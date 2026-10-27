@@ -66,6 +66,25 @@ describe('feedback hub', () => {
     hub.stop();
   });
 
+  it('keeps reporting listening between two long-poll rounds', async () => {
+    vi.useFakeTimers();
+    const { hub, explorationId } = setup();
+    const round = hub.waitForFeedback({ explorationId, shimId: 'shim-a', waitMs: 1000 });
+    await vi.advanceTimersByTimeAsync(1000);
+    await round;
+    expect(hub.status(explorationId)).toBe('listening');
+    hub.stop();
+  });
+
+  it('stops reporting listening once feedback was handed over', async () => {
+    const { store, hub, explorationId, mainForkId } = setup();
+    const waiting = hub.waitForFeedback({ explorationId, shimId: 'shim-a', waitMs: 60_000 });
+    store.submit(explorationId, mainForkId, 'hello');
+    await waiting;
+    expect(hub.status(explorationId)).toBe('answering');
+    hub.stop();
+  });
+
   it('reports answering while delivered forks wait for an answer', async () => {
     const { store, hub, explorationId, mainForkId } = setup();
     store.submit(explorationId, mainForkId, 'hello');

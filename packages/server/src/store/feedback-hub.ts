@@ -14,7 +14,7 @@ interface Waiter {
   settle: (result: FeedbackResult) => void;
 }
 
-// A shim long-polls in rounds, so there is a short gap between two rounds while it is listening.
+// A shim long-polls in rounds, so after a round times out there is a short gap before the next one.
 const listeningGraceMs = 5_000;
 
 export class FeedbackHub {
@@ -65,7 +65,9 @@ export class FeedbackHub {
           clearTimeout(timer);
           input.signal?.removeEventListener('abort', onAbort);
           this.waiters.delete(waiter);
-          this.lastPollEndedAt.set(input.explorationId, this.now());
+          if (result.status === 'timeout')
+            this.lastPollEndedAt.set(input.explorationId, this.now());
+          else this.lastPollEndedAt.delete(input.explorationId);
           resolve(result);
           this.refreshStatus(input.explorationId);
         },
