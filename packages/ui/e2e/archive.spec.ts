@@ -48,4 +48,8 @@ test('takes back an archive that is not confirmed', async ({ page }) => {
   await page.clock.fastForward(3_100);
   await expect(item.getByRole('button', { name: 'Archive' })).toBeVisible();
   await expect(item.getByRole('button', { name: 'Confirm' })).toHaveCount(0);
+
+  await item.getByRole('button', { name: 'Archive' }).click();
+  await page.getByRole('heading', { name: 'Explorations' }).click();
+  await expect(item.getByRole('button', { name: 'Archive' })).toBeVisible();
 });

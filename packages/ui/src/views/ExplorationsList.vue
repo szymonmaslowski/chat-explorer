@@ -73,6 +73,7 @@ async function removeFromList(explorationId: string, change: (id: string) => Pro
             />
             <ConfirmButton
               label="Delete"
+              danger
               @confirm="removeFromList(exploration.id, api.deleteExploration)"
             />
           </template>
