@@ -167,3 +167,12 @@ blockquote {
   background-color: var(--accent-soft);
   text-decoration: underline solid var(--accent) 2px;
 }
+
+/* iOS zooms into a focused field whose text is smaller than 16px. Wins over component sizes. */
+@media (pointer: coarse) {
+  textarea,
+  select,
+  input {
+    font-size: 16px !important;
+  }
+}
