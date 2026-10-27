@@ -41,6 +41,42 @@ In a Claude Code session, run `/explore-chat`. It imports the conversation so fa
 
 Press Esc in the terminal to stop Claude waiting for feedback.
 
+You don't need a terminal session to continue. When you submit and no session is attached, chat-explorer starts Claude Code in the background to answer (see below).
+
+## From the phone
+
+The daemon can run Claude Code itself, so the phone only needs to reach the daemon.
+
+1. **Run the daemon at login:** `chat-explorer service install` (macOS). It also restarts the daemon after a crash. `chat-explorer service uninstall` removes it.
+2. **Reach it through Tailscale.** Install Tailscale on the Mac and the phone, signed in to the same account. On the Mac run `tailscale serve --bg 4517`. It prints an `https://<mac>.<tailnet>.ts.net` address, reachable only from your own devices. If Tailscale asks you to enable HTTPS certificates for the tailnet, do that first.
+3. **Tell chat-explorer that address,** so the links Claude prints open on the phone and the daemon accepts requests from it. In `~/.chat-explorer/config.json`:
+
+   ```json
+   { "publicUrl": "https://<mac>.<tailnet>.ts.net" }
+   ```
+
+   Then restart the daemon: `chat-explorer service install` again, or `chat-explorer stop` followed by `chat-explorer start`.
+
+4. **Keep the Mac awake on the charger:** System Settings → Battery → Options → "Prevent automatic sleeping on power adapter when the display is off". A MacBook with its lid closed still sleeps unless an external display is connected.
+
+On the phone, open the address. Start a new exploration from the explorations page, or continue an existing one. Comments are listed under their message instead of floating over the text.
+
+### Background sessions
+
+When feedback is waiting and no session is attached, the daemon runs:
+
+```
+claude -p "/explore-chat <id>" --model <model> --tools WebSearch ...
+```
+
+- The session can search the web and use the chat-explorer tools. It cannot read or write files or run commands, and anything that would need a permission prompt is denied.
+- It runs in `~/.chat-explorer/sessions/`, logging to `sessions/<id>.log`.
+- The model picker in the status bar (Sonnet or Opus) sets the model for these sessions. Changing it restarts a running session, which keeps its conversation.
+- After `idleMinutes` with nothing to answer, the session stops. Your next submit resumes it with the same conversation, which takes a few seconds.
+- At most `maxSessions` run at once. To start another, chat-explorer stops the one idle longest.
+- If Claude cannot start, for example because it is not logged in, the page shows the end of its log and a Retry button.
+- Running `/explore-chat <id>` in a terminal takes the exploration over. The background session then exits.
+
 ## CLI
 
 ```
@@ -50,6 +86,7 @@ chat-explorer status                        version, port and attached sessions
 chat-explorer list [--json]                 explorations, newest first
 chat-explorer open [id] [--fork <forkId>]   open the UI in the browser
 chat-explorer delete <id>
+chat-explorer service install|uninstall     run the daemon at login (macOS)
 ```
 
 `chat-explorer mcp` and `chat-explorer hook <name>` are used by the plugin.
@@ -61,9 +98,19 @@ chat-explorer delete <id>
 | `CHAT_EXPLORER_PORT`       | `4517`             | Port of the local daemon                              |
 | `CHAT_EXPLORER_HOME`       | `~/.chat-explorer` | Database (`chat-explorer.db`) and `daemon.log`        |
 | `CHAT_EXPLORER_NO_BROWSER` | unset              | When set, `/explore-chat` does not open a browser tab |
+| `CHAT_EXPLORER_PUBLIC_URL` | unset              | Overrides `publicUrl` from `config.json`              |
 | `CLAUDE_CONFIG_DIR`        | `~/.claude`        | Where Claude Code transcripts are found               |
 
-The daemon listens on `127.0.0.1` only and rejects requests from other websites.
+`~/.chat-explorer/config.json` is read when the daemon starts. Every key is optional:
+
+| Key            | Default    |                                                        |
+| -------------- | ---------- | ------------------------------------------------------ |
+| `publicUrl`    | `null`     | Address the phone uses, e.g. a Tailscale Serve address |
+| `defaultModel` | `"sonnet"` | Model for new explorations (`"sonnet"` or `"opus"`)    |
+| `idleMinutes`  | `60`       | Stop a background session after this long with no work |
+| `maxSessions`  | `3`        | Background sessions running at once                    |
+
+The daemon listens on `127.0.0.1` only and rejects requests from other websites. Requests through `publicUrl` are accepted too, so anyone who can reach that address can start Claude sessions on your Mac. Keep it inside your tailnet (`tailscale serve`, not `tailscale funnel`).
 
 ## How it works
 
@@ -88,6 +135,8 @@ The design and its decisions are in [docs/plan.md](docs/plan.md).
 
 - Forks share one Claude context. Claude is told to answer each fork only from its own messages, but what it read in other forks can still influence it. Forks answered by separate subagents are planned.
 - Claude Code only (CLI and the Desktop Code tab), not regular Claude Desktop chat.
+- Background sessions can't touch files or run commands. Sessions in isolated containers with those tools are planned.
+- `service install` is macOS only.
 
 ## Development
 
