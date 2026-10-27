@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ExplorationState } from '../stores/exploration';
 import SessionStatusBar from './SessionStatusBar.vue';
+import ThemeSwitch from './ThemeSwitch.vue';
 
 defineProps<{ state: ExplorationState }>();
 </script>
@@ -12,12 +13,15 @@ defineProps<{ state: ExplorationState }>();
         <RouterLink to="/">Explorations</RouterLink>
         <slot name="links" />
       </nav>
-      <SessionStatusBar
-        :status="state.sessionStatus"
-        :connected="state.connected"
-        :exploration-id="state.explorationId"
-        :model="state.exploration?.model"
-      />
+      <div class="controls">
+        <SessionStatusBar
+          :status="state.sessionStatus"
+          :connected="state.connected"
+          :exploration-id="state.explorationId"
+          :model="state.exploration?.model"
+        />
+        <ThemeSwitch />
+      </div>
     </div>
     <p v-if="state.exploration" class="title">
       {{ state.exploration.title || 'Untitled exploration' }}
@@ -44,6 +48,13 @@ defineProps<{ state: ExplorationState }>();
 .links {
   display: flex;
   gap: 0.4rem;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-left: auto;
 }
 
 .title {
