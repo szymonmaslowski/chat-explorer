@@ -42,9 +42,9 @@ onBeforeUnmount(disarm);
 
 <style scoped>
 .armed {
-  background: var(--warning);
-  border-color: var(--warning);
-  color: var(--background);
+  background: var(--caution);
+  border-color: var(--caution);
+  color: var(--on-caution);
 }
 
 .danger {

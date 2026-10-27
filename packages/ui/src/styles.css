@@ -11,6 +11,8 @@
   --fork-soft: light-dark(rgb(234 88 12 / 0.16), rgb(251 146 60 / 0.2));
   --success: light-dark(#15803d, #4ade80);
   --warning: light-dark(#b45309, #fbbf24);
+  --caution: light-dark(#f59e0b, #fbbf24);
+  --on-caution: #1d1d1b;
   --danger: light-dark(#b91c1c, #f87171);
   --radius: 8px;
   --column: 760px;
