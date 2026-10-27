@@ -94,6 +94,8 @@ export function createApp(options: AppOptions) {
     return context.json({ ok: true });
   });
 
+  app.get('/api/settings', (context) => context.json({ defaultModel: options.defaultModel }));
+
   app.get('/api/explorations', (context) => {
     const explorations: ExplorationListItem[] = store
       .listExplorations()

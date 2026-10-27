@@ -78,6 +78,7 @@ const layout = computed(() => {
         :status="state.sessionStatus"
         :connected="state.connected"
         :exploration-id="explorationId"
+        :model="state.exploration?.model"
       />
     </header>
 

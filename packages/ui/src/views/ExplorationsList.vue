@@ -2,6 +2,7 @@
 import type { ExplorationListItem } from '@shared/types';
 import { onMounted, ref } from 'vue';
 import { api } from '../api';
+import NewExploration from '../components/NewExploration.vue';
 import { relativeTime } from '@shared/time';
 
 const explorations = ref<ExplorationListItem[] | null>(null);
@@ -19,9 +20,10 @@ onMounted(async () => {
 <template>
   <main class="page">
     <h1>Explorations</h1>
+    <NewExploration />
     <p v-if="failed" class="muted">Could not load explorations.</p>
     <p v-else-if="explorations?.length === 0" class="muted">
-      No explorations yet. Run <code>/explore-chat</code> in Claude Code.
+      No explorations yet. Start one above, or run <code>/explore-chat</code> in Claude Code.
     </p>
     <ul v-else-if="explorations" class="explorations">
       <li v-for="exploration in explorations" :key="exploration.id">

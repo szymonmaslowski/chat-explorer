@@ -1,6 +1,8 @@
+import type { ClaudeModel } from '@shared/models';
 import type {
   Comment,
   CommentChanges,
+  Exploration,
   ExplorationListItem,
   NewComment,
   QueuedSubmission,
@@ -28,8 +30,15 @@ async function call<Result>(path: string, init: { method?: string; json?: object
 }
 
 export const api = {
+  settings: () => call<{ defaultModel: ClaudeModel }>('/api/settings'),
   listExplorations: () => call<ExplorationListItem[]>('/api/explorations'),
   snapshot: (explorationId: string) => call<Snapshot>(`/api/explorations/${explorationId}`),
+  createExploration: (message: string, model: ClaudeModel) =>
+    call<{ explorationId: string }>('/api/explorations', { json: { message, model } }),
+  setModel: (explorationId: string, model: ClaudeModel) =>
+    call<Exploration>(`/api/explorations/${explorationId}`, { method: 'PATCH', json: { model } }),
+  startSession: (explorationId: string) =>
+    call<{ ok: true }>(`/api/explorations/${explorationId}/session`, { method: 'POST' }),
   submit: (explorationId: string, forkId: string, globalMessage: string) =>
     call<QueuedSubmission>(`/api/explorations/${explorationId}/submit`, {
       json: { forkId, globalMessage },

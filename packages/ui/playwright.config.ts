@@ -1,5 +1,5 @@
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { defineConfig } from '@playwright/test';
 
 const port = 4519;
@@ -17,7 +17,12 @@ export default defineConfig({
   webServer: {
     command: `rm -rf "${home}" && node ${server}/dev/seed.js && node ${server}/daemon/main.js`,
     url: `http://127.0.0.1:${port}/api/health`,
-    env: { CHAT_EXPLORER_HOME: home, CHAT_EXPLORER_PORT: String(port) },
+    // Without `claude` on PATH, background sessions fail to start instead of running Claude.
+    env: {
+      CHAT_EXPLORER_HOME: home,
+      CHAT_EXPLORER_PORT: String(port),
+      PATH: `${dirname(process.execPath)}:/usr/bin:/bin`,
+    },
     reuseExistingServer: false,
   },
 });

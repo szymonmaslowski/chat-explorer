@@ -20,6 +20,7 @@ export interface ExplorationState {
   comments: Map<string, Comment>;
   queuedSubmissions: Map<string, QueuedSubmission>;
   sessionStatus: SessionStatus;
+  sessionError: string | null;
   connected: boolean;
 }
 
@@ -36,6 +37,7 @@ const eventTypes: ExplorationEvent['type'][] = [
   'exploration.updated',
   'exploration.deleted',
   'session.status',
+  'session.error',
 ];
 
 const byId = <Item extends { id: string }>(items: Item[]) =>
@@ -74,6 +76,9 @@ export function applyEvent(state: ExplorationState, event: ExplorationEvent) {
     case 'session.status':
       state.sessionStatus = event.status;
       break;
+    case 'session.error':
+      state.sessionError = event.message;
+      break;
     case 'session.attached':
       break;
   }
@@ -86,6 +91,7 @@ function applySnapshot(state: ExplorationState, snapshot: Snapshot) {
   state.comments = byId(snapshot.comments);
   state.queuedSubmissions = byId(snapshot.queuedSubmissions);
   state.sessionStatus = snapshot.sessionStatus;
+  state.sessionError = snapshot.sessionError;
   state.status = 'ready';
 }
 
@@ -99,6 +105,7 @@ function createExplorationStore(explorationId: string) {
     comments: new Map(),
     queuedSubmissions: new Map(),
     sessionStatus: 'detached',
+    sessionError: null,
     connected: false,
   });
 

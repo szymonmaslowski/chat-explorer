@@ -6,6 +6,7 @@ import { api } from '../api';
 import { anchorOfRange, clampToRoot, locateAnchor, type TextAnchor } from '../lib/anchoring';
 import { layoutCards } from '../lib/card-layout';
 import { pointer } from '../lib/pointer';
+import { useMediaQuery } from '../composables/useMediaQuery';
 import CommentCard from './CommentCard.vue';
 import CommentEditor from './CommentEditor.vue';
 import CommentTray from './CommentTray.vue';
@@ -15,14 +16,19 @@ const props = defineProps<{
   forkId: string;
   comments: Comment[];
   layoutKey: string;
+  compact: boolean;
 }>();
 
 const draftWidth = 280;
 const submittedWidth = 220;
 const estimatedHeight = { draft: 78, queued: 60, submitted: 28 } as const;
 const flashMs = 1_400;
+const selectionSettleMs = 300;
+// Keeps the button clear of the selection handles on touch screens.
+const touchButtonOffset = 24;
 
 const route = useRoute();
+const coarsePointer = useMediaQuery('(pointer: coarse)');
 const router = useRouter();
 const layer = ref<HTMLElement | null>(null);
 const layerWidth = ref(0);
@@ -83,6 +89,10 @@ function measure() {
 }
 
 function updateTray() {
+  if (props.compact) {
+    if (trayIds.value.size > 0) trayIds.value = new Set();
+    return;
+  }
   const header = document.querySelector('[data-sticky-header]');
   const limit = header ? header.getBoundingClientRect().bottom : 0;
   const inTray = new Set<string>();
@@ -133,6 +143,7 @@ function scrollToComment(commentId: string) {
 }
 
 const floatingCards = computed(() => {
+  if (props.compact) return [];
   const requests = props.comments.flatMap((comment) => {
     const box = anchorBoxes.value.get(comment.id);
     if (!box || trayIds.value.has(comment.id)) return [];
@@ -157,42 +168,67 @@ const trayComments = computed(() =>
   props.comments.filter((comment) => trayIds.value.has(comment.id)),
 );
 
-function onMouseUp() {
-  setTimeout(() => {
-    if (editor.value) return;
-    const current = window.getSelection();
-    if (!current || current.isCollapsed || current.rangeCount === 0) {
-      selection.value = null;
-      return;
-    }
-    const selected = current.getRangeAt(0);
-    const root = anchorRootOf(selected.startContainer) ?? anchorRootOf(selected.endContainer);
-    if (!root || !container()?.contains(root)) {
-      selection.value = null;
-      return;
-    }
-    const range = clampToRoot(root, selected);
-    const anchor = anchorOfRange(root, range);
-    if (!anchor) {
-      selection.value = null;
-      return;
-    }
-    const rects = range.getClientRects();
-    const lastLine = relative(rects[rects.length - 1] ?? range.getBoundingClientRect());
-    const firstLine = relative(firstLineRect(range));
-    selection.value = {
-      messageId: root.dataset.anchorRoot!,
-      anchor,
-      buttonTop: lastLine.bottom + 4,
-      buttonLeft: Math.max(0, Math.min(lastLine.right + 6, layerWidth.value - 84)),
-      lineTop: firstLine.top,
-      lineLeft: firstLine.left,
-    };
-  });
+const listedComments = computed(() => {
+  if (!props.compact) return [];
+  const byMessage = new Map<string, Comment[]>();
+  for (const comment of props.comments.toSorted(
+    (left, right) => left.startOffset - right.startOffset,
+  )) {
+    byMessage.set(comment.messageId, [...(byMessage.get(comment.messageId) ?? []), comment]);
+  }
+  return [...byMessage].map(([messageId, comments]) => ({ messageId, comments }));
+});
+
+let mouseButtonDown = false;
+let selectionTimer: ReturnType<typeof setTimeout> | undefined;
+
+function onPointerDown(event: PointerEvent) {
+  if (event.pointerType === 'mouse') mouseButtonDown = true;
 }
 
+function onMouseUp() {
+  mouseButtonDown = false;
+  setTimeout(showCommentButton);
+}
+
+function showCommentButton() {
+  if (editor.value) return;
+  const current = window.getSelection();
+  if (!current || current.isCollapsed || current.rangeCount === 0) {
+    selection.value = null;
+    return;
+  }
+  const selected = current.getRangeAt(0);
+  const root = anchorRootOf(selected.startContainer) ?? anchorRootOf(selected.endContainer);
+  if (!root || !container()?.contains(root)) {
+    selection.value = null;
+    return;
+  }
+  const range = clampToRoot(root, selected);
+  const anchor = anchorOfRange(root, range);
+  if (!anchor) {
+    selection.value = null;
+    return;
+  }
+  const rects = range.getClientRects();
+  const lastLine = relative(rects[rects.length - 1] ?? range.getBoundingClientRect());
+  const firstLine = relative(firstLineRect(range));
+  selection.value = {
+    messageId: root.dataset.anchorRoot!,
+    anchor,
+    buttonTop: lastLine.bottom + 4 + (coarsePointer.value ? touchButtonOffset : 0),
+    buttonLeft: Math.max(0, Math.min(lastLine.right + 6, layerWidth.value - 84)),
+    lineTop: firstLine.top,
+    lineLeft: firstLine.left,
+  };
+}
+
+// Touch and keyboard selections have no mouseup, so the button follows a selection that settled.
 function onSelectionChange() {
   if (!editor.value && window.getSelection()?.isCollapsed) selection.value = null;
+  if (mouseButtonDown) return;
+  clearTimeout(selectionTimer);
+  selectionTimer = setTimeout(showCommentButton, selectionSettleMs);
 }
 
 function openEditor() {
@@ -232,6 +268,7 @@ function openSubmitted(comment: Comment) {
 let resizeObserver: ResizeObserver | null = null;
 onMounted(() => {
   const root = container();
+  document.addEventListener('pointerdown', onPointerDown);
   document.addEventListener('mouseup', onMouseUp);
   document.addEventListener('selectionchange', onSelectionChange);
   resizeObserver = new ResizeObserver(() => measure());
@@ -240,13 +277,15 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  clearTimeout(selectionTimer);
+  document.removeEventListener('pointerdown', onPointerDown);
   document.removeEventListener('mouseup', onMouseUp);
   document.removeEventListener('selectionchange', onSelectionChange);
   resizeObserver?.disconnect();
   if ('highlights' in CSS) CSS.highlights.clear();
 });
 
-watch(() => [props.comments, props.layoutKey], reanchor, { flush: 'post' });
+watch(() => [props.comments, props.layoutKey, props.compact], reanchor, { flush: 'post' });
 watch(() => pointer.frame, updateTray);
 
 let handledHash = '';
@@ -270,12 +309,24 @@ watch(
       v-for="card in floatingCards"
       :key="card.id"
       :comment="card.comment"
-      :top="card.top"
-      :left="card.left"
-      :width="card.width"
+      :placement="card"
       @measure="(height) => heights.set(card.id, height)"
       @open="openSubmitted"
     />
+
+    <Teleport
+      v-for="group in listedComments"
+      :key="group.messageId"
+      :to="`#comments-${group.messageId}`"
+      defer
+    >
+      <CommentCard
+        v-for="comment in group.comments"
+        :key="comment.id"
+        :comment="comment"
+        @open="openSubmitted"
+      />
+    </Teleport>
 
     <button
       v-if="selection"
@@ -283,7 +334,10 @@ watch(
       class="comment-button"
       :style="{ top: `${selection.buttonTop}px`, left: `${selection.buttonLeft}px` }"
       title="Comment on the selection"
+      @pointerdown.prevent
       @mousedown.prevent
+      @touchstart.prevent
+      @pointerup="openEditor"
       @click="openEditor"
     >
       Comment

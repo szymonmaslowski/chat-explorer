@@ -1,11 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-
-async function openSeededExploration(page: Page) {
-  const [exploration] = await (await page.request.get('/api/explorations')).json();
-  await page.goto(`/e/${exploration.id}`);
-  await expect(page.locator('.message').first()).toBeVisible();
-  return exploration.id as string;
-}
+import { openSeededExploration } from './helpers';
 
 const paragraphBox = async (page: Page, paragraph: string) => {
   const locator = page.locator('.content p', { hasText: paragraph }).first();

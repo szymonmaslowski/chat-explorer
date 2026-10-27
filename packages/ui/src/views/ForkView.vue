@@ -5,7 +5,9 @@ import CommentLayer from '../components/CommentLayer.vue';
 import ConversationMessage from '../components/ConversationMessage.vue';
 import QueuedSubmissionCard from '../components/QueuedSubmissionCard.vue';
 import ReplyBar from '../components/ReplyBar.vue';
+import SessionError from '../components/SessionError.vue';
 import SessionStatusBar from '../components/SessionStatusBar.vue';
+import { useMediaQuery } from '../composables/useMediaQuery';
 import { forkPath, forkTitle, mainFork, quotedCommentsOf } from '../lib/conversation';
 import { openExploration } from '../stores/exploration';
 
@@ -15,6 +17,7 @@ const nearBottomPx = 200;
 const flashMs = 1_400;
 
 const route = useRoute();
+const compact = useMediaQuery('(max-width: 700px), (hover: none)');
 const state = computed(() => openExploration(props.explorationId));
 const fork = computed(() =>
   props.forkId ? (state.value.forks.get(props.forkId) ?? null) : mainFork(state.value.forks),
@@ -110,10 +113,17 @@ watch(
           :status="state.sessionStatus"
           :connected="state.connected"
           :exploration-id="explorationId"
+          :model="state.exploration?.model"
         />
       </div>
       <div id="comment-tray" />
     </header>
+
+    <SessionError
+      v-if="state.sessionError"
+      :exploration-id="explorationId"
+      :message="state.sessionError"
+    />
 
     <p v-if="state.status === 'loading'" class="muted">Loading…</p>
     <p v-else-if="state.status === 'missing'" class="muted">This exploration does not exist.</p>
@@ -144,6 +154,7 @@ watch(
             :quoted-comments="quotedCommentsOf(message.id, state.comments)"
             :shared="ownStart !== -1 && index < ownStart"
           />
+          <div :id="`comments-${message.id}`" class="message-comments" />
         </template>
         <CommentLayer
           :key="fork.id"
@@ -151,6 +162,7 @@ watch(
           :fork-id="fork.id"
           :comments="viewComments"
           :layout-key="[...pathIds].join()"
+          :compact="compact"
         />
       </div>
 
@@ -195,6 +207,17 @@ watch(
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .bar {
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+  }
+
+  .crumbs {
+    flex-basis: 100%;
+  }
 }
 
 .fork-title {

@@ -4,7 +4,11 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { api } from '../api';
 import { useProximityFade } from '../composables/useProximityFade';
 
-const props = defineProps<{ comment: Comment; top: number; left: number; width: number }>();
+// Without a placement the card is listed in the page flow, on narrow and touch screens.
+const props = defineProps<{
+  comment: Comment;
+  placement?: { top: number; left: number; width: number };
+}>();
 const emit = defineEmits<{ measure: [height: number]; open: [comment: Comment] }>();
 
 const card = ref<HTMLElement | null>(null);
@@ -12,7 +16,10 @@ const editing = ref(false);
 const draftBody = ref('');
 const busy = ref(false);
 const isDraft = computed(() => props.comment.status === 'draft');
-const { opacity, interactive } = useProximityFade(card, editing);
+const { opacity, interactive } = useProximityFade(
+  card,
+  computed(() => editing.value || !props.placement),
+);
 
 let resizeObserver: ResizeObserver | null = null;
 onMounted(() => {
@@ -65,14 +72,16 @@ function onEditorKeydown(event: KeyboardEvent) {
   <div
     ref="card"
     class="comment-card"
-    :class="[comment.type, comment.status]"
-    :style="{
-      top: `${top}px`,
-      left: `${left}px`,
-      width: `${width}px`,
-      opacity,
-      pointerEvents: interactive ? 'auto' : 'none',
-    }"
+    :class="[comment.type, comment.status, { listed: !placement }]"
+    :style="
+      placement && {
+        top: `${placement.top}px`,
+        left: `${placement.left}px`,
+        width: `${placement.width}px`,
+        opacity,
+        pointerEvents: interactive ? 'auto' : 'none',
+      }
+    "
     @click="comment.status === 'submitted' && emit('open', comment)"
   >
     <template v-if="editing">
@@ -88,6 +97,7 @@ function onEditorKeydown(event: KeyboardEvent) {
         <span v-if="comment.status === 'queued'">· queued</span>
         <span v-if="comment.status === 'submitted'">· sent</span>
       </div>
+      <p v-if="!placement" class="quote">{{ comment.quote }}</p>
       <p class="body">{{ comment.body }}</p>
       <div v-if="isDraft" class="actions">
         <button
@@ -119,6 +129,12 @@ function onEditorKeydown(event: KeyboardEvent) {
   transition: opacity 120ms linear;
 }
 
+.comment-card.listed {
+  position: static;
+  box-shadow: none;
+  margin-top: 0.4rem;
+}
+
 .comment-card.fork {
   border-left-color: var(--fork);
 }
@@ -145,6 +161,17 @@ function onEditorKeydown(event: KeyboardEvent) {
 
 .submitted .label {
   color: var(--text-muted);
+}
+
+.quote {
+  margin: 0.1rem 0 0;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--border);
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .body {
