@@ -11,12 +11,15 @@
     "chat-explorer": "dist/cli/main.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/dev"
   ],
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json && node scripts/copy-ui.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "seed": "node dist/dev/seed.js",
+    "daemon": "node dist/daemon/main.js"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.5",
