@@ -103,6 +103,11 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
     console.log(`Opened ${config.baseUrl}${path}`);
   },
 
+  async mcp() {
+    const { runShim } = await import('../mcp/shim.js');
+    await runShim();
+  },
+
   async delete(args) {
     const [explorationId] = args;
     if (!explorationId) throw new UsageError('chat-explorer delete <id>');
