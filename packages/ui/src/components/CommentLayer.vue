@@ -26,6 +26,7 @@ const flashMs = 1_400;
 const selectionSettleMs = 300;
 // Keeps the button clear of the selection handles on touch screens.
 const touchButtonOffset = 24;
+const buttonWidth = { mouse: 84, touch: 124 };
 
 const route = useRoute();
 const coarsePointer = useMediaQuery('(pointer: coarse)');
@@ -217,7 +218,13 @@ function showCommentButton() {
     messageId: root.dataset.anchorRoot!,
     anchor,
     buttonTop: lastLine.bottom + 4 + (coarsePointer.value ? touchButtonOffset : 0),
-    buttonLeft: Math.max(0, Math.min(lastLine.right + 6, layerWidth.value - 84)),
+    buttonLeft: Math.max(
+      0,
+      Math.min(
+        lastLine.right + 6,
+        layerWidth.value - (coarsePointer.value ? buttonWidth.touch : buttonWidth.mouse),
+      ),
+    ),
     lineTop: firstLine.top,
     lineLeft: firstLine.left,
   };
@@ -370,8 +377,19 @@ watch(
   position: absolute;
   z-index: 4;
   border-radius: 999px;
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--background);
   box-shadow: var(--shadow);
   font-size: 0.8rem;
   padding: 0.15rem 0.7rem;
+}
+
+@media (pointer: coarse) {
+  .comment-button {
+    font-size: 1rem;
+    font-weight: 600;
+    padding: 0.6rem 1.3rem;
+  }
 }
 </style>
