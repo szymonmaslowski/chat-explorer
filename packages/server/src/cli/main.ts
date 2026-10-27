@@ -5,6 +5,7 @@ import { createDaemonClient, DaemonError } from '../client/http.js';
 import { apiVersion, loadConfig } from '../config.js';
 import { DaemonStartError, ensureDaemon, probe, stopDaemon } from '../daemon/control.js';
 import { openBrowser } from '../open-browser.js';
+import { relativeTime } from '../shared/time.js';
 import type { ExplorationListItem } from '../shared/types.js';
 import { packageVersion } from '../version.js';
 
@@ -24,15 +25,6 @@ Commands:
 const config = loadConfig();
 const request = createDaemonClient(config.baseUrl);
 const ensureRunning = () => ensureDaemon(config, { version: packageVersion, apiVersion });
-
-const relativeTime = (timestamp: number) => {
-  const minutes = Math.round((Date.now() - timestamp) / 60_000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours} h ago`;
-  return `${Math.round(hours / 24)} d ago`;
-};
 
 const truncate = (text: string, length: number) =>
   text.length > length ? `${text.slice(0, length - 1)}…` : text;

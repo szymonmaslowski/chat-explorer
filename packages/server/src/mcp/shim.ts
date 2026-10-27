@@ -299,11 +299,18 @@ export function createShim(options: ShimOptions) {
 }
 
 export async function runShim() {
-  const shim = createShim({ config: loadConfig(), version: packageVersion, openUrl: openBrowser });
+  const shim = createShim({
+    config: loadConfig(),
+    version: packageVersion,
+    openUrl: process.env.CHAT_EXPLORER_NO_BROWSER ? () => {} : openBrowser,
+  });
   const transport = new StdioServerTransport();
-  transport.onclose = () => {
+  const exit = () => {
     void shim.close().finally(() => process.exit(0));
   };
-  process.stdin.on('end', () => transport.onclose?.());
+  transport.onclose = exit;
+  process.stdin.on('end', exit);
+  process.on('SIGTERM', exit);
+  process.on('SIGINT', exit);
   await shim.server.connect(transport);
 }

@@ -6,7 +6,10 @@
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "types": ["vite/client"],
     "jsx": "preserve",
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@shared/*": ["../server/src/shared/*"]
+    }
   },
   "include": ["src", "test", "vite.config.ts", "env.d.ts"]
 }

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "chat-explorer": {
+      "command": "chat-explorer",
+      "args": ["mcp"],
+      "timeout": 86400000
+    }
+  }
+}

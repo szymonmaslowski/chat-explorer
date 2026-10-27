@@ -1,0 +1,131 @@
+:root {
+  --background: #fbfbfa;
+  --surface: #ffffff;
+  --surface-muted: #f3f3f1;
+  --text: #1d1d1b;
+  --text-muted: #6b6b66;
+  --border: #e3e3df;
+  --accent: #4f46e5;
+  --accent-soft: rgb(79 70 229 / 0.14);
+  --fork: #c2410c;
+  --fork-soft: rgb(234 88 12 / 0.16);
+  --success: #15803d;
+  --warning: #b45309;
+  --danger: #b91c1c;
+  --radius: 8px;
+  --column: 760px;
+  --shadow: 0 4px 16px rgb(0 0 0 / 0.08);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #161615;
+    --surface: #1f1f1d;
+    --surface-muted: #262624;
+    --text: #ececea;
+    --text-muted: #9c9c96;
+    --border: #34342f;
+    --accent: #8b85ff;
+    --accent-soft: rgb(139 133 255 / 0.2);
+    --fork: #fb923c;
+    --fork-soft: rgb(251 146 60 / 0.2);
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --danger: #f87171;
+    --shadow: 0 4px 16px rgb(0 0 0 / 0.4);
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--text);
+  font:
+    16px/1.6 system-ui,
+    -apple-system,
+    sans-serif;
+}
+
+a {
+  color: var(--accent);
+}
+
+button {
+  font: inherit;
+  font-size: 0.875rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 0.3rem 0.75rem;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+textarea {
+  font: inherit;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.75rem;
+  width: 100%;
+  resize: vertical;
+}
+
+textarea:focus {
+  outline: 2px solid var(--accent-soft);
+  border-color: var(--accent);
+}
+
+pre {
+  background: var(--surface-muted);
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius);
+  overflow-x: auto;
+  font-size: 0.85rem;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875em;
+}
+
+:not(pre) > code {
+  background: var(--surface-muted);
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+}
+
+blockquote {
+  margin: 0.5rem 0;
+  padding: 0.1rem 0.9rem;
+  border-left: 3px solid var(--border);
+  color: var(--text-muted);
+}
+
+.page {
+  max-width: var(--column);
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.muted {
+  color: var(--text-muted);
+}

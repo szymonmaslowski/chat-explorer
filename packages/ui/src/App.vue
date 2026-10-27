@@ -1,3 +1,3 @@
 <template>
-  <main>chat-explorer</main>
+  <RouterView />
 </template>

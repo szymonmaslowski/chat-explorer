@@ -1,0 +1,5 @@
+{
+  "name": "chat-explorer",
+  "version": "0.1.0",
+  "description": "Explore a Claude Code conversation as a tree of forks in the browser: comment on answers inline or fork them, and Claude answers in the UI."
+}
