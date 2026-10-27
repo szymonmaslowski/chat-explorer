@@ -2,13 +2,21 @@
 import type { Comment } from '@shared/types';
 import { computed, ref } from 'vue';
 import { api } from '../api';
+import { insertAtCursor } from '../lib/insert-text';
 import { replyDrafts } from '../stores/reply-drafts';
+import DictationButton from './DictationButton.vue';
 
-const props = defineProps<{ explorationId: string; forkId: string; drafts: Comment[] }>();
+const props = defineProps<{
+  explorationId: string;
+  forkId: string;
+  drafts: Comment[];
+  hint: string;
+}>();
 const emit = defineEmits<{ submitted: [] }>();
 
 const sending = ref(false);
 const error = ref('');
+const textarea = ref<HTMLTextAreaElement | null>(null);
 
 const text = computed({
   get: () => replyDrafts.get(props.forkId),
@@ -59,6 +67,7 @@ function onKeydown(event: KeyboardEvent) {
 <template>
   <form class="reply-bar" @submit.prevent="submit">
     <textarea
+      ref="textarea"
       v-model="text"
       rows="2"
       placeholder="Reply to Claude (⌘↵ to send)"
@@ -73,6 +82,10 @@ function onKeydown(event: KeyboardEvent) {
       >
         {{ allForks ? 'Unfork all' : 'Fork all' }}
       </button>
+      <DictationButton
+        :hint="hint"
+        @text="(dictated) => (text = insertAtCursor(textarea, text, dictated))"
+      />
       <span class="spacer" />
       <span v-if="error" class="error">{{ error }}</span>
       <span v-else-if="summary" class="summary muted">{{ summary }}</span>
@@ -95,6 +108,7 @@ function onKeydown(event: KeyboardEvent) {
 
 .actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
 }

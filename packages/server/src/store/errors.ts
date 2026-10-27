@@ -6,9 +6,14 @@ export type StoreErrorCode =
   | 'stale_tip'
   | 'attached_elsewhere'
   | 'detached'
-  | 'too_many_sessions';
+  | 'too_many_sessions'
+  | 'cancelled'
+  | 'dictation_unavailable'
+  | 'invalid_audio'
+  | 'transcription_failed'
+  | 'transcription_timeout';
 
-const httpStatusByCode: Record<StoreErrorCode, 400 | 404 | 409 | 503> = {
+const httpStatusByCode: Record<StoreErrorCode, 400 | 404 | 409 | 500 | 503 | 504> = {
   not_found: 404,
   invalid: 400,
   not_draft: 409,
@@ -17,6 +22,11 @@ const httpStatusByCode: Record<StoreErrorCode, 400 | 404 | 409 | 503> = {
   attached_elsewhere: 409,
   detached: 409,
   too_many_sessions: 503,
+  cancelled: 409,
+  dictation_unavailable: 503,
+  invalid_audio: 400,
+  transcription_failed: 500,
+  transcription_timeout: 504,
 };
 
 export class StoreError extends Error {

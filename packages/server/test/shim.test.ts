@@ -11,7 +11,7 @@ import { createShim } from '../src/mcp/shim.js';
 import { EventBus } from '../src/store/event-bus.js';
 import { FeedbackHub } from '../src/store/feedback-hub.js';
 import { ChatStore } from '../src/store/store.js';
-import { createTestSessions } from './helpers.js';
+import { createTestSessions, createTestTranscriber } from './helpers.js';
 
 const version = '0.0.0-test';
 let server: Server;
@@ -35,6 +35,7 @@ beforeEach(async () => {
     hub,
     bus,
     sessions,
+    transcriber: createTestTranscriber().transcriber,
     defaultModel: 'sonnet',
     port: config.port,
     publicUrl: null,

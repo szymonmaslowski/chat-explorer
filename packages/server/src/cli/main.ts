@@ -4,7 +4,16 @@ import { parseArgs } from 'node:util';
 import { createDaemonClient, DaemonError } from '../client/http.js';
 import { apiVersion, loadConfig } from '../config.js';
 import { DaemonStartError, ensureDaemon, probe, stopDaemon } from '../daemon/control.js';
+import { dictationAvailability } from '../dictation/availability.js';
+import { whisperModelPath, whisperModels } from '../dictation/models.js';
 import { openBrowser } from '../open-browser.js';
+import {
+  InstallError,
+  installDictation,
+  megabytes,
+  uninstallDictation,
+} from '../dictation/install.js';
+import { loadSettings, SettingsError } from '../settings.js';
 import { relativeTime } from '../shared/time.js';
 import type { ExplorationListItem } from '../shared/types.js';
 import { packageVersion } from '../version.js';
@@ -20,6 +29,9 @@ Commands:
   delete <id>                 Delete an exploration
   service install             Run the daemon at login (macOS)
   service uninstall           Stop running the daemon at login
+  dictation install [--model <name>]
+                              Download the Whisper model for dictation
+  dictation uninstall         Delete the Whisper models
   mcp                         Run the stdio MCP server (used by the Claude Code plugin)
   hook <name>                 Run a Claude Code hook handler (used by the plugin)
   --version                   Print the version`;
@@ -53,6 +65,9 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
     }
     const { version, pid } = current.health;
     console.log(`chat-explorer ${version} is running at ${config.baseUrl} (pid ${pid}).`);
+    const { model } = loadSettings(config).dictation;
+    const dictation = dictationAvailability(whisperModelPath(config.modelsPath, model));
+    console.log(`Dictation: ${dictation.available ? 'ready' : dictation.reason}`);
     const explorations = await request<ExplorationListItem[]>('/api/explorations');
     const attached = explorations.filter((exploration) => exploration.sessionStatus !== 'detached');
     if (attached.length === 0) return console.log('No Claude session is attached.');
@@ -112,6 +127,50 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
     throw new UsageError('chat-explorer service install|uninstall');
   },
 
+  async dictation([action, ...args]) {
+    if (action === 'install') {
+      const { values } = parseArgs({ args, options: { model: { type: 'string' } } });
+      const model = whisperModels.find((name) => name === values.model);
+      if (values.model && !model) {
+        throw new UsageError(`chat-explorer dictation install --model ${whisperModels.join('|')}`);
+      }
+      let printedMegabytes = -1;
+      await installDictation({
+        config,
+        model: model ?? loadSettings(config).dictation.model,
+        log: (line) => console.log(line),
+        onProgress: (receivedBytes, totalBytes) => {
+          const done = receivedBytes === totalBytes;
+          const receivedMegabytes = megabytes(receivedBytes);
+          if (receivedMegabytes === printedMegabytes && !done) return;
+          printedMegabytes = receivedMegabytes;
+          process.stdout.write(
+            `\rDownloading ${receivedMegabytes} / ${megabytes(totalBytes)} MB${done ? '\n' : ''}`,
+          );
+        },
+      });
+      const current = await probe(config.baseUrl);
+      if (current.state !== 'running') {
+        return console.log('Dictation is ready. Start chat-explorer to use it.');
+      }
+      const settings = await request<{ dictation: boolean }>('/api/settings');
+      console.log(
+        settings.dictation
+          ? 'Dictation is ready.'
+          : 'The running daemon cannot find whisper-cli or the model. If it runs as a service, run chat-explorer service install again so it picks up your PATH.',
+      );
+      return;
+    }
+    if (action === 'uninstall') {
+      const removed = await uninstallDictation(config);
+      for (const path of removed) console.log(`Removed ${path}.`);
+      if (removed.length === 0) console.log('No Whisper model is installed.');
+      console.log('To remove whisper-cli too: brew uninstall whisper-cpp');
+      return;
+    }
+    throw new UsageError('chat-explorer dictation install|uninstall');
+  },
+
   async mcp() {
     const { runShim } = await import('../mcp/shim.js');
     await runShim();
@@ -146,7 +205,12 @@ async function main([command, ...args]: string[]) {
 
 main(process.argv.slice(2)).catch((error: Error) => {
   if (error instanceof UsageError) console.error(`Usage: ${error.message}`);
-  else if (error instanceof DaemonStartError || error instanceof DaemonError)
+  else if (
+    error instanceof DaemonStartError ||
+    error instanceof DaemonError ||
+    error instanceof SettingsError ||
+    error instanceof InstallError
+  )
     console.error(error.message);
   else console.error(error);
   process.exitCode = 1;

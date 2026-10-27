@@ -3,13 +3,16 @@ import { claudeModels, defaultClaudeModel, type ClaudeModel } from '@shared/mode
 import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { api } from '../api';
+import { insertAtCursor } from '../lib/insert-text';
 import { modelLabels } from '../lib/models';
+import DictationButton from './DictationButton.vue';
 
 const router = useRouter();
 const message = ref('');
 const model = ref<ClaudeModel>(defaultClaudeModel);
 const starting = ref(false);
 const error = ref('');
+const textarea = ref<HTMLTextAreaElement | null>(null);
 
 onMounted(async () => {
   try {
@@ -43,6 +46,7 @@ function onKeydown(event: KeyboardEvent) {
 <template>
   <form class="new-exploration" @submit.prevent="start">
     <textarea
+      ref="textarea"
       v-model="message"
       rows="3"
       placeholder="Start a new exploration: ask anything (⌘↵ to start)"
@@ -54,6 +58,7 @@ function onKeydown(event: KeyboardEvent) {
           {{ modelLabels[option] }}
         </option>
       </select>
+      <DictationButton @text="(text) => (message = insertAtCursor(textarea, message, text))" />
       <span class="spacer" />
       <span v-if="error" class="error">{{ error }}</span>
       <button type="submit" class="primary" :disabled="!message.trim() || starting">Start</button>
@@ -70,6 +75,7 @@ function onKeydown(event: KeyboardEvent) {
 
 .actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
 }

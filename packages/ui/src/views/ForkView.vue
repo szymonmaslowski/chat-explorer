@@ -164,6 +164,7 @@ watch(
         :exploration-id="explorationId"
         :fork-id="fork.id"
         :drafts="drafts"
+        :hint="state.exploration?.title ?? ''"
         @submitted="onSubmitted"
       />
     </template>

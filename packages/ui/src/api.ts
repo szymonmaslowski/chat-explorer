@@ -18,11 +18,15 @@ export class ApiError extends Error {
   }
 }
 
-async function call<Result>(path: string, init: { method?: string; json?: object } = {}) {
+async function call<Result>(
+  path: string,
+  init: { method?: string; json?: object; form?: FormData; signal?: AbortSignal } = {},
+) {
   const response = await fetch(path, {
-    method: init.method ?? (init.json ? 'POST' : 'GET'),
+    method: init.method ?? (init.json || init.form ? 'POST' : 'GET'),
     headers: init.json ? { 'content-type': 'application/json' } : {},
-    body: init.json ? JSON.stringify(init.json) : null,
+    body: init.json ? JSON.stringify(init.json) : (init.form ?? null),
+    signal: init.signal,
   });
   const body = await response.json();
   if (!response.ok) throw new ApiError(body.error ?? 'error', body.message ?? response.statusText);
@@ -30,7 +34,13 @@ async function call<Result>(path: string, init: { method?: string; json?: object
 }
 
 export const api = {
-  settings: () => call<{ defaultModel: ClaudeModel }>('/api/settings'),
+  settings: () => call<{ defaultModel: ClaudeModel; dictation: boolean }>('/api/settings'),
+  transcribe: (wav: Blob, hint: string, signal: AbortSignal) => {
+    const form = new FormData();
+    form.append('audio', wav, 'recording.wav');
+    form.append('hint', hint);
+    return call<{ text: string }>('/api/transcriptions', { form, signal });
+  },
   listExplorations: () => call<ExplorationListItem[]>('/api/explorations'),
   snapshot: (explorationId: string) => call<Snapshot>(`/api/explorations/${explorationId}`),
   createExploration: (message: string, model: ClaudeModel) =>

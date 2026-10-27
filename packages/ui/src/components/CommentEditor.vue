@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { CommentType } from '@shared/types';
 import { onMounted, ref } from 'vue';
+import { insertAtCursor } from '../lib/insert-text';
+import DictationButton from './DictationButton.vue';
 
 defineProps<{ quote: string; top: number; left: number; width: number }>();
 const emit = defineEmits<{ save: [body: string, type: CommentType]; cancel: [] }>();
@@ -37,6 +39,10 @@ function onKeydown(event: KeyboardEvent) {
     />
     <div class="actions">
       <label><input v-model="asFork" type="checkbox" /> Fork</label>
+      <DictationButton
+        :hint="quote"
+        @text="(text) => (body = insertAtCursor(textarea, body, text))"
+      />
       <span class="spacer" />
       <button type="button" @click="emit('cancel')">Cancel</button>
       <button type="button" class="primary" :disabled="!body.trim()" @click="save">Save</button>
@@ -72,6 +78,7 @@ function onKeydown(event: KeyboardEvent) {
 
 .actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem;
   margin-top: 0.4rem;

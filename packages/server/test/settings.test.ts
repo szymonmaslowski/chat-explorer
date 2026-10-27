@@ -27,6 +27,7 @@ describe('settings', () => {
       defaultModel: 'sonnet',
       idleMinutes: 60,
       maxSessions: 3,
+      dictation: { model: 'large-v3-turbo-q5_0', language: 'auto' },
     });
   });
 

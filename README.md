@@ -77,6 +77,21 @@ claude -p "/explore-chat <id>" --model <model> --tools WebSearch ...
 - If Claude cannot start, for example because it is not logged in, the page shows the end of its log and a Retry button.
 - Running `/explore-chat <id>` in a terminal takes the exploration over. The background session then exits.
 
+### Dictation
+
+Every text box has a mic button. Tap it, speak, tap it again: the Mac turns the recording into text with [whisper.cpp](https://github.com/ggml-org/whisper.cpp) on its GPU, and the text lands at the cursor. Audio never leaves your devices.
+
+```
+brew install whisper-cpp
+chat-explorer dictation install
+```
+
+- `dictation install` downloads the Whisper model (`large-v3-turbo` quantised to q5_0, 574 MB) from Hugging Face into `~/.chat-explorer/models/`, checks its SHA-256, and runs Whisper once. The first run compiles GPU code, which takes about 15 seconds.
+- On an M2 Max a 20-second recording takes about 1.5 seconds. Whisper uses about 800 MB of memory while it runs and nothing in between.
+- The language is detected per recording. The exploration title or the quoted text goes to Whisper as a hint, which helps with technical words.
+- The mic button appears once the daemon finds `whisper-cli` and the model, with no restart needed. It needs HTTPS or `127.0.0.1`, which the Tailscale address and the local address both are.
+- `chat-explorer dictation uninstall` deletes the model.
+
 ## CLI
 
 ```
@@ -87,6 +102,7 @@ chat-explorer list [--json]                 explorations, newest first
 chat-explorer open [id] [--fork <forkId>]   open the UI in the browser
 chat-explorer delete <id>
 chat-explorer service install|uninstall     run the daemon at login (macOS)
+chat-explorer dictation install|uninstall   download or delete the Whisper model
 ```
 
 `chat-explorer mcp` and `chat-explorer hook <name>` are used by the plugin.
@@ -103,12 +119,13 @@ chat-explorer service install|uninstall     run the daemon at login (macOS)
 
 `~/.chat-explorer/config.json` is read when the daemon starts. Every key is optional:
 
-| Key            | Default    |                                                        |
-| -------------- | ---------- | ------------------------------------------------------ |
-| `publicUrl`    | `null`     | Address the phone uses, e.g. a Tailscale Serve address |
-| `defaultModel` | `"sonnet"` | Model for new explorations (`"sonnet"` or `"opus"`)    |
-| `idleMinutes`  | `60`       | Stop a background session after this long with no work |
-| `maxSessions`  | `3`        | Background sessions running at once                    |
+| Key            | Default    |                                                          |
+| -------------- | ---------- | -------------------------------------------------------- |
+| `publicUrl`    | `null`     | Address the phone uses, e.g. a Tailscale Serve address   |
+| `defaultModel` | `"sonnet"` | Model for new explorations (`"sonnet"` or `"opus"`)      |
+| `idleMinutes`  | `60`       | Stop a background session after this long with no work   |
+| `maxSessions`  | `3`        | Background sessions running at once                      |
+| `dictation`    | see below  | `{ "model": "large-v3-turbo-q5_0", "language": "auto" }` |
 
 The daemon listens on `127.0.0.1` only and rejects requests from other websites. Requests through `publicUrl` are accepted too, so anyone who can reach that address can start Claude sessions on your Mac. Keep it inside your tailnet (`tailscale serve`, not `tailscale funnel`).
 
@@ -137,6 +154,7 @@ The design and its decisions are in [docs/plan.md](docs/plan.md).
 - Claude Code only (CLI and the Desktop Code tab), not regular Claude Desktop chat.
 - Background sessions can't touch files or run commands. Sessions in isolated containers with those tools are planned.
 - `service install` is macOS only.
+- Dictation shows no words while you speak; the text arrives once you stop.
 
 ## Development
 

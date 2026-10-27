@@ -1,8 +1,11 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../src/api/app.js';
 import { Database } from '../src/db/database.js';
+import type { DictationAvailability } from '../src/dictation/availability.js';
+import { Transcriber } from '../src/dictation/transcriber.js';
+import type { WhisperRun } from '../src/dictation/whisper.js';
 import { BackgroundSessions } from '../src/sessions/background-sessions.js';
 import type { LaunchSpec, SessionProcess } from '../src/sessions/launch-claude.js';
 import type { ExplorationEvent } from '../src/shared/types.js';
@@ -76,13 +79,48 @@ function fakeLaunch(spec: LaunchSpec): FakeLaunch {
   return launch;
 }
 
+export interface FakeWhisperCall {
+  whisperPath: string;
+  args: string[];
+  signal: AbortSignal;
+  audio: Buffer;
+  finish: (run: Partial<WhisperRun>) => void;
+}
+
+export function createTestTranscriber(options: { timeoutMs?: number } = {}) {
+  const calls: FakeWhisperCall[] = [];
+  const availability: { current: DictationAvailability } = {
+    current: { available: true, whisperPath: '/bin/whisper-cli', modelPath: '/models/test.bin' },
+  };
+  const transcriber = new Transcriber({
+    language: 'auto',
+    checkAvailability: () => availability.current,
+    timeoutMs: options.timeoutMs,
+    run: (whisperPath, args, signal) =>
+      new Promise((resolve, reject) => {
+        const audioPath = args[args.indexOf('-f') + 1]!;
+        signal.addEventListener('abort', () => reject(signal.reason));
+        calls.push({
+          whisperPath,
+          args,
+          signal,
+          audio: readFileSync(audioPath),
+          finish: (run) => resolve({ code: 0, stdout: '', stderr: '', ...run }),
+        });
+      }),
+  });
+  return { transcriber, calls, availability };
+}
+
 export function createTestApp(options: { publicUrl?: string } = {}) {
   const context = createTestStore();
+  const { transcriber, calls: whisperCalls } = createTestTranscriber();
   const app = createApp({
     store: context.store,
     hub: context.hub,
     bus: context.bus,
     sessions: context.sessions,
+    transcriber,
     defaultModel: 'sonnet',
     port: testPort,
     publicUrl: options.publicUrl ?? null,
@@ -101,7 +139,7 @@ export function createTestApp(options: { publicUrl?: string } = {}) {
       body: json ? JSON.stringify(json) : rest.body,
     });
   };
-  return { ...context, app, request };
+  return { ...context, app, request, whisperCalls };
 }
 
 export function seedConversation(store: ChatStore) {

@@ -1,8 +1,10 @@
 import { existsSync } from 'node:fs';
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 import { apiVersion } from '../config.js';
+import { dictationHint, type Transcriber } from '../dictation/transcriber.js';
 import { findTranscript, readTranscript } from '../import/transcript.js';
 import type { BackgroundSessions } from '../sessions/background-sessions.js';
 import { claudeModels, type ClaudeModel } from '../shared/models.js';
@@ -19,6 +21,7 @@ export interface AppOptions {
   hub: FeedbackHub;
   bus: EventBus;
   sessions: BackgroundSessions;
+  transcriber: Transcriber;
   defaultModel: ClaudeModel;
   port: number;
   publicUrl: string | null;
@@ -29,6 +32,8 @@ export interface AppOptions {
 
 const sseKeepAliveMs = 20_000;
 const maxFeedbackWaitMs = 280_000;
+// About ten minutes of 16 kHz mono 16-bit WAV.
+const maxRecordingBytes = 20 * 1024 * 1024;
 
 const commentType = z.enum(['inline', 'fork']);
 const model = z.enum(claudeModels);
@@ -59,12 +64,16 @@ const explorationChangesBody = shimBody.extend({
   title: z.string().optional(),
   summary: z.string().optional(),
 });
+const transcriptionBody = z.object({
+  audio: z.instanceof(File),
+  hint: z.string().default(''),
+});
 const feedbackBody = shimBody.extend({
   waitMs: z.number().int().positive().max(maxFeedbackWaitMs),
 });
 
 export function createApp(options: AppOptions) {
-  const { store, hub, bus, sessions, port } = options;
+  const { store, hub, bus, sessions, transcriber, port } = options;
   const localUrl = `http://127.0.0.1:${port}`;
   const explorationUrls = (explorationId: string) => ({
     url: `${options.publicUrl ?? localUrl}/e/${explorationId}`,
@@ -94,7 +103,27 @@ export function createApp(options: AppOptions) {
     return context.json({ ok: true });
   });
 
-  app.get('/api/settings', (context) => context.json({ defaultModel: options.defaultModel }));
+  app.get('/api/settings', (context) =>
+    context.json({ defaultModel: options.defaultModel, dictation: transcriber.available() }),
+  );
+
+  app.post(
+    '/api/transcriptions',
+    bodyLimit({
+      maxSize: maxRecordingBytes,
+      onError: (context) =>
+        context.json({ error: 'too_large', message: 'The recording is too long.' }, 413),
+    }),
+    async (context) => {
+      const { audio, hint } = transcriptionBody.parse(await context.req.parseBody());
+      const text = await transcriber.transcribe({
+        wav: new Uint8Array(await audio.arrayBuffer()),
+        hint: dictationHint(hint),
+        signal: context.req.raw.signal,
+      });
+      return context.json({ text });
+    },
+  );
 
   app.get('/api/explorations', (context) => {
     const explorations: ExplorationListItem[] = store

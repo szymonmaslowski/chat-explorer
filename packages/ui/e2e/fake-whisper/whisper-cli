@@ -1,0 +1,11 @@
+#!/bin/sh
+# Stands in for whisper-cli in e2e tests: checks it got a WAV and prints a fixed transcript.
+while [ $# -gt 0 ]; do
+  [ "$1" = "-f" ] && audio="$2"
+  shift
+done
+if [ "$(head -c 4 "$audio")" != "RIFF" ]; then
+  echo "error: failed to read audio file '$audio'" >&2
+  exit 2
+fi
+echo " Dictated by the fake whisper."

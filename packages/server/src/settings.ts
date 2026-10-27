@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { z } from 'zod';
 import type { Config } from './config.js';
+import { defaultWhisperModel, whisperModels } from './dictation/models.js';
 import { claudeModels, defaultClaudeModel } from './shared/models.js';
 
 const settingsSchema = z
@@ -13,6 +14,13 @@ const settingsSchema = z
     defaultModel: z.enum(claudeModels).default(defaultClaudeModel),
     idleMinutes: z.number().positive().default(60),
     maxSessions: z.number().int().positive().default(3),
+    dictation: z
+      .object({
+        model: z.enum(whisperModels).default(defaultWhisperModel),
+        language: z.string().default('auto'),
+      })
+      .strict()
+      .prefault({}),
   })
   .strict();
 

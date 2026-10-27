@@ -14,6 +14,7 @@ export function loadConfig() {
     logPath: join(home, 'daemon.log'),
     settingsPath: join(home, 'config.json'),
     sessionsPath: join(home, 'sessions'),
+    modelsPath: join(home, 'models'),
     baseUrl: `http://127.0.0.1:${port}`,
   };
 }

@@ -439,6 +439,29 @@ claude -p "/explore-chat <id>" --model <model> (--session-id <uuid> | --resume <
 
 Done when: a test exploration started from the UI is answered by a background session; the model switch restarts it with its context; an idle session stops and resumes on the next submit; unit tests cover the session manager with a fake launcher; Playwright covers the new-exploration form and the narrow layout.
 
+### 11. Dictation
+
+Goal: speak into any text box on the phone or the Mac. The Mac transcribes on its own GPU; audio stays on your devices.
+
+**Engine.** whisper.cpp from Homebrew (`whisper-cli`), model `large-v3-turbo` q5_0 (574 MB) in `~/.chat-explorer/models/`. MLX Whisper (Python), Node bindings (native rebuilds) and Apple SpeechAnalyzer (macOS 26) were rejected.
+
+Measured on an M2 Max with synthetic speech:
+
+| | 14 s Polish | 20 s English | 59 s English | Memory |
+|---|---|---|---|---|
+| `whisper-cli` per recording | 1.5 s | 1.5 s | 2.7 s | ~800 MB peak, only while running |
+| warm `whisper-server` | 1.0 s | 1.1 s | 2.3 s | ~730 MB held |
+
+Loading the model takes 0.2 s, so the daemon runs `whisper-cli` per recording and keeps nothing warm. The first run ever takes about 16 s while macOS compiles the GPU code. A vocabulary hint fixes most technical terms ("E tag" becomes "ETag").
+
+**Browser.** `MediaRecorder` records (Opus in WebM on Chrome, AAC in MP4 on Safari). On stop, the page decodes the recording, resamples it to 16 kHz mono with an `OfflineAudioContext` and sends a WAV. `whisper-cli` cannot read WebM or MP4, and converting in the browser avoids ffmpeg on the Mac. A level meter shows the mic hears you; a recording that never got loud enough is not sent, because Whisper invents words for silence ("you"). A screen wake lock keeps iOS from stopping the recording. Recordings stop on their own at 10 minutes.
+
+**Endpoint.** `POST /api/transcriptions`, multipart `audio` plus an optional `hint`, answers `{ text }`. Body limit 20 MB. The daemon writes the WAV to a temp directory, runs `whisper-cli -m <model> -f audio.wav -l <language> -nt -np --prompt <hint>` and reads the text from standard output. One run at a time, in an in-memory queue. Cancelling the request kills the run or drops it from the queue. Runs over 2 minutes are killed. Errors: `dictation_unavailable` (503), `invalid_audio` (400), `transcription_failed` (500), `transcription_timeout` (504).
+
+**Setup.** `chat-explorer dictation install [--model <name>]` checks for `whisper-cli`, checks disk space, downloads the model to a `.part` file while hashing it, compares the SHA-256 with the one pinned in `src/dictation/models.ts`, renames it, runs Whisper once on a second of silence, and asks the running daemon whether it sees dictation. `GET /api/settings` reports `dictation: true | false`, checked on every call. `chat-explorer status` prints a dictation line.
+
+Done when: unit tests cover the transcriber with a fake runner, the download with a local server and the WAV encoder; a real-Whisper test runs when the model is present; Playwright dictates a reply through Chrome's fake microphone and a fake `whisper-cli`.
+
 ## Later
 
 - Hard forks: each fork's answer written by a subagent that only gets `read_fork` for that fork.
@@ -447,3 +470,4 @@ Done when: a test exploration started from the UI is answered by a background se
 - Code highlighting in messages, search, export.
 - Background sessions in isolated Docker containers with file and shell tools, for building things from the phone.
 - Claude suggests a model switch mid-exploration, and the UI offers it in one tap.
+- Dictation: words appearing while you speak, a voice-activity model if silence still slips through.

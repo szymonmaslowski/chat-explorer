@@ -5,6 +5,10 @@ import { fileURLToPath } from 'node:url';
 import { getRequestListener } from '@hono/node-server';
 import { createApp } from '../api/app.js';
 import { loadConfig } from '../config.js';
+import { dictationAvailability } from '../dictation/availability.js';
+import { whisperModelPath } from '../dictation/models.js';
+import { Transcriber } from '../dictation/transcriber.js';
+import { runWhisper } from '../dictation/whisper.js';
 import { findTranscript } from '../import/transcript.js';
 import { BackgroundSessions } from '../sessions/background-sessions.js';
 import { claudeLauncher } from '../sessions/launch-claude.js';
@@ -35,6 +39,12 @@ const sessions = new BackgroundSessions({
   onStatusChange: (explorationId) => hub.refreshStatus(explorationId),
 });
 const hub = new FeedbackHub(store, bus, Date.now, sessions);
+const modelPath = whisperModelPath(config.modelsPath, settings.dictation.model);
+const transcriber = new Transcriber({
+  language: settings.dictation.language,
+  checkAvailability: () => dictationAvailability(modelPath),
+  run: runWhisper,
+});
 
 const shutdown = () => {
   sessions.stopAll();
@@ -50,6 +60,7 @@ const app = createApp({
   hub,
   bus,
   sessions,
+  transcriber,
   defaultModel: settings.defaultModel,
   port: config.port,
   publicUrl: settings.publicUrl,
