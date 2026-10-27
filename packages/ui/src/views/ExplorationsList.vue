@@ -2,6 +2,7 @@
 import type { ExplorationListItem } from '@shared/types';
 import { ref, watch } from 'vue';
 import { api } from '../api';
+import ConfirmButton from '../components/ConfirmButton.vue';
 import NewExploration from '../components/NewExploration.vue';
 import ThemeSwitch from '../components/ThemeSwitch.vue';
 import { relativeTime } from '@shared/time';
@@ -61,13 +62,11 @@ async function removeFromList(explorationId: string, change: (id: string) => Pro
           </span>
         </RouterLink>
         <div class="actions">
-          <button
+          <ConfirmButton
             v-if="!archived"
-            type="button"
-            @click="removeFromList(exploration.id, api.archive)"
-          >
-            Archive
-          </button>
+            label="Archive"
+            @confirm="removeFromList(exploration.id, api.archive)"
+          />
           <template v-else-if="confirmingDelete === exploration.id">
             <span class="muted">Delete?</span>
             <button
