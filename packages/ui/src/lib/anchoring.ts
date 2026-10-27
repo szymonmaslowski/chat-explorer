@@ -20,10 +20,22 @@ export function textOffsetOf(root: Node, container: Node, offset: number) {
 
 export function anchorOfRange(root: Node, range: Range): TextAnchor | null {
   if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return null;
-  const quote = range.toString();
-  if (!quote.trim()) return null;
-  const startOffset = textOffsetOf(root, range.startContainer, range.startOffset);
+  const selected = range.toString();
+  const quote = selected.trim();
+  if (!quote) return null;
+  const startOffset =
+    textOffsetOf(root, range.startContainer, range.startOffset) +
+    selected.length -
+    selected.trimStart().length;
   return { quote, startOffset, endOffset: startOffset + quote.length };
+}
+
+// A triple-click or a drag past the end of a message selects up to a node outside it.
+export function clampToRoot(root: Node, range: Range) {
+  const clamped = range.cloneRange();
+  if (!root.contains(clamped.startContainer)) clamped.setStart(root, 0);
+  if (!root.contains(clamped.endContainer)) clamped.setEnd(root, root.childNodes.length);
+  return clamped;
 }
 
 export function rangeFromOffsets(root: Node, startOffset: number, endOffset: number) {

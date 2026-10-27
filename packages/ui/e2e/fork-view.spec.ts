@@ -7,13 +7,21 @@ async function openSeededExploration(page: Page) {
   return exploration.id as string;
 }
 
+const paragraphBox = async (page: Page, paragraph: string) => {
+  const locator = page.locator('.content p', { hasText: paragraph }).first();
+  await locator.scrollIntoViewIfNeeded();
+  return (await locator.boundingBox())!;
+};
+
 async function selectText(page: Page, paragraph: string, length: number) {
-  const box = (await page.locator('.content p', { hasText: paragraph }).first().boundingBox())!;
+  const box = await paragraphBox(page, paragraph);
   await page.mouse.move(box.x + 2, box.y + 10);
   await page.mouse.down();
   await page.mouse.move(box.x + length, box.y + 10, { steps: 5 });
   await page.mouse.up();
 }
+
+const commentButton = (page: Page) => page.getByRole('button', { name: 'Comment', exact: true });
 
 const summary = (page: Page) => page.locator('.reply-bar .summary');
 
@@ -22,7 +30,7 @@ test('creates, reveals and deletes a draft comment', async ({ page }) => {
   await expect(summary(page)).toHaveText('1 comment');
 
   await selectText(page, 'There are three common ways', 160);
-  await page.getByRole('button', { name: 'Comment', exact: true }).click();
+  await commentButton(page).click();
   await page.getByPlaceholder('Your comment').fill('Which one is cheapest?');
   await page.keyboard.press('ControlOrMeta+Enter');
 
@@ -36,6 +44,27 @@ test('creates, reveals and deletes a draft comment', async ({ page }) => {
   await card.getByRole('button', { name: 'Delete' }).click();
   await expect(card).toHaveCount(0);
   await expect(summary(page)).toHaveText('1 comment');
+});
+
+test('offers a comment for a triple-clicked paragraph', async ({ page }) => {
+  await openSeededExploration(page);
+  const box = await paragraphBox(page, "For most apps I'd start");
+  await page.mouse.click(box.x + 20, box.y + 10, { clickCount: 3 });
+  await commentButton(page).click();
+  await expect(page.locator('.comment-editor')).toContainText(
+    "For most apps I'd start with HTTP caching for public data and a shared cache for per-user data.",
+  );
+  await page.keyboard.press('Escape');
+});
+
+test('offers a comment when the drag ends outside the conversation', async ({ page }) => {
+  await openSeededExploration(page);
+  const box = await paragraphBox(page, 'There are three common ways');
+  await page.mouse.move(box.x + 2, box.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width + 120, box.y + 10, { steps: 5 });
+  await page.mouse.up();
+  await expect(commentButton(page)).toBeVisible();
 });
 
 test('queues a submit, scrolls to it and cancels it back into drafts', async ({ page }) => {
@@ -68,6 +97,15 @@ test('navigates through the map and back and forward with [ and ]', async ({ pag
   await expect(page).toHaveURL(/\/map/);
   await page.keyboard.press(']');
   await expect(page.locator('.fork-title')).toHaveText('Purging cached responses on a CDN');
+});
+
+test('opens a fork from the map at its end', async ({ page }) => {
+  const explorationId = await openSeededExploration(page);
+  await page.goto(`/e/${explorationId}/map`);
+  await page.locator('.fork-box', { hasText: 'Caching options and invalidation' }).click();
+  await expect(page.locator('.fork-title')).toHaveText('Caching options and invalidation');
+  await expect(page.getByPlaceholder('Reply to Claude')).toBeInViewport();
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
 });
 
 test('opens the fork created by a submitted fork comment', async ({ page }) => {

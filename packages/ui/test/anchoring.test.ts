@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { anchorOfRange, locateAnchor, rangeFromOffsets } from '../src/lib/anchoring';
+import { anchorOfRange, clampToRoot, locateAnchor, rangeFromOffsets } from '../src/lib/anchoring';
 
 let root: HTMLElement;
 
@@ -36,6 +36,26 @@ describe('anchoring', () => {
     ).toBeNull();
     const first = root.querySelector('p')!.firstChild!;
     expect(anchorOfRange(root, selectText(first, 5, first, 6))).toBeNull();
+  });
+
+  it('leaves surrounding whitespace out of the quote', () => {
+    const second = root.querySelectorAll('p')[1]!;
+    root.insertBefore(document.createTextNode('\n'), second);
+    const first = root.querySelector('p')!.firstChild!;
+    expect(anchorOfRange(root, selectText(first, 5, second.firstChild!, 0))).toEqual({
+      quote: 'bold line.',
+      startOffset: 6,
+      endOffset: 16,
+    });
+  });
+
+  it('clamps a selection that ends outside the root', () => {
+    const outside = document.createElement('p');
+    outside.textContent = 'elsewhere';
+    document.body.append(outside);
+    const second = root.querySelectorAll('p')[1]!.firstChild!;
+    const clamped = clampToRoot(root, selectText(second, 7, outside.firstChild!, 0));
+    expect(anchorOfRange(root, clamped)?.quote).toBe('line.');
   });
 
   it('rebuilds a range from offsets', () => {

@@ -3,7 +3,7 @@ import type { Comment, CommentType } from '@shared/types';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from '../api';
-import { anchorOfRange, locateAnchor, type TextAnchor } from '../lib/anchoring';
+import { anchorOfRange, clampToRoot, locateAnchor, type TextAnchor } from '../lib/anchoring';
 import { layoutCards } from '../lib/card-layout';
 import { pointer } from '../lib/pointer';
 import CommentCard from './CommentCard.vue';
@@ -165,10 +165,15 @@ function onMouseUp() {
       selection.value = null;
       return;
     }
-    const range = current.getRangeAt(0);
-    const root = anchorRootOf(range.startContainer);
-    const anchor = root && root === anchorRootOf(range.endContainer) && anchorOfRange(root, range);
-    if (!root || !anchor) {
+    const selected = current.getRangeAt(0);
+    const root = anchorRootOf(selected.startContainer) ?? anchorRootOf(selected.endContainer);
+    if (!root || !container()?.contains(root)) {
+      selection.value = null;
+      return;
+    }
+    const range = clampToRoot(root, selected);
+    const anchor = anchorOfRange(root, range);
+    if (!anchor) {
       selection.value = null;
       return;
     }
@@ -227,7 +232,7 @@ function openSubmitted(comment: Comment) {
 let resizeObserver: ResizeObserver | null = null;
 onMounted(() => {
   const root = container();
-  root?.addEventListener('mouseup', onMouseUp);
+  document.addEventListener('mouseup', onMouseUp);
   document.addEventListener('selectionchange', onSelectionChange);
   resizeObserver = new ResizeObserver(() => measure());
   if (root) resizeObserver.observe(root);
@@ -235,7 +240,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-  container()?.removeEventListener('mouseup', onMouseUp);
+  document.removeEventListener('mouseup', onMouseUp);
   document.removeEventListener('selectionchange', onSelectionChange);
   resizeObserver?.disconnect();
   if ('highlights' in CSS) CSS.highlights.clear();

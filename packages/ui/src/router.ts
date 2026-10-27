@@ -8,8 +8,13 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', component: ExplorationsList },
-    { path: '/e/:explorationId', component: ForkView, props: true },
-    { path: '/e/:explorationId/f/:forkId', component: ForkView, props: true },
+    { path: '/e/:explorationId', component: ForkView, props: true, meta: { opensAtEnd: true } },
+    {
+      path: '/e/:explorationId/f/:forkId',
+      component: ForkView,
+      props: true,
+      meta: { opensAtEnd: true },
+    },
     {
       path: '/e/:explorationId/map',
       component: ForkMap,
@@ -26,7 +31,9 @@ export const router = createRouter({
     }
     // Views scroll to `#m-` and `#c-` targets themselves once the content has rendered.
     if (to.hash || to.path === from.path) return false;
-    return { top: 0 };
+    if (!to.meta.opensAtEnd) return { top: 0 };
+    await whenActiveExplorationLoaded();
+    return { top: document.documentElement.scrollHeight };
   },
 });
 
