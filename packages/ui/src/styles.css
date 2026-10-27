@@ -129,3 +129,31 @@ blockquote {
 .muted {
   color: var(--text-muted);
 }
+
+.flash {
+  animation: flash 1.4s ease-out;
+}
+
+@keyframes flash {
+  from {
+    box-shadow: 0 0 0 4px var(--accent-soft);
+  }
+}
+
+::highlight(comment-inline) {
+  background-color: var(--accent-soft);
+}
+
+::highlight(comment-fork) {
+  background-color: var(--fork-soft);
+}
+
+::highlight(comment-submitted) {
+  text-decoration: underline dotted var(--text-muted);
+  text-underline-offset: 3px;
+}
+
+::highlight(comment-flash) {
+  background-color: var(--accent-soft);
+  text-decoration: underline solid var(--accent) 2px;
+}

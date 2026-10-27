@@ -8,7 +8,7 @@ import type {
   SessionStatus,
   Snapshot,
 } from '@shared/types';
-import { reactive } from 'vue';
+import { nextTick, reactive, watch } from 'vue';
 import { api, ApiError } from '../api';
 
 export interface ExplorationState {
@@ -129,6 +129,20 @@ function createExplorationStore(explorationId: string) {
 }
 
 let active: ReturnType<typeof createExplorationStore> | null = null;
+
+export function whenActiveExplorationLoaded() {
+  return new Promise<void>((resolve) => {
+    if (!active || active.state.status !== 'loading') return resolve();
+    const stop = watch(
+      () => active?.state.status,
+      (status) => {
+        if (status === 'loading') return;
+        stop();
+        void nextTick(resolve);
+      },
+    );
+  });
+}
 
 export function openExploration(explorationId: string) {
   if (active?.state.explorationId === explorationId) return active.state;

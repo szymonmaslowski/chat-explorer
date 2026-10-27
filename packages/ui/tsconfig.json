@@ -11,5 +11,5 @@
       "@shared/*": ["../server/src/shared/*"]
     }
   },
-  "include": ["src", "test", "vite.config.ts", "env.d.ts"]
+  "include": ["src", "test", "e2e", "vite.config.ts", "playwright.config.ts", "env.d.ts"]
 }

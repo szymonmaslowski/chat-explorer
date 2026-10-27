@@ -21,10 +21,16 @@ const html = computed(() => (props.message.content ? renderMarkdown(props.messag
   >
     <header class="role">{{ message.role === 'user' ? 'You' : 'Claude' }}</header>
     <div v-for="comment in quotedComments" :key="comment.id" class="quoted-comment">
-      <blockquote>{{ comment.quote }}</blockquote>
+      <RouterLink
+        :to="`/e/${message.explorationId}/f/${comment.viewForkId}#c-${comment.id}`"
+        class="quote-link"
+        title="Show where this was commented"
+      >
+        <blockquote>{{ comment.quote }}</blockquote>
+      </RouterLink>
       <p>{{ comment.body }}</p>
     </div>
-    <div v-if="html" class="content" v-html="html" />
+    <div v-if="html" class="content" :data-anchor-root="message.id" v-html="html" />
   </article>
 </template>
 
@@ -50,6 +56,15 @@ const html = computed(() => (props.message.content ? renderMarkdown(props.messag
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-muted);
+}
+
+.quote-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.quote-link:hover blockquote {
+  border-left-color: var(--accent);
 }
 
 .quoted-comment p {

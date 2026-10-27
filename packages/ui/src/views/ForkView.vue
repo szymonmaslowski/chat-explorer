@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, watch } from 'vue';
+import { useRoute } from 'vue-router';
+import CommentLayer from '../components/CommentLayer.vue';
 import ConversationMessage from '../components/ConversationMessage.vue';
 import QueuedSubmissionCard from '../components/QueuedSubmissionCard.vue';
 import ReplyBar from '../components/ReplyBar.vue';
@@ -9,6 +11,10 @@ import { openExploration } from '../stores/exploration';
 
 const props = defineProps<{ explorationId: string; forkId?: string }>();
 
+const nearBottomPx = 200;
+const flashMs = 1_400;
+
+const route = useRoute();
 const state = computed(() => openExploration(props.explorationId));
 const fork = computed(() =>
   props.forkId ? (state.value.forks.get(props.forkId) ?? null) : mainFork(state.value.forks),
@@ -17,10 +23,17 @@ const parentFork = computed(() =>
   fork.value?.parentForkId ? (state.value.forks.get(fork.value.parentForkId) ?? null) : null,
 );
 const path = computed(() => (fork.value ? forkPath(fork.value, state.value.messages) : []));
+const pathIds = computed(() => new Set(path.value.map((message) => message.id)));
 const ownStart = computed(() =>
   path.value.findIndex((message) => message.forkId === fork.value?.id),
 );
 const awaitingAnswer = computed(() => path.value.at(-1)?.role === 'user');
+const viewComments = computed(() =>
+  [...state.value.comments.values()].filter(
+    (comment) => comment.viewForkId === fork.value?.id && pathIds.value.has(comment.messageId),
+  ),
+);
+const drafts = computed(() => viewComments.value.filter((comment) => comment.status === 'draft'));
 const queuedSubmissions = computed(() =>
   [...state.value.queuedSubmissions.values()].filter(
     (submission) => submission.forkId === fork.value?.id,
@@ -29,22 +42,77 @@ const queuedSubmissions = computed(() =>
 const commentCountOf = (submissionId: string) =>
   [...state.value.comments.values()].filter((comment) => comment.submissionId === submissionId)
     .length;
+
+let nearBottom = true;
+const trackScroll = () => {
+  const { scrollHeight } = document.documentElement;
+  nearBottom = window.scrollY + window.innerHeight >= scrollHeight - nearBottomPx;
+};
+onMounted(() => window.addEventListener('scroll', trackScroll, { passive: true }));
+onBeforeUnmount(() => window.removeEventListener('scroll', trackScroll));
+
+const scrollToBottom = () =>
+  window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+
+async function onSubmitted() {
+  await nextTick();
+  scrollToBottom();
+}
+
+// Follow new messages only when the reader is already at the end of the fork.
+watch(
+  () => [fork.value?.id, path.value.at(-1)] as const,
+  ([forkId, last], [previousForkId, previousLast]) => {
+    if (!last || !previousLast || forkId !== previousForkId || last.id === previousLast.id) return;
+    if (!nearBottom) return;
+    if (last.role === 'assistant') {
+      document
+        .getElementById(`m-${last.id}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      scrollToBottom();
+    }
+  },
+  { flush: 'post' },
+);
+
+let handledHash = '';
+watch(
+  () => [route.hash, path.value.length] as const,
+  ([hash]) => {
+    if (!hash.startsWith('#m-') || hash === handledHash) return;
+    const target = document.getElementById(hash.slice(1));
+    if (!target) return;
+    handledHash = hash;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    target.classList.add('flash');
+    setTimeout(() => target.classList.remove('flash'), flashMs);
+  },
+  { flush: 'post', immediate: true },
+);
 </script>
 
 <template>
   <div class="page fork-view">
-    <header class="top">
-      <nav class="crumbs">
-        <RouterLink to="/">Explorations</RouterLink>
-        <span v-if="state.exploration">
-          / {{ state.exploration.title || 'Untitled exploration' }}
-        </span>
-      </nav>
-      <SessionStatusBar
-        :status="state.sessionStatus"
-        :connected="state.connected"
-        :exploration-id="explorationId"
-      />
+    <header class="top" data-sticky-header>
+      <div class="bar">
+        <nav class="crumbs">
+          <RouterLink to="/">Explorations</RouterLink>
+          <span v-if="state.exploration">
+            / {{ state.exploration.title || 'Untitled exploration' }}
+          </span>
+          <template v-if="fork">
+            ·
+            <RouterLink :to="`/e/${explorationId}/map?from=${fork.id}`">Map</RouterLink>
+          </template>
+        </nav>
+        <SessionStatusBar
+          :status="state.sessionStatus"
+          :connected="state.connected"
+          :exploration-id="explorationId"
+        />
+      </div>
+      <div id="comment-tray" />
     </header>
 
     <p v-if="state.status === 'loading'" class="muted">Loading…</p>
@@ -57,25 +125,34 @@ const commentCountOf = (submissionId: string) =>
       <h1 class="fork-title">{{ forkTitle(fork) }}</h1>
       <p v-if="path.length === 0" class="muted">No messages yet. Write the first one below.</p>
 
-      <template v-for="(message, index) in path" :key="message.id">
-        <div v-if="parentFork && index === ownStart" class="fork-point">
-          Forked from
-          <RouterLink
-            :to="
-              parentFork.parentForkId
-                ? `/e/${explorationId}/f/${parentFork.id}`
-                : `/e/${explorationId}`
-            "
-          >
-            {{ forkTitle(parentFork) }}
-          </RouterLink>
-        </div>
-        <ConversationMessage
-          :message="message"
-          :quoted-comments="quotedCommentsOf(message.id, state.comments)"
-          :shared="ownStart !== -1 && index < ownStart"
+      <div class="conversation">
+        <template v-for="(message, index) in path" :key="message.id">
+          <div v-if="parentFork && index === ownStart" class="fork-point">
+            Forked from
+            <RouterLink
+              :to="
+                parentFork.parentForkId
+                  ? `/e/${explorationId}/f/${parentFork.id}`
+                  : `/e/${explorationId}`
+              "
+            >
+              {{ forkTitle(parentFork) }}
+            </RouterLink>
+          </div>
+          <ConversationMessage
+            :message="message"
+            :quoted-comments="quotedCommentsOf(message.id, state.comments)"
+            :shared="ownStart !== -1 && index < ownStart"
+          />
+        </template>
+        <CommentLayer
+          :key="fork.id"
+          :exploration-id="explorationId"
+          :fork-id="fork.id"
+          :comments="viewComments"
+          :layout-key="[...pathIds].join()"
         />
-      </template>
+      </div>
 
       <p v-if="awaitingAnswer" class="answering muted">Claude is answering…</p>
 
@@ -86,7 +163,12 @@ const commentCountOf = (submissionId: string) =>
         :comment-count="commentCountOf(submission.id)"
       />
 
-      <ReplyBar :exploration-id="explorationId" :fork-id="fork.id" />
+      <ReplyBar
+        :exploration-id="explorationId"
+        :fork-id="fork.id"
+        :drafts="drafts"
+        @submitted="onSubmitted"
+      />
     </template>
   </div>
 </template>
@@ -95,15 +177,18 @@ const commentCountOf = (submissionId: string) =>
 .top {
   position: sticky;
   top: 0;
-  z-index: 5;
+  z-index: 6;
+  background: var(--background);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.875rem;
+}
+
+.bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
   padding: 0.75rem 0;
-  background: var(--background);
-  border-bottom: 1px solid var(--border);
-  font-size: 0.875rem;
 }
 
 .crumbs {
@@ -115,6 +200,14 @@ const commentCountOf = (submissionId: string) =>
 .fork-title {
   font-size: 1.35rem;
   margin: 1.25rem 0 0.5rem;
+}
+
+.conversation {
+  position: relative;
+}
+
+.conversation :deep(.message) {
+  scroll-margin-top: 6rem;
 }
 
 .fork-point {

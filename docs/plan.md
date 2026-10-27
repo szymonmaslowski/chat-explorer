@@ -272,6 +272,8 @@ Vue Router's `scrollBehavior` restores the saved position on back and forward, a
 - Textarea for the global message. Submit with the button or Cmd+Enter.
 - Shows what will be sent ("2 forks, 3 comments, message"). Submit is disabled when there are no drafts and the message is empty.
 - "Fork all" toggle: if every draft is fork-type, it turns them all inline. Otherwise it turns them all fork-type. Disabled with no drafts. New drafts are always created inline.
+- After a submit, the view scrolls to the bottom so the queued card or the new message is visible.
+- When an answer arrives in the open fork and you are near the bottom, the view scrolls to the start of the answer. Further up, it stays where you are reading.
 
 ### Submitted comments
 

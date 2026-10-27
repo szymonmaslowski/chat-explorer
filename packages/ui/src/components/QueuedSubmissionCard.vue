@@ -26,7 +26,7 @@ async function cancel() {
 </script>
 
 <template>
-  <div class="queued">
+  <div class="queued-submission">
     <div>
       <strong>Queued</strong>, sent when Claude is free.
       <span class="muted">
@@ -44,7 +44,7 @@ async function cancel() {
 </template>
 
 <style scoped>
-.queued {
+.queued-submission {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
