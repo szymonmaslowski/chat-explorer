@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
@@ -154,6 +155,9 @@ export function createApp(options: AppOptions) {
 
   internal.post('/explorations', async (context) => {
     const body = startExplorationBody.parse(await context.req.json());
+    if (body.transcriptPath && !existsSync(body.transcriptPath)) {
+      throw new StoreError('invalid', `Transcript ${body.transcriptPath} does not exist.`);
+    }
     const transcriptPath = body.transcriptPath ?? findTranscript(body.sessionId);
     const transcript = transcriptPath ? readTranscript(transcriptPath) : null;
     const { exploration, mainFork } = store.createExploration({

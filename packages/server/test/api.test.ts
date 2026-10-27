@@ -115,6 +115,16 @@ describe('internal API', () => {
     ]);
   });
 
+  it('rejects a transcript path that does not exist', async () => {
+    const { request } = createTestApp();
+    const response = await request('/api/internal/explorations', {
+      method: 'POST',
+      json: { shimId: 'shim-a', sessionId: 'session-a', transcriptPath: '/missing/session.jsonl' },
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: 'invalid' });
+  });
+
   it('runs one feedback round: start, wait, submit, answer', async () => {
     const { request, store } = createTestApp();
     const started = await (

@@ -1,0 +1,14 @@
+{
+  "name": "chat-explorer",
+  "description": "chat-explorer: explore Claude Code conversations as a tree of forks in the browser.",
+  "owner": {
+    "name": "chat-explorer"
+  },
+  "plugins": [
+    {
+      "name": "chat-explorer",
+      "source": "./plugin",
+      "description": "Explore a Claude Code conversation as a tree of forks in the browser."
+    }
+  ]
+}

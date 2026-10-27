@@ -100,6 +100,11 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
     await runShim();
   },
 
+  async hook([name]) {
+    const { runHook } = await import('../hooks/run-hook.js');
+    await runHook(name ?? '', config);
+  },
+
   async delete(args) {
     const [explorationId] = args;
     if (!explorationId) throw new UsageError('chat-explorer delete <id>');
