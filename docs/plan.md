@@ -206,7 +206,7 @@ The transcript is `~/.claude/projects/<project>/<sessionId>.jsonl`, one JSON rec
 
 Rules:
 
-1. Start at the newest `last-prompt.leafUuid` (or the last record with a `uuid`) and walk `parentUuid` back to the root, through records of every type. This keeps the branch you are on and drops branches left behind by rewinds.
+1. Start at the last record with a `uuid` and walk `parentUuid` back to the root, through records of every type. A rewind appends the new branch at the end of the file, so this keeps the branch you are on and drops abandoned ones. (`last-prompt.leafUuid` points at the last completed turn, so it misses the turn that runs `/explore-chat`.) Everything from the `/explore-chat` invocation onwards is dropped.
 2. At a `compact_boundary` system record (`parentUuid: null`), continue through its `logicalParentUuid`, so history before a `/compact` is kept.
 3. Skip `isSidechain` records (subagents).
 4. Keep user records whose content is text you typed: a string, or `text` blocks (an `image` block becomes `[image]`). Skip records with `tool_result` blocks, `isMeta` records (skill bodies, caveats), `isCompactSummary` records, task notifications (`origin.kind: "task-notification"` or `<task-notification>`), and anything that starts with `<command-name>`, `<command-message>`, `<local-command-stdout>`, `<local-command-caveat>` or `<system-reminder>`. Slash commands, `/explore-chat` included, are dropped this way.

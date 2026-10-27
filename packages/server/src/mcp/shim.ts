@@ -92,18 +92,28 @@ export function createShim(options: ShimOptions) {
         'Start a new chat-explorer exploration from the current conversation, attach this session to it and open it in the browser.',
       inputSchema: {
         sessionId: z.string().describe('The Claude Code session id'),
+        transcriptPath: z
+          .string()
+          .optional()
+          .describe('Transcript JSONL to import. Found from sessionId when omitted.'),
         title: z.string().optional().describe('A short title for the exploration'),
       },
     },
-    tool(async ({ sessionId, title }: { sessionId: string; title?: string | undefined }) => {
-      const started = await request<{ explorationId: string; mainForkId: string; url: string }>(
-        '/api/internal/explorations',
-        { json: { shimId, sessionId, title } },
-      );
-      attachment = { explorationId: started.explorationId, sessionId };
-      options.openUrl(started.url);
-      return json(started);
-    }),
+    tool(
+      async (args: {
+        sessionId: string;
+        transcriptPath?: string | undefined;
+        title?: string | undefined;
+      }) => {
+        const started = await request<{ explorationId: string; mainForkId: string; url: string }>(
+          '/api/internal/explorations',
+          { json: { shimId, ...args } },
+        );
+        attachment = { explorationId: started.explorationId, sessionId: args.sessionId };
+        options.openUrl(started.url);
+        return json(started);
+      },
+    ),
   );
 
   server.registerTool(

@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createTestApp, draft, seedConversation, testPort } from './helpers.js';
 
@@ -77,6 +80,41 @@ describe('public API', () => {
 });
 
 describe('internal API', () => {
+  it('imports the transcript when an exploration starts', async () => {
+    const { request, store } = createTestApp();
+    const directory = mkdtempSync(join(tmpdir(), 'transcript-'));
+    const transcriptPath = join(directory, 'session.jsonl');
+    writeFileSync(
+      transcriptPath,
+      [
+        { type: 'user', uuid: 'a', parentUuid: null, message: { content: 'Hi' } },
+        {
+          type: 'assistant',
+          uuid: 'b',
+          parentUuid: 'a',
+          message: { content: [{ type: 'text', text: 'Hello' }] },
+        },
+        { type: 'ai-title', aiTitle: 'Greeting' },
+      ]
+        .map((record) => JSON.stringify(record))
+        .join('\n'),
+    );
+    const started = await (
+      await request('/api/internal/explorations', {
+        method: 'POST',
+        json: { shimId: 'shim-a', sessionId: 'session-a', transcriptPath },
+      })
+    ).json();
+    rmSync(directory, { recursive: true });
+    expect(started).toMatchObject({ importedMessages: 2, transcriptFound: true });
+    const snapshot = store.snapshot(started.explorationId);
+    expect(snapshot.exploration.title).toBe('Greeting');
+    expect(snapshot.messages.map((message) => [message.role, message.source])).toEqual([
+      ['user', 'import'],
+      ['assistant', 'import'],
+    ]);
+  });
+
   it('runs one feedback round: start, wait, submit, answer', async () => {
     const { request, store } = createTestApp();
     const started = await (

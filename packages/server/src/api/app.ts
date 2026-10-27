@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 import { apiVersion } from '../config.js';
+import { findTranscript, readTranscript } from '../import/transcript.js';
 import type { ExplorationListItem, Snapshot } from '../shared/types.js';
 import { StoreError } from '../store/errors.js';
 import type { EventBus } from '../store/event-bus.js';
@@ -39,6 +40,7 @@ const submitBody = z.object({ forkId: z.string(), globalMessage: z.string().defa
 const shimBody = z.object({ shimId: z.string() });
 const startExplorationBody = shimBody.extend({
   sessionId: z.string(),
+  transcriptPath: z.string().endsWith('.jsonl').optional(),
   title: z.string().optional(),
 });
 const attachBody = shimBody.extend({ sessionId: z.string(), takeover: z.boolean().default(false) });
@@ -152,7 +154,12 @@ export function createApp(options: AppOptions) {
 
   internal.post('/explorations', async (context) => {
     const body = startExplorationBody.parse(await context.req.json());
-    const { exploration, mainFork } = store.createExploration({ title: body.title });
+    const transcriptPath = body.transcriptPath ?? findTranscript(body.sessionId);
+    const transcript = transcriptPath ? readTranscript(transcriptPath) : null;
+    const { exploration, mainFork } = store.createExploration({
+      title: body.title ?? transcript?.title ?? '',
+      messages: transcript?.messages ?? [],
+    });
     store.attach({
       explorationId: exploration.id,
       shimId: body.shimId,
@@ -164,6 +171,8 @@ export function createApp(options: AppOptions) {
         explorationId: exploration.id,
         mainForkId: mainFork.id,
         url: explorationUrl(exploration.id),
+        importedMessages: transcript?.messages.length ?? 0,
+        transcriptFound: transcript !== null,
       },
       201,
     );
