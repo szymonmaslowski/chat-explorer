@@ -15,6 +15,7 @@ export interface Exploration {
 
 export interface ExplorationListItem extends Exploration {
   forkCount: number;
+  sessionStatus: SessionStatus;
 }
 
 export interface Fork {

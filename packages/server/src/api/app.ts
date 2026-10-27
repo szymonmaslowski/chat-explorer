@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 import { apiVersion } from '../config.js';
-import type { Snapshot } from '../shared/types.js';
+import type { ExplorationListItem, Snapshot } from '../shared/types.js';
 import { StoreError } from '../store/errors.js';
 import type { EventBus } from '../store/event-bus.js';
 import type { FeedbackHub } from '../store/feedback-hub.js';
@@ -79,7 +79,12 @@ export function createApp(options: AppOptions) {
     return context.json({ ok: true });
   });
 
-  app.get('/api/explorations', (context) => context.json(store.listExplorations()));
+  app.get('/api/explorations', (context) => {
+    const explorations: ExplorationListItem[] = store
+      .listExplorations()
+      .map((exploration) => ({ ...exploration, sessionStatus: hub.status(exploration.id) }));
+    return context.json(explorations);
+  });
 
   app.get('/api/explorations/:id', (context) => {
     const explorationId = context.req.param('id');

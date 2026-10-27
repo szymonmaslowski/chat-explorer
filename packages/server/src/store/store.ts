@@ -125,7 +125,7 @@ export class ChatStore {
     };
   }
 
-  listExplorations(): ExplorationListItem[] {
+  listExplorations(): Omit<ExplorationListItem, 'sessionStatus'>[] {
     return this.db
       .all<ExplorationRow & { fork_count: number }>(
         `SELECT explorations.*,
