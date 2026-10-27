@@ -4,6 +4,8 @@ import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 import { apiVersion } from '../config.js';
 import { findTranscript, readTranscript } from '../import/transcript.js';
+import type { BackgroundSessions } from '../sessions/background-sessions.js';
+import { claudeModels, type ClaudeModel } from '../shared/models.js';
 import type { ExplorationListItem, Snapshot } from '../shared/types.js';
 import { StoreError } from '../store/errors.js';
 import type { EventBus } from '../store/event-bus.js';
@@ -16,6 +18,8 @@ export interface AppOptions {
   store: ChatStore;
   hub: FeedbackHub;
   bus: EventBus;
+  sessions: BackgroundSessions;
+  defaultModel: ClaudeModel;
   port: number;
   publicUrl: string | null;
   version: string;
@@ -27,6 +31,9 @@ const sseKeepAliveMs = 20_000;
 const maxFeedbackWaitMs = 280_000;
 
 const commentType = z.enum(['inline', 'fork']);
+const model = z.enum(claudeModels);
+const newExplorationBody = z.object({ message: z.string().trim().min(1), model: model.optional() });
+const explorationSettingsBody = z.object({ model });
 const newCommentBody = z.object({
   messageId: z.string(),
   viewForkId: z.string(),
@@ -57,7 +64,7 @@ const feedbackBody = shimBody.extend({
 });
 
 export function createApp(options: AppOptions) {
-  const { store, hub, bus, port } = options;
+  const { store, hub, bus, sessions, port } = options;
   const localUrl = `http://127.0.0.1:${port}`;
   const explorationUrls = (explorationId: string) => ({
     url: `${options.publicUrl ?? localUrl}/e/${explorationId}`,
@@ -94,13 +101,36 @@ export function createApp(options: AppOptions) {
     return context.json(explorations);
   });
 
+  app.post('/api/explorations', async (context) => {
+    const body = newExplorationBody.parse(await context.req.json());
+    const { exploration, mainFork } = store.createExploration({
+      model: body.model ?? options.defaultModel,
+    });
+    store.submit(exploration.id, mainFork.id, body.message);
+    return context.json({ explorationId: exploration.id }, 201);
+  });
+
   app.get('/api/explorations/:id', (context) => {
     const explorationId = context.req.param('id');
     const snapshot: Snapshot = {
       ...store.snapshot(explorationId),
       sessionStatus: hub.status(explorationId),
+      sessionError: sessions.error(explorationId),
     };
     return context.json(snapshot);
+  });
+
+  app.patch('/api/explorations/:id', async (context) => {
+    const explorationId = context.req.param('id');
+    const { model } = explorationSettingsBody.parse(await context.req.json());
+    const exploration = store.setModel(explorationId, model);
+    sessions.restart(explorationId);
+    return context.json(exploration);
+  });
+
+  app.post('/api/explorations/:id/session', (context) => {
+    sessions.start(context.req.param('id'));
+    return context.json({ ok: true }, 201);
   });
 
   app.delete('/api/explorations/:id', (context) => {
@@ -168,6 +198,7 @@ export function createApp(options: AppOptions) {
     const { exploration, mainFork } = store.createExploration({
       title: body.title ?? transcript?.title ?? '',
       messages: transcript?.messages ?? [],
+      model: options.defaultModel,
     });
     store.attach({
       explorationId: exploration.id,

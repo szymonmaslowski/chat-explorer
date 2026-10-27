@@ -14,9 +14,9 @@ Argument: `$ARGUMENTS` (an exploration id, or empty).
 
 ## Start
 
-1. Run `chat-explorer start`. If the command is not found, skip this step: the chat-explorer MCP server starts the daemon itself.
+1. Run `chat-explorer start`. If the command is not found or you cannot run shell commands, skip this step: the chat-explorer MCP server starts the daemon itself.
 2. Without an argument: call `start_exploration` with `sessionId: "${CLAUDE_SESSION_ID}"`. It imports this conversation so far and opens it in the browser.
-   With an argument: call `attach_exploration` with that id and the same `sessionId`. If it fails because another session is attached, ask the user whether to take it over, and if yes call it again with `takeover: true`.
+   With an argument: call `attach_exploration` with that id and the same `sessionId`. If it fails because another session is attached, ask the user whether to take it over, and if yes call it again with `takeover: true`. In a non-interactive session (`claude -p`), where nobody can answer, stop instead.
 3. Tell the user in one line that the exploration is open, with its URL.
 
 ## Loop

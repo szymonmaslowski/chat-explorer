@@ -5,6 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { getRequestListener } from '@hono/node-server';
 import { createApp } from '../api/app.js';
 import { loadConfig } from '../config.js';
+import { findTranscript } from '../import/transcript.js';
+import { BackgroundSessions } from '../sessions/background-sessions.js';
+import { claudeLauncher } from '../sessions/launch-claude.js';
 import { loadSettings, SettingsError } from '../settings.js';
 import { Database } from '../db/database.js';
 import { EventBus } from '../store/event-bus.js';
@@ -22,9 +25,19 @@ const settings = loadSettingsOrExit();
 const database = new Database(config.databasePath);
 const bus = new EventBus();
 const store = new ChatStore(database, bus);
-const hub = new FeedbackHub(store, bus);
+const sessions = new BackgroundSessions({
+  store,
+  bus,
+  settings,
+  sessionsPath: config.sessionsPath,
+  launch: claudeLauncher(config),
+  canResume: (sessionId) => findTranscript(sessionId) !== null,
+  onStatusChange: (explorationId) => hub.refreshStatus(explorationId),
+});
+const hub = new FeedbackHub(store, bus, Date.now, sessions);
 
 const shutdown = () => {
+  sessions.stopAll();
   hub.stop();
   server.close();
   server.closeAllConnections();
@@ -36,6 +49,8 @@ const app = createApp({
   store,
   hub,
   bus,
+  sessions,
+  defaultModel: settings.defaultModel,
   port: config.port,
   publicUrl: settings.publicUrl,
   version: packageVersion,

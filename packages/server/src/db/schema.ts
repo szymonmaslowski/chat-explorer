@@ -69,4 +69,8 @@ export const migrations = [
   CREATE INDEX comments_by_exploration ON comments (exploration_id);
   CREATE INDEX comments_by_reply ON comments (reply_message_id);
   `,
+  `
+  ALTER TABLE explorations ADD COLUMN model TEXT NOT NULL DEFAULT 'sonnet';
+  ALTER TABLE explorations ADD COLUMN background_session_id TEXT;
+  `,
 ];

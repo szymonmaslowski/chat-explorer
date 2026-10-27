@@ -1,5 +1,10 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createApp } from '../src/api/app.js';
 import { Database } from '../src/db/database.js';
+import { BackgroundSessions } from '../src/sessions/background-sessions.js';
+import type { LaunchSpec, SessionProcess } from '../src/sessions/launch-claude.js';
 import type { ExplorationEvent } from '../src/shared/types.js';
 import { EventBus } from '../src/store/event-bus.js';
 import { FeedbackHub } from '../src/store/feedback-hub.js';
@@ -15,8 +20,60 @@ export function createTestStore() {
   const events: ExplorationEvent[] = [];
   bus.subscribe((_explorationId, event) => events.push(event));
   const store = new ChatStore(database, bus, now);
-  const hub = new FeedbackHub(store, bus, now);
-  return { clock, database, bus, store, hub, events };
+  const { sessions, launches } = createTestSessions({
+    store,
+    bus,
+    now,
+    onStatusChange: (explorationId) => hub.refreshStatus(explorationId),
+  });
+  const hub = new FeedbackHub(store, bus, now, sessions);
+  return { clock, database, bus, store, hub, sessions, launches, events };
+}
+
+export function createTestSessions(input: {
+  store: ChatStore;
+  bus: EventBus;
+  now?: () => number;
+  onStatusChange: (explorationId: string) => void;
+}) {
+  const launches: FakeLaunch[] = [];
+  const sessions = new BackgroundSessions({
+    ...input,
+    settings: { idleMinutes: 60, maxSessions: 2 },
+    sessionsPath: mkdtempSync(join(tmpdir(), 'chat-explorer-sessions-')),
+    launch: (spec) => {
+      const launch = fakeLaunch(spec);
+      launches.push(launch);
+      return launch.process;
+    },
+    canResume: () => true,
+  });
+  return { sessions, launches };
+}
+
+export interface FakeLaunch {
+  spec: LaunchSpec;
+  process: SessionProcess;
+  stopped: boolean;
+  exit: (code: number | null, error?: string) => void;
+}
+
+function fakeLaunch(spec: LaunchSpec): FakeLaunch {
+  const listeners: ((result: { code: number | null; error?: string }) => void)[] = [];
+  const launch: FakeLaunch = {
+    spec,
+    stopped: false,
+    process: {
+      stop: () => {
+        launch.stopped = true;
+      },
+      onExit: (listener) => listeners.push(listener),
+    },
+    exit: (code, error) => {
+      for (const listener of listeners) listener(error ? { code, error } : { code });
+    },
+  };
+  return launch;
 }
 
 export function createTestApp(options: { publicUrl?: string } = {}) {
@@ -25,6 +82,8 @@ export function createTestApp(options: { publicUrl?: string } = {}) {
     store: context.store,
     hub: context.hub,
     bus: context.bus,
+    sessions: context.sessions,
+    defaultModel: 'sonnet',
     port: testPort,
     publicUrl: options.publicUrl ?? null,
     version: '0.0.0-test',

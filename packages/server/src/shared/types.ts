@@ -1,14 +1,17 @@
+import type { ClaudeModel } from './models.js';
+
 export type Role = 'user' | 'assistant';
 export type MessageSource = 'import' | 'live';
 export type ForkKind = 'soft' | 'hard';
 export type CommentType = 'inline' | 'fork';
 export type CommentStatus = 'draft' | 'queued' | 'submitted';
-export type SessionStatus = 'listening' | 'answering' | 'attached' | 'detached';
+export type SessionStatus = 'starting' | 'listening' | 'answering' | 'attached' | 'detached';
 
 export interface Exploration {
   id: string;
   title: string;
   summary: string;
+  model: ClaudeModel;
   createdAt: number;
   updatedAt: number;
 }
@@ -75,6 +78,7 @@ export interface Snapshot {
   comments: Comment[];
   queuedSubmissions: QueuedSubmission[];
   sessionStatus: SessionStatus;
+  sessionError: string | null;
 }
 
 export type ExplorationEvent =
@@ -90,7 +94,8 @@ export type ExplorationEvent =
   | { type: 'exploration.updated'; exploration: Exploration }
   | { type: 'exploration.deleted'; explorationId: string }
   | { type: 'session.attached'; shimId: string }
-  | { type: 'session.status'; status: SessionStatus };
+  | { type: 'session.status'; status: SessionStatus }
+  | { type: 'session.error'; message: string | null };
 
 export interface NewComment {
   messageId: string;

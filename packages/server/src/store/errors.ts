@@ -5,9 +5,10 @@ export type StoreErrorCode =
   | 'already_sent'
   | 'stale_tip'
   | 'attached_elsewhere'
-  | 'detached';
+  | 'detached'
+  | 'too_many_sessions';
 
-const httpStatusByCode: Record<StoreErrorCode, 400 | 404 | 409> = {
+const httpStatusByCode: Record<StoreErrorCode, 400 | 404 | 409 | 503> = {
   not_found: 404,
   invalid: 400,
   not_draft: 409,
@@ -15,6 +16,7 @@ const httpStatusByCode: Record<StoreErrorCode, 400 | 404 | 409> = {
   stale_tip: 409,
   attached_elsewhere: 409,
   detached: 409,
+  too_many_sessions: 503,
 };
 
 export class StoreError extends Error {

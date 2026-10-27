@@ -1,3 +1,4 @@
+import type { ClaudeModel } from '../shared/models.js';
 import type {
   Comment,
   CommentStatus,
@@ -20,6 +21,8 @@ export interface ExplorationRow {
   attached_session_id: string | null;
   attached_shim_id: string | null;
   attached_seen_at: number | null;
+  model: ClaudeModel;
+  background_session_id: string | null;
 }
 
 export interface ForkRow {
@@ -78,6 +81,7 @@ export const toExploration = (row: ExplorationRow): Exploration => ({
   id: row.id,
   title: row.title,
   summary: row.summary,
+  model: row.model,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });

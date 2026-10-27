@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { z } from 'zod';
 import type { Config } from './config.js';
-import { claudeModels } from './shared/models.js';
+import { claudeModels, defaultClaudeModel } from './shared/models.js';
 
 const settingsSchema = z
   .object({
@@ -10,7 +10,7 @@ const settingsSchema = z
       .nullable()
       .default(null)
       .transform((url) => (url ? new URL(url).origin : null)),
-    defaultModel: z.enum(claudeModels).default('sonnet'),
+    defaultModel: z.enum(claudeModels).default(defaultClaudeModel),
     idleMinutes: z.number().positive().default(60),
     maxSessions: z.number().int().positive().default(3),
   })

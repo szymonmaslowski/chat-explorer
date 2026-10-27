@@ -11,6 +11,7 @@ import { createShim } from '../src/mcp/shim.js';
 import { EventBus } from '../src/store/event-bus.js';
 import { FeedbackHub } from '../src/store/feedback-hub.js';
 import { ChatStore } from '../src/store/store.js';
+import { createTestSessions } from './helpers.js';
 
 const version = '0.0.0-test';
 let server: Server;
@@ -23,11 +24,18 @@ beforeEach(async () => {
   config = loadConfig();
   const bus = new EventBus();
   const store = new ChatStore(new Database(':memory:'), bus);
-  hub = new FeedbackHub(store, bus);
+  const { sessions } = createTestSessions({
+    store,
+    bus,
+    onStatusChange: (explorationId) => hub.refreshStatus(explorationId),
+  });
+  hub = new FeedbackHub(store, bus, Date.now, sessions);
   const app = createApp({
     store,
     hub,
     bus,
+    sessions,
+    defaultModel: 'sonnet',
     port: config.port,
     publicUrl: null,
     version,

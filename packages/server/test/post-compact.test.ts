@@ -7,6 +7,7 @@ describe('postCompactOutput', () => {
       id: 'abc',
       title: 'Caching',
       summary: '',
+      model: 'sonnet',
       createdAt: 0,
       updatedAt: 0,
     });

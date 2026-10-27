@@ -14,6 +14,10 @@ interface Waiter {
   settle: (result: FeedbackResult) => void;
 }
 
+export interface StartingSessions {
+  isStarting(explorationId: string): boolean;
+}
+
 // A shim long-polls in rounds, so after a round times out there is a short gap before the next one.
 const listeningGraceMs = 5_000;
 
@@ -27,6 +31,7 @@ export class FeedbackHub {
     private readonly store: ChatStore,
     private readonly bus: EventBus,
     private readonly now: () => number = Date.now,
+    private readonly startingSessions: StartingSessions = { isStarting: () => false },
   ) {
     bus.subscribe((explorationId, event) => {
       if (event.type === 'session.status') return;
@@ -82,7 +87,9 @@ export class FeedbackHub {
 
   status(explorationId: string): SessionStatus {
     const attachment = this.store.attachment(explorationId);
-    if (!attachment?.live) return 'detached';
+    if (!attachment?.live) {
+      return this.startingSessions.isStarting(explorationId) ? 'starting' : 'detached';
+    }
     if (this.isListening(explorationId)) return 'listening';
     if (this.store.pendingForks(explorationId).length > 0) return 'answering';
     return 'attached';

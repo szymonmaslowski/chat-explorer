@@ -25,6 +25,7 @@ import type {
   Role,
   Snapshot,
 } from '../shared/types.js';
+import { defaultClaudeModel, type ClaudeModel } from '../shared/models.js';
 import { StoreError } from './errors.js';
 import type { EventBus } from './event-bus.js';
 import { newId } from './ids.js';
@@ -95,15 +96,18 @@ export class ChatStore {
     private readonly now: () => number = Date.now,
   ) {}
 
-  createExploration(options: { title?: string; messages?: NewMessage[] } = {}) {
+  createExploration(
+    options: { title?: string; messages?: NewMessage[]; model?: ClaudeModel } = {},
+  ) {
     const createdAt = this.now();
     const explorationId = newId();
     const mainForkId = newId();
     this.db.transaction(() => {
       this.db.run(
-        'INSERT INTO explorations (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)',
+        'INSERT INTO explorations (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
         explorationId,
         options.title ?? '',
+        options.model ?? defaultClaudeModel,
         createdAt,
         createdAt,
       );
@@ -135,7 +139,7 @@ export class ChatStore {
       .map((row) => ({ ...toExploration(row), forkCount: row.fork_count }));
   }
 
-  snapshot(explorationId: string): Omit<Snapshot, 'sessionStatus'> {
+  snapshot(explorationId: string): Omit<Snapshot, 'sessionStatus' | 'sessionError'> {
     const exploration = toExploration(this.requireExplorationRow(explorationId));
     return {
       exploration,
@@ -180,6 +184,32 @@ export class ChatStore {
     const exploration = toExploration(this.requireExplorationRow(explorationId));
     this.publish([[explorationId, { type: 'exploration.updated', exploration }]]);
     return exploration;
+  }
+
+  setModel(explorationId: string, model: ClaudeModel) {
+    this.requireExplorationRow(explorationId);
+    this.db.run(
+      'UPDATE explorations SET model = ?, updated_at = ? WHERE id = ?',
+      model,
+      this.now(),
+      explorationId,
+    );
+    const exploration = toExploration(this.requireExplorationRow(explorationId));
+    this.publish([[explorationId, { type: 'exploration.updated', exploration }]]);
+    return exploration;
+  }
+
+  backgroundSession(explorationId: string) {
+    const row = this.requireExplorationRow(explorationId);
+    return { model: row.model, sessionId: row.background_session_id };
+  }
+
+  setBackgroundSessionId(explorationId: string, sessionId: string) {
+    this.db.run(
+      'UPDATE explorations SET background_session_id = ? WHERE id = ?',
+      sessionId,
+      explorationId,
+    );
   }
 
   deleteExploration(explorationId: string) {
@@ -417,6 +447,14 @@ export class ChatStore {
     return { globalMessage: row.global_message };
   }
 
+  explorationsWithQueuedSubmissions() {
+    return this.db
+      .all<{ exploration_id: string }>(
+        "SELECT DISTINCT exploration_id FROM submissions WHERE status = 'queued'",
+      )
+      .map((row) => row.exploration_id);
+  }
+
   queuedSubmissions(explorationId: string): QueuedSubmission[] {
     return this.queuedSubmissionRows(explorationId).map(toQueuedSubmission);
   }
@@ -558,6 +596,14 @@ export class ChatStore {
       shimId,
     );
     return explorationIds;
+  }
+
+  // A new daemon has no background sessions yet, so attachments left by earlier ones are stale.
+  releaseBackgroundAttachments() {
+    this.db.run(
+      `UPDATE explorations SET attached_shim_id = NULL, attached_session_id = NULL, attached_seen_at = NULL
+       WHERE attached_session_id = background_session_id`,
+    );
   }
 
   heartbeat(shimId: string) {
