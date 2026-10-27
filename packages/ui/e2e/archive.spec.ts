@@ -36,7 +36,7 @@ test('archives, restores and deletes an exploration', async ({ page }) => {
   await page.reload();
   await expect(page.getByText('Nothing archived.')).toBeVisible();
   await page.goto(`/e/${explorationId}`);
-  await expect(page.getByText('This exploration does not exist.')).toBeVisible();
+  await expect(page.getByText('This chat does not exist.')).toBeVisible();
 });
 
 test('takes back an archive that is not confirmed', async ({ page }) => {
@@ -50,6 +50,6 @@ test('takes back an archive that is not confirmed', async ({ page }) => {
   await expect(item.getByRole('button', { name: 'Confirm' })).toHaveCount(0);
 
   await item.getByRole('button', { name: 'Archive' }).click();
-  await page.getByRole('heading', { name: 'Explorations' }).click();
+  await page.getByRole('heading', { name: 'Chats' }).click();
   await expect(item.getByRole('button', { name: 'Archive' })).toBeVisible();
 });

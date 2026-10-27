@@ -18,7 +18,7 @@ test('dictates a reply into the text box', async ({ page }) => {
 
 test('throws a recording away on cancel', async ({ page }) => {
   await page.goto('/');
-  const box = page.getByPlaceholder('Start a new exploration');
+  const box = page.getByPlaceholder('Start a new chat');
   await page.locator('.new-exploration').getByRole('button', { name: 'Dictate' }).click();
   await page.locator('.new-exploration').getByRole('button', { name: 'Cancel dictation' }).click();
   await expect(

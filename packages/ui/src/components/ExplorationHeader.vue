@@ -12,7 +12,7 @@ defineProps<{ state: ExplorationState }>();
   <header class="exploration-header">
     <div class="bar">
       <nav class="links">
-        <RouterLink to="/">Explorations</RouterLink>
+        <RouterLink to="/">Chats</RouterLink>
         <slot name="links" />
       </nav>
       <div class="controls">
@@ -27,7 +27,7 @@ defineProps<{ state: ExplorationState }>();
       </div>
     </div>
     <p v-if="state.exploration" class="title">
-      {{ state.exploration.title || 'Untitled exploration' }}
+      {{ state.exploration.title || 'Untitled chat' }}
     </p>
     <p v-if="state.exploration?.archivedAt" class="archived">
       Archived, read only.
@@ -54,7 +54,26 @@ defineProps<{ state: ExplorationState }>();
 
 .links {
   display: flex;
+  align-items: center;
   gap: 0.4rem;
+}
+
+@media (pointer: coarse) {
+  .links {
+    font-size: 1rem;
+    gap: 0.2rem;
+  }
+
+  .links :deep(a) {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.5rem;
+    padding: 0 0.4rem;
+  }
+
+  .links :deep(a:first-child) {
+    padding-left: 0;
+  }
 }
 
 .controls {

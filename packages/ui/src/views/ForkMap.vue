@@ -72,7 +72,7 @@ const layout = computed(() => {
     </ExplorationHeader>
 
     <p v-if="state.status === 'loading'" class="muted">Loading…</p>
-    <p v-else-if="state.status !== 'ready'" class="muted">This exploration is not available.</p>
+    <p v-else-if="state.status !== 'ready'" class="muted">This chat is not available.</p>
 
     <div
       v-else-if="layout"

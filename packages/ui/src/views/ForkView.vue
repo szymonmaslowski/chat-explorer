@@ -112,9 +112,9 @@ watch(
     />
 
     <p v-if="state.status === 'loading'" class="muted">Loading…</p>
-    <p v-else-if="state.status === 'missing'" class="muted">This exploration does not exist.</p>
-    <p v-else-if="state.status === 'deleted'" class="muted">This exploration was deleted.</p>
-    <p v-else-if="state.status === 'error'" class="muted">Could not load this exploration.</p>
+    <p v-else-if="state.status === 'missing'" class="muted">This chat does not exist.</p>
+    <p v-else-if="state.status === 'deleted'" class="muted">This chat was deleted.</p>
+    <p v-else-if="state.status === 'error'" class="muted">Could not load this chat.</p>
     <p v-else-if="!fork" class="muted">This fork does not exist.</p>
 
     <template v-else>

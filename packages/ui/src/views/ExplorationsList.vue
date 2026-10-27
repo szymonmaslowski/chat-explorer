@@ -36,24 +36,24 @@ async function removeFromList(explorationId: string, change: (id: string) => Pro
 <template>
   <main class="page">
     <div class="heading">
-      <h1>{{ archived ? 'Archived' : 'Explorations' }}</h1>
+      <h1>{{ archived ? 'Archived' : 'Chats' }}</h1>
       <RouterLink :to="archived ? '/' : '/archived'" class="view-link">
-        {{ archived ? 'Explorations' : 'Archived' }}
+        {{ archived ? 'Chats' : 'Archived' }}
       </RouterLink>
       <ThemeSwitch />
     </div>
     <NewExploration v-if="!archived" />
-    <p v-if="failed" class="muted">Could not load explorations.</p>
+    <p v-if="failed" class="muted">Could not load chats.</p>
     <p v-else-if="explorations?.length === 0" class="muted">
       <template v-if="archived">Nothing archived.</template>
       <template v-else>
-        No explorations yet. Start one above, or run <code>/explore-chat</code> in Claude Code.
+        No chats yet. Start one above, or run <code>/explore-chat</code> in Claude Code.
       </template>
     </p>
     <ul v-else-if="explorations" class="explorations">
       <li v-for="exploration in explorations" :key="exploration.id" class="exploration">
         <RouterLink :to="`/e/${exploration.id}/map`" class="open">
-          <span class="title">{{ exploration.title || 'Untitled exploration' }}</span>
+          <span class="title">{{ exploration.title || 'Untitled chat' }}</span>
           <span v-if="exploration.summary" class="summary">{{ exploration.summary }}</span>
           <span class="meta muted">
             {{ exploration.forkCount }} fork{{ exploration.forkCount === 1 ? '' : 's' }} ·
@@ -96,6 +96,16 @@ async function removeFromList(explorationId: string, change: (id: string) => Pro
 
 .view-link {
   font-size: 0.9rem;
+}
+
+@media (pointer: coarse) {
+  .view-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.5rem;
+    padding: 0 0.4rem;
+    font-size: 1rem;
+  }
 }
 
 .explorations {

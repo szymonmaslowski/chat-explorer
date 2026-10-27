@@ -30,7 +30,7 @@ async function start() {
     const { explorationId } = await api.createExploration(message.value, model.value);
     await router.push(`/e/${explorationId}`);
   } catch {
-    error.value = 'Could not start the exploration.';
+    error.value = 'Could not start the chat.';
     starting.value = false;
   }
 }
@@ -49,7 +49,7 @@ function onKeydown(event: KeyboardEvent) {
       ref="textarea"
       v-model="message"
       rows="3"
-      placeholder="Start a new exploration: ask anything (⌘↵ to start)"
+      placeholder="Start a new chat: ask anything (⌘↵ to start)"
       @keydown="onKeydown"
     />
     <div class="actions">

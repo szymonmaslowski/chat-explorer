@@ -3,7 +3,7 @@ import { openSeededExploration } from './helpers';
 
 test('starts a new exploration and reports a Claude that cannot start', async ({ page }) => {
   await page.goto('/');
-  await page.getByPlaceholder('Start a new exploration').fill('Why is the sky blue?');
+  await page.getByPlaceholder('Start a new chat').fill('Why is the sky blue?');
   await page.getByTitle('Model').selectOption('opus');
   await page.getByRole('button', { name: 'Start' }).click();
 
