@@ -11,7 +11,6 @@ const props = defineProps<{ archived?: boolean }>();
 
 const explorations = ref<ExplorationListItem[] | null>(null);
 const failed = ref(false);
-const confirmingDelete = ref<string | null>(null);
 
 watch(
   () => props.archived,
@@ -67,22 +66,15 @@ async function removeFromList(explorationId: string, change: (id: string) => Pro
             label="Archive"
             @confirm="removeFromList(exploration.id, api.archive)"
           />
-          <template v-else-if="confirmingDelete === exploration.id">
-            <span class="muted">Delete?</span>
-            <button
-              type="button"
-              class="danger"
-              @click="removeFromList(exploration.id, api.deleteExploration)"
-            >
-              Delete
-            </button>
-            <button type="button" @click="confirmingDelete = null">Keep</button>
-          </template>
           <template v-else>
-            <button type="button" @click="removeFromList(exploration.id, api.unarchive)">
-              Restore
-            </button>
-            <button type="button" @click="confirmingDelete = exploration.id">Delete</button>
+            <ConfirmButton
+              label="Restore"
+              @confirm="removeFromList(exploration.id, api.unarchive)"
+            />
+            <ConfirmButton
+              label="Delete"
+              @confirm="removeFromList(exploration.id, api.deleteExploration)"
+            />
           </template>
         </div>
       </li>
@@ -148,10 +140,5 @@ async function removeFromList(explorationId: string, change: (id: string) => Pro
   align-items: center;
   gap: 0.4rem;
   margin-left: auto;
-}
-
-.danger {
-  color: var(--danger);
-  border-color: var(--danger);
 }
 </style>

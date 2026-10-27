@@ -20,6 +20,7 @@ test('archives, restores and deletes an exploration', async ({ page }) => {
   await expect(page.getByText('Archived, read only.')).toBeVisible();
   await expect(page.getByPlaceholder('Reply to Claude')).toHaveCount(0);
   await page.getByRole('button', { name: 'Restore' }).click();
+  await page.getByRole('button', { name: 'Confirm' }).click();
   await expect(page.getByText('Archived, read only.')).toHaveCount(0);
   await expect(page.getByPlaceholder('Reply to Claude')).toBeVisible();
 
@@ -29,9 +30,7 @@ test('archives, restores and deletes an exploration', async ({ page }) => {
   await expect(item).toHaveCount(0);
   await page.goto('/archived');
   await item.getByRole('button', { name: 'Delete' }).click();
-  await item.getByRole('button', { name: 'Keep' }).click();
-  await item.getByRole('button', { name: 'Delete' }).click();
-  await item.getByRole('button', { name: 'Delete' }).click();
+  await item.getByRole('button', { name: 'Confirm' }).click();
   await expect(item).toHaveCount(0);
 
   await page.reload();

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { api } from '../api';
 import type { ExplorationState } from '../stores/exploration';
+import ConfirmButton from './ConfirmButton.vue';
 import SessionStatusBar from './SessionStatusBar.vue';
 import ThemeSwitch from './ThemeSwitch.vue';
 
@@ -30,7 +31,7 @@ defineProps<{ state: ExplorationState }>();
     </p>
     <p v-if="state.exploration?.archivedAt" class="archived">
       Archived, read only.
-      <button type="button" @click="api.unarchive(state.explorationId)">Restore</button>
+      <ConfirmButton label="Restore" @confirm="api.unarchive(state.explorationId)" />
     </p>
     <slot />
   </header>
