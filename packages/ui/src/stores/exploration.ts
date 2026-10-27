@@ -123,8 +123,13 @@ function createExplorationStore(explorationId: string) {
     state.connected = true;
     void load();
   });
+  // EventSource reports the 404 of a missing exploration only as an error, and keeps retrying.
   source.addEventListener('error', () => {
     state.connected = false;
+    if (state.status !== 'loading') return;
+    void load().then(() => {
+      if (state.status === 'missing') source.close();
+    });
   });
   for (const type of eventTypes) {
     source.addEventListener(type, (message) => {

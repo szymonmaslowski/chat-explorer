@@ -58,6 +58,14 @@ describe('feedback hub', () => {
     hub.stop();
   });
 
+  it('tells the session it was detached when the exploration is archived', async () => {
+    const { store, hub, explorationId } = setup();
+    const waiting = hub.waitForFeedback({ explorationId, shimId: 'shim-a', waitMs: 60_000 });
+    store.archiveExploration(explorationId);
+    expect(await waiting).toEqual({ status: 'detached' });
+    hub.stop();
+  });
+
   it('tells the session the exploration was deleted', async () => {
     const { store, hub, explorationId } = setup();
     const waiting = hub.waitForFeedback({ explorationId, shimId: 'shim-a', waitMs: 60_000 });

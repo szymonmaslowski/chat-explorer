@@ -18,6 +18,7 @@ import type {
   Exploration,
   ExplorationEvent,
   ExplorationListItem,
+  ExplorationView,
   ForkKind,
   MessageSource,
   NewComment,
@@ -32,6 +33,8 @@ import { newId } from './ids.js';
 
 export const attachmentLivenessMs = 45_000;
 const forkSummaryLength = 80;
+const clearAttachment =
+  'attached_shim_id = NULL, attached_session_id = NULL, attached_seen_at = NULL';
 
 export interface NewMessage {
   role: Role;
@@ -129,12 +132,17 @@ export class ChatStore {
     };
   }
 
-  listExplorations(): Omit<ExplorationListItem, 'sessionStatus'>[] {
+  listExplorations(view: ExplorationView = 'active'): Omit<ExplorationListItem, 'sessionStatus'>[] {
+    const filters: Record<ExplorationView, string> = {
+      active: 'deleted_at IS NULL AND archived_at IS NULL ORDER BY updated_at DESC',
+      archived: 'deleted_at IS NULL AND archived_at IS NOT NULL ORDER BY archived_at DESC',
+      deleted: 'deleted_at IS NOT NULL ORDER BY deleted_at DESC',
+    };
     return this.db
       .all<ExplorationRow & { fork_count: number }>(
         `SELECT explorations.*,
            (SELECT count(*) FROM forks WHERE forks.exploration_id = explorations.id) AS fork_count
-         FROM explorations ORDER BY updated_at DESC`,
+         FROM explorations WHERE ${filters[view]}`,
       )
       .map((row) => ({ ...toExploration(row), forkCount: row.fork_count }));
   }
@@ -181,9 +189,7 @@ export class ChatStore {
       this.now(),
       explorationId,
     );
-    const exploration = toExploration(this.requireExplorationRow(explorationId));
-    this.publish([[explorationId, { type: 'exploration.updated', exploration }]]);
-    return exploration;
+    return this.publishExplorationUpdate(explorationId);
   }
 
   setModel(explorationId: string, model: ClaudeModel) {
@@ -194,9 +200,7 @@ export class ChatStore {
       this.now(),
       explorationId,
     );
-    const exploration = toExploration(this.requireExplorationRow(explorationId));
-    this.publish([[explorationId, { type: 'exploration.updated', exploration }]]);
-    return exploration;
+    return this.publishExplorationUpdate(explorationId);
   }
 
   backgroundSession(explorationId: string) {
@@ -212,8 +216,49 @@ export class ChatStore {
     );
   }
 
+  archiveExploration(explorationId: string) {
+    this.requireExplorationRow(explorationId);
+    this.db.run(
+      `UPDATE explorations SET archived_at = ?, ${clearAttachment} WHERE id = ?`,
+      this.now(),
+      explorationId,
+    );
+    return this.publishExplorationUpdate(explorationId);
+  }
+
+  unarchiveExploration(explorationId: string) {
+    this.requireExplorationRow(explorationId);
+    this.db.run('UPDATE explorations SET archived_at = NULL WHERE id = ?', explorationId);
+    return this.publishExplorationUpdate(explorationId);
+  }
+
+  isArchived(explorationId: string) {
+    return this.requireExplorationRow(explorationId).archived_at !== null;
+  }
+
   deleteExploration(explorationId: string) {
     this.requireExplorationRow(explorationId);
+    this.db.run(
+      `UPDATE explorations SET deleted_at = ?, ${clearAttachment} WHERE id = ?`,
+      this.now(),
+      explorationId,
+    );
+    this.publish([[explorationId, { type: 'exploration.deleted', explorationId }]]);
+  }
+
+  // A deleted exploration comes back archived, so it does not reappear among the active ones.
+  restoreExploration(explorationId: string) {
+    this.requireExplorationRow(explorationId, { includeDeleted: true });
+    this.db.run(
+      'UPDATE explorations SET deleted_at = NULL, archived_at = coalesce(archived_at, ?) WHERE id = ?',
+      this.now(),
+      explorationId,
+    );
+    return toExploration(this.requireExplorationRow(explorationId));
+  }
+
+  purgeExploration(explorationId: string) {
+    this.requireExplorationRow(explorationId, { includeDeleted: true });
     this.db.run('DELETE FROM explorations WHERE id = ?', explorationId);
     this.publish([[explorationId, { type: 'exploration.deleted', explorationId }]]);
   }
@@ -308,7 +353,7 @@ export class ChatStore {
   }
 
   createComment(explorationId: string, input: NewComment) {
-    this.requireExplorationRow(explorationId);
+    this.requireWritable(explorationId);
     const viewFork = this.requireForkRow(input.viewForkId, explorationId);
     const isOnPath = this.pathTo(viewFork.tip_message_id).some((row) => row.id === input.messageId);
     if (!isOnPath) {
@@ -348,6 +393,7 @@ export class ChatStore {
 
   updateComment(commentId: string, changes: CommentChanges) {
     const row = this.requireDraft(commentId);
+    this.requireWritable(row.exploration_id);
     if (changes.body !== undefined && !changes.body.trim()) {
       throw new StoreError('invalid', 'A comment body cannot be empty.');
     }
@@ -365,11 +411,13 @@ export class ChatStore {
 
   deleteComment(commentId: string) {
     const row = this.requireDraft(commentId);
+    this.requireWritable(row.exploration_id);
     this.db.run('DELETE FROM comments WHERE id = ?', commentId);
     this.publish([[row.exploration_id, { type: 'comment.deleted', commentId }]]);
   }
 
   toggleForkAll(explorationId: string, forkId: string) {
+    this.requireWritable(explorationId);
     this.requireForkRow(forkId, explorationId);
     const drafts = this.draftsIn(forkId);
     if (drafts.length === 0) return [];
@@ -392,6 +440,7 @@ export class ChatStore {
   }
 
   submit(explorationId: string, forkId: string, globalMessage: string) {
+    this.requireWritable(explorationId);
     this.requireForkRow(forkId, explorationId);
     const drafts = this.draftsIn(forkId);
     const message = globalMessage.trim();
@@ -450,7 +499,9 @@ export class ChatStore {
   explorationsWithQueuedSubmissions() {
     return this.db
       .all<{ exploration_id: string }>(
-        "SELECT DISTINCT exploration_id FROM submissions WHERE status = 'queued'",
+        `SELECT DISTINCT exploration_id FROM submissions
+         JOIN explorations ON explorations.id = submissions.exploration_id
+         WHERE status = 'queued' AND archived_at IS NULL AND deleted_at IS NULL`,
       )
       .map((row) => row.exploration_id);
   }
@@ -559,7 +610,7 @@ export class ChatStore {
   }
 
   attach(input: { explorationId: string; shimId: string; sessionId: string; takeover: boolean }) {
-    const row = this.requireExplorationRow(input.explorationId);
+    const row = this.requireWritable(input.explorationId);
     const heldByOther =
       row.attached_shim_id !== null && row.attached_shim_id !== input.shimId && this.isLive(row);
     if (heldByOther && !input.takeover) {
@@ -571,7 +622,7 @@ export class ChatStore {
     const now = this.now();
     this.db.transaction(() => {
       this.db.run(
-        `UPDATE explorations SET attached_shim_id = NULL, attached_session_id = NULL, attached_seen_at = NULL
+        `UPDATE explorations SET ${clearAttachment}
          WHERE attached_shim_id = ? AND id != ?`,
         input.shimId,
         input.explorationId,
@@ -591,7 +642,7 @@ export class ChatStore {
   detach(shimId: string) {
     const explorationIds = this.attachedExplorationIds(shimId);
     this.db.run(
-      `UPDATE explorations SET attached_shim_id = NULL, attached_session_id = NULL, attached_seen_at = NULL
+      `UPDATE explorations SET ${clearAttachment}
        WHERE attached_shim_id = ?`,
       shimId,
     );
@@ -601,7 +652,7 @@ export class ChatStore {
   // A new daemon has no background sessions yet, so attachments left by earlier ones are stale.
   releaseBackgroundAttachments() {
     this.db.run(
-      `UPDATE explorations SET attached_shim_id = NULL, attached_session_id = NULL, attached_seen_at = NULL
+      `UPDATE explorations SET ${clearAttachment}
        WHERE attached_session_id = background_session_id`,
     );
   }
@@ -649,7 +700,12 @@ export class ChatStore {
   }
 
   hasExploration(explorationId: string) {
-    return this.db.get('SELECT 1 FROM explorations WHERE id = ?', explorationId) !== undefined;
+    return (
+      this.db.get(
+        'SELECT 1 FROM explorations WHERE id = ? AND deleted_at IS NULL',
+        explorationId,
+      ) !== undefined
+    );
   }
 
   messageText(row: MessageRow) {
@@ -773,13 +829,32 @@ export class ChatStore {
     for (const [explorationId, event] of events) this.bus.publish(explorationId, event);
   }
 
-  private requireExplorationRow(explorationId: string) {
+  private requireExplorationRow(explorationId: string, options = { includeDeleted: false }) {
     const row = this.db.get<ExplorationRow>(
       'SELECT * FROM explorations WHERE id = ?',
       explorationId,
     );
-    if (!row) throw new StoreError('not_found', `Exploration ${explorationId} does not exist.`);
+    if (!row || (row.deleted_at !== null && !options.includeDeleted)) {
+      throw new StoreError('not_found', `Exploration ${explorationId} does not exist.`);
+    }
     return row;
+  }
+
+  private requireWritable(explorationId: string) {
+    const row = this.requireExplorationRow(explorationId);
+    if (row.archived_at !== null) {
+      throw new StoreError(
+        'archived',
+        `Exploration ${explorationId} is archived. Restore it to continue.`,
+      );
+    }
+    return row;
+  }
+
+  private publishExplorationUpdate(explorationId: string) {
+    const exploration = toExploration(this.requireExplorationRow(explorationId));
+    this.publish([[explorationId, { type: 'exploration.updated', exploration }]]);
+    return exploration;
   }
 
   private requireForkRow(forkId: string, explorationId?: string) {

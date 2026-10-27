@@ -38,6 +38,7 @@ In a Claude Code session, run `/explore-chat`. It imports the conversation so fa
 - **Queue:** if Claude is still answering, or no session is attached, your submission waits in a queue and you can cancel it.
 - **Map:** the **Map** link shows the tree of forks. `[` and `]` go back and forward.
 - **Continue later:** run `/explore-chat <id>` in any session. The id is in the status bar and in `chat-explorer list`.
+- **Archive:** **Archive** in the list moves an exploration to **Archived**, where it is read only. **Restore** brings it back; **Delete** hides it. A deleted exploration stays in the database until `chat-explorer purge <id>`; `chat-explorer restore <id>` brings it back as archived.
 
 Press Esc in the terminal to stop Claude waiting for feedback.
 
@@ -98,9 +99,12 @@ chat-explorer dictation install
 chat-explorer start                         start the daemon if it is not running
 chat-explorer stop
 chat-explorer status                        version, port and attached sessions
-chat-explorer list [--json]                 explorations, newest first
+chat-explorer list [--archived|--deleted] [--json]
+                                            explorations, newest first
 chat-explorer open [id] [--fork <forkId>]   open the UI in the browser
-chat-explorer delete <id>
+chat-explorer archive|unarchive <id>
+chat-explorer delete <id>                   hide it; restore <id> brings it back, archived
+chat-explorer purge <id>                    delete permanently
 chat-explorer service install|uninstall     run the daemon at login (macOS)
 chat-explorer dictation install|uninstall   download or delete the Whisper model
 ```

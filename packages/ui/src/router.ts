@@ -8,6 +8,7 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', component: ExplorationsList },
+    { path: '/archived', component: ExplorationsList, props: { archived: true } },
     { path: '/e/:explorationId', component: ForkView, props: true, meta: { opensAtEnd: true } },
     {
       path: '/e/:explorationId/f/:forkId',

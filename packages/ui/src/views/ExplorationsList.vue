@@ -1,37 +1,58 @@
 <script setup lang="ts">
 import type { ExplorationListItem } from '@shared/types';
-import { onMounted, ref } from 'vue';
+import { ref, watch } from 'vue';
 import { api } from '../api';
 import NewExploration from '../components/NewExploration.vue';
 import ThemeSwitch from '../components/ThemeSwitch.vue';
 import { relativeTime } from '@shared/time';
 
+const props = defineProps<{ archived?: boolean }>();
+
 const explorations = ref<ExplorationListItem[] | null>(null);
 const failed = ref(false);
+const confirmingDelete = ref<string | null>(null);
 
-onMounted(async () => {
-  try {
-    explorations.value = await api.listExplorations();
-  } catch {
-    failed.value = true;
-  }
-});
+watch(
+  () => props.archived,
+  async (archived) => {
+    explorations.value = null;
+    failed.value = false;
+    try {
+      explorations.value = await api.listExplorations(archived);
+    } catch {
+      failed.value = true;
+    }
+  },
+  { immediate: true },
+);
+
+async function removeFromList(explorationId: string, change: (id: string) => Promise<object>) {
+  await change(explorationId);
+  explorations.value =
+    explorations.value?.filter((exploration) => exploration.id !== explorationId) ?? null;
+}
 </script>
 
 <template>
   <main class="page">
     <div class="heading">
-      <h1>Explorations</h1>
+      <h1>{{ archived ? 'Archived' : 'Explorations' }}</h1>
+      <RouterLink :to="archived ? '/' : '/archived'" class="view-link">
+        {{ archived ? 'Explorations' : 'Archived' }}
+      </RouterLink>
       <ThemeSwitch />
     </div>
-    <NewExploration />
+    <NewExploration v-if="!archived" />
     <p v-if="failed" class="muted">Could not load explorations.</p>
     <p v-else-if="explorations?.length === 0" class="muted">
-      No explorations yet. Start one above, or run <code>/explore-chat</code> in Claude Code.
+      <template v-if="archived">Nothing archived.</template>
+      <template v-else>
+        No explorations yet. Start one above, or run <code>/explore-chat</code> in Claude Code.
+      </template>
     </p>
     <ul v-else-if="explorations" class="explorations">
-      <li v-for="exploration in explorations" :key="exploration.id">
-        <RouterLink :to="`/e/${exploration.id}/map`" class="exploration">
+      <li v-for="exploration in explorations" :key="exploration.id" class="exploration">
+        <RouterLink :to="`/e/${exploration.id}/map`" class="open">
           <span class="title">{{ exploration.title || 'Untitled exploration' }}</span>
           <span v-if="exploration.summary" class="summary">{{ exploration.summary }}</span>
           <span class="meta muted">
@@ -39,6 +60,32 @@ onMounted(async () => {
             {{ relativeTime(exploration.updatedAt) }} · <code>{{ exploration.id }}</code>
           </span>
         </RouterLink>
+        <div class="actions">
+          <button
+            v-if="!archived"
+            type="button"
+            @click="removeFromList(exploration.id, api.archive)"
+          >
+            Archive
+          </button>
+          <template v-else-if="confirmingDelete === exploration.id">
+            <span class="muted">Delete?</span>
+            <button
+              type="button"
+              class="danger"
+              @click="removeFromList(exploration.id, api.deleteExploration)"
+            >
+              Delete
+            </button>
+            <button type="button" @click="confirmingDelete = null">Keep</button>
+          </template>
+          <template v-else>
+            <button type="button" @click="removeFromList(exploration.id, api.unarchive)">
+              Restore
+            </button>
+            <button type="button" @click="confirmingDelete = exploration.id">Delete</button>
+          </template>
+        </div>
       </li>
     </ul>
   </main>
@@ -47,8 +94,16 @@ onMounted(async () => {
 <style scoped>
 .heading {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 1rem;
+}
+
+.heading h1 {
+  flex: 1;
+}
+
+.view-link {
+  font-size: 0.9rem;
 }
 
 .explorations {
@@ -59,18 +114,26 @@ onMounted(async () => {
 }
 
 .exploration {
-  display: grid;
-  gap: 0.15rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
   padding: 0.8rem 1rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
-  color: inherit;
-  text-decoration: none;
 }
 
 .exploration:hover {
   border-color: var(--accent);
+}
+
+.open {
+  flex: 1 1 18rem;
+  display: grid;
+  gap: 0.15rem;
+  color: inherit;
+  text-decoration: none;
 }
 
 .title {
@@ -79,5 +142,17 @@ onMounted(async () => {
 
 .meta {
   font-size: 0.8rem;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
+.danger {
+  color: var(--danger);
+  border-color: var(--danger);
 }
 </style>

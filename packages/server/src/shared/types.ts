@@ -14,7 +14,11 @@ export interface Exploration {
   model: ClaudeModel;
   createdAt: number;
   updatedAt: number;
+  archivedAt: number | null;
+  deletedAt: number | null;
 }
+
+export type ExplorationView = 'active' | 'archived' | 'deleted';
 
 export interface ExplorationListItem extends Exploration {
   forkCount: number;

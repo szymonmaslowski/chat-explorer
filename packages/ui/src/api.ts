@@ -41,7 +41,14 @@ export const api = {
     form.append('hint', hint);
     return call<{ text: string }>('/api/transcriptions', { form, signal });
   },
-  listExplorations: () => call<ExplorationListItem[]>('/api/explorations'),
+  listExplorations: (archived = false) =>
+    call<ExplorationListItem[]>(`/api/explorations${archived ? '?archived=true' : ''}`),
+  archive: (explorationId: string) =>
+    call<Exploration>(`/api/explorations/${explorationId}/archive`, { method: 'POST' }),
+  unarchive: (explorationId: string) =>
+    call<Exploration>(`/api/explorations/${explorationId}/unarchive`, { method: 'POST' }),
+  deleteExploration: (explorationId: string) =>
+    call<{ ok: true }>(`/api/explorations/${explorationId}`, { method: 'DELETE' }),
   snapshot: (explorationId: string) => call<Snapshot>(`/api/explorations/${explorationId}`),
   createExploration: (message: string, model: ClaudeModel) =>
     call<{ explorationId: string }>('/api/explorations', { json: { message, model } }),

@@ -47,6 +47,9 @@ export class BackgroundSessions implements StartingSessions {
         this.errors.delete(explorationId);
         return;
       }
+      if (event.type === 'exploration.updated' && event.exploration.archivedAt !== null) {
+        this.stop(explorationId);
+      }
       if (event.type === 'session.attached' && session) session.attached = true;
       if (event.type === 'message.added' || event.type === 'session.attached') {
         if (session) session.lastActiveAt = this.now();
@@ -75,6 +78,9 @@ export class BackgroundSessions implements StartingSessions {
   start(explorationId: string) {
     const { store } = this.options;
     if (this.running.has(explorationId)) return;
+    if (store.isArchived(explorationId)) {
+      throw new StoreError('archived', 'This exploration is archived. Restore it to continue.');
+    }
     if (store.attachment(explorationId)?.live) {
       throw new StoreError(
         'attached_elsewhere',
@@ -138,7 +144,9 @@ export class BackgroundSessions implements StartingSessions {
   }
 
   private startIfUnattended(explorationId: string) {
-    if (!this.options.store.attachment(explorationId)?.live) this.tryStart(explorationId);
+    const { store } = this.options;
+    if (store.isArchived(explorationId) || store.attachment(explorationId)?.live) return;
+    this.tryStart(explorationId);
   }
 
   private tryStart(explorationId: string) {

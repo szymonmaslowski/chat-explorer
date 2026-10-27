@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { api } from '../api';
 import type { ExplorationState } from '../stores/exploration';
 import SessionStatusBar from './SessionStatusBar.vue';
 import ThemeSwitch from './ThemeSwitch.vue';
@@ -15,6 +16,7 @@ defineProps<{ state: ExplorationState }>();
       </nav>
       <div class="controls">
         <SessionStatusBar
+          v-if="!state.exploration?.archivedAt"
           :status="state.sessionStatus"
           :connected="state.connected"
           :exploration-id="state.explorationId"
@@ -25,6 +27,10 @@ defineProps<{ state: ExplorationState }>();
     </div>
     <p v-if="state.exploration" class="title">
       {{ state.exploration.title || 'Untitled exploration' }}
+    </p>
+    <p v-if="state.exploration?.archivedAt" class="archived">
+      Archived, read only.
+      <button type="button" @click="api.unarchive(state.explorationId)">Restore</button>
     </p>
     <slot />
   </header>
@@ -55,6 +61,14 @@ defineProps<{ state: ExplorationState }>();
   align-items: center;
   gap: 0.6rem;
   margin-left: auto;
+}
+
+.archived {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.4rem 0 0;
+  color: var(--warning);
 }
 
 .title {

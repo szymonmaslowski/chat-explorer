@@ -10,6 +10,8 @@ describe('postCompactOutput', () => {
       model: 'sonnet',
       createdAt: 0,
       updatedAt: 0,
+      archivedAt: null,
+      deletedAt: null,
     });
     expect(output?.hookSpecificOutput.hookEventName).toBe('SessionStart');
     expect(output?.hookSpecificOutput.additionalContext).toContain('exploration abc ("Caching")');

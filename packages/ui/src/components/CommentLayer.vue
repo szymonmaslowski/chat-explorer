@@ -17,6 +17,7 @@ const props = defineProps<{
   comments: Comment[];
   layoutKey: string;
   compact: boolean;
+  readOnly: boolean;
 }>();
 
 const draftWidth = 280;
@@ -336,7 +337,7 @@ watch(
     </Teleport>
 
     <button
-      v-if="selection"
+      v-if="selection && !readOnly"
       type="button"
       class="comment-button"
       :style="{ top: `${selection.buttonTop}px`, left: `${selection.buttonLeft}px` }"

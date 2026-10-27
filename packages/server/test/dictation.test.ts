@@ -1,18 +1,19 @@
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { dictationAvailability, findOnPath } from '../src/dictation/availability.js';
 import { dictationHint } from '../src/dictation/transcriber.js';
 import { silentWav, transcriptText, whisperArguments } from '../src/dictation/whisper.js';
-import { createTestApp, createTestTranscriber } from './helpers.js';
+import { createTestApp, createTestTranscriber, type FakeWhisperCall } from './helpers.js';
 
 const wav = new Uint8Array(silentWav(1));
 const transcribe = (
   transcriber: ReturnType<typeof createTestTranscriber>['transcriber'],
   signal = new AbortController().signal,
 ) => transcriber.transcribe({ wav, hint: '', signal });
-const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
+const untilCalls = (calls: FakeWhisperCall[], count: number) =>
+  vi.waitFor(() => expect(calls).toHaveLength(count));
 
 describe('whisper command', () => {
   it('passes the model, audio, language and hint', () => {
@@ -89,14 +90,12 @@ describe('transcriber', () => {
     const { transcriber, calls } = createTestTranscriber();
     const first = transcribe(transcriber);
     const second = transcribe(transcriber);
-    await settle();
-    expect(calls).toHaveLength(1);
+    await untilCalls(calls, 1);
     expect(calls[0]!.audio).toEqual(Buffer.from(wav));
 
     calls[0]!.finish({ stdout: ' first\n' });
     expect(await first).toBe('first');
-    await settle();
-    expect(calls).toHaveLength(2);
+    await untilCalls(calls, 2);
     calls[1]!.finish({ stdout: ' second\n' });
     expect(await second).toBe('second');
   });
@@ -107,7 +106,7 @@ describe('transcriber', () => {
     const cancel = new AbortController();
     const second = transcribe(transcriber, cancel.signal);
     cancel.abort();
-    await settle();
+    await untilCalls(calls, 1);
     calls[0]!.finish({ stdout: 'first' });
     await first;
     await expect(second).rejects.toMatchObject({ code: 'cancelled' });
@@ -118,7 +117,7 @@ describe('transcriber', () => {
     const { transcriber, calls } = createTestTranscriber();
     const cancel = new AbortController();
     const running = transcribe(transcriber, cancel.signal);
-    await settle();
+    await untilCalls(calls, 1);
     cancel.abort();
     await expect(running).rejects.toMatchObject({ code: 'cancelled' });
     expect(calls[0]!.signal.aborted).toBe(true);
@@ -134,7 +133,7 @@ describe('transcriber', () => {
   it('reports a recording Whisper cannot read', async () => {
     const { transcriber, calls } = createTestTranscriber();
     const running = transcribe(transcriber);
-    await settle();
+    await untilCalls(calls, 1);
     calls[0]!.finish({ code: 2, stderr: "error: failed to read audio file 'audio.wav'\n" });
     await expect(running).rejects.toMatchObject({ code: 'invalid_audio' });
   });
@@ -142,7 +141,7 @@ describe('transcriber', () => {
   it('reports other failures with the end of the output', async () => {
     const { transcriber, calls } = createTestTranscriber();
     const running = transcribe(transcriber);
-    await settle();
+    await untilCalls(calls, 1);
     calls[0]!.finish({ code: 1, stderr: 'loading\nggml_metal_init: out of memory\n' });
     await expect(running).rejects.toMatchObject({
       code: 'transcription_failed',
@@ -175,7 +174,7 @@ describe('transcription API', () => {
       method: 'POST',
       body: upload({ audio: new Blob([wav], { type: 'audio/wav' }), hint: 'Caching API' }),
     });
-    await settle();
+    await untilCalls(whisperCalls, 1);
     expect(whisperCalls[0]!.args.slice(-2)).toEqual(['--prompt', 'Caching API']);
     whisperCalls[0]!.finish({ stdout: ' Hello there.\n' });
     expect(await (await response).json()).toEqual({ text: 'Hello there.' });

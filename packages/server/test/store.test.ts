@@ -302,8 +302,66 @@ describe('attachment', () => {
   });
 });
 
-describe('delete', () => {
-  it('removes every row of the exploration', () => {
+describe('archive and delete', () => {
+  const listed = (store: ReturnType<typeof setup>['store']) => ({
+    active: store.listExplorations().map((exploration) => exploration.id),
+    archived: store.listExplorations('archived').map((exploration) => exploration.id),
+    deleted: store.listExplorations('deleted').map((exploration) => exploration.id),
+  });
+
+  it('archives an exploration read-only and detaches its session', () => {
+    const { store, clock, explorationId, mainForkId, answer } = setup();
+    clock.now += 1000;
+    expect(store.archiveExploration(explorationId).archivedAt).toBe(clock.now);
+    expect(listed(store)).toEqual({ active: [], archived: [explorationId], deleted: [] });
+    expect(store.attachment(explorationId)).toBeNull();
+    expect(store.snapshot(explorationId).exploration.archivedAt).toBe(clock.now);
+    expect(() => store.submit(explorationId, mainForkId, 'more')).toThrow(
+      expect.objectContaining({ code: 'archived' }),
+    );
+    expect(() =>
+      draft(store, explorationId, { messageId: answer.id, viewForkId: mainForkId, body: 'x' }),
+    ).toThrow(expect.objectContaining({ code: 'archived' }));
+    expect(() =>
+      store.attach({ explorationId, shimId: 'shim-b', sessionId: 'session-b', takeover: false }),
+    ).toThrow(expect.objectContaining({ code: 'archived' }));
+
+    store.unarchiveExploration(explorationId);
+    expect(listed(store).active).toEqual([explorationId]);
+    store.submit(explorationId, mainForkId, 'more');
+  });
+
+  it('keeps queued feedback of an archived exploration for after it is restored', () => {
+    const { store, explorationId, mainForkId } = setup();
+    store.detach('shim-a');
+    store.submit(explorationId, mainForkId, 'later');
+    store.archiveExploration(explorationId);
+    expect(store.explorationsWithQueuedSubmissions()).toEqual([]);
+    store.unarchiveExploration(explorationId);
+    expect(store.explorationsWithQueuedSubmissions()).toEqual([explorationId]);
+  });
+
+  it('hides a deleted exploration and restores it as archived', () => {
+    const { store, explorationId } = setup();
+    store.archiveExploration(explorationId);
+    store.deleteExploration(explorationId);
+    expect(listed(store)).toEqual({ active: [], archived: [], deleted: [explorationId] });
+    expect(store.hasExploration(explorationId)).toBe(false);
+    expect(() => store.snapshot(explorationId)).toThrow(
+      expect.objectContaining({ code: 'not_found' }),
+    );
+
+    store.restoreExploration(explorationId);
+    expect(listed(store)).toEqual({ active: [], archived: [explorationId], deleted: [] });
+  });
+
+  it('restores an exploration deleted while active as archived too', () => {
+    const { store, explorationId } = setup();
+    store.deleteExploration(explorationId);
+    expect(store.restoreExploration(explorationId).archivedAt).not.toBeNull();
+  });
+
+  it('purges every row of the exploration', () => {
     const { store, database, explorationId, mainForkId, answer } = setup();
     draft(store, explorationId, {
       messageId: answer.id,
@@ -314,6 +372,7 @@ describe('delete', () => {
     store.submit(explorationId, mainForkId, 'message');
     store.deliverQueued(explorationId);
     store.deleteExploration(explorationId);
+    store.purgeExploration(explorationId);
     for (const table of ['explorations', 'forks', 'messages', 'comments', 'submissions']) {
       expect(database.get<{ count: number }>(`SELECT count(*) AS count FROM ${table}`)!.count).toBe(
         0,

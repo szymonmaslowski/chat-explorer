@@ -73,4 +73,8 @@ export const migrations = [
   ALTER TABLE explorations ADD COLUMN model TEXT NOT NULL DEFAULT 'sonnet';
   ALTER TABLE explorations ADD COLUMN background_session_id TEXT;
   `,
+  `
+  ALTER TABLE explorations ADD COLUMN archived_at INTEGER;
+  ALTER TABLE explorations ADD COLUMN deleted_at INTEGER;
+  `,
 ];

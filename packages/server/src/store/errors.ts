@@ -7,6 +7,7 @@ export type StoreErrorCode =
   | 'attached_elsewhere'
   | 'detached'
   | 'too_many_sessions'
+  | 'archived'
   | 'cancelled'
   | 'dictation_unavailable'
   | 'invalid_audio'
@@ -22,6 +23,7 @@ const httpStatusByCode: Record<StoreErrorCode, 400 | 404 | 409 | 500 | 503 | 504
   attached_elsewhere: 409,
   detached: 409,
   too_many_sessions: 503,
+  archived: 409,
   cancelled: 409,
   dictation_unavailable: 503,
   invalid_audio: 400,

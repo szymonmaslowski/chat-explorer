@@ -8,7 +8,7 @@ import { dictationHint, type Transcriber } from '../dictation/transcriber.js';
 import { findTranscript, readTranscript } from '../import/transcript.js';
 import type { BackgroundSessions } from '../sessions/background-sessions.js';
 import { claudeModels, type ClaudeModel } from '../shared/models.js';
-import type { ExplorationListItem, Snapshot } from '../shared/types.js';
+import type { ExplorationListItem, ExplorationView, Snapshot } from '../shared/types.js';
 import { StoreError } from '../store/errors.js';
 import type { EventBus } from '../store/event-bus.js';
 import type { FeedbackHub } from '../store/feedback-hub.js';
@@ -126,9 +126,16 @@ export function createApp(options: AppOptions) {
   );
 
   app.get('/api/explorations', (context) => {
-    const explorations: ExplorationListItem[] = store
-      .listExplorations()
-      .map((exploration) => ({ ...exploration, sessionStatus: hub.status(exploration.id) }));
+    const view: ExplorationView =
+      context.req.query('deleted') === 'true'
+        ? 'deleted'
+        : context.req.query('archived') === 'true'
+          ? 'archived'
+          : 'active';
+    const explorations: ExplorationListItem[] = store.listExplorations(view).map((exploration) => ({
+      ...exploration,
+      sessionStatus: view === 'deleted' ? 'detached' : hub.status(exploration.id),
+    }));
     return context.json(explorations);
   });
 
@@ -164,8 +171,22 @@ export function createApp(options: AppOptions) {
     return context.json({ ok: true }, 201);
   });
 
+  app.post('/api/explorations/:id/archive', (context) =>
+    context.json(store.archiveExploration(context.req.param('id'))),
+  );
+
+  app.post('/api/explorations/:id/unarchive', (context) =>
+    context.json(store.unarchiveExploration(context.req.param('id'))),
+  );
+
+  app.post('/api/explorations/:id/restore', (context) =>
+    context.json(store.restoreExploration(context.req.param('id'))),
+  );
+
   app.delete('/api/explorations/:id', (context) => {
-    store.deleteExploration(context.req.param('id'));
+    const explorationId = context.req.param('id');
+    if (context.req.query('purge') === 'true') store.purgeExploration(explorationId);
+    else store.deleteExploration(explorationId);
     return context.json({ ok: true });
   });
 

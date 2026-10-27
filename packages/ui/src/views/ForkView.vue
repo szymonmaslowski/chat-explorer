@@ -19,6 +19,7 @@ const flashMs = 1_400;
 const route = useRoute();
 const compact = useMediaQuery('(max-width: 700px), (hover: none)');
 const state = computed(() => openExploration(props.explorationId));
+const archived = computed(() => Boolean(state.value.exploration?.archivedAt));
 const fork = computed(() =>
   props.forkId ? (state.value.forks.get(props.forkId) ?? null) : mainFork(state.value.forks),
 );
@@ -118,7 +119,9 @@ watch(
 
     <template v-else>
       <h1 class="fork-title">{{ forkTitle(fork) }}</h1>
-      <p v-if="path.length === 0" class="muted">No messages yet. Write the first one below.</p>
+      <p v-if="path.length === 0" class="muted">
+        No messages yet.<template v-if="!archived"> Write the first one below.</template>
+      </p>
 
       <div class="conversation">
         <template v-for="(message, index) in path" :key="message.id">
@@ -148,6 +151,7 @@ watch(
           :comments="viewComments"
           :layout-key="[...pathIds].join()"
           :compact="compact"
+          :read-only="archived"
         />
       </div>
 
@@ -161,6 +165,7 @@ watch(
       />
 
       <ReplyBar
+        v-if="!archived"
         :exploration-id="explorationId"
         :fork-id="fork.id"
         :drafts="drafts"

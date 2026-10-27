@@ -24,9 +24,14 @@ Commands:
   start                       Start the daemon if it is not running and print its URL
   stop                        Stop the daemon
   status                      Show whether the daemon runs, its version and attached sessions
-  list [--json]               List explorations
+  list [--archived|--deleted] [--json]
+                              List explorations
   open [id] [--fork <forkId>] Open the UI in the browser
-  delete <id>                 Delete an exploration
+  archive <id>                Archive an exploration
+  unarchive <id>              Bring an archived exploration back
+  delete <id>                 Delete an exploration (restore brings it back)
+  restore <id>                Bring a deleted exploration back, archived
+  purge <id>                  Delete an exploration permanently
   service install             Run the daemon at login (macOS)
   service uninstall           Stop running the daemon at login
   dictation install [--model <name>]
@@ -79,12 +84,23 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
   },
 
   async list(args) {
-    const { values } = parseArgs({ args, options: { json: { type: 'boolean' } } });
+    const { values } = parseArgs({
+      args,
+      options: {
+        json: { type: 'boolean' },
+        archived: { type: 'boolean' },
+        deleted: { type: 'boolean' },
+      },
+    });
     await ensureRunning();
-    const explorations = await request<ExplorationListItem[]>('/api/explorations');
+    const query = values.deleted ? '?deleted=true' : values.archived ? '?archived=true' : '';
+    const explorations = await request<ExplorationListItem[]>(`/api/explorations${query}`);
     if (values.json) return console.log(JSON.stringify(explorations, null, 2));
-    if (explorations.length === 0)
-      return console.log('No explorations yet. Run /explore-chat in Claude Code.');
+    if (explorations.length === 0) {
+      return console.log(
+        query ? 'No explorations here.' : 'No explorations yet. Run /explore-chat in Claude Code.',
+      );
+    }
     for (const exploration of explorations) {
       const forks = `${exploration.forkCount} fork${exploration.forkCount === 1 ? '' : 's'}`;
       console.log(
@@ -181,16 +197,41 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
     await runHook(name ?? '', config);
   },
 
-  async delete(args) {
-    const [explorationId] = args;
-    if (!explorationId) throw new UsageError('chat-explorer delete <id>');
-    await ensureRunning();
-    await request(`/api/explorations/${explorationId}`, { method: 'DELETE' });
-    console.log(`Deleted exploration ${explorationId}.`);
+  async archive([explorationId]) {
+    await changeExploration('archive', explorationId, '/archive', 'POST', 'Archived');
+  },
+
+  async unarchive([explorationId]) {
+    await changeExploration('unarchive', explorationId, '/unarchive', 'POST', 'Unarchived');
+  },
+
+  async delete([explorationId]) {
+    await changeExploration('delete', explorationId, '', 'DELETE', 'Deleted');
+  },
+
+  async restore([explorationId]) {
+    await changeExploration('restore', explorationId, '/restore', 'POST', 'Restored (archived)');
+  },
+
+  async purge([explorationId]) {
+    await changeExploration('purge', explorationId, '?purge=true', 'DELETE', 'Permanently deleted');
   },
 };
 
 class UsageError extends Error {}
+
+async function changeExploration(
+  command: string,
+  explorationId: string | undefined,
+  pathSuffix: string,
+  method: 'POST' | 'DELETE',
+  done: string,
+) {
+  if (!explorationId) throw new UsageError(`chat-explorer ${command} <id>`);
+  await ensureRunning();
+  await request(`/api/explorations/${explorationId}${pathSuffix}`, { method });
+  console.log(`${done} exploration ${explorationId}.`);
+}
 
 async function main([command, ...args]: string[]) {
   if (command === '--version' || command === '-v') return console.log(packageVersion);

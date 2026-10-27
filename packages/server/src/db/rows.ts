@@ -23,6 +23,8 @@ export interface ExplorationRow {
   attached_seen_at: number | null;
   model: ClaudeModel;
   background_session_id: string | null;
+  archived_at: number | null;
+  deleted_at: number | null;
 }
 
 export interface ForkRow {
@@ -84,6 +86,8 @@ export const toExploration = (row: ExplorationRow): Exploration => ({
   model: row.model,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
+  archivedAt: row.archived_at,
+  deletedAt: row.deleted_at,
 });
 
 export const toFork = (row: ForkRow): Fork => ({

@@ -294,9 +294,11 @@ Vue Router's `scrollBehavior` restores the saved position on back and forward, a
 chat-explorer start            start the daemon if needed, print the URL
 chat-explorer stop
 chat-explorer status           running or not, version, port, attached sessions
-chat-explorer list [--json]    id, title, summary, forks, updated
+chat-explorer list [--archived|--deleted] [--json]
 chat-explorer open [id] [--fork <forkId>]
-chat-explorer delete <id>
+chat-explorer archive|unarchive <id>
+chat-explorer delete|restore <id>   soft delete; restore brings it back archived
+chat-explorer purge <id>       delete permanently
 chat-explorer mcp              stdio MCP shim (used by the plugin)
 chat-explorer hook <name>      hook handlers (used by the plugin)
 ```
@@ -461,6 +463,14 @@ Loading the model takes 0.2 s, so the daemon runs `whisper-cli` per recording an
 **Setup.** `chat-explorer dictation install [--model <name>]` checks for `whisper-cli`, checks disk space, downloads the model to a `.part` file while hashing it, compares the SHA-256 with the one pinned in `src/dictation/models.ts`, renames it, runs Whisper once on a second of silence, and asks the running daemon whether it sees dictation. `GET /api/settings` reports `dictation: true | false`, checked on every call. `chat-explorer status` prints a dictation line.
 
 Done when: unit tests cover the transcriber with a fake runner, the download with a local server and the WAV encoder; a real-Whisper test runs when the model is present; Playwright dictates a reply through Chrome's fake microphone and a fake `whisper-cli`.
+
+### 12. Archive and delete
+
+`archived_at` and `deleted_at` columns on explorations, empty while not set.
+
+- Archived: listed only under **Archived** (`GET /api/explorations?archived=true`), read only. Submits, comments and attaching a session fail with `archived`; the attached session is detached and a background session stops. Queued feedback stays queued and is answered once the exploration is restored.
+- Deleted: only from the archived view in the UI, after an inline confirmation. A deleted exploration is not found anywhere except `?deleted=true`. `restore` brings it back archived; `purge` removes its rows.
+- Hard delete is CLI only.
 
 ## Later
 

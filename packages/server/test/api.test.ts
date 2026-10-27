@@ -79,6 +79,32 @@ describe('public API', () => {
     expect(await cancel.json()).toMatchObject({ error: 'already_sent' });
   });
 
+  it('archives, deletes, restores and purges through the API', async () => {
+    const { request, store } = createTestApp();
+    const { explorationId } = seedConversation(store);
+    const ids = async (query = '') =>
+      ((await (await request(`/api/explorations${query}`)).json()) as { id: string }[]).map(
+        (exploration) => exploration.id,
+      );
+
+    await request(`/api/explorations/${explorationId}/archive`, { method: 'POST' });
+    expect(await ids()).toEqual([]);
+    expect(await ids('?archived=true')).toEqual([explorationId]);
+
+    await request(`/api/explorations/${explorationId}`, { method: 'DELETE' });
+    expect(await ids('?archived=true')).toEqual([]);
+    expect(await ids('?deleted=true')).toEqual([explorationId]);
+    expect((await request(`/api/explorations/${explorationId}`)).status).toBe(404);
+
+    await request(`/api/explorations/${explorationId}/restore`, { method: 'POST' });
+    await request(`/api/explorations/${explorationId}/unarchive`, { method: 'POST' });
+    expect(await ids()).toEqual([explorationId]);
+
+    await request(`/api/explorations/${explorationId}?purge=true`, { method: 'DELETE' });
+    expect(store.listExplorations('deleted')).toEqual([]);
+    expect(await ids()).toEqual([]);
+  });
+
   it('validates request bodies', async () => {
     const { request, store } = createTestApp();
     const { explorationId } = seedConversation(store);
