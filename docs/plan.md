@@ -377,9 +377,71 @@ The post-compact hook and the marketplace file.
 
 Run `/explore-chat` in a real conversation, comment, fork, submit, compact, continue from a new session with `/explore-chat <id>`. Fix what breaks. Write the README.
 
+### 10. From the phone
+
+Goal: open, continue and start explorations from a phone, with no Claude Code session started by hand on the Mac.
+
+**Settings file.** `~/.chat-explorer/config.json`, read when the daemon starts:
+
+```json
+{ "publicUrl": null, "defaultModel": "sonnet", "idleMinutes": 60, "maxSessions": 3 }
+```
+
+Every key is optional. `CHAT_EXPLORER_PUBLIC_URL` overrides `publicUrl`. An invalid file stops the daemon with a message naming the key.
+
+**Remote access through Tailscale.** `tailscale serve --bg 4517` publishes the daemon at `https://<mac>.<tailnet>.ts.net` to your own devices only. Nothing is public, so there is no login to build.
+
+- The host and origin check also accepts the host and origin of `publicUrl`.
+- The URLs that `start_exploration` and `attach_exploration` return use `publicUrl` when it is set, so a link Claude prints opens on the phone. The shim still opens the local URL in the Mac's browser.
+
+**Daemon at login (macOS).** `chat-explorer service install` writes a launchd agent and loads it. `chat-explorer service uninstall` removes it.
+
+- The agent runs the daemon at login and restarts it after a crash (`KeepAlive` with `SuccessfulExit: false`). A shutdown through the API exits with 0 and is not restarted, so version upgrades keep working as before.
+- `PATH` from the shell that ran `install` goes into the agent, so the daemon finds `claude` and `chat-explorer`.
+- When the port is already held by a chat-explorer daemon, a new daemon exits with 0 instead of 3, so launchd does not retry forever.
+- The Mac must stay awake on the charger. The README says how. There is no fix for a sleeping Mac.
+
+**Background sessions.** When nobody is attached, the daemon runs Claude Code itself:
+
+```
+claude -p "/explore-chat <id>" --model <model> (--session-id <uuid> | --resume <uuid>)
+  --plugin-dir <package>/dist/plugin --tools WebSearch
+  --allowedTools WebSearch mcp__plugin_chat-explorer_chat-explorer --permission-prompts none
+```
+
+- Trigger: a submission is queued while the exploration has no live attachment and no background session. This covers new explorations, explorations started in a terminal whose session has ended, and sessions stopped for being idle.
+- `claude --bg` was tried and rejected: it ignores the prompt it is started with and runs a full terminal session with the user's default permission mode.
+- Tools: web search and the chat-explorer tools only. Anything that would prompt for permission is denied. Isolated containers with more tools come later.
+- Working directory: `~/.chat-explorer/sessions/`. Output goes to `sessions/<explorationId>.log`. `CHAT_EXPLORER_NO_BROWSER` is set, so no tab opens on the Mac.
+- The plugin is copied into the package at build time and loaded with `--plugin-dir`, so the background session always matches the daemon's version.
+- The Claude session id is stored on the exploration. The next start uses `--resume` with it when its transcript exists, so Claude keeps its context.
+- Idle: a background session that has had nothing to answer for `idleMinutes` (default 60) is stopped. After an hour the prompt cache has expired, so a waiting session has no advantage over a resumed one. The next submit starts it again.
+- At most `maxSessions` (default 3) run at once. Starting another stops the one idle longest. If none is idle, the start fails with a message.
+- A session that exits before attaching, or exits with an error, is a failed start. The last lines of its log go to the UI. The queued submission stays queued. Retry, or submit again.
+- The status bar shows a new `starting` state between the start and the attach.
+- When the daemon shuts down, it stops its background sessions. The next submit resumes them.
+- A terminal session can still take over with `/explore-chat <id>`. The background session gets `detached` and exits.
+
+**Model.** Each exploration has a model (`sonnet` or `opus`, default from `defaultModel`). The status bar has a picker. Changing it restarts a running background session with `--resume` and the new model. A terminal session keeps its own model, so the picker only affects background sessions.
+
+**New exploration.** The explorations page gets a form: first message, model, Start. The daemon creates an empty exploration, queues the message on the main fork and starts a background session. The page opens the new exploration, which shows the queued message and "Starting Claude…".
+
+**Touch and narrow screens.**
+
+- The Comment button also appears after a touch or keyboard selection: on `selectionchange`, once the selection has not changed for 300 ms and no mouse button is down. It sits further below the selection on touch screens, clear of the selection handles.
+- The button acts on `pointerup` and prevents the default on `pointerdown` and `touchstart`, so tapping it does not clear the selection first.
+- When the screen is narrower than 700 px or has no hover, comments are not floating cards. They are listed under their message, in text order, without fading and without the sticky tray. Highlights stay.
+- The header wraps on narrow screens.
+
+**Not in this phase.** Moving a project to another directory. Sessions with file and shell tools. Claude suggesting a model switch.
+
+Done when: a test exploration started from the UI is answered by a background session; the model switch restarts it with its context; an idle session stops and resumes on the next submit; unit tests cover the session manager with a fake launcher; Playwright covers the new-exploration form and the narrow layout.
+
 ## Later
 
 - Hard forks: each fork's answer written by a subagent that only gets `read_fork` for that fork.
 - Message summaries on the map, with each fork's comments listed under its box. Needs: a nullable `messages.summary` column (one `ALTER TABLE`), an optional `summary` on `add_message`, summaries for user messages (built from the comments, or written by Claude), a pass for imported messages, and a map layout for boxes of different heights (`d3-flextree`). About 1–2 days.
 - Regular Claude Desktop chat.
 - Code highlighting in messages, search, export.
+- Background sessions in isolated Docker containers with file and shell tools, for building things from the phone.
+- Claude suggests a model switch mid-exploration, and the UI offers it in one tap.
