@@ -105,12 +105,14 @@ export function createShim(options: ShimOptions) {
         transcriptPath?: string | undefined;
         title?: string | undefined;
       }) => {
-        const started = await request<{ explorationId: string; mainForkId: string; url: string }>(
-          '/api/internal/explorations',
-          { json: { shimId, ...args } },
-        );
+        const { localUrl, ...started } = await request<{
+          explorationId: string;
+          mainForkId: string;
+          url: string;
+          localUrl: string;
+        }>('/api/internal/explorations', { json: { shimId, ...args } });
         attachment = { explorationId: started.explorationId, sessionId: args.sessionId };
-        options.openUrl(started.url);
+        options.openUrl(localUrl);
         return json(started);
       },
     ),
@@ -137,12 +139,15 @@ export function createShim(options: ShimOptions) {
         sessionId: string;
         takeover?: boolean | undefined;
       }) => {
-        const attached = await request<{ url: string; forks: ForkMapEntry[] }>(
-          `/api/internal/explorations/${explorationId}/attach`,
-          { json: { shimId, sessionId, takeover: takeover ?? false } },
-        );
+        const { localUrl, ...attached } = await request<{
+          url: string;
+          localUrl: string;
+          forks: ForkMapEntry[];
+        }>(`/api/internal/explorations/${explorationId}/attach`, {
+          json: { shimId, sessionId, takeover: takeover ?? false },
+        });
         attachment = { explorationId, sessionId };
-        options.openUrl(attached.url);
+        options.openUrl(localUrl);
         return json(attached);
       },
     ),

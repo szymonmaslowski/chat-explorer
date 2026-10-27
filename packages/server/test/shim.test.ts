@@ -29,6 +29,7 @@ beforeEach(async () => {
     hub,
     bus,
     port: config.port,
+    publicUrl: null,
     version,
     uiDirectory: null,
     onShutdown: () => {},

@@ -17,6 +17,7 @@ export interface AppOptions {
   hub: FeedbackHub;
   bus: EventBus;
   port: number;
+  publicUrl: string | null;
   version: string;
   uiDirectory: string | null;
   onShutdown: () => void;
@@ -57,10 +58,14 @@ const feedbackBody = shimBody.extend({
 
 export function createApp(options: AppOptions) {
   const { store, hub, bus, port } = options;
-  const explorationUrl = (explorationId: string) => `http://127.0.0.1:${port}/e/${explorationId}`;
+  const localUrl = `http://127.0.0.1:${port}`;
+  const explorationUrls = (explorationId: string) => ({
+    url: `${options.publicUrl ?? localUrl}/e/${explorationId}`,
+    localUrl: `${localUrl}/e/${explorationId}`,
+  });
   const app = new Hono();
 
-  app.use('*', guardLocalRequests(port));
+  app.use('*', guardLocalRequests(port, options.publicUrl));
 
   app.onError((error, context) => {
     if (error instanceof StoreError) {
@@ -174,7 +179,7 @@ export function createApp(options: AppOptions) {
       {
         explorationId: exploration.id,
         mainForkId: mainFork.id,
-        url: explorationUrl(exploration.id),
+        ...explorationUrls(exploration.id),
         importedMessages: transcript?.messages.length ?? 0,
         transcriptFound: transcript !== null,
       },
@@ -187,7 +192,7 @@ export function createApp(options: AppOptions) {
     const body = attachBody.parse(await context.req.json());
     store.attach({ explorationId, ...body });
     return context.json({
-      url: explorationUrl(explorationId),
+      ...explorationUrls(explorationId),
       forks: store.forkMap(explorationId),
     });
   });

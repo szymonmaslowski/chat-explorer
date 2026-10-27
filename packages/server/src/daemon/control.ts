@@ -20,7 +20,7 @@ export interface DaemonTarget {
 
 const startTimeoutMs = 5_000;
 const pollIntervalMs = 100;
-const defaultDaemonEntry = fileURLToPath(new URL('./main.js', import.meta.url));
+export const defaultDaemonEntry = fileURLToPath(new URL('./main.js', import.meta.url));
 
 export class DaemonStartError extends Error {}
 
@@ -100,7 +100,7 @@ function spawnDaemon(config: Config, daemonEntry: string) {
   child.unref();
 }
 
-async function waitForHealth(config: Config) {
+export async function waitForHealth(config: Config) {
   const deadline = Date.now() + startTimeoutMs;
   while (Date.now() < deadline) {
     const current = await probe(config.baseUrl);

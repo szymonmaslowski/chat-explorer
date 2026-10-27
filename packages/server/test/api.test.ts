@@ -32,6 +32,17 @@ describe('request guard', () => {
     });
     expect(response.status).toBe(201);
   });
+
+  it('accepts requests through the public URL', async () => {
+    const { request, store } = createTestApp({ publicUrl: 'https://mac.tailnet.ts.net' });
+    const { explorationId, mainForkId } = seedConversation(store);
+    const response = await request(`/api/explorations/${explorationId}/submit`, {
+      method: 'POST',
+      headers: { host: 'mac.tailnet.ts.net', origin: 'https://mac.tailnet.ts.net' },
+      json: { forkId: mainForkId, globalMessage: 'hi' },
+    });
+    expect(response.status).toBe(201);
+  });
 });
 
 describe('public API', () => {
@@ -158,6 +169,20 @@ describe('internal API', () => {
       'Hello',
       'Hi there',
     ]);
+  });
+
+  it('returns the public URL for the phone and the local one for the Mac', async () => {
+    const { request } = createTestApp({ publicUrl: 'https://mac.tailnet.ts.net' });
+    const started = await (
+      await request('/api/internal/explorations', {
+        method: 'POST',
+        json: { shimId: 'shim-a', sessionId: 'session-a' },
+      })
+    ).json();
+    expect(started).toMatchObject({
+      url: `https://mac.tailnet.ts.net/e/${started.explorationId}`,
+      localUrl: `http://127.0.0.1:${testPort}/e/${started.explorationId}`,
+    });
   });
 
   it('refuses writes from a detached session', async () => {

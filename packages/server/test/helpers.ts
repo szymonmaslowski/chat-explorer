@@ -19,13 +19,14 @@ export function createTestStore() {
   return { clock, database, bus, store, hub, events };
 }
 
-export function createTestApp() {
+export function createTestApp(options: { publicUrl?: string } = {}) {
   const context = createTestStore();
   const app = createApp({
     store: context.store,
     hub: context.hub,
     bus: context.bus,
     port: testPort,
+    publicUrl: options.publicUrl ?? null,
     version: '0.0.0-test',
     uiDirectory: null,
     onShutdown: () => {},

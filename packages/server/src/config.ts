@@ -12,6 +12,8 @@ export function loadConfig() {
     home,
     databasePath: join(home, 'chat-explorer.db'),
     logPath: join(home, 'daemon.log'),
+    settingsPath: join(home, 'config.json'),
+    sessionsPath: join(home, 'sessions'),
     baseUrl: `http://127.0.0.1:${port}`,
   };
 }

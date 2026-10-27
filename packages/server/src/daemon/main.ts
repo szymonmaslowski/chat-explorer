@@ -5,16 +5,19 @@ import { fileURLToPath } from 'node:url';
 import { getRequestListener } from '@hono/node-server';
 import { createApp } from '../api/app.js';
 import { loadConfig } from '../config.js';
+import { loadSettings, SettingsError } from '../settings.js';
 import { Database } from '../db/database.js';
 import { EventBus } from '../store/event-bus.js';
 import { FeedbackHub } from '../store/feedback-hub.js';
 import { ChatStore } from '../store/store.js';
 import { packageVersion } from '../version.js';
+import { probe } from './control.js';
 
 export const portInUseExitCode = 3;
 
 const config = loadConfig();
 mkdirSync(config.home, { recursive: true });
+const settings = loadSettingsOrExit();
 
 const database = new Database(config.databasePath);
 const bus = new EventBus();
@@ -34,6 +37,7 @@ const app = createApp({
   hub,
   bus,
   port: config.port,
+  publicUrl: settings.publicUrl,
   version: packageVersion,
   uiDirectory: fileURLToPath(new URL('../ui', import.meta.url)),
   onShutdown: shutdown,
@@ -41,10 +45,15 @@ const app = createApp({
 
 const server = createServer(getRequestListener(app.fetch));
 
-server.on('error', (error: NodeJS.ErrnoException) => {
+// Exiting with 0 when another chat-explorer daemon holds the port stops launchd from retrying.
+server.on('error', async (error: NodeJS.ErrnoException) => {
   if (error.code !== 'EADDRINUSE') throw error;
-  console.error(`Port ${config.port} is already in use.`);
   database.close();
+  if ((await probe(config.baseUrl)).state === 'running') {
+    console.log(`chat-explorer is already running on port ${config.port}.`);
+    process.exit(0);
+  }
+  console.error(`Port ${config.port} is already in use.`);
   process.exit(portInUseExitCode);
 });
 
@@ -56,3 +65,13 @@ server.listen(config.port, '127.0.0.1', () => {
 
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
+
+function loadSettingsOrExit() {
+  try {
+    return loadSettings(config);
+  } catch (error) {
+    if (!(error instanceof SettingsError)) throw error;
+    console.error(error.message);
+    process.exit(1);
+  }
+}

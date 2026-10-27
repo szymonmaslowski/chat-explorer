@@ -18,6 +18,8 @@ Commands:
   list [--json]               List explorations
   open [id] [--fork <forkId>] Open the UI in the browser
   delete <id>                 Delete an exploration
+  service install             Run the daemon at login (macOS)
+  service uninstall           Stop running the daemon at login
   mcp                         Run the stdio MCP server (used by the Claude Code plugin)
   hook <name>                 Run a Claude Code hook handler (used by the plugin)
   --version                   Print the version`;
@@ -93,6 +95,21 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
         : `/e/${explorationId}`;
     openBrowser(`${config.baseUrl}${path}`);
     console.log(`Opened ${config.baseUrl}${path}`);
+  },
+
+  async service([action]) {
+    const { installService, uninstallService } = await import('../daemon/launchd.js');
+    if (action === 'install') {
+      const { launchAgentPath, health } = await installService(config);
+      console.log(`chat-explorer ${health.version} runs at login (${launchAgentPath}).`);
+      return;
+    }
+    if (action === 'uninstall') {
+      const removed = await uninstallService();
+      console.log(removed ? `Removed ${removed}.` : 'The chat-explorer service is not installed.');
+      return;
+    }
+    throw new UsageError('chat-explorer service install|uninstall');
   },
 
   async mcp() {
