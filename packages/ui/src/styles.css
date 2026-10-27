@@ -170,4 +170,13 @@ blockquote {
   input {
     font-size: 16px !important;
   }
+
+  button,
+  select {
+    min-height: 2.5rem;
+  }
+
+  button {
+    min-width: 2.5rem;
+  }
 }

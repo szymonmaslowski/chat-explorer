@@ -198,4 +198,11 @@ function onEditorKeydown(event: KeyboardEvent) {
   padding: 0.1rem 0.5rem;
   font-size: 0.75rem;
 }
+
+@media (pointer: coarse) {
+  .actions button {
+    padding: 0.1rem 0.8rem;
+    font-size: 0.875rem;
+  }
+}
 </style>

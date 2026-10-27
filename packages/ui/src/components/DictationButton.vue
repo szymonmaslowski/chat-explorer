@@ -90,6 +90,13 @@ const clock = computed(() => {
   stroke-linecap: round;
 }
 
+@media (pointer: coarse) {
+  .mic svg {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+}
+
 .mic.recording {
   color: var(--danger);
   border-color: var(--danger);

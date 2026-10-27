@@ -29,4 +29,10 @@ function next() {
   font-size: 0.95rem;
   line-height: 1.2;
 }
+
+@media (pointer: coarse) {
+  .theme-switch {
+    font-size: 1.2rem;
+  }
+}
 </style>
