@@ -2,11 +2,11 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import CommentLayer from '../components/CommentLayer.vue';
+import ExplorationHeader from '../components/ExplorationHeader.vue';
 import ConversationMessage from '../components/ConversationMessage.vue';
 import QueuedSubmissionCard from '../components/QueuedSubmissionCard.vue';
 import ReplyBar from '../components/ReplyBar.vue';
 import SessionError from '../components/SessionError.vue';
-import SessionStatusBar from '../components/SessionStatusBar.vue';
 import { useMediaQuery } from '../composables/useMediaQuery';
 import { forkPath, forkTitle, mainFork, quotedCommentsOf } from '../lib/conversation';
 import { openExploration } from '../stores/exploration';
@@ -97,27 +97,12 @@ watch(
 
 <template>
   <div class="page fork-view">
-    <header class="top" data-sticky-header>
-      <div class="bar">
-        <nav class="crumbs">
-          <RouterLink to="/">Explorations</RouterLink>
-          <span v-if="state.exploration">
-            / {{ state.exploration.title || 'Untitled exploration' }}
-          </span>
-          <template v-if="fork">
-            ·
-            <RouterLink :to="`/e/${explorationId}/map?from=${fork.id}`">Map</RouterLink>
-          </template>
-        </nav>
-        <SessionStatusBar
-          :status="state.sessionStatus"
-          :connected="state.connected"
-          :exploration-id="explorationId"
-          :model="state.exploration?.model"
-        />
-      </div>
+    <ExplorationHeader :state="state" class="top" data-sticky-header>
+      <template v-if="fork" #links>
+        · <RouterLink :to="`/e/${explorationId}/map?from=${fork.id}`">Map</RouterLink>
+      </template>
       <div id="comment-tray" />
-    </header>
+    </ExplorationHeader>
 
     <SessionError
       v-if="state.sessionError"
@@ -191,33 +176,6 @@ watch(
   top: 0;
   z-index: 6;
   background: var(--background);
-  border-bottom: 1px solid var(--border);
-  font-size: 0.875rem;
-}
-
-.bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 0;
-}
-
-.crumbs {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@media (max-width: 700px) {
-  .bar {
-    flex-wrap: wrap;
-    gap: 0.25rem 1rem;
-  }
-
-  .crumbs {
-    flex-basis: 100%;
-  }
 }
 
 .fork-title {

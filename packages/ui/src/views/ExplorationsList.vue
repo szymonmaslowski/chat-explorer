@@ -27,7 +27,7 @@ onMounted(async () => {
     </p>
     <ul v-else-if="explorations" class="explorations">
       <li v-for="exploration in explorations" :key="exploration.id">
-        <RouterLink :to="`/e/${exploration.id}`" class="exploration">
+        <RouterLink :to="`/e/${exploration.id}/map`" class="exploration">
           <span class="title">{{ exploration.title || 'Untitled exploration' }}</span>
           <span v-if="exploration.summary" class="summary">{{ exploration.summary }}</span>
           <span class="meta muted">

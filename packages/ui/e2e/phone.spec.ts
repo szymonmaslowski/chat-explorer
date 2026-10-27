@@ -30,6 +30,7 @@ test.describe('on a phone', () => {
     page,
   }) => {
     await openSeededExploration(page);
+    await expect(page.getByRole('link', { name: 'Map' })).toBeInViewport();
     const listed = page.locator('.message-comments .comment-card.listed');
     await expect(listed.first()).toBeVisible();
     await expect(page.locator('.comment-layer > .comment-card')).toHaveCount(0);

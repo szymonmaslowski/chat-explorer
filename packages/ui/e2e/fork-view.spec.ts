@@ -93,6 +93,14 @@ test('navigates through the map and back and forward with [ and ]', async ({ pag
   await expect(page.locator('.fork-title')).toHaveText('Purging cached responses on a CDN');
 });
 
+test('opens an exploration from the list on its map', async ({ page }) => {
+  const explorationId = await openSeededExploration(page);
+  await page.goto('/');
+  await page.locator('.exploration', { hasText: 'Caching API responses' }).click();
+  await expect(page).toHaveURL(new RegExp(`/e/${explorationId}/map$`));
+  await expect(page.locator('.fork-box')).toHaveCount(2);
+});
+
 test('opens a fork from the map at its end', async ({ page }) => {
   const explorationId = await openSeededExploration(page);
   await page.goto(`/e/${explorationId}/map`);

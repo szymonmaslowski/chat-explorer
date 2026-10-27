@@ -231,11 +231,13 @@ On SSE reconnect the UI loads the snapshot again rather than replaying missed ev
 
 ### Routes
 
-- `/`: explorations list (title, summary, forks, updated time)
+- `/`: explorations list (title, summary, forks, updated time). An exploration opens on its map.
 - `/e/:id`: main branch view
 - `/e/:id/f/:forkId`: fork view (same component as the branch view)
 - `/e/:id/map`: forks map
 - `#m-<messageId>`: scroll to a message and flash it
+
+The header of the fork view and the map has the links (Explorations, Map) and the status on the first line, and the exploration title under them, so a long title never hides a link.
 
 Vue Router's `scrollBehavior` restores the saved position on back and forward, after the snapshot has loaded. Opening a fork any other way, for example from the map, starts at its end. `[` and `]` call `history.back()` and `history.forward()`, and are ignored while focus is in a text field.
 

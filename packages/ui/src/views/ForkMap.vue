@@ -2,7 +2,7 @@
 import type { Fork } from '@shared/types';
 import { stratify, tree } from 'd3-hierarchy';
 import { computed } from 'vue';
-import SessionStatusBar from '../components/SessionStatusBar.vue';
+import ExplorationHeader from '../components/ExplorationHeader.vue';
 import { forkPath, forkTitle } from '../lib/conversation';
 import { openExploration } from '../stores/exploration';
 
@@ -67,20 +67,9 @@ const layout = computed(() => {
 
 <template>
   <div class="map-page">
-    <header class="top">
-      <nav>
-        <RouterLink to="/">Explorations</RouterLink>
-        <span v-if="state.exploration">
-          / {{ state.exploration.title || 'Untitled exploration' }} / Map
-        </span>
-      </nav>
-      <SessionStatusBar
-        :status="state.sessionStatus"
-        :connected="state.connected"
-        :exploration-id="explorationId"
-        :model="state.exploration?.model"
-      />
-    </header>
+    <ExplorationHeader :state="state" class="top">
+      <template #links>· <span>Map</span></template>
+    </ExplorationHeader>
 
     <p v-if="state.status === 'loading'" class="muted">Loading…</p>
     <p v-else-if="state.status !== 'ready'" class="muted">This exploration is not available.</p>
@@ -122,14 +111,7 @@ const layout = computed(() => {
 }
 
 .top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 0;
   margin-bottom: 1rem;
-  border-bottom: 1px solid var(--border);
-  font-size: 0.875rem;
 }
 
 .canvas {
