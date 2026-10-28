@@ -96,10 +96,6 @@ function onKeydown(event: KeyboardEvent) {
 
 <style scoped>
 .reply-bar {
-  position: sticky;
-  bottom: 0;
-  z-index: 5;
-  background: var(--background);
   padding: 0.75rem 0 1rem;
   border-top: 1px solid var(--border);
   display: grid;

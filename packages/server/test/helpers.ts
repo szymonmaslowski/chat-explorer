@@ -7,6 +7,8 @@ import type { DictationAvailability } from '../src/dictation/availability.js';
 import { Transcriber } from '../src/dictation/transcriber.js';
 import type { WhisperRun } from '../src/dictation/whisper.js';
 import { BackgroundSessions } from '../src/sessions/background-sessions.js';
+import { Speaker } from '../src/speech/speaker.js';
+import type { SpeechInspection } from '../src/speech/voices.js';
 import type { LaunchSpec, SessionProcess } from '../src/sessions/launch-claude.js';
 import type { ExplorationEvent } from '../src/shared/types.js';
 import { EventBus } from '../src/store/event-bus.js';
@@ -112,15 +114,45 @@ export function createTestTranscriber(options: { timeoutMs?: number } = {}) {
   return { transcriber, calls, availability };
 }
 
+export interface FakeSpeechCall {
+  text: string;
+  voice: string | null;
+}
+
+export function createTestSpeaker(
+  inspection: SpeechInspection = {
+    language: 'en',
+    voices: [{ identifier: 'com.apple.voice.compact.en-GB.Daniel', language: 'en-GB', quality: 1 }],
+    preferredVoice: null,
+  },
+) {
+  const inspected: string[] = [];
+  const spoken: FakeSpeechCall[] = [];
+  const speaker = new Speaker({
+    available: () => true,
+    inspect: async (text) => {
+      inspected.push(text);
+      return inspection;
+    },
+    synthesize: async (text, voice) => {
+      spoken.push({ text, voice });
+      return new TextEncoder().encode(`audio:${text}`);
+    },
+  });
+  return { speaker, inspected, spoken };
+}
+
 export function createTestApp(options: { publicUrl?: string } = {}) {
   const context = createTestStore();
   const { transcriber, calls: whisperCalls } = createTestTranscriber();
+  const { speaker, inspected, spoken } = createTestSpeaker();
   const app = createApp({
     store: context.store,
     hub: context.hub,
     bus: context.bus,
     sessions: context.sessions,
     transcriber,
+    speaker,
     defaultModel: 'sonnet',
     port: testPort,
     publicUrl: options.publicUrl ?? null,
@@ -139,7 +171,7 @@ export function createTestApp(options: { publicUrl?: string } = {}) {
       body: json ? JSON.stringify(json) : rest.body,
     });
   };
-  return { ...context, app, request, whisperCalls };
+  return { ...context, app, request, whisperCalls, inspected, spoken };
 }
 
 export function seedConversation(store: ChatStore) {

@@ -7,9 +7,11 @@ import ConversationMessage from '../components/ConversationMessage.vue';
 import QueuedSubmissionCard from '../components/QueuedSubmissionCard.vue';
 import ReplyBar from '../components/ReplyBar.vue';
 import SessionError from '../components/SessionError.vue';
+import SpeechPlayer from '../components/SpeechPlayer.vue';
 import { useMediaQuery } from '../composables/useMediaQuery';
 import { forkPath, forkTitle, mainFork, quotedCommentsOf } from '../lib/conversation';
 import { openExploration } from '../stores/exploration';
+import { stopSpeech } from '../stores/speech';
 
 const props = defineProps<{ explorationId: string; forkId?: string }>();
 
@@ -54,6 +56,7 @@ const trackScroll = () => {
 };
 onMounted(() => window.addEventListener('scroll', trackScroll, { passive: true }));
 onBeforeUnmount(() => window.removeEventListener('scroll', trackScroll));
+onBeforeUnmount(stopSpeech);
 
 const scrollToBottom = () =>
   window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
@@ -164,14 +167,17 @@ watch(
         :comment-count="commentCountOf(submission.id)"
       />
 
-      <ReplyBar
-        v-if="!archived"
-        :exploration-id="explorationId"
-        :fork-id="fork.id"
-        :drafts="drafts"
-        :hint="state.exploration?.title ?? ''"
-        @submitted="onSubmitted"
-      />
+      <div class="dock" data-dock>
+        <SpeechPlayer />
+        <ReplyBar
+          v-if="!archived"
+          :exploration-id="explorationId"
+          :fork-id="fork.id"
+          :drafts="drafts"
+          :hint="state.exploration?.title ?? ''"
+          @submitted="onSubmitted"
+        />
+      </div>
     </template>
   </div>
 </template>
@@ -182,6 +188,12 @@ watch(
   top: 0;
   z-index: 6;
   background: var(--background);
+}
+
+/* Covers the read-aloud buttons in the left margin as they scroll under the bars. */
+.top,
+.dock {
+  box-shadow: -2.5rem 0 0 var(--background);
 }
 
 .fork-title {
@@ -215,5 +227,12 @@ watch(
 
 .answering {
   font-style: italic;
+}
+
+.dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  background: var(--background);
 }
 </style>

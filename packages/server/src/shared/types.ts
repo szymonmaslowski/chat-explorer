@@ -115,3 +115,10 @@ export interface CommentChanges {
   body?: string;
   type?: CommentType;
 }
+
+export type SpeechBlock =
+  | { kind: 'text'; text: string }
+  | { kind: 'code'; language: string; lines: number }
+  | { kind: 'diagram' }
+  | { kind: 'table'; columns: number; rows: number }
+  | { kind: 'image'; description: string };

@@ -13,6 +13,8 @@ import { findTranscript } from '../import/transcript.js';
 import { BackgroundSessions } from '../sessions/background-sessions.js';
 import { claudeLauncher } from '../sessions/launch-claude.js';
 import { loadSettings, SettingsError } from '../settings.js';
+import { inspectSpeech, macosSpeechAvailable, synthesizeSpeech } from '../speech/macos.js';
+import { Speaker } from '../speech/speaker.js';
 import { Database } from '../db/database.js';
 import { EventBus } from '../store/event-bus.js';
 import { FeedbackHub } from '../store/feedback-hub.js';
@@ -45,6 +47,12 @@ const transcriber = new Transcriber({
   checkAvailability: () => dictationAvailability(modelPath),
   run: runWhisper,
 });
+const speechAvailable = macosSpeechAvailable();
+const speaker = new Speaker({
+  available: () => speechAvailable,
+  inspect: inspectSpeech,
+  synthesize: synthesizeSpeech,
+});
 
 const shutdown = () => {
   sessions.stopAll();
@@ -61,6 +69,7 @@ const app = createApp({
   bus,
   sessions,
   transcriber,
+  speaker,
   defaultModel: settings.defaultModel,
   port: config.port,
   publicUrl: settings.publicUrl,

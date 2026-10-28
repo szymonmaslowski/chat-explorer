@@ -7,6 +7,7 @@ import { apiVersion } from '../config.js';
 import { dictationHint, type Transcriber } from '../dictation/transcriber.js';
 import { findTranscript, readTranscript } from '../import/transcript.js';
 import type { BackgroundSessions } from '../sessions/background-sessions.js';
+import type { Speaker } from '../speech/speaker.js';
 import { claudeModels, type ClaudeModel } from '../shared/models.js';
 import type { ExplorationListItem, ExplorationView, Snapshot } from '../shared/types.js';
 import { StoreError } from '../store/errors.js';
@@ -22,6 +23,7 @@ export interface AppOptions {
   bus: EventBus;
   sessions: BackgroundSessions;
   transcriber: Transcriber;
+  speaker: Speaker;
   defaultModel: ClaudeModel;
   port: number;
   publicUrl: string | null;
@@ -68,12 +70,32 @@ const transcriptionBody = z.object({
   audio: z.instanceof(File),
   hint: z.string().default(''),
 });
+// A paragraph is far shorter; this only keeps one request from tying up `say` for minutes.
+const maxSpeechTextLength = 10_000;
+const speechBody = z.object({
+  messageId: z.string(),
+  block: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('text'), text: z.string().trim().min(1).max(maxSpeechTextLength) }),
+    z.object({
+      kind: z.literal('code'),
+      language: z.string().max(40),
+      lines: z.number().int().min(0),
+    }),
+    z.object({ kind: z.literal('diagram') }),
+    z.object({
+      kind: z.literal('table'),
+      columns: z.number().int().min(0),
+      rows: z.number().int().min(0),
+    }),
+    z.object({ kind: z.literal('image'), description: z.string().max(maxSpeechTextLength) }),
+  ]),
+});
 const feedbackBody = shimBody.extend({
   waitMs: z.number().int().positive().max(maxFeedbackWaitMs),
 });
 
 export function createApp(options: AppOptions) {
-  const { store, hub, bus, sessions, transcriber, port } = options;
+  const { store, hub, bus, sessions, transcriber, speaker, port } = options;
   const localUrl = `http://127.0.0.1:${port}`;
   const explorationUrls = (explorationId: string) => ({
     url: `${options.publicUrl ?? localUrl}/e/${explorationId}`,
@@ -104,8 +126,23 @@ export function createApp(options: AppOptions) {
   });
 
   app.get('/api/settings', (context) =>
-    context.json({ defaultModel: options.defaultModel, dictation: transcriber.available() }),
+    context.json({
+      defaultModel: options.defaultModel,
+      dictation: transcriber.available(),
+      speech: speaker.available(),
+    }),
   );
+
+  app.post('/api/speech', async (context) => {
+    const { messageId, block } = speechBody.parse(await context.req.json());
+    const audio = await speaker.speak({
+      messageId,
+      content: store.messageContent(messageId),
+      block,
+      signal: context.req.raw.signal,
+    });
+    return context.body(audio, 200, { 'content-type': 'audio/mp4' });
+  });
 
   app.post(
     '/api/transcriptions',

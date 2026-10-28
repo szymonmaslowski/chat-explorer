@@ -472,6 +472,18 @@ Done when: unit tests cover the transcriber with a fake runner, the download wit
 - Deleted: only from the archived view in the UI, after an inline confirmation. A deleted exploration is not found anywhere except `?deleted=true`. `restore` brings it back archived; `purge` removes its rows.
 - Hard delete is CLI only.
 
+### 13. Read aloud
+
+Goal: listen to an answer, from the start or from any block, with play, pause, stop, 5 seconds back and forward.
+
+**Blocks.** The page splits a rendered answer into paragraphs, headings, quotes, list items (nested items after their parent), code, diagrams and tables. Code, diagrams (` ```mermaid ` and friends, or a code block with box-drawing characters) and tables are announced instead of read: "Code block, TypeScript, 12 lines", "Diagram", "Table, 3 columns, 5 rows". An image is read as its description, and a link written out as an address as its host name.
+
+**Engine.** macOS `say`, with no install. The daemon detects the answer's language once with Apple's `NLLanguageRecognizer`, through a JavaScript for Automation script, and picks the best installed voice for it from `AVSpeechSynthesisVoice`: Premium over Enhanced over the compact voices, only `com.apple.voice.*` (no novelty, Eloquence or Siri voices; `say` cannot open the Siri ones). Announcements are in Polish for Polish answers, English otherwise. `say` renders AAC in MP4: 2 minutes of speech in about 1.2 s.
+
+**Endpoint.** `POST /api/speech` with `{ messageId, block }` answers `audio/mp4`. `GET /api/settings` reports `speech: true | false`.
+
+**Player.** One `Audio` element. Each block's audio is fetched when it starts, and the next one while it plays. With chaining on (remembered per browser), a block that ends starts the next; at the end of the answer playback stops. Skipping back past the start of a block goes into the end of the previous one. The block being read is highlighted and scrolled to 40% of the space between the header and the player. The lock screen gets play, pause, 5-second skips and previous/next block through the Media Session API. Safari only starts audio from a tap, so the first tap plays a moment of silence, which unlocks the element for the blocks that follow.
+
 ## Later
 
 - Hard forks: each fork's answer written by a subagent that only gets `read_fork` for that fork.
@@ -481,3 +493,4 @@ Done when: unit tests cover the transcriber with a fake runner, the download wit
 - Background sessions in isolated Docker containers with file and shell tools, for building things from the phone.
 - Claude suggests a model switch mid-exploration, and the UI offers it in one tap.
 - Dictation: words appearing while you speak, a voice-activity model if silence still slips through.
+- Read aloud: a local neural voice (Piper) in place of `say`, a voice setting per language, tables read row by row.

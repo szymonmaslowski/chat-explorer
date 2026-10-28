@@ -708,6 +708,10 @@ export class ChatStore {
     );
   }
 
+  messageContent(messageId: string) {
+    return this.requireMessageRow(messageId).content;
+  }
+
   messageText(row: MessageRow) {
     if (row.role === 'assistant') return row.content;
     const quotedComments = this.db

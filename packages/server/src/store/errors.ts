@@ -12,7 +12,9 @@ export type StoreErrorCode =
   | 'dictation_unavailable'
   | 'invalid_audio'
   | 'transcription_failed'
-  | 'transcription_timeout';
+  | 'transcription_timeout'
+  | 'speech_unavailable'
+  | 'speech_failed';
 
 const httpStatusByCode: Record<StoreErrorCode, 400 | 404 | 409 | 500 | 503 | 504> = {
   not_found: 404,
@@ -29,6 +31,8 @@ const httpStatusByCode: Record<StoreErrorCode, 400 | 404 | 409 | 500 | 503 | 504
   invalid_audio: 400,
   transcription_failed: 500,
   transcription_timeout: 504,
+  speech_unavailable: 503,
+  speech_failed: 500,
 };
 
 export class StoreError extends Error {

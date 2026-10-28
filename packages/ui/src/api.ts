@@ -7,6 +7,7 @@ import type {
   NewComment,
   QueuedSubmission,
   Snapshot,
+  SpeechBlock,
 } from '@shared/types';
 
 export class ApiError extends Error {
@@ -18,23 +19,36 @@ export class ApiError extends Error {
   }
 }
 
-async function call<Result>(
-  path: string,
-  init: { method?: string; json?: object; form?: FormData; signal?: AbortSignal } = {},
-) {
+interface RequestOptions {
+  method?: string;
+  json?: object;
+  form?: FormData;
+  signal?: AbortSignal;
+}
+
+async function send(path: string, init: RequestOptions) {
   const response = await fetch(path, {
     method: init.method ?? (init.json || init.form ? 'POST' : 'GET'),
     headers: init.json ? { 'content-type': 'application/json' } : {},
     body: init.json ? JSON.stringify(init.json) : (init.form ?? null),
     signal: init.signal,
   });
-  const body = await response.json();
-  if (!response.ok) throw new ApiError(body.error ?? 'error', body.message ?? response.statusText);
-  return body as Result;
+  if (!response.ok) {
+    const body = await response.json();
+    throw new ApiError(body.error ?? 'error', body.message ?? response.statusText);
+  }
+  return response;
+}
+
+async function call<Result>(path: string, init: RequestOptions = {}) {
+  return (await (await send(path, init)).json()) as Result;
 }
 
 export const api = {
-  settings: () => call<{ defaultModel: ClaudeModel; dictation: boolean }>('/api/settings'),
+  settings: () =>
+    call<{ defaultModel: ClaudeModel; dictation: boolean; speech: boolean }>('/api/settings'),
+  speech: async (messageId: string, block: SpeechBlock) =>
+    (await send('/api/speech', { json: { messageId, block } })).blob(),
   transcribe: (wav: Blob, hint: string, signal: AbortSignal) => {
     const form = new FormData();
     form.append('audio', wav, 'recording.wav');

@@ -147,6 +147,16 @@ blockquote {
   }
 }
 
+/* The block being read aloud. */
+.speaking {
+  border-radius: 4px;
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.speaking:not(pre) {
+  background: var(--accent-soft);
+}
+
 ::highlight(comment-inline) {
   background-color: var(--accent-soft);
 }

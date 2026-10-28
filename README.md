@@ -93,6 +93,14 @@ chat-explorer dictation install
 - The mic button appears once the daemon finds `whisper-cli` and the model, with no restart needed. It needs HTTPS or `127.0.0.1`, which the Tailscale address and the local address both are.
 - `chat-explorer dictation uninstall` deletes the model.
 
+### Read aloud
+
+**Listen** next to an answer reads it aloud, and the ▶ beside each paragraph, list item or code block starts from there. The player above the reply box has play/pause, 5 seconds back and forward, previous and next block, and stop. With the chain button on, the next block starts when one ends; reading stops at the end of the answer. The block being read is highlighted and kept a little above the middle of the screen. On the iPhone the lock screen controls work too.
+
+- The Mac reads with its own voices (`say`), in the language it detects for the answer. For a better voice, download a Premium or Enhanced one in System Settings → Accessibility → Spoken Content → System voice → Manage Voices. The best installed voice for the language is picked.
+- Code, diagrams and tables are announced ("Code block, TypeScript, 12 lines") instead of read.
+- macOS only.
+
 ## CLI
 
 ```

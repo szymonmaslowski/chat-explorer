@@ -204,6 +204,7 @@ describe('transcription API', () => {
     expect(await (await request('/api/settings')).json()).toEqual({
       defaultModel: 'sonnet',
       dictation: true,
+      speech: true,
     });
   });
 });
