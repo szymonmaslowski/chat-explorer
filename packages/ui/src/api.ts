@@ -7,6 +7,7 @@ import type {
   MessageFile,
   NewComment,
   QueuedSubmission,
+  ReplyDraft,
   Snapshot,
   SpeechBlock,
 } from '@shared/types';
@@ -25,6 +26,8 @@ interface RequestOptions {
   json?: object;
   form?: FormData;
   signal?: AbortSignal;
+  // Lets a save sent while the page closes reach the daemon.
+  keepalive?: boolean;
 }
 
 async function send(path: string, init: RequestOptions) {
@@ -33,6 +36,7 @@ async function send(path: string, init: RequestOptions) {
     headers: init.json ? { 'content-type': 'application/json' } : {},
     body: init.json ? JSON.stringify(init.json) : (init.form ?? null),
     signal: init.signal,
+    keepalive: init.keepalive,
   });
   if (!response.ok) {
     const body = await response.json();
@@ -91,10 +95,21 @@ export const api = {
       `/api/submissions/${submissionId}`,
       { method: 'DELETE' },
     ),
-  createComment: (explorationId: string, comment: NewComment) =>
-    call<Comment>(`/api/explorations/${explorationId}/comments`, { json: comment }),
-  updateComment: (commentId: string, changes: CommentChanges) =>
-    call<Comment>(`/api/comments/${commentId}`, { method: 'PATCH', json: changes }),
+  createComment: (explorationId: string, comment: NewComment, keepalive = false) =>
+    call<Comment>(`/api/explorations/${explorationId}/comments`, { json: comment, keepalive }),
+  updateComment: (commentId: string, changes: CommentChanges, keepalive = false) =>
+    call<Comment>(`/api/comments/${commentId}`, { method: 'PATCH', json: changes, keepalive }),
+  replyDraft: (forkId: string) => call<ReplyDraft>(`/api/forks/${forkId}/reply-draft`),
+  saveReplyDraft: (
+    forkId: string,
+    draft: { text: string; newFork: boolean; fileIds: string[] },
+    keepalive = false,
+  ) =>
+    call<ReplyDraft>(`/api/forks/${forkId}/reply-draft`, {
+      method: 'PUT',
+      json: draft,
+      keepalive,
+    }),
   deleteComment: (commentId: string) =>
     call<{ ok: true }>(`/api/comments/${commentId}`, { method: 'DELETE' }),
   toggleForkAll: (explorationId: string, forkId: string) =>

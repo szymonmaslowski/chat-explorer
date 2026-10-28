@@ -10,6 +10,7 @@ import {
   type ExplorationRow,
   type FileRow,
   type ForkRow,
+  type ReplyDraftRow,
   type MessageRow,
   type SubmissionRow,
 } from '../db/rows.js';
@@ -26,6 +27,7 @@ import type {
   MessageSource,
   NewComment,
   QueuedSubmission,
+  ReplyDraft,
   Role,
   Snapshot,
 } from '../shared/types.js';
@@ -179,6 +181,9 @@ export class ChatStore {
           explorationId,
         )
         .map(toMessageFile),
+      replyDrafts: this.db
+        .all<ReplyDraftRow>('SELECT * FROM reply_drafts WHERE exploration_id = ?', explorationId)
+        .map((row) => this.toReplyDraft(row)),
     };
   }
 
@@ -371,7 +376,7 @@ export class ChatStore {
         `Message ${input.messageId} is not shown in fork ${viewFork.id}.`,
       );
     }
-    if (!input.body.trim() || !input.quote) {
+    if ((!input.body.trim() && input.editBody === undefined) || !input.quote) {
       throw new StoreError('invalid', 'A comment needs a quote and a body.');
     }
     if (input.startOffset < 0 || input.endOffset <= input.startOffset) {
@@ -381,8 +386,8 @@ export class ChatStore {
     const createdAt = this.now();
     this.db.run(
       `INSERT INTO comments (id, exploration_id, message_id, view_fork_id, quote, start_offset,
-         end_offset, body, type, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
+         end_offset, body, edit_body, type, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
       id,
       explorationId,
       input.messageId,
@@ -391,6 +396,7 @@ export class ChatStore {
       input.startOffset,
       input.endOffset,
       input.body.trim(),
+      input.editBody ?? null,
       input.type ?? 'inline',
       createdAt,
       createdAt,
@@ -407,8 +413,9 @@ export class ChatStore {
       throw new StoreError('invalid', 'A comment body cannot be empty.');
     }
     this.db.run(
-      'UPDATE comments SET body = ?, type = ?, updated_at = ? WHERE id = ?',
+      'UPDATE comments SET body = ?, edit_body = ?, type = ?, updated_at = ? WHERE id = ?',
       changes.body?.trim() ?? row.body,
+      changes.editBody === undefined ? row.edit_body : changes.editBody,
       changes.type ?? row.type,
       this.now(),
       commentId,
@@ -474,6 +481,9 @@ export class ChatStore {
     if (newFork && fork.tip_message_id === null) {
       throw new StoreError('invalid', 'This fork has no messages to fork from.');
     }
+    if (drafts.some((draft) => draft.edit_body !== null)) {
+      throw new StoreError('invalid', 'Save or cancel the comments being edited first.');
+    }
     const id = newId();
     this.db.transaction(() => {
       this.db.run(
@@ -502,6 +512,8 @@ export class ChatStore {
           file.id,
         );
       }
+      this.db.run('UPDATE files SET draft_fork_id = NULL WHERE draft_fork_id = ?', forkId);
+      this.db.run('DELETE FROM reply_drafts WHERE fork_id = ?', forkId);
     });
     const submission = toQueuedSubmission(this.requireSubmissionRow(id));
     this.publishCommentUpdates(
@@ -865,16 +877,63 @@ export class ChatStore {
   // Drafts belong to no exploration until submitted, so a closed page leaves them behind.
   deleteDraftFilesBefore(createdBefore: number) {
     return this.db.transaction(() => {
-      const rows = this.db.all<FileRow>(
-        'SELECT * FROM files WHERE exploration_id IS NULL AND created_at < ?',
-        createdBefore,
-      );
-      this.db.run(
-        'DELETE FROM files WHERE exploration_id IS NULL AND created_at < ?',
-        createdBefore,
-      );
+      const unused = `exploration_id IS NULL AND created_at < ?
+        AND (draft_fork_id IS NULL OR draft_fork_id NOT IN (SELECT fork_id FROM reply_drafts))`;
+      const rows = this.db.all<FileRow>(`SELECT * FROM files WHERE ${unused}`, createdBefore);
+      this.db.run(`DELETE FROM files WHERE ${unused}`, createdBefore);
       return rows.map((row) => row.path);
     });
+  }
+
+  replyDraft(forkId: string): ReplyDraft {
+    const row = this.db.get<ReplyDraftRow>('SELECT * FROM reply_drafts WHERE fork_id = ?', forkId);
+    if (row) return this.toReplyDraft(row);
+    this.requireForkRow(forkId);
+    return { forkId, text: '', newFork: false, files: [], updatedAt: 0 };
+  }
+
+  // An empty draft is no draft: its row goes, so a fork never keeps a blank one around.
+  saveReplyDraft(forkId: string, input: { text: string; newFork: boolean; fileIds: string[] }) {
+    const fork = this.requireForkRow(forkId);
+    this.requireWritable(fork.exploration_id);
+    const files = input.fileIds.map((fileId) => this.requireDraftFile(fileId));
+    this.db.transaction(() => {
+      this.db.run('UPDATE files SET draft_fork_id = NULL WHERE draft_fork_id = ?', forkId);
+      for (const file of files) {
+        this.db.run('UPDATE files SET draft_fork_id = ? WHERE id = ?', forkId, file.id);
+      }
+      if (!input.text && !input.newFork && files.length === 0) {
+        this.db.run('DELETE FROM reply_drafts WHERE fork_id = ?', forkId);
+        return;
+      }
+      this.db.run(
+        `INSERT INTO reply_drafts (fork_id, exploration_id, text, new_fork, updated_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT (fork_id) DO UPDATE SET
+           text = excluded.text, new_fork = excluded.new_fork, updated_at = excluded.updated_at`,
+        forkId,
+        fork.exploration_id,
+        input.text,
+        input.newFork ? 1 : 0,
+        this.now(),
+      );
+    });
+    return this.replyDraft(forkId);
+  }
+
+  private toReplyDraft(row: ReplyDraftRow): ReplyDraft {
+    return {
+      forkId: row.fork_id,
+      text: row.text,
+      newFork: row.new_fork === 1,
+      files: this.db
+        .all<FileRow>(
+          'SELECT * FROM files WHERE draft_fork_id = ? ORDER BY created_at, rowid',
+          row.fork_id,
+        )
+        .map(toMessageFile),
+      updatedAt: row.updated_at,
+    };
   }
 
   private insertFork(input: {

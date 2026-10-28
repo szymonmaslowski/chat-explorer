@@ -1,25 +1,83 @@
 <script setup lang="ts">
 import type { CommentType } from '@shared/types';
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, watch } from 'vue';
+import { api } from '../api';
+import { useAutosave } from '../composables/useAutosave';
+import type { TextAnchor } from '../lib/anchoring';
 import { insertAtCursor } from '../lib/insert-text';
 import DictationButton from './DictationButton.vue';
 
-defineProps<{ quote: string; top: number; left: number; width: number }>();
-const emit = defineEmits<{ save: [body: string, type: CommentType]; cancel: [] }>();
+const props = defineProps<{
+  explorationId: string;
+  viewForkId: string;
+  messageId: string;
+  anchor: TextAnchor;
+  top: number;
+  left: number;
+  width: number;
+}>();
+const emit = defineEmits<{ created: [commentId: string]; close: [] }>();
 
 const body = ref('');
 const asFork = ref(false);
+const error = ref('');
 const textarea = ref<HTMLTextAreaElement | null>(null);
 const insertDictation = (text: string) => insertAtCursor(textarea.value, body, text);
+const type = (): CommentType => (asFork.value ? 'fork' : 'inline');
+const target = () => ({
+  messageId: props.messageId,
+  viewForkId: props.viewForkId,
+  ...props.anchor,
+});
+
+// The comment is stored from the first words on, as one still being written (empty body), so a
+// closed page brings it back in its editor.
+let commentId: string | null = null;
+const autosave = useAutosave(async (keepalive) => {
+  if (commentId) {
+    await api.updateComment(commentId, { editBody: body.value, type: type() }, keepalive);
+    return;
+  }
+  if (!body.value.trim()) return;
+  const comment = await api.createComment(
+    props.explorationId,
+    { ...target(), body: '', editBody: body.value, type: type() },
+    keepalive,
+  );
+  commentId = comment.id;
+  emit('created', comment.id);
+});
+watch([body, asFork], autosave.changed);
 
 onMounted(() => textarea.value?.focus());
 
+async function close(operation: () => Promise<unknown>) {
+  error.value = '';
+  try {
+    await autosave.finish(operation);
+    emit('close');
+  } catch {
+    error.value = 'Could not save. Is the chat-explorer daemon running?';
+  }
+}
+
 function save() {
-  if (body.value.trim()) emit('save', body.value, asFork.value ? 'fork' : 'inline');
+  if (!body.value.trim()) return;
+  void close(() =>
+    commentId
+      ? api.updateComment(commentId, { body: body.value, editBody: null, type: type() })
+      : api.createComment(props.explorationId, { ...target(), body: body.value, type: type() }),
+  );
+}
+
+function cancel() {
+  void close(async () => {
+    if (commentId) await api.deleteComment(commentId);
+  });
 }
 
 function onKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') emit('cancel');
+  if (event.key === 'Escape') cancel();
   if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) save();
 }
 </script>
@@ -30,7 +88,7 @@ function onKeydown(event: KeyboardEvent) {
     :class="{ fork: asFork }"
     :style="{ top: `${top}px`, left: `${left}px`, width: `${width}px` }"
   >
-    <p class="quote">{{ quote }}</p>
+    <p class="quote">{{ anchor.quote }}</p>
     <textarea
       ref="textarea"
       v-model="body"
@@ -40,9 +98,10 @@ function onKeydown(event: KeyboardEvent) {
     />
     <div class="actions">
       <label><input v-model="asFork" type="checkbox" /> Fork</label>
-      <DictationButton :hint="quote" @text="insertDictation" />
+      <DictationButton :hint="anchor.quote" @text="insertDictation" />
       <span class="spacer" />
-      <button type="button" @click="emit('cancel')">Cancel</button>
+      <span v-if="error" class="error" role="alert">{{ error }}</span>
+      <button type="button" @click="cancel">Cancel</button>
       <button type="button" class="primary" :disabled="!body.trim()" @click="save">Save</button>
     </div>
   </div>

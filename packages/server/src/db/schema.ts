@@ -96,4 +96,15 @@ export const migrations = [
   CREATE INDEX files_by_exploration ON files (exploration_id);
   CREATE INDEX files_by_submission ON files (submission_id);
   `,
+  `
+  ALTER TABLE comments ADD COLUMN edit_body TEXT;
+  ALTER TABLE files ADD COLUMN draft_fork_id TEXT;
+  CREATE TABLE reply_drafts (
+    fork_id TEXT PRIMARY KEY,
+    exploration_id TEXT NOT NULL REFERENCES explorations (id) ON DELETE CASCADE,
+    text TEXT NOT NULL,
+    new_fork INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  `,
 ];

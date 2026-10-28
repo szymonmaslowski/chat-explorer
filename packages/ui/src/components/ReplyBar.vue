@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import type { Comment } from '@shared/types';
-import { computed, ref } from 'vue';
+import type { Comment, ReplyDraft } from '@shared/types';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { api } from '../api';
+import { useAutosave } from '../composables/useAutosave';
 import { insertAtCursor } from '../lib/insert-text';
 import { transferredFiles } from '../lib/transferred-files';
-import { replyFilesOwner, useFileDrafts } from '../stores/file-drafts';
+import { replyFilesOwner, restoreFileDrafts, useFileDrafts } from '../stores/file-drafts';
 import { replyDrafts } from '../stores/reply-drafts';
 import AttachButton from './AttachButton.vue';
 import DictationButton from './DictationButton.vue';
@@ -14,12 +15,12 @@ const props = defineProps<{
   explorationId: string;
   forkId: string;
   drafts: Comment[];
+  savedDraft: ReplyDraft | null;
   hint: string;
 }>();
 const emit = defineEmits<{ submitted: [] }>();
 
 const sending = ref(false);
-const newFork = ref(false);
 const error = ref('');
 const textarea = ref<HTMLTextAreaElement | null>(null);
 
@@ -27,14 +28,20 @@ const text = computed({
   get: () => replyDrafts.get(props.forkId),
   set: (value: string) => replyDrafts.set(props.forkId, value),
 });
+const newFork = computed({
+  get: () => replyDrafts.newFork(props.forkId),
+  set: (value: boolean) => replyDrafts.setNewFork(props.forkId, value),
+});
 const insertDictation = (dictated: string) => insertAtCursor(textarea.value, text, dictated);
 const files = useFileDrafts(() => replyFilesOwner(props.forkId));
 const fileCount = computed(() => files.readyIds.value.length);
-const forkCount = computed(() => props.drafts.filter((draft) => draft.type === 'fork').length);
-const inlineCount = computed(() => props.drafts.length - forkCount.value);
+const editingCount = computed(() => props.drafts.filter((draft) => draft.editBody !== null).length);
+const readyDrafts = computed(() => props.drafts.filter((draft) => draft.editBody === null));
+const forkCount = computed(() => readyDrafts.value.filter((draft) => draft.type === 'fork').length);
+const inlineCount = computed(() => readyDrafts.value.length - forkCount.value);
 const allForks = computed(() => props.drafts.length > 0 && forkCount.value === props.drafts.length);
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
 const summary = computed(() => {
-  const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
   const reply = [
     inlineCount.value ? plural(inlineCount.value, 'comment') : '',
     text.value.trim() ? 'message' : '',
@@ -43,6 +50,7 @@ const summary = computed(() => {
     .filter(Boolean)
     .join(', ');
   return [
+    editingCount.value ? `${plural(editingCount.value, 'comment')} being edited` : '',
     forkCount.value ? plural(forkCount.value, 'fork') : '',
     newFork.value && reply ? `new fork with ${reply}` : reply,
   ]
@@ -56,19 +64,97 @@ const canSubmit = computed(
   () =>
     !sending.value &&
     !files.uploading.value &&
+    editingCount.value === 0 &&
     summary.value !== '' &&
     !(newFork.value && replyEmpty.value),
 );
+
+// The box as the daemon last saw it, per fork, so only real changes are sent.
+const lastSaved = new Map<string, string>();
+const emptyDraft = JSON.stringify({ text: '', newFork: false, fileIds: [] });
+const currentDraft = () => ({
+  text: text.value,
+  newFork: newFork.value,
+  fileIds: files.readyIds.value,
+});
+let pending: { forkId: string; draft: ReturnType<typeof currentDraft> } | null = null;
+const autosave = useAutosave(async (keepalive) => {
+  if (!pending) return;
+  const { forkId, draft } = pending;
+  pending = null;
+  await api.saveReplyDraft(forkId, draft, keepalive);
+});
+
+function applyDraft(draft: ReplyDraft) {
+  text.value = draft.text;
+  newFork.value = draft.newFork;
+  files.clear();
+  restoreFileDrafts(replyFilesOwner(draft.forkId), draft.files);
+  lastSaved.set(
+    draft.forkId,
+    JSON.stringify({
+      text: draft.text,
+      newFork: draft.newFork,
+      fileIds: draft.files.map((file) => file.id),
+    }),
+  );
+}
+
+// The page keeps each fork's box while it is open; the saved draft fills a box seen first.
+watch(
+  () => [props.forkId, props.savedDraft] as const,
+  ([forkId, savedDraft]) => {
+    if (replyDrafts.has(forkId)) return;
+    if (savedDraft) applyDraft(savedDraft);
+    else replyDrafts.set(forkId, '');
+  },
+  { immediate: true },
+);
+
+watch(
+  () => [props.forkId, JSON.stringify(currentDraft())] as const,
+  ([forkId, json]) => {
+    if (json === (lastSaved.get(forkId) ?? emptyDraft)) return;
+    lastSaved.set(forkId, json);
+    pending = { forkId, draft: JSON.parse(json) };
+    autosave.changed();
+  },
+);
+
+// Another device may have changed the draft meanwhile; a box being typed in is left alone.
+async function refreshFromDaemon() {
+  if (document.visibilityState !== 'visible') return;
+  if (autosave.isDirty() || files.uploading.value || document.activeElement === textarea.value) {
+    return;
+  }
+  const forkId = props.forkId;
+  const draft = await api.replyDraft(forkId).catch(() => null);
+  const json =
+    draft &&
+    JSON.stringify({
+      text: draft.text,
+      newFork: draft.newFork,
+      fileIds: draft.files.map((file) => file.id),
+    });
+  if (!draft || forkId !== props.forkId || json === lastSaved.get(forkId)) return;
+  applyDraft(draft);
+}
+onMounted(() => document.addEventListener('visibilitychange', refreshFromDaemon));
+onBeforeUnmount(() => document.removeEventListener('visibilitychange', refreshFromDaemon));
 
 async function submit() {
   if (!canSubmit.value) return;
   sending.value = true;
   error.value = '';
   try {
-    await api.submit(props.explorationId, props.forkId, text.value, {
-      newFork: newFork.value,
-      fileIds: files.readyIds.value,
-    });
+    const forkId = props.forkId;
+    await autosave.finish(() =>
+      api.submit(props.explorationId, forkId, text.value, {
+        newFork: newFork.value,
+        fileIds: files.readyIds.value,
+      }),
+    );
+    lastSaved.set(forkId, emptyDraft);
     text.value = '';
     newFork.value = false;
     files.clear();

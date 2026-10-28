@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { Comment } from '@shared/types';
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { api } from '../api';
+import { useAutosave } from '../composables/useAutosave';
 import { useProximityFade } from '../composables/useProximityFade';
 import { insertAtCursor } from '../lib/insert-text';
 import DictationButton from './DictationButton.vue';
@@ -18,8 +19,9 @@ const emit = defineEmits<{
 }>();
 
 const card = ref<HTMLElement | null>(null);
-const editing = ref(false);
-const draftBody = ref('');
+// An editor left open, on this device or another, reopens with its text.
+const editing = ref(props.comment.editBody !== null);
+const draftBody = ref(props.comment.editBody ?? '');
 const editor = ref<HTMLTextAreaElement | null>(null);
 const insertDictation = (text: string) => insertAtCursor(editor.value, draftBody, text);
 const busy = ref(false);
@@ -38,6 +40,24 @@ onMounted(() => {
 });
 onBeforeUnmount(() => resizeObserver?.disconnect());
 
+const autosave = useAutosave((keepalive) =>
+  api.updateComment(props.comment.id, { editBody: draftBody.value }, keepalive),
+);
+watch(draftBody, () => {
+  if (editing.value) autosave.changed();
+});
+watch(
+  () => props.comment.editBody,
+  (editBody) => {
+    if (editBody !== null && !editing.value) {
+      draftBody.value = editBody;
+      editing.value = true;
+    } else if (editBody === null && editing.value && !autosave.isDirty()) {
+      editing.value = false;
+    }
+  },
+);
+
 const run = async (action: () => Promise<unknown>) => {
   busy.value = true;
   try {
@@ -50,6 +70,7 @@ const run = async (action: () => Promise<unknown>) => {
 async function startEditing() {
   draftBody.value = props.comment.body;
   editing.value = true;
+  void autosave.finish(() => api.updateComment(props.comment.id, { editBody: props.comment.body }));
   await nextTick();
   editor.value?.focus();
 }
@@ -57,7 +78,19 @@ async function startEditing() {
 const save = () =>
   run(async () => {
     if (!draftBody.value.trim()) return;
-    await api.updateComment(props.comment.id, { body: draftBody.value });
+    await autosave.finish(() =>
+      api.updateComment(props.comment.id, { body: draftBody.value, editBody: null }),
+    );
+    editing.value = false;
+  });
+
+// A comment that was never saved has nothing to go back to, so cancelling deletes it.
+const cancelEditing = () =>
+  run(async () => {
+    await autosave.finish(async () => {
+      if (props.comment.body) await api.updateComment(props.comment.id, { editBody: null });
+      else await api.deleteComment(props.comment.id);
+    });
     editing.value = false;
   });
 
@@ -71,7 +104,7 @@ const toggleType = () =>
 const remove = () => run(() => api.deleteComment(props.comment.id));
 
 function onEditorKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') editing.value = false;
+  if (event.key === 'Escape') void cancelEditing();
   if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) void save();
 }
 </script>
@@ -97,8 +130,10 @@ function onEditorKeydown(event: KeyboardEvent) {
       <div class="actions">
         <DictationButton :hint="comment.quote" @text="insertDictation" />
         <span class="spacer" />
-        <button type="button" @click="editing = false">Cancel</button>
-        <button type="button" class="primary" :disabled="busy" @click="save">Save</button>
+        <button type="button" :disabled="busy" @click="cancelEditing">Cancel</button>
+        <button type="button" class="primary" :disabled="busy || !draftBody.trim()" @click="save">
+          Save
+        </button>
       </div>
     </template>
     <template v-else>

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { openSeededExploration } from './helpers';
+import { clearReply, openSeededExploration } from './helpers';
 
 const paragraphBox = async (page: Page, paragraph: string) => {
   const locator = page.locator('.content p', { hasText: paragraph }).first();
@@ -76,7 +76,7 @@ test('queues a submit, scrolls to it and cancels it back into drafts', async ({ 
   await expect(queued).toHaveCount(0);
   await expect(page.getByPlaceholder('Reply to Claude')).toHaveValue('Can you compare costs?');
   await expect(summary(page)).toHaveText('1 comment, message');
-  await page.getByPlaceholder('Reply to Claude').fill('');
+  await clearReply(page);
 });
 
 test('navigates through the map and back and forward with [ and ]', async ({ page }) => {

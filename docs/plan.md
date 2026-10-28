@@ -496,6 +496,15 @@ Images (PNG, JPEG, GIF, WebP), PDFs and UTF-8 text, up to 10 MB each, in the rep
 
 Claude reads a user message with a list of absolute paths under "Attached files (open them with the Read tool)". Background sessions get `Read` with `--allowedTools 'Read(//<files folder>/**)'`; reads anywhere else are refused (checked with `claude -p`). `GET /api/files/:id` serves text as `text/plain` with `nosniff`, so an uploaded HTML file never runs. `purge` deletes a chat's files; drafts older than a day go hourly. The table is `files`, not `attachments`, because "attachment" already means a session attached to a chat.
 
+### 16. Unsaved text
+
+Nothing typed is lost when the page closes, which iOS does to a home-screen app in the background.
+
+- **Comments:** `comments.edit_body` holds the text of an open editor and is `NULL` otherwise. A new comment is stored from its first words, with an empty `body`; Save moves `edit_body` into `body`, Cancel deletes it. Editing a saved comment fills `edit_body` and leaves `body` alone until Save; Cancel clears it. A comment with `edit_body` opens in its editor when the page loads. Submit refuses while any draft of the fork has `edit_body`, and the reply box says "1 comment being edited".
+- **Reply box:** `reply_drafts` holds one row per fork: text and the New fork tick, with files linked by `files.draft_fork_id`. `PUT /api/forks/:id/reply-draft` saves it, an empty one deletes the row, and submit deletes it with the submission. Linked files are kept by the stale-draft sweep. Other devices pick the draft up when their page loads or comes back to the front, never while their box has focus.
+- **When:** a second after the last change, at least every 5 seconds while typing goes on, and on `visibilitychange` to hidden or `pagehide` with `fetch(…, { keepalive: true })`. Saves and Save, Cancel and Submit run one at a time in order (`useAutosave`), so a late save never undoes them.
+- The new-chat box and a dictation in progress are not saved.
+
 ## Later
 
 - Hard forks: each fork's answer written by a subagent that only gets `read_fork` for that fork.

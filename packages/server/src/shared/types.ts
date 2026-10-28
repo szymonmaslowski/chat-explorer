@@ -58,6 +58,9 @@ export interface Comment {
   startOffset: number;
   endOffset: number;
   body: string;
+  // Text in an open editor, saved as it is typed; null when no editor is open. A comment that
+  // was never saved has an empty body.
+  editBody: string | null;
   type: CommentType;
   status: CommentStatus;
   submissionId: string | null;
@@ -89,6 +92,14 @@ export interface MessageFile {
   createdAt: number;
 }
 
+export interface ReplyDraft {
+  forkId: string;
+  text: string;
+  newFork: boolean;
+  files: MessageFile[];
+  updatedAt: number;
+}
+
 export interface Snapshot {
   exploration: Exploration;
   forks: Fork[];
@@ -96,6 +107,7 @@ export interface Snapshot {
   comments: Comment[];
   queuedSubmissions: QueuedSubmission[];
   files: MessageFile[];
+  replyDrafts: ReplyDraft[];
   sessionStatus: SessionStatus;
   sessionError: string | null;
 }
@@ -125,11 +137,13 @@ export interface NewComment {
   startOffset: number;
   endOffset: number;
   body: string;
+  editBody?: string;
   type?: CommentType;
 }
 
 export interface CommentChanges {
   body?: string;
+  editBody?: string | null;
   type?: CommentType;
 }
 

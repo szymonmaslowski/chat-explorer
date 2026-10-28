@@ -62,6 +62,7 @@ export interface CommentRow {
   start_offset: number;
   end_offset: number;
   body: string;
+  edit_body: string | null;
   type: CommentType;
   status: CommentStatus;
   submission_id: string | null;
@@ -81,7 +82,16 @@ export interface FileRow {
   media_type: string;
   size: number;
   path: string;
+  draft_fork_id: string | null;
   created_at: number;
+}
+
+export interface ReplyDraftRow {
+  fork_id: string;
+  exploration_id: string;
+  text: string;
+  new_fork: number;
+  updated_at: number;
 }
 
 export interface SubmissionRow {
@@ -139,6 +149,7 @@ export const toComment = (row: CommentRow): Comment => ({
   startOffset: row.start_offset,
   endOffset: row.end_offset,
   body: row.body,
+  editBody: row.edit_body,
   type: row.type,
   status: row.status,
   submissionId: row.submission_id,

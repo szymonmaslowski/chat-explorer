@@ -39,3 +39,12 @@ export async function deliverAndAnswer(
 
 export const detachFakeSession = (request: APIRequestContext) =>
   request.post('/api/internal/detach', { data: { shimId } });
+
+// The reply box is saved on the daemon, so a test that types into a shared chat empties it again.
+export async function clearReply(page: Page) {
+  const saved = page.waitForResponse(
+    (response) => response.url().endsWith('/reply-draft') && response.request().method() === 'PUT',
+  );
+  await page.getByPlaceholder('Reply to Claude').fill('');
+  await saved;
+}

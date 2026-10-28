@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { openSeededExploration } from './helpers';
+import { clearReply, openSeededExploration } from './helpers';
 
 test('dictates a reply into the text box', async ({ page }) => {
   await openSeededExploration(page);
@@ -14,6 +14,7 @@ test('dictates a reply into the text box', async ({ page }) => {
 
   await expect(reply).toHaveValue('First thought. Dictated by the fake whisper.');
   await expect(page.locator('.reply-bar').getByRole('button', { name: 'Dictate' })).toBeVisible();
+  await clearReply(page);
 });
 
 test('continues a dictation from where the last one ended', async ({ page }) => {
@@ -32,6 +33,7 @@ test('continues a dictation from where the last one ended', async ({ page }) => 
   await expect(reply).toHaveValue(
     'Start. Dictated by the fake whisper. Dictated by the fake whisper. End.',
   );
+  await clearReply(page);
 });
 
 test.describe('on a phone', () => {

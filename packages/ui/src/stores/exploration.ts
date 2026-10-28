@@ -6,6 +6,7 @@ import type {
   Message,
   MessageFile,
   QueuedSubmission,
+  ReplyDraft,
   SessionStatus,
   Snapshot,
 } from '@shared/types';
@@ -21,6 +22,8 @@ export interface ExplorationState {
   comments: Map<string, Comment>;
   queuedSubmissions: Map<string, QueuedSubmission>;
   files: Map<string, MessageFile>;
+  // As loaded; the reply box takes over from there and saves its own changes.
+  replyDrafts: Map<string, ReplyDraft>;
   sessionStatus: SessionStatus;
   sessionError: string | null;
   connected: boolean;
@@ -101,6 +104,7 @@ function applySnapshot(state: ExplorationState, snapshot: Snapshot) {
   state.comments = byId(snapshot.comments);
   state.queuedSubmissions = byId(snapshot.queuedSubmissions);
   state.files = byId(snapshot.files);
+  state.replyDrafts = new Map(snapshot.replyDrafts.map((draft) => [draft.forkId, draft]));
   state.sessionStatus = snapshot.sessionStatus;
   state.sessionError = snapshot.sessionError;
   state.status = 'ready';
@@ -116,6 +120,7 @@ function createExplorationStore(explorationId: string) {
     comments: new Map(),
     queuedSubmissions: new Map(),
     files: new Map(),
+    replyDrafts: new Map(),
     sessionStatus: 'detached',
     sessionError: null,
     connected: false,

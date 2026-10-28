@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import type { Comment, CommentType } from '@shared/types';
+import type { Comment } from '@shared/types';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { api } from '../api';
 import { anchorOfRange, clampToRoot, locateAnchor, type TextAnchor } from '../lib/anchoring';
 import { layoutCards } from '../lib/card-layout';
 import { pointer } from '../lib/pointer';
@@ -64,8 +63,16 @@ const pickedPlaying = computed(
     speech.playback?.messageId === picked.value?.messageId &&
     speech.playback?.index === picked.value?.blockIndex,
 );
-const editor = ref<{ messageId: string; anchor: TextAnchor; top: number; left: number } | null>(
-  null,
+const editor = ref<{
+  messageId: string;
+  anchor: TextAnchor;
+  top: number;
+  left: number;
+  commentId: string | null;
+} | null>(null);
+// The comment open in the editor shows there, not also as a card.
+const shownComments = computed(() =>
+  props.comments.filter((comment) => comment.id !== editor.value?.commentId),
 );
 
 const container = () => layer.value?.parentElement ?? null;
@@ -164,7 +171,7 @@ function scrollToComment(commentId: string) {
 
 const floatingCards = computed(() => {
   if (props.compact) return [];
-  const requests = props.comments.flatMap((comment) => {
+  const requests = shownComments.value.flatMap((comment) => {
     const box = anchorBoxes.value.get(comment.id);
     if (!box || trayIds.value.has(comment.id)) return [];
     return [
@@ -191,7 +198,7 @@ const trayComments = computed(() =>
 const listedComments = computed(() => {
   if (!props.compact) return [];
   const byMessage = new Map<string, Comment[]>();
-  for (const comment of props.comments.toSorted(
+  for (const comment of shownComments.value.toSorted(
     (left, right) => left.startOffset - right.startOffset,
   )) {
     byMessage.set(comment.messageId, [...(byMessage.get(comment.messageId) ?? []), comment]);
@@ -323,6 +330,7 @@ function openEditor() {
     anchor,
     top: lineTop,
     left: Math.max(0, Math.min(lineLeft, layerWidth.value - draftWidth)),
+    commentId: null,
   };
   selection.value = null;
   picked.value = null;
@@ -331,19 +339,6 @@ function openEditor() {
 function closeEditor() {
   editor.value = null;
   highlightPicked(null);
-}
-
-async function saveComment(body: string, type: CommentType) {
-  if (!editor.value) return;
-  const { messageId, anchor } = editor.value;
-  await api.createComment(props.explorationId, {
-    messageId,
-    viewForkId: props.forkId,
-    ...anchor,
-    body,
-    type,
-  });
-  closeEditor();
   window.getSelection()?.removeAllRanges();
 }
 
@@ -458,12 +453,15 @@ watch(
 
     <CommentEditor
       v-if="editor"
-      :quote="editor.anchor.quote"
+      :exploration-id="explorationId"
+      :view-fork-id="forkId"
+      :message-id="editor.messageId"
+      :anchor="editor.anchor"
       :top="editor.top"
       :left="editor.left"
       :width="draftWidth"
-      @save="saveComment"
-      @cancel="closeEditor"
+      @created="(commentId) => editor && (editor.commentId = commentId)"
+      @close="closeEditor"
     />
   </div>
 </template>

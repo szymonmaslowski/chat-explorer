@@ -54,10 +54,16 @@ const newCommentBody = z.object({
   quote: z.string(),
   startOffset: z.number().int(),
   endOffset: z.number().int(),
-  body: z.string(),
+  body: z.string().default(''),
+  editBody: z.string().optional(),
   type: commentType.optional(),
 });
-const commentChangesBody = z.object({ body: z.string().optional(), type: commentType.optional() });
+const commentChangesBody = z.object({
+  body: z.string().optional(),
+  editBody: z.string().nullable().optional(),
+  type: commentType.optional(),
+});
+const replyDraftBody = z.object({ text: z.string(), newFork: z.boolean(), fileIds });
 const forkBody = z.object({ forkId: z.string() });
 const submitBody = z.object({
   forkId: z.string(),
@@ -307,6 +313,15 @@ export function createApp(options: AppOptions) {
       store.submit(context.req.param('id'), forkId, globalMessage, { newFork, fileIds }),
       201,
     );
+  });
+
+  app.get('/api/forks/:id/reply-draft', (context) =>
+    context.json(store.replyDraft(context.req.param('id'))),
+  );
+
+  app.put('/api/forks/:id/reply-draft', async (context) => {
+    const draft = replyDraftBody.parse(await context.req.json());
+    return context.json(store.saveReplyDraft(context.req.param('id'), draft));
   });
 
   app.delete('/api/submissions/:id', (context) =>

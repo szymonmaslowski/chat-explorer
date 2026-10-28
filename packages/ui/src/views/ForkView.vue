@@ -197,6 +197,7 @@ watch(
           :exploration-id="explorationId"
           :fork-id="fork.id"
           :drafts="drafts"
+          :saved-draft="state.replyDrafts.get(fork.id) ?? null"
           :hint="state.exploration?.title ?? ''"
           @submitted="onSubmitted"
         />
