@@ -77,4 +77,7 @@ export const migrations = [
   ALTER TABLE explorations ADD COLUMN archived_at INTEGER;
   ALTER TABLE explorations ADD COLUMN deleted_at INTEGER;
   `,
+  `
+  ALTER TABLE submissions ADD COLUMN new_fork INTEGER NOT NULL DEFAULT 0;
+  `,
 ];

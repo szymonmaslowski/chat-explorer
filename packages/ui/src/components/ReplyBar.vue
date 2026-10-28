@@ -15,6 +15,7 @@ const props = defineProps<{
 const emit = defineEmits<{ submitted: [] }>();
 
 const sending = ref(false);
+const newFork = ref(false);
 const error = ref('');
 const textarea = ref<HTMLTextAreaElement | null>(null);
 
@@ -28,23 +29,32 @@ const inlineCount = computed(() => props.drafts.length - forkCount.value);
 const allForks = computed(() => props.drafts.length > 0 && forkCount.value === props.drafts.length);
 const summary = computed(() => {
   const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
-  return [
-    forkCount.value ? plural(forkCount.value, 'fork') : '',
+  const reply = [
     inlineCount.value ? plural(inlineCount.value, 'comment') : '',
     text.value.trim() ? 'message' : '',
   ]
     .filter(Boolean)
     .join(', ');
+  return [
+    forkCount.value ? plural(forkCount.value, 'fork') : '',
+    newFork.value && reply ? `new fork with ${reply}` : reply,
+  ]
+    .filter(Boolean)
+    .join(', ');
 });
-const canSubmit = computed(() => !sending.value && summary.value !== '');
+const replyEmpty = computed(() => inlineCount.value === 0 && !text.value.trim());
+const canSubmit = computed(
+  () => !sending.value && summary.value !== '' && !(newFork.value && replyEmpty.value),
+);
 
 async function submit() {
   if (!canSubmit.value) return;
   sending.value = true;
   error.value = '';
   try {
-    await api.submit(props.explorationId, props.forkId, text.value);
+    await api.submit(props.explorationId, props.forkId, text.value, newFork.value);
     text.value = '';
+    newFork.value = false;
     emit('submitted');
   } catch {
     error.value = 'Could not send. Is the chat-explorer daemon running?';
@@ -66,7 +76,7 @@ function onKeydown(event: KeyboardEvent) {
 </script>
 
 <template>
-  <form class="reply-bar" @submit.prevent="submit">
+  <form class="reply-bar" :class="{ 'new-fork': newFork }" @submit.prevent="submit">
     <textarea
       ref="textarea"
       v-model="text"
@@ -83,6 +93,12 @@ function onKeydown(event: KeyboardEvent) {
       >
         {{ allForks ? 'Unfork all' : 'Fork all' }}
       </button>
+      <label
+        class="new-fork-toggle"
+        title="Send the message and inline comments to a new fork, leaving this one as it is"
+      >
+        <input v-model="newFork" type="checkbox" /> New fork
+      </label>
       <DictationButton :hint="hint" @text="insertDictation" />
       <span class="spacer" />
       <span v-if="error" class="error">{{ error }}</span>
@@ -109,6 +125,18 @@ function onKeydown(event: KeyboardEvent) {
 
 .spacer {
   flex: 1;
+}
+
+.new-fork-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.new-fork textarea {
+  border-left: 3px solid var(--fork);
 }
 
 .summary {

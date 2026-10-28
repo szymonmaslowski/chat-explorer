@@ -439,23 +439,31 @@ export class ChatStore {
     );
   }
 
-  submit(explorationId: string, forkId: string, globalMessage: string) {
+  submit(explorationId: string, forkId: string, globalMessage: string, newFork = false) {
     this.requireWritable(explorationId);
-    this.requireForkRow(forkId, explorationId);
+    const fork = this.requireForkRow(forkId, explorationId);
     const drafts = this.draftsIn(forkId);
     const message = globalMessage.trim();
     if (drafts.length === 0 && !message) {
       throw new StoreError('invalid', 'Nothing to submit: no draft comments and no message.');
     }
+    if (newFork && !message && drafts.every((draft) => draft.type === 'fork')) {
+      throw new StoreError('invalid', 'A new fork needs a message or an inline comment.');
+    }
+    if (newFork && fork.tip_message_id === null) {
+      throw new StoreError('invalid', 'This fork has no messages to fork from.');
+    }
     const id = newId();
     this.db.transaction(() => {
       this.db.run(
-        `INSERT INTO submissions (id, exploration_id, fork_id, global_message, status, created_at)
-         VALUES (?, ?, ?, ?, 'queued', ?)`,
+        `INSERT INTO submissions
+           (id, exploration_id, fork_id, global_message, new_fork, status, created_at)
+         VALUES (?, ?, ?, ?, ?, 'queued', ?)`,
         id,
         explorationId,
         forkId,
         message,
+        newFork ? 1 : 0,
         this.now(),
       );
       for (const draft of drafts) {
@@ -519,7 +527,23 @@ export class ChatStore {
       const repliesByFork = new Map<string, { inline: CommentRow[]; globalMessages: string[] }>();
       const forkComments: CommentRow[] = [];
 
-      for (const submission of submissions) {
+      // Before the replies to the same forks move their tips, so a new fork starts where
+      // the reader saw the fork end.
+      for (const submission of submissions.filter((row) => row.new_fork === 1)) {
+        const comments = this.db.all<CommentRow>(
+          'SELECT * FROM comments WHERE submission_id = ? ORDER BY created_at, rowid',
+          submission.id,
+        );
+        const { fork, message } = this.createForkFromReply(
+          submission,
+          comments.filter((comment) => comment.type === 'inline'),
+        );
+        forkComments.push(...comments.filter((comment) => comment.type === 'fork'));
+        addEvent({ type: 'fork.created', fork: toFork(fork) });
+        addEvent({ type: 'message.added', message: toMessage(message), fork: toFork(fork) });
+      }
+
+      for (const submission of submissions.filter((row) => row.new_fork === 0)) {
         const reply = repliesByFork.get(submission.fork_id) ?? { inline: [], globalMessages: [] };
         repliesByFork.set(submission.fork_id, reply);
         const comments = this.db.all<CommentRow>(
@@ -723,8 +747,13 @@ export class ChatStore {
     return [...quotedComments, row.content].filter(Boolean).join('\n\n');
   }
 
-  private createForkFromComment(comment: CommentRow) {
-    const base = this.requireMessageRow(comment.message_id);
+  private insertFork(input: {
+    explorationId: string;
+    parentForkId: string;
+    baseMessageId: string | null;
+    originCommentId: string | null;
+    summary: string;
+  }) {
     const forkId = newId();
     const createdAt = this.now();
     this.db.run(
@@ -732,20 +761,59 @@ export class ChatStore {
          summary, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       forkId,
-      comment.exploration_id,
-      base.fork_id,
-      base.id,
-      comment.id,
-      summaryFrom(comment.body),
+      input.explorationId,
+      input.parentForkId,
+      input.baseMessageId,
+      input.originCommentId,
+      input.summary,
       createdAt,
       createdAt,
     );
-    const { message, fork } = this.appendMessage(this.requireForkRow(forkId), 'user', '', 'live');
+    return this.requireForkRow(forkId);
+  }
+
+  private createForkFromReply(submission: SubmissionRow, inlineComments: CommentRow[]) {
+    const parent = this.requireForkRow(submission.fork_id);
+    const forkRow = this.insertFork({
+      explorationId: submission.exploration_id,
+      parentForkId: parent.id,
+      baseMessageId: parent.tip_message_id,
+      originCommentId: null,
+      summary: summaryFrom(submission.global_message || inlineComments[0]?.body || ''),
+    });
+    const { message, fork } = this.appendMessage(
+      forkRow,
+      'user',
+      submission.global_message,
+      'live',
+    );
+    for (const comment of inlineComments) {
+      this.db.run(
+        `UPDATE comments SET status = 'submitted', reply_message_id = ?, created_fork_id = ?
+         WHERE id = ?`,
+        message.id,
+        fork.id,
+        comment.id,
+      );
+    }
+    return { message, fork };
+  }
+
+  private createForkFromComment(comment: CommentRow) {
+    const base = this.requireMessageRow(comment.message_id);
+    const forkRow = this.insertFork({
+      explorationId: comment.exploration_id,
+      parentForkId: base.fork_id,
+      baseMessageId: base.id,
+      originCommentId: comment.id,
+      summary: summaryFrom(comment.body),
+    });
+    const { message, fork } = this.appendMessage(forkRow, 'user', '', 'live');
     this.db.run(
       `UPDATE comments SET status = 'submitted', reply_message_id = ?, created_fork_id = ?
        WHERE id = ?`,
       message.id,
-      forkId,
+      fork.id,
       comment.id,
     );
     return { message, fork };

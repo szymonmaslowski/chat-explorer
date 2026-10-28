@@ -72,6 +72,7 @@ export interface QueuedSubmission {
   explorationId: string;
   forkId: string;
   globalMessage: string;
+  newFork: boolean;
   createdAt: number;
 }
 

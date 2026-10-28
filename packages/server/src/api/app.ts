@@ -52,7 +52,11 @@ const newCommentBody = z.object({
 });
 const commentChangesBody = z.object({ body: z.string().optional(), type: commentType.optional() });
 const forkBody = z.object({ forkId: z.string() });
-const submitBody = z.object({ forkId: z.string(), globalMessage: z.string().default('') });
+const submitBody = z.object({
+  forkId: z.string(),
+  globalMessage: z.string().default(''),
+  newFork: z.boolean().default(false),
+});
 const shimBody = z.object({ shimId: z.string() });
 const startExplorationBody = shimBody.extend({
   sessionId: z.string(),
@@ -247,8 +251,8 @@ export function createApp(options: AppOptions) {
   });
 
   app.post('/api/explorations/:id/submit', async (context) => {
-    const { forkId, globalMessage } = submitBody.parse(await context.req.json());
-    return context.json(store.submit(context.req.param('id'), forkId, globalMessage), 201);
+    const { forkId, globalMessage, newFork } = submitBody.parse(await context.req.json());
+    return context.json(store.submit(context.req.param('id'), forkId, globalMessage, newFork), 201);
   });
 
   app.delete('/api/submissions/:id', (context) =>

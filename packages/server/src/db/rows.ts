@@ -74,6 +74,7 @@ export interface SubmissionRow {
   exploration_id: string;
   fork_id: string;
   global_message: string;
+  new_fork: number;
   status: 'queued' | 'delivered';
   created_at: number;
   delivered_at: number | null;
@@ -137,5 +138,6 @@ export const toQueuedSubmission = (row: SubmissionRow): QueuedSubmission => ({
   explorationId: row.exploration_id,
   forkId: row.fork_id,
   globalMessage: row.global_message,
+  newFork: row.new_fork === 1,
   createdAt: row.created_at,
 });

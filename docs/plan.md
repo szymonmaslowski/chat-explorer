@@ -486,6 +486,10 @@ Goal: listen to an answer, from the start or from any block, with play, pause, s
 
 **Player.** One `Audio` element. Each block's audio is fetched when it starts, and the next one while it plays. Fetched audio stays in memory after Stop and across answers, up to 20 MB (about an hour); past that, the least recently played blocks go first. With chaining on (remembered per browser), a block that ends starts the next; at the end of the answer playback stops. Skipping back past the start of a block goes into the end of the previous one. The block being read is highlighted and scrolled to 40% of the space between the header and the player. The lock screen gets play, pause, 5-second skips and previous/next block through the Media Session API. Safari only starts audio from a tap, so the first tap plays a moment of silence, which unlocks the element for the blocks that follow.
 
+### 14. A reply as a new fork
+
+**New fork** in the reply box sends the message and the inline comments to a new fork instead of the current one. `submissions.new_fork` marks it. On delivery the new fork starts from the current fork's tip (its base message), before the replies queued for the same fork move that tip, and the inline comments get it as their `created_fork_id`. Fork comments in the same submission still make forks of their own. A new fork needs a message or an inline comment. The fork view lists forks started from replies under their base message (`↳ Fork: …`); forks from comments are reached through their comment.
+
 ## Later
 
 - Hard forks: each fork's answer written by a subagent that only gets `read_fork` for that fork.

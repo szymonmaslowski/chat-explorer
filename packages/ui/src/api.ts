@@ -70,9 +70,9 @@ export const api = {
     call<Exploration>(`/api/explorations/${explorationId}`, { method: 'PATCH', json: { model } }),
   startSession: (explorationId: string) =>
     call<{ ok: true }>(`/api/explorations/${explorationId}/session`, { method: 'POST' }),
-  submit: (explorationId: string, forkId: string, globalMessage: string) =>
+  submit: (explorationId: string, forkId: string, globalMessage: string, newFork: boolean) =>
     call<QueuedSubmission>(`/api/explorations/${explorationId}/submit`, {
-      json: { forkId, globalMessage },
+      json: { forkId, globalMessage, newFork },
     }),
   cancelSubmission: (submissionId: string) =>
     call<{ globalMessage: string }>(`/api/submissions/${submissionId}`, { method: 'DELETE' }),

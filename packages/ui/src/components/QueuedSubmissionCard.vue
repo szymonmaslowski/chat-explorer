@@ -28,7 +28,8 @@ async function cancel() {
 <template>
   <div class="queued-submission">
     <div>
-      <strong>Queued</strong>, sent when Claude is free.
+      <strong>Queued</strong><template v-if="submission.newFork"> as a new fork</template>, sent
+      when Claude is free.
       <span class="muted">
         <template v-if="commentCount">
           {{ commentCount }} comment{{ commentCount === 1 ? '' : 's' }}

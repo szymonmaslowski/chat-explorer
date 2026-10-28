@@ -45,6 +45,15 @@ const queuedSubmissions = computed(() =>
     (submission) => submission.forkId === fork.value?.id,
   ),
 );
+// Forks started from a reply; forks from comments are reached through their comment.
+const replyForksAt = (messageId: string) =>
+  [...state.value.forks.values()].filter(
+    (child) =>
+      child.baseMessageId === messageId &&
+      child.originCommentId === null &&
+      child.parentForkId !== null &&
+      child.id !== fork.value?.id,
+  );
 const commentCountOf = (submissionId: string) =>
   [...state.value.comments.values()].filter((comment) => comment.submissionId === submissionId)
     .length;
@@ -146,6 +155,14 @@ watch(
             :shared="ownStart !== -1 && index < ownStart"
           />
           <div :id="`comments-${message.id}`" class="message-comments" />
+          <RouterLink
+            v-for="child in replyForksAt(message.id)"
+            :key="child.id"
+            :to="`/e/${explorationId}/f/${child.id}`"
+            class="reply-fork"
+          >
+            ↳ Fork: {{ forkTitle(child) }}
+          </RouterLink>
         </template>
         <CommentLayer
           :key="fork.id"
@@ -222,6 +239,13 @@ watch(
 
 .answering {
   font-style: italic;
+}
+
+.reply-fork {
+  display: block;
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--fork);
 }
 
 .dock {

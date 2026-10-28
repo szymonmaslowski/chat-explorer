@@ -182,6 +182,42 @@ describe('submission queue', () => {
     expect(store.deliverQueued(explorationId)).toBe(false);
   });
 
+  it('starts a new fork from a reply, leaving the current fork as it was', () => {
+    const { store, explorationId, mainForkId, answer } = setup();
+    draft(store, explorationId, { messageId: answer.id, viewForkId: mainForkId, body: 'inline' });
+    const submission = store.submit(explorationId, mainForkId, 'What about Redis?', true);
+    expect(submission.newFork).toBe(true);
+    store.submit(explorationId, mainForkId, 'Carry on here');
+
+    store.deliverQueued(explorationId);
+
+    const [main, newFork] = store.pendingForks(explorationId);
+    expect(main!.forkId).toBe(mainForkId);
+    expect(main!.userMessages.map((message) => message.text)).toEqual(['Carry on here']);
+    expect(newFork!.isNewFork).toBe(true);
+    expect(newFork!.parentForkId).toBe(mainForkId);
+    expect(newFork!.baseMessageId).toBe(answer.id);
+    expect(newFork!.userMessages[0]!.text).toBe('> some text\ninline\n\nWhat about Redis?');
+    const snapshot = store.snapshot(explorationId);
+    const created = snapshot.forks.find((fork) => fork.id === newFork!.forkId)!;
+    expect(created.summary).toBe('What about Redis?');
+    expect(created.originCommentId).toBeNull();
+    expect(snapshot.comments[0]!.createdForkId).toBe(created.id);
+  });
+
+  it('refuses a new fork with nothing but fork comments', () => {
+    const { store, explorationId, mainForkId, answer } = setup();
+    draft(store, explorationId, {
+      messageId: answer.id,
+      viewForkId: mainForkId,
+      body: 'fork',
+      type: 'fork',
+    });
+    expect(() => store.submit(explorationId, mainForkId, '', true)).toThrow(
+      expect.objectContaining({ code: 'invalid' }),
+    );
+  });
+
   it('restores drafts and returns the message when a queued submission is cancelled', () => {
     const { store, explorationId, mainForkId, answer } = setup();
     draft(store, explorationId, { messageId: answer.id, viewForkId: mainForkId, body: 'inline' });
