@@ -22,6 +22,7 @@ const text = computed({
   get: () => replyDrafts.get(props.forkId),
   set: (value: string) => replyDrafts.set(props.forkId, value),
 });
+const insertDictation = (dictated: string) => insertAtCursor(textarea.value, text, dictated);
 const forkCount = computed(() => props.drafts.filter((draft) => draft.type === 'fork').length);
 const inlineCount = computed(() => props.drafts.length - forkCount.value);
 const allForks = computed(() => props.drafts.length > 0 && forkCount.value === props.drafts.length);
@@ -82,10 +83,7 @@ function onKeydown(event: KeyboardEvent) {
       >
         {{ allForks ? 'Unfork all' : 'Fork all' }}
       </button>
-      <DictationButton
-        :hint="hint"
-        @text="(dictated) => (text = insertAtCursor(textarea, text, dictated))"
-      />
+      <DictationButton :hint="hint" @text="insertDictation" />
       <span class="spacer" />
       <span v-if="error" class="error">{{ error }}</span>
       <span v-else-if="summary" class="summary muted">{{ summary }}</span>

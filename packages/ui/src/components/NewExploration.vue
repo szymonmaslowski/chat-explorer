@@ -13,6 +13,7 @@ const model = ref<ClaudeModel>(defaultClaudeModel);
 const starting = ref(false);
 const error = ref('');
 const textarea = ref<HTMLTextAreaElement | null>(null);
+const insertDictation = (text: string) => insertAtCursor(textarea.value, message, text);
 
 onMounted(async () => {
   try {
@@ -58,7 +59,7 @@ function onKeydown(event: KeyboardEvent) {
           {{ modelLabels[option] }}
         </option>
       </select>
-      <DictationButton @text="(text) => (message = insertAtCursor(textarea, message, text))" />
+      <DictationButton @text="insertDictation" />
       <span class="spacer" />
       <span v-if="error" class="error">{{ error }}</span>
       <button type="submit" class="primary" :disabled="!message.trim() || starting">Start</button>

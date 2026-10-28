@@ -16,6 +16,24 @@ test('dictates a reply into the text box', async ({ page }) => {
   await expect(page.locator('.reply-bar').getByRole('button', { name: 'Dictate' })).toBeVisible();
 });
 
+test('continues a dictation from where the last one ended', async ({ page }) => {
+  await openSeededExploration(page);
+  const reply = page.getByPlaceholder('Reply to Claude');
+  await reply.fill('Start. End.');
+  await reply.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(6, 6));
+
+  for (let part = 0; part < 2; part++) {
+    await page.locator('.reply-bar').getByRole('button', { name: 'Dictate' }).click();
+    await expect(page.locator('.reply-bar .clock')).toHaveText('0:01');
+    await page.getByRole('button', { name: 'Stop dictation' }).click();
+    await expect(page.locator('.reply-bar').getByRole('button', { name: 'Dictate' })).toBeVisible();
+  }
+
+  await expect(reply).toHaveValue(
+    'Start. Dictated by the fake whisper. Dictated by the fake whisper. End.',
+  );
+});
+
 test('throws a recording away on cancel', async ({ page }) => {
   await page.goto('/');
   const box = page.getByPlaceholder('Start a new chat');

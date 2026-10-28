@@ -10,6 +10,7 @@ const emit = defineEmits<{ save: [body: string, type: CommentType]; cancel: [] }
 const body = ref('');
 const asFork = ref(false);
 const textarea = ref<HTMLTextAreaElement | null>(null);
+const insertDictation = (text: string) => insertAtCursor(textarea.value, body, text);
 
 onMounted(() => textarea.value?.focus());
 
@@ -39,10 +40,7 @@ function onKeydown(event: KeyboardEvent) {
     />
     <div class="actions">
       <label><input v-model="asFork" type="checkbox" /> Fork</label>
-      <DictationButton
-        :hint="quote"
-        @text="(text) => (body = insertAtCursor(textarea, body, text))"
-      />
+      <DictationButton :hint="quote" @text="insertDictation" />
       <span class="spacer" />
       <button type="button" @click="emit('cancel')">Cancel</button>
       <button type="button" class="primary" :disabled="!body.trim()" @click="save">Save</button>
