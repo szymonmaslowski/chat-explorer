@@ -35,6 +35,7 @@ In a Claude Code session, run `/explore-chat`. It imports the conversation so fa
 
 - **Comment:** select text in a message, or tap a paragraph, and click **Comment**. Tick **Fork** to start a new branch from it, or leave it unticked to continue the current one.
 - **Reply:** write in the box at the bottom. **Submit** sends your comments and message together: each fork comment becomes a new fork, and the inline comments and message become one reply in the current fork. Tick **New fork** to send the message and inline comments to a new fork instead, starting from the end of the current one. The current fork stays as it was, and a **↳ Fork** link under its last message leads to the new one.
+- **Files:** paste an image, drop files on the reply box or the new-chat box, or pick them with 📎 (on the iPhone: photos, the camera or Files). Images, PDFs and text or code files, up to 10 MB each. They are stored in `~/.chat-explorer/files/`, and Claude gets their paths and opens them with its Read tool. Background sessions may read that folder and nothing else.
 - **Queue:** if Claude is still answering, or no session is attached, your submission waits in a queue and you can cancel it.
 - **Map:** the **Map** link shows the tree of forks. `[` and `]` go back and forward.
 - **Continue later:** run `/explore-chat <id>` in any session. The id is in the status bar and in `chat-explorer list`.

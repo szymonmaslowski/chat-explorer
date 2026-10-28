@@ -4,9 +4,11 @@ import type {
   CommentStatus,
   CommentType,
   Exploration,
+  FileKind,
   Fork,
   ForkKind,
   Message,
+  MessageFile,
   MessageSource,
   QueuedSubmission,
   Role,
@@ -67,6 +69,19 @@ export interface CommentRow {
   created_fork_id: string | null;
   created_at: number;
   updated_at: number;
+}
+
+export interface FileRow {
+  id: string;
+  exploration_id: string | null;
+  submission_id: string | null;
+  message_id: string | null;
+  name: string;
+  kind: FileKind;
+  media_type: string;
+  size: number;
+  path: string;
+  created_at: number;
 }
 
 export interface SubmissionRow {
@@ -131,6 +146,17 @@ export const toComment = (row: CommentRow): Comment => ({
   createdForkId: row.created_fork_id,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
+});
+
+export const toMessageFile = (row: FileRow): MessageFile => ({
+  id: row.id,
+  name: row.name,
+  kind: row.kind,
+  mediaType: row.media_type,
+  size: row.size,
+  submissionId: row.submission_id,
+  messageId: row.message_id,
+  createdAt: row.created_at,
 });
 
 export const toQueuedSubmission = (row: SubmissionRow): QueuedSubmission => ({

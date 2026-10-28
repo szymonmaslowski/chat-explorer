@@ -4,6 +4,7 @@ import type {
   CommentChanges,
   Exploration,
   ExplorationListItem,
+  MessageFile,
   NewComment,
   QueuedSubmission,
   Snapshot,
@@ -64,18 +65,32 @@ export const api = {
   deleteExploration: (explorationId: string) =>
     call<{ ok: true }>(`/api/explorations/${explorationId}`, { method: 'DELETE' }),
   snapshot: (explorationId: string) => call<Snapshot>(`/api/explorations/${explorationId}`),
-  createExploration: (message: string, model: ClaudeModel) =>
-    call<{ explorationId: string }>('/api/explorations', { json: { message, model } }),
+  createExploration: (message: string, model: ClaudeModel, fileIds: string[]) =>
+    call<{ explorationId: string }>('/api/explorations', { json: { message, model, fileIds } }),
+  uploadFile: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return call<MessageFile>('/api/files', { form });
+  },
+  deleteFile: (fileId: string) => call<{ ok: true }>(`/api/files/${fileId}`, { method: 'DELETE' }),
   setModel: (explorationId: string, model: ClaudeModel) =>
     call<Exploration>(`/api/explorations/${explorationId}`, { method: 'PATCH', json: { model } }),
   startSession: (explorationId: string) =>
     call<{ ok: true }>(`/api/explorations/${explorationId}/session`, { method: 'POST' }),
-  submit: (explorationId: string, forkId: string, globalMessage: string, newFork: boolean) =>
+  submit: (
+    explorationId: string,
+    forkId: string,
+    globalMessage: string,
+    options: { newFork: boolean; fileIds: string[] },
+  ) =>
     call<QueuedSubmission>(`/api/explorations/${explorationId}/submit`, {
-      json: { forkId, globalMessage, newFork },
+      json: { forkId, globalMessage, ...options },
     }),
   cancelSubmission: (submissionId: string) =>
-    call<{ globalMessage: string }>(`/api/submissions/${submissionId}`, { method: 'DELETE' }),
+    call<{ globalMessage: string; newFork: boolean; files: MessageFile[] }>(
+      `/api/submissions/${submissionId}`,
+      { method: 'DELETE' },
+    ),
   createComment: (explorationId: string, comment: NewComment) =>
     call<Comment>(`/api/explorations/${explorationId}/comments`, { json: comment }),
   updateComment: (commentId: string, changes: CommentChanges) =>

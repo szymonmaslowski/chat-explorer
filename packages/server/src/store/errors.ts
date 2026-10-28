@@ -14,9 +14,11 @@ export type StoreErrorCode =
   | 'transcription_failed'
   | 'transcription_timeout'
   | 'speech_unavailable'
-  | 'speech_failed';
+  | 'speech_failed'
+  | 'too_large'
+  | 'unsupported_file';
 
-const httpStatusByCode: Record<StoreErrorCode, 400 | 404 | 409 | 500 | 503 | 504> = {
+const httpStatusByCode: Record<StoreErrorCode, 400 | 404 | 409 | 413 | 415 | 500 | 503 | 504> = {
   not_found: 404,
   invalid: 400,
   not_draft: 409,
@@ -33,6 +35,8 @@ const httpStatusByCode: Record<StoreErrorCode, 400 | 404 | 409 | 500 | 503 | 504
   transcription_timeout: 504,
   speech_unavailable: 503,
   speech_failed: 500,
+  too_large: 413,
+  unsupported_file: 415,
 };
 
 export class StoreError extends Error {

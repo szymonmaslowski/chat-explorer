@@ -3,6 +3,8 @@ import type { Comment } from '@shared/types';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { api } from '../api';
 import { useProximityFade } from '../composables/useProximityFade';
+import { insertAtCursor } from '../lib/insert-text';
+import DictationButton from './DictationButton.vue';
 
 // Without a placement the card is listed in the page flow, on narrow and touch screens.
 const props = defineProps<{
@@ -14,6 +16,8 @@ const emit = defineEmits<{ measure: [height: number]; open: [comment: Comment] }
 const card = ref<HTMLElement | null>(null);
 const editing = ref(false);
 const draftBody = ref('');
+const editor = ref<HTMLTextAreaElement | null>(null);
+const insertDictation = (text: string) => insertAtCursor(editor.value, draftBody, text);
 const busy = ref(false);
 const isDraft = computed(() => props.comment.status === 'draft');
 const { opacity, interactive } = useProximityFade(
@@ -43,7 +47,7 @@ async function startEditing() {
   draftBody.value = props.comment.body;
   editing.value = true;
   await nextTick();
-  card.value?.querySelector('textarea')?.focus();
+  editor.value?.focus();
 }
 
 const save = () =>
@@ -85,8 +89,10 @@ function onEditorKeydown(event: KeyboardEvent) {
     @click="comment.status === 'submitted' && emit('open', comment)"
   >
     <template v-if="editing">
-      <textarea v-model="draftBody" rows="3" @keydown="onEditorKeydown" />
+      <textarea ref="editor" v-model="draftBody" rows="3" @keydown="onEditorKeydown" />
       <div class="actions">
+        <DictationButton :hint="comment.quote" @text="insertDictation" />
+        <span class="spacer" />
         <button type="button" @click="editing = false">Cancel</button>
         <button type="button" class="primary" :disabled="busy" @click="save">Save</button>
       </div>
@@ -190,8 +196,13 @@ function onEditorKeydown(event: KeyboardEvent) {
 .actions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 0.3rem;
   margin-top: 0.35rem;
+}
+
+.spacer {
+  flex: 1;
 }
 
 .actions button {

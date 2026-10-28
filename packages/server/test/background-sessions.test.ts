@@ -246,7 +246,7 @@ describe('background sessions', () => {
     expect(launches[1]!.spec).toMatchObject({ model: 'opus', resume: true });
   });
 
-  it('passes only web search and the chat-explorer tools to Claude', () => {
+  it('passes web search, reading uploaded files and the chat-explorer tools to Claude', () => {
     expect(
       claudeArguments(
         {
@@ -256,6 +256,7 @@ describe('background sessions', () => {
           resume: true,
           logPath: '/tmp/abc.log',
         },
+        '/home/.chat-explorer/files',
         '/plugin',
       ),
     ).toEqual([
@@ -268,10 +269,11 @@ describe('background sessions', () => {
       '--plugin-dir',
       '/plugin',
       '--tools',
-      'WebSearch',
+      'WebSearch,Read',
       '--allowedTools',
       'WebSearch',
       'mcp__plugin_chat-explorer_chat-explorer',
+      'Read(//home/.chat-explorer/files/**)',
       '--permission-prompts',
       'none',
     ]);

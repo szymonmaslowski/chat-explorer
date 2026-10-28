@@ -4,9 +4,11 @@ import {
   toExploration,
   toFork,
   toMessage,
+  toMessageFile,
   toQueuedSubmission,
   type CommentRow,
   type ExplorationRow,
+  type FileRow,
   type ForkRow,
   type MessageRow,
   type SubmissionRow,
@@ -19,6 +21,7 @@ import type {
   ExplorationEvent,
   ExplorationListItem,
   ExplorationView,
+  FileKind,
   ForkKind,
   MessageSource,
   NewComment,
@@ -170,6 +173,12 @@ export class ChatStore {
         )
         .map(toComment),
       queuedSubmissions: this.queuedSubmissions(explorationId),
+      files: this.db
+        .all<FileRow>(
+          'SELECT * FROM files WHERE exploration_id = ? ORDER BY created_at, rowid',
+          explorationId,
+        )
+        .map(toMessageFile),
     };
   }
 
@@ -439,16 +448,28 @@ export class ChatStore {
     );
   }
 
-  submit(explorationId: string, forkId: string, globalMessage: string, newFork = false) {
+  submit(
+    explorationId: string,
+    forkId: string,
+    globalMessage: string,
+    options: { newFork?: boolean; fileIds?: string[] } = {},
+  ) {
+    const { newFork = false, fileIds = [] } = options;
     this.requireWritable(explorationId);
     const fork = this.requireForkRow(forkId, explorationId);
     const drafts = this.draftsIn(forkId);
+    const files = fileIds.map((fileId) => this.requireDraftFile(fileId));
     const message = globalMessage.trim();
-    if (drafts.length === 0 && !message) {
+    if (drafts.length === 0 && !message && files.length === 0) {
       throw new StoreError('invalid', 'Nothing to submit: no draft comments and no message.');
     }
-    if (newFork && !message && drafts.every((draft) => draft.type === 'fork')) {
-      throw new StoreError('invalid', 'A new fork needs a message or an inline comment.');
+    if (
+      newFork &&
+      !message &&
+      files.length === 0 &&
+      drafts.every((draft) => draft.type === 'fork')
+    ) {
+      throw new StoreError('invalid', 'A new fork needs a message, a file or an inline comment.');
     }
     if (newFork && fork.tip_message_id === null) {
       throw new StoreError('invalid', 'This fork has no messages to fork from.');
@@ -473,6 +494,14 @@ export class ChatStore {
           draft.id,
         );
       }
+      for (const file of files) {
+        this.db.run(
+          'UPDATE files SET exploration_id = ?, submission_id = ? WHERE id = ?',
+          explorationId,
+          id,
+          file.id,
+        );
+      }
     });
     const submission = toQueuedSubmission(this.requireSubmissionRow(id));
     this.publishCommentUpdates(
@@ -480,11 +509,14 @@ export class ChatStore {
       drafts.map((draft) => draft.id),
     );
     this.publish([[explorationId, { type: 'submission.queued', submission }]]);
+    if (files.length > 0) {
+      this.publish([[explorationId, { type: 'files.updated', files: this.filesOf(id) }]]);
+    }
     return submission;
   }
 
   cancelSubmission(submissionId: string) {
-    const { row, commentIds } = this.db.transaction(() => {
+    const { row, commentIds, files } = this.db.transaction(() => {
       const row = this.requireSubmissionRow(submissionId);
       if (row.status !== 'queued') {
         throw new StoreError('already_sent', 'This submission was already sent to Claude.');
@@ -492,16 +524,29 @@ export class ChatStore {
       const commentIds = this.db
         .all<{ id: string }>('SELECT id FROM comments WHERE submission_id = ?', submissionId)
         .map(({ id }) => id);
+      const files = this.filesOf(submissionId);
       this.db.run(
         "UPDATE comments SET status = 'draft', submission_id = NULL WHERE submission_id = ?",
         submissionId,
       );
+      this.db.run(
+        'UPDATE files SET exploration_id = NULL, submission_id = NULL WHERE submission_id = ?',
+        submissionId,
+      );
       this.db.run('DELETE FROM submissions WHERE id = ?', submissionId);
-      return { row, commentIds };
+      return { row, commentIds, files };
     });
     this.publishCommentUpdates(row.exploration_id, commentIds);
     this.publish([[row.exploration_id, { type: 'submission.cancelled', submissionId }]]);
-    return { globalMessage: row.global_message };
+    if (files.length > 0) {
+      const fileIds = files.map((file) => file.id);
+      this.publish([[row.exploration_id, { type: 'files.released', fileIds }]]);
+    }
+    return {
+      globalMessage: row.global_message,
+      newFork: row.new_fork === 1,
+      files: files.map((file) => ({ ...file, submissionId: null })),
+    };
   }
 
   explorationsWithQueuedSubmissions() {
@@ -524,7 +569,10 @@ export class ChatStore {
       if (submissions.length === 0) return [];
       const events: PendingEvent[] = [];
       const addEvent = (event: ExplorationEvent) => events.push([explorationId, event]);
-      const repliesByFork = new Map<string, { inline: CommentRow[]; globalMessages: string[] }>();
+      const repliesByFork = new Map<
+        string,
+        { inline: CommentRow[]; globalMessages: string[]; submissionIds: string[]; files: number }
+      >();
       const forkComments: CommentRow[] = [];
 
       // Before the replies to the same forks move their tips, so a new fork starts where
@@ -539,12 +587,24 @@ export class ChatStore {
           comments.filter((comment) => comment.type === 'inline'),
         );
         forkComments.push(...comments.filter((comment) => comment.type === 'fork'));
+        this.db.run(
+          'UPDATE files SET message_id = ? WHERE submission_id = ?',
+          message.id,
+          submission.id,
+        );
         addEvent({ type: 'fork.created', fork: toFork(fork) });
         addEvent({ type: 'message.added', message: toMessage(message), fork: toFork(fork) });
       }
 
       for (const submission of submissions.filter((row) => row.new_fork === 0)) {
-        const reply = repliesByFork.get(submission.fork_id) ?? { inline: [], globalMessages: [] };
+        const reply = repliesByFork.get(submission.fork_id) ?? {
+          inline: [],
+          globalMessages: [],
+          submissionIds: [],
+          files: 0,
+        };
+        reply.submissionIds.push(submission.id);
+        reply.files += this.filesOf(submission.id).length;
         repliesByFork.set(submission.fork_id, reply);
         const comments = this.db.all<CommentRow>(
           'SELECT * FROM comments WHERE submission_id = ? ORDER BY created_at, rowid',
@@ -556,7 +616,9 @@ export class ChatStore {
       }
 
       for (const [forkId, reply] of repliesByFork) {
-        if (reply.inline.length === 0 && reply.globalMessages.length === 0) continue;
+        if (reply.inline.length === 0 && reply.globalMessages.length === 0 && reply.files === 0) {
+          continue;
+        }
         const { message, fork } = this.appendMessage(
           this.requireForkRow(forkId),
           'user',
@@ -568,6 +630,13 @@ export class ChatStore {
             "UPDATE comments SET status = 'submitted', reply_message_id = ? WHERE id = ?",
             message.id,
             comment.id,
+          );
+        }
+        for (const submissionId of reply.submissionIds) {
+          this.db.run(
+            'UPDATE files SET message_id = ? WHERE submission_id = ?',
+            message.id,
+            submissionId,
           );
         }
         addEvent({ type: 'message.added', message: toMessage(message), fork: toFork(fork) });
@@ -593,6 +662,8 @@ export class ChatStore {
         for (const comment of comments) {
           addEvent({ type: 'comment.updated', comment: toComment(comment) });
         }
+        const files = this.filesOf(submission.id);
+        if (files.length > 0) addEvent({ type: 'files.updated', files });
         addEvent({ type: 'submission.delivered', submissionId: submission.id });
       }
       return events;
@@ -744,7 +815,66 @@ export class ChatStore {
         row.id,
       )
       .map((comment) => `${quoteBlock(comment.quote)}\n${comment.body}`);
-    return [...quotedComments, row.content].filter(Boolean).join('\n\n');
+    const paths = this.db
+      .all<FileRow>('SELECT * FROM files WHERE message_id = ? ORDER BY created_at, rowid', row.id)
+      .map((file) => `- ${file.path}`);
+    const files = paths.length
+      ? `Attached files (open them with the Read tool):\n${paths.join('\n')}`
+      : '';
+    return [...quotedComments, row.content, files].filter(Boolean).join('\n\n');
+  }
+
+  createFile(input: {
+    id: string;
+    name: string;
+    kind: FileKind;
+    mediaType: string;
+    size: number;
+    path: string;
+  }) {
+    this.db.run(
+      `INSERT INTO files (id, name, kind, media_type, size, path, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      input.id,
+      input.name,
+      input.kind,
+      input.mediaType,
+      input.size,
+      input.path,
+      this.now(),
+    );
+    return toMessageFile(this.requireFileRow(input.id));
+  }
+
+  fileRow(fileId: string) {
+    return this.requireFileRow(fileId);
+  }
+
+  deleteDraftFile(fileId: string) {
+    const row = this.requireDraftFile(fileId);
+    this.db.run('DELETE FROM files WHERE id = ?', fileId);
+    return row;
+  }
+
+  filePathsOf(explorationId: string) {
+    return this.db
+      .all<FileRow>('SELECT * FROM files WHERE exploration_id = ?', explorationId)
+      .map((row) => row.path);
+  }
+
+  // Drafts belong to no exploration until submitted, so a closed page leaves them behind.
+  deleteDraftFilesBefore(createdBefore: number) {
+    return this.db.transaction(() => {
+      const rows = this.db.all<FileRow>(
+        'SELECT * FROM files WHERE exploration_id IS NULL AND created_at < ?',
+        createdBefore,
+      );
+      this.db.run(
+        'DELETE FROM files WHERE exploration_id IS NULL AND created_at < ?',
+        createdBefore,
+      );
+      return rows.map((row) => row.path);
+    });
   }
 
   private insertFork(input: {
@@ -779,7 +909,12 @@ export class ChatStore {
       parentForkId: parent.id,
       baseMessageId: parent.tip_message_id,
       originCommentId: null,
-      summary: summaryFrom(submission.global_message || inlineComments[0]?.body || ''),
+      summary: summaryFrom(
+        submission.global_message ||
+          inlineComments[0]?.body ||
+          this.filesOf(submission.id)[0]?.name ||
+          '',
+      ),
     });
     const { message, fork } = this.appendMessage(
       forkRow,
@@ -953,6 +1088,29 @@ export class ChatStore {
     const row = this.requireCommentRow(commentId);
     if (row.status !== 'draft') {
       throw new StoreError('not_draft', 'Only draft comments can be changed.');
+    }
+    return row;
+  }
+
+  private filesOf(submissionId: string) {
+    return this.db
+      .all<FileRow>(
+        'SELECT * FROM files WHERE submission_id = ? ORDER BY created_at, rowid',
+        submissionId,
+      )
+      .map(toMessageFile);
+  }
+
+  private requireFileRow(fileId: string) {
+    const row = this.db.get<FileRow>('SELECT * FROM files WHERE id = ?', fileId);
+    if (!row) throw new StoreError('not_found', `File ${fileId} does not exist.`);
+    return row;
+  }
+
+  private requireDraftFile(fileId: string) {
+    const row = this.requireFileRow(fileId);
+    if (row.exploration_id !== null) {
+      throw new StoreError('not_draft', `File ${fileId} was already submitted.`);
     }
     return row;
   }

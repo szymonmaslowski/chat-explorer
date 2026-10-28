@@ -490,6 +490,12 @@ Goal: listen to an answer, from the start or from any block, with play, pause, s
 
 **New fork** in the reply box sends the message and the inline comments to a new fork instead of the current one. `submissions.new_fork` marks it. On delivery the new fork starts from the current fork's tip (its base message), before the replies queued for the same fork move that tip, and the inline comments get it as their `created_fork_id`. Fork comments in the same submission still make forks of their own. A new fork needs a message or an inline comment. The fork view lists forks started from replies under their base message (`↳ Fork: …`); forks from comments are reached through their comment.
 
+### 15. Files
+
+Images (PNG, JPEG, GIF, WebP), PDFs and UTF-8 text, up to 10 MB each, in the reply box and the new-chat box (not in comments). A file uploads as soon as it is pasted, dropped or picked (`POST /api/files`), as a draft that belongs to no chat yet; `DELETE /api/files/:id` removes a draft. Submit and new chat take `fileIds`; delivery gives the files the message their submission became, and cancelling a submission gives them back as drafts. Files live in `~/.chat-explorer/files/<id>/<name>`, under a cleaned version of the uploaded name, with the extension the content calls for. The content decides the kind, since browsers report `.ts` as `video/mp2t`: a known image type or extension, a `%PDF` header, or valid UTF-8 without NUL bytes.
+
+Claude reads a user message with a list of absolute paths under "Attached files (open them with the Read tool)". Background sessions get `Read` with `--allowedTools 'Read(//<files folder>/**)'`; reads anywhere else are refused (checked with `claude -p`). `GET /api/files/:id` serves text as `text/plain` with `nosniff`, so an uploaded HTML file never runs. `purge` deletes a chat's files; drafts older than a day go hourly. The table is `files`, not `attachments`, because "attachment" already means a session attached to a chat.
+
 ## Later
 
 - Hard forks: each fork's answer written by a subagent that only gets `read_fork` for that fork.

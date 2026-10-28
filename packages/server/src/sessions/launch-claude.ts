@@ -24,7 +24,9 @@ const pluginDirectory = fileURLToPath(new URL('../plugin', import.meta.url));
 const killAfterMs = 5_000;
 const allowedTools = ['WebSearch', 'mcp__plugin_chat-explorer_chat-explorer'];
 
-export function claudeArguments(spec: LaunchSpec, plugin = pluginDirectory) {
+// Reading is allowed only in the folder of uploaded files; the leading `//` makes the rule an
+// absolute path.
+export function claudeArguments(spec: LaunchSpec, filesPath: string, plugin = pluginDirectory) {
   return [
     '-p',
     `/explore-chat ${spec.explorationId}`,
@@ -35,9 +37,10 @@ export function claudeArguments(spec: LaunchSpec, plugin = pluginDirectory) {
     '--plugin-dir',
     plugin,
     '--tools',
-    'WebSearch',
+    'WebSearch,Read',
     '--allowedTools',
     ...allowedTools,
+    `Read(/${filesPath}/**)`,
     '--permission-prompts',
     'none',
   ];
@@ -51,7 +54,7 @@ export function claudeLauncher(config: Config): Launcher {
       log,
       `\n--- ${new Date().toISOString()} ${spec.resume ? 'resume' : 'start'} ${spec.sessionId} (${spec.model})\n`,
     );
-    const child = spawn('claude', claudeArguments(spec), {
+    const child = spawn('claude', claudeArguments(spec, config.filesPath), {
       cwd: config.sessionsPath,
       stdio: ['ignore', log, log],
       env: {

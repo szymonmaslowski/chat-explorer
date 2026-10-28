@@ -80,4 +80,20 @@ export const migrations = [
   `
   ALTER TABLE submissions ADD COLUMN new_fork INTEGER NOT NULL DEFAULT 0;
   `,
+  `
+  CREATE TABLE files (
+    id TEXT PRIMARY KEY,
+    exploration_id TEXT REFERENCES explorations (id) ON DELETE CASCADE,
+    submission_id TEXT,
+    message_id TEXT,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('image', 'pdf', 'text')),
+    media_type TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    path TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX files_by_exploration ON files (exploration_id);
+  CREATE INDEX files_by_submission ON files (submission_id);
+  `,
 ];

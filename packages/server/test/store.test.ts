@@ -185,7 +185,9 @@ describe('submission queue', () => {
   it('starts a new fork from a reply, leaving the current fork as it was', () => {
     const { store, explorationId, mainForkId, answer } = setup();
     draft(store, explorationId, { messageId: answer.id, viewForkId: mainForkId, body: 'inline' });
-    const submission = store.submit(explorationId, mainForkId, 'What about Redis?', true);
+    const submission = store.submit(explorationId, mainForkId, 'What about Redis?', {
+      newFork: true,
+    });
     expect(submission.newFork).toBe(true);
     store.submit(explorationId, mainForkId, 'Carry on here');
 
@@ -213,7 +215,7 @@ describe('submission queue', () => {
       body: 'fork',
       type: 'fork',
     });
-    expect(() => store.submit(explorationId, mainForkId, '', true)).toThrow(
+    expect(() => store.submit(explorationId, mainForkId, '', { newFork: true })).toThrow(
       expect.objectContaining({ code: 'invalid' }),
     );
   });
@@ -222,7 +224,11 @@ describe('submission queue', () => {
     const { store, explorationId, mainForkId, answer } = setup();
     draft(store, explorationId, { messageId: answer.id, viewForkId: mainForkId, body: 'inline' });
     const submission = store.submit(explorationId, mainForkId, 'global');
-    expect(store.cancelSubmission(submission.id)).toEqual({ globalMessage: 'global' });
+    expect(store.cancelSubmission(submission.id)).toEqual({
+      globalMessage: 'global',
+      newFork: false,
+      files: [],
+    });
     const snapshot = store.snapshot(explorationId);
     expect(snapshot.comments.map((comment) => [comment.status, comment.submissionId])).toEqual([
       ['draft', null],

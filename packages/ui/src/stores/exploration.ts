@@ -4,6 +4,7 @@ import type {
   ExplorationEvent,
   Fork,
   Message,
+  MessageFile,
   QueuedSubmission,
   SessionStatus,
   Snapshot,
@@ -19,6 +20,7 @@ export interface ExplorationState {
   messages: Map<string, Message>;
   comments: Map<string, Comment>;
   queuedSubmissions: Map<string, QueuedSubmission>;
+  files: Map<string, MessageFile>;
   sessionStatus: SessionStatus;
   sessionError: string | null;
   connected: boolean;
@@ -34,6 +36,8 @@ const eventTypes: ExplorationEvent['type'][] = [
   'submission.queued',
   'submission.cancelled',
   'submission.delivered',
+  'files.updated',
+  'files.released',
   'exploration.updated',
   'exploration.deleted',
   'session.status',
@@ -67,6 +71,12 @@ export function applyEvent(state: ExplorationState, event: ExplorationEvent) {
     case 'submission.delivered':
       state.queuedSubmissions.delete(event.submissionId);
       break;
+    case 'files.updated':
+      for (const file of event.files) state.files.set(file.id, file);
+      break;
+    case 'files.released':
+      for (const fileId of event.fileIds) state.files.delete(fileId);
+      break;
     case 'exploration.updated':
       state.exploration = event.exploration;
       break;
@@ -90,6 +100,7 @@ function applySnapshot(state: ExplorationState, snapshot: Snapshot) {
   state.messages = byId(snapshot.messages);
   state.comments = byId(snapshot.comments);
   state.queuedSubmissions = byId(snapshot.queuedSubmissions);
+  state.files = byId(snapshot.files);
   state.sessionStatus = snapshot.sessionStatus;
   state.sessionError = snapshot.sessionError;
   state.status = 'ready';
@@ -104,6 +115,7 @@ function createExplorationStore(explorationId: string) {
     messages: new Map(),
     comments: new Map(),
     queuedSubmissions: new Map(),
+    files: new Map(),
     sessionStatus: 'detached',
     sessionError: null,
     connected: false,

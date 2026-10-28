@@ -1,17 +1,5 @@
-import { expect, test, type APIRequestContext } from '@playwright/test';
-
-const shimId = 'reply-fork-shim';
-
-async function deliverAndAnswer(request: APIRequestContext, explorationId: string, answer: string) {
-  await request.post(`/api/internal/explorations/${explorationId}/feedback`, {
-    data: { shimId, waitMs: 1_000 },
-  });
-  const snapshot = await (await request.get(`/api/explorations/${explorationId}`)).json();
-  const tip = snapshot.messages.at(-1);
-  await request.post(`/api/internal/forks/${tip.forkId}/messages`, {
-    data: { shimId, inReplyTo: tip.id, content: answer },
-  });
-}
+import { expect, test } from '@playwright/test';
+import { attachFakeSession, deliverAndAnswer, detachFakeSession } from './helpers';
 
 test('sends a reply to a new fork and leaves the current fork as it was', async ({
   page,
@@ -20,9 +8,7 @@ test('sends a reply to a new fork and leaves the current fork as it was', async 
   const { explorationId } = await (
     await request.post('/api/explorations', { data: { message: 'How do I cache responses?' } })
   ).json();
-  await request.post(`/api/internal/explorations/${explorationId}/attach`, {
-    data: { shimId, sessionId: 'reply-fork-session', takeover: true },
-  });
+  await attachFakeSession(request, explorationId);
   await deliverAndAnswer(request, explorationId, 'Use HTTP caching.');
 
   await page.goto(`/e/${explorationId}`);
@@ -46,5 +32,5 @@ test('sends a reply to a new fork and leaves the current fork as it was', async 
   await expect(page.locator('.conversation')).toContainText('Redis works too.');
   await expect(page.locator('.fork-point')).toContainText('Forked from');
 
-  await request.post('/api/internal/detach', { data: { shimId } });
+  await detachFakeSession(request);
 });

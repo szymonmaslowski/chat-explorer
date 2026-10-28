@@ -1,10 +1,13 @@
-import { existsSync } from 'node:fs';
+import { createReadStream, existsSync } from 'node:fs';
+import { Readable } from 'node:stream';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 import { apiVersion } from '../config.js';
 import { dictationHint, type Transcriber } from '../dictation/transcriber.js';
+import type { FileStorage } from '../files/file-storage.js';
+import { maxFileBytes } from '../files/kinds.js';
 import { findTranscript, readTranscript } from '../import/transcript.js';
 import type { BackgroundSessions } from '../sessions/background-sessions.js';
 import type { Speaker } from '../speech/speaker.js';
@@ -24,6 +27,7 @@ export interface AppOptions {
   sessions: BackgroundSessions;
   transcriber: Transcriber;
   speaker: Speaker;
+  fileStorage: FileStorage;
   defaultModel: ClaudeModel;
   port: number;
   publicUrl: string | null;
@@ -39,7 +43,10 @@ const maxRecordingBytes = 20 * 1024 * 1024;
 
 const commentType = z.enum(['inline', 'fork']);
 const model = z.enum(claudeModels);
-const newExplorationBody = z.object({ message: z.string().trim().min(1), model: model.optional() });
+const fileIds = z.array(z.string()).default([]);
+const newExplorationBody = z
+  .object({ message: z.string().trim().default(''), model: model.optional(), fileIds })
+  .refine((body) => body.message || body.fileIds.length > 0, 'Write a message or attach a file.');
 const explorationSettingsBody = z.object({ model });
 const newCommentBody = z.object({
   messageId: z.string(),
@@ -56,7 +63,11 @@ const submitBody = z.object({
   forkId: z.string(),
   globalMessage: z.string().default(''),
   newFork: z.boolean().default(false),
+  fileIds,
 });
+const uploadBody = z.object({ file: z.instanceof(File) });
+// Multipart framing around a file at the size limit.
+const uploadOverheadBytes = 64 * 1024;
 const shimBody = z.object({ shimId: z.string() });
 const startExplorationBody = shimBody.extend({
   sessionId: z.string(),
@@ -99,7 +110,7 @@ const feedbackBody = shimBody.extend({
 });
 
 export function createApp(options: AppOptions) {
-  const { store, hub, bus, sessions, transcriber, speaker, port } = options;
+  const { store, hub, bus, sessions, transcriber, speaker, fileStorage, port } = options;
   const localUrl = `http://127.0.0.1:${port}`;
   const explorationUrls = (explorationId: string) => ({
     url: `${options.publicUrl ?? localUrl}/e/${explorationId}`,
@@ -184,8 +195,43 @@ export function createApp(options: AppOptions) {
     const { exploration, mainFork } = store.createExploration({
       model: body.model ?? options.defaultModel,
     });
-    store.submit(exploration.id, mainFork.id, body.message);
+    store.submit(exploration.id, mainFork.id, body.message, { fileIds: body.fileIds });
     return context.json({ explorationId: exploration.id }, 201);
+  });
+
+  app.post(
+    '/api/files',
+    bodyLimit({
+      maxSize: maxFileBytes + uploadOverheadBytes,
+      onError: (context) =>
+        context.json({ error: 'too_large', message: 'The file is larger than 10 MB.' }, 413),
+    }),
+    async (context) => {
+      const { file } = uploadBody.parse(await context.req.parseBody());
+      const uploaded = await fileStorage.add({
+        name: file.name,
+        mediaType: file.type,
+        bytes: new Uint8Array(await file.arrayBuffer()),
+      });
+      return context.json(uploaded, 201);
+    },
+  );
+
+  // Text goes out as plain text, so an uploaded HTML file is shown, never run.
+  app.get('/api/files/:id', (context) => {
+    const row = store.fileRow(context.req.param('id'));
+    const contentType = row.kind === 'text' ? 'text/plain; charset=utf-8' : row.media_type;
+    return context.body(Readable.toWeb(createReadStream(row.path)) as ReadableStream, 200, {
+      'content-type': contentType,
+      'content-disposition': `inline; filename*=UTF-8''${encodeURIComponent(row.name)}`,
+      'x-content-type-options': 'nosniff',
+      'cache-control': 'private, max-age=31536000, immutable',
+    });
+  });
+
+  app.delete('/api/files/:id', async (context) => {
+    await fileStorage.removeDraft(context.req.param('id'));
+    return context.json({ ok: true });
   });
 
   app.get('/api/explorations/:id', (context) => {
@@ -223,10 +269,15 @@ export function createApp(options: AppOptions) {
     context.json(store.restoreExploration(context.req.param('id'))),
   );
 
-  app.delete('/api/explorations/:id', (context) => {
+  app.delete('/api/explorations/:id', async (context) => {
     const explorationId = context.req.param('id');
-    if (context.req.query('purge') === 'true') store.purgeExploration(explorationId);
-    else store.deleteExploration(explorationId);
+    if (context.req.query('purge') === 'true') {
+      const paths = store.filePathsOf(explorationId);
+      store.purgeExploration(explorationId);
+      await fileStorage.removeFiles(paths);
+    } else {
+      store.deleteExploration(explorationId);
+    }
     return context.json({ ok: true });
   });
 
@@ -251,8 +302,11 @@ export function createApp(options: AppOptions) {
   });
 
   app.post('/api/explorations/:id/submit', async (context) => {
-    const { forkId, globalMessage, newFork } = submitBody.parse(await context.req.json());
-    return context.json(store.submit(context.req.param('id'), forkId, globalMessage, newFork), 201);
+    const { forkId, globalMessage, newFork, fileIds } = submitBody.parse(await context.req.json());
+    return context.json(
+      store.submit(context.req.param('id'), forkId, globalMessage, { newFork, fileIds }),
+      201,
+    );
   });
 
   app.delete('/api/submissions/:id', (context) =>

@@ -7,6 +7,7 @@ import type { DictationAvailability } from '../src/dictation/availability.js';
 import { Transcriber } from '../src/dictation/transcriber.js';
 import type { WhisperRun } from '../src/dictation/whisper.js';
 import { BackgroundSessions } from '../src/sessions/background-sessions.js';
+import { FileStorage } from '../src/files/file-storage.js';
 import { Speaker } from '../src/speech/speaker.js';
 import type { SpeechInspection } from '../src/speech/voices.js';
 import type { LaunchSpec, SessionProcess } from '../src/sessions/launch-claude.js';
@@ -146,6 +147,11 @@ export function createTestApp(options: { publicUrl?: string } = {}) {
   const context = createTestStore();
   const { transcriber, calls: whisperCalls } = createTestTranscriber();
   const { speaker, inspected, spoken } = createTestSpeaker();
+  const fileStorage = new FileStorage(
+    context.store,
+    mkdtempSync(join(tmpdir(), 'chat-explorer-files-')),
+    () => context.clock.now,
+  );
   const app = createApp({
     store: context.store,
     hub: context.hub,
@@ -153,6 +159,7 @@ export function createTestApp(options: { publicUrl?: string } = {}) {
     sessions: context.sessions,
     transcriber,
     speaker,
+    fileStorage,
     defaultModel: 'sonnet',
     port: testPort,
     publicUrl: options.publicUrl ?? null,
@@ -171,7 +178,7 @@ export function createTestApp(options: { publicUrl?: string } = {}) {
       body: json ? JSON.stringify(json) : rest.body,
     });
   };
-  return { ...context, app, request, whisperCalls, inspected, spoken };
+  return { ...context, app, request, whisperCalls, inspected, spoken, fileStorage };
 }
 
 export function seedConversation(store: ChatStore) {

@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import type { Comment, Message } from '@shared/types';
+import type { Comment, Message, MessageFile } from '@shared/types';
 import { computed, onMounted, ref, shallowRef, watch } from 'vue';
 import { renderMarkdown } from '../lib/markdown';
 import { bringToReadingLine } from '../lib/reading-line';
 import { speechBlocks, type SpokenElement } from '../lib/speech-blocks';
 import { checkSpeechAvailable, playFrom, speech, togglePause } from '../stores/speech';
+import FileIcon from './FileIcon.vue';
 import MediaIcon from './MediaIcon.vue';
 
 const props = defineProps<{
   message: Message;
   quotedComments: Comment[];
+  files: MessageFile[];
   shared: boolean;
 }>();
 
@@ -90,6 +92,23 @@ onMounted(findBlocks);
       </RouterLink>
       <p>{{ comment.body }}</p>
     </div>
+    <div v-if="files.length" class="files">
+      <a
+        v-for="file in files"
+        :key="file.id"
+        :href="`/api/files/${file.id}`"
+        target="_blank"
+        rel="noopener"
+        :class="file.kind"
+        :title="file.name"
+      >
+        <img v-if="file.kind === 'image'" :src="`/api/files/${file.id}`" :alt="file.name" />
+        <template v-else>
+          <FileIcon />
+          <span class="name">{{ file.name }}</span>
+        </template>
+      </a>
+    </div>
     <div
       v-if="html"
       ref="content"
@@ -138,6 +157,44 @@ onMounted(findBlocks);
   text-transform: none;
   letter-spacing: normal;
   color: var(--text-muted);
+}
+
+.files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.4rem 0;
+}
+
+.files a {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  color: inherit;
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.files a:not(.image) {
+  padding: 0.3rem 0.6rem 0.3rem 0.45rem;
+  font-size: 0.85rem;
+}
+
+.files img {
+  display: block;
+  max-width: 10rem;
+  max-height: 8rem;
+  border-radius: var(--radius);
+}
+
+.files .name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .quote-link {

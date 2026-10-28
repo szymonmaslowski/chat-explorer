@@ -15,6 +15,7 @@ export function loadConfig() {
     settingsPath: join(home, 'config.json'),
     sessionsPath: join(home, 'sessions'),
     modelsPath: join(home, 'models'),
+    filesPath: join(home, 'files'),
     baseUrl: `http://127.0.0.1:${port}`,
   };
 }

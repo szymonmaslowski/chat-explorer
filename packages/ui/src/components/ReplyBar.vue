@@ -3,8 +3,12 @@ import type { Comment } from '@shared/types';
 import { computed, ref } from 'vue';
 import { api } from '../api';
 import { insertAtCursor } from '../lib/insert-text';
+import { transferredFiles } from '../lib/transferred-files';
+import { replyFilesOwner, useFileDrafts } from '../stores/file-drafts';
 import { replyDrafts } from '../stores/reply-drafts';
+import AttachButton from './AttachButton.vue';
 import DictationButton from './DictationButton.vue';
+import FileDraftList from './FileDraftList.vue';
 
 const props = defineProps<{
   explorationId: string;
@@ -24,6 +28,8 @@ const text = computed({
   set: (value: string) => replyDrafts.set(props.forkId, value),
 });
 const insertDictation = (dictated: string) => insertAtCursor(textarea.value, text, dictated);
+const files = useFileDrafts(() => replyFilesOwner(props.forkId));
+const fileCount = computed(() => files.readyIds.value.length);
 const forkCount = computed(() => props.drafts.filter((draft) => draft.type === 'fork').length);
 const inlineCount = computed(() => props.drafts.length - forkCount.value);
 const allForks = computed(() => props.drafts.length > 0 && forkCount.value === props.drafts.length);
@@ -32,6 +38,7 @@ const summary = computed(() => {
   const reply = [
     inlineCount.value ? plural(inlineCount.value, 'comment') : '',
     text.value.trim() ? 'message' : '',
+    fileCount.value ? plural(fileCount.value, 'file') : '',
   ]
     .filter(Boolean)
     .join(', ');
@@ -42,9 +49,15 @@ const summary = computed(() => {
     .filter(Boolean)
     .join(', ');
 });
-const replyEmpty = computed(() => inlineCount.value === 0 && !text.value.trim());
+const replyEmpty = computed(
+  () => inlineCount.value === 0 && !text.value.trim() && fileCount.value === 0,
+);
 const canSubmit = computed(
-  () => !sending.value && summary.value !== '' && !(newFork.value && replyEmpty.value),
+  () =>
+    !sending.value &&
+    !files.uploading.value &&
+    summary.value !== '' &&
+    !(newFork.value && replyEmpty.value),
 );
 
 async function submit() {
@@ -52,9 +65,13 @@ async function submit() {
   sending.value = true;
   error.value = '';
   try {
-    await api.submit(props.explorationId, props.forkId, text.value, newFork.value);
+    await api.submit(props.explorationId, props.forkId, text.value, {
+      newFork: newFork.value,
+      fileIds: files.readyIds.value,
+    });
     text.value = '';
     newFork.value = false;
+    files.clear();
     emit('submitted');
   } catch {
     error.value = 'Could not send. Is the chat-explorer daemon running?';
@@ -67,6 +84,13 @@ async function toggleForkAll() {
   await api.toggleForkAll(props.explorationId, props.forkId);
 }
 
+function onPaste(event: ClipboardEvent) {
+  const pasted = transferredFiles(event.clipboardData);
+  if (pasted.length === 0) return;
+  event.preventDefault();
+  files.add(pasted);
+}
+
 function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
     event.preventDefault();
@@ -76,14 +100,22 @@ function onKeydown(event: KeyboardEvent) {
 </script>
 
 <template>
-  <form class="reply-bar" :class="{ 'new-fork': newFork }" @submit.prevent="submit">
+  <form
+    class="reply-bar"
+    :class="{ 'new-fork': newFork }"
+    @submit.prevent="submit"
+    @dragover.prevent
+    @drop.prevent="files.add(transferredFiles($event.dataTransfer))"
+  >
     <textarea
       ref="textarea"
       v-model="text"
       rows="2"
       placeholder="Reply to Claude (⌘↵ to send)"
       @keydown="onKeydown"
+      @paste="onPaste"
     />
+    <FileDraftList :drafts="files.drafts.value" @remove="files.remove" />
     <div class="actions">
       <button
         type="button"
@@ -99,6 +131,7 @@ function onKeydown(event: KeyboardEvent) {
       >
         <input v-model="newFork" type="checkbox" /> New fork
       </label>
+      <AttachButton @files="files.add" />
       <DictationButton :hint="hint" @text="insertDictation" />
       <span class="spacer" />
       <span v-if="error" class="error">{{ error }}</span>

@@ -54,6 +54,10 @@ const replyForksAt = (messageId: string) =>
       child.parentForkId !== null &&
       child.id !== fork.value?.id,
   );
+const filesOfMessage = (messageId: string) =>
+  [...state.value.files.values()].filter((file) => file.messageId === messageId);
+const fileCountOf = (submissionId: string) =>
+  [...state.value.files.values()].filter((file) => file.submissionId === submissionId).length;
 const commentCountOf = (submissionId: string) =>
   [...state.value.comments.values()].filter((comment) => comment.submissionId === submissionId)
     .length;
@@ -152,6 +156,7 @@ watch(
           <ConversationMessage
             :message="message"
             :quoted-comments="quotedCommentsOf(message.id, state.comments)"
+            :files="filesOfMessage(message.id)"
             :shared="ownStart !== -1 && index < ownStart"
           />
           <div :id="`comments-${message.id}`" class="message-comments" />
@@ -182,6 +187,7 @@ watch(
         :key="submission.id"
         :submission="submission"
         :comment-count="commentCountOf(submission.id)"
+        :file-count="fileCountOf(submission.id)"
       />
 
       <div class="dock" data-dock>

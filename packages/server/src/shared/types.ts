@@ -76,12 +76,26 @@ export interface QueuedSubmission {
   createdAt: number;
 }
 
+export type FileKind = 'image' | 'pdf' | 'text';
+
+export interface MessageFile {
+  id: string;
+  name: string;
+  kind: FileKind;
+  mediaType: string;
+  size: number;
+  submissionId: string | null;
+  messageId: string | null;
+  createdAt: number;
+}
+
 export interface Snapshot {
   exploration: Exploration;
   forks: Fork[];
   messages: Message[];
   comments: Comment[];
   queuedSubmissions: QueuedSubmission[];
+  files: MessageFile[];
   sessionStatus: SessionStatus;
   sessionError: string | null;
 }
@@ -96,6 +110,8 @@ export type ExplorationEvent =
   | { type: 'submission.queued'; submission: QueuedSubmission }
   | { type: 'submission.cancelled'; submissionId: string }
   | { type: 'submission.delivered'; submissionId: string }
+  | { type: 'files.updated'; files: MessageFile[] }
+  | { type: 'files.released'; fileIds: string[] }
   | { type: 'exploration.updated'; exploration: Exploration }
   | { type: 'exploration.deleted'; explorationId: string }
   | { type: 'session.attached'; shimId: string }

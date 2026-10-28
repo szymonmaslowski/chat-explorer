@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/api/app.js';
 import { loadConfig } from '../src/config.js';
 import { Database } from '../src/db/database.js';
+import { FileStorage } from '../src/files/file-storage.js';
 import { createShim } from '../src/mcp/shim.js';
 import { EventBus } from '../src/store/event-bus.js';
 import { FeedbackHub } from '../src/store/feedback-hub.js';
@@ -37,6 +38,7 @@ beforeEach(async () => {
     sessions,
     transcriber: createTestTranscriber().transcriber,
     speaker: createTestSpeaker().speaker,
+    fileStorage: new FileStorage(store, '/nonexistent'),
     defaultModel: 'sonnet',
     port: config.port,
     publicUrl: null,

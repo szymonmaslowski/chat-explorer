@@ -9,6 +9,7 @@ import { dictationAvailability } from '../dictation/availability.js';
 import { whisperModelPath } from '../dictation/models.js';
 import { Transcriber } from '../dictation/transcriber.js';
 import { runWhisper } from '../dictation/whisper.js';
+import { FileStorage } from '../files/file-storage.js';
 import { findTranscript } from '../import/transcript.js';
 import { BackgroundSessions } from '../sessions/background-sessions.js';
 import { claudeLauncher } from '../sessions/launch-claude.js';
@@ -47,6 +48,10 @@ const transcriber = new Transcriber({
   checkAvailability: () => dictationAvailability(modelPath),
   run: runWhisper,
 });
+const fileStorage = new FileStorage(store, config.filesPath);
+const staleDraftSweepMs = 60 * 60 * 1000;
+void fileStorage.removeStaleDrafts();
+setInterval(() => void fileStorage.removeStaleDrafts(), staleDraftSweepMs).unref();
 const speechAvailable = macosSpeechAvailable();
 const speaker = new Speaker({
   available: () => speechAvailable,
@@ -70,6 +75,7 @@ const app = createApp({
   sessions,
   transcriber,
   speaker,
+  fileStorage,
   defaultModel: settings.defaultModel,
   port: config.port,
   publicUrl: settings.publicUrl,

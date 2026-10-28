@@ -34,6 +34,25 @@ test('continues a dictation from where the last one ended', async ({ page }) => 
   );
 });
 
+test.describe('on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
+
+  test('dictates into a comment being edited', async ({ page }) => {
+    await openSeededExploration(page);
+    const card = page.locator('.comment-card.draft').first();
+    await card.getByRole('button', { name: 'Edit' }).click();
+    const editor = card.locator('textarea');
+    const before = await editor.inputValue();
+
+    await card.getByRole('button', { name: 'Dictate' }).click();
+    await expect(card.locator('.clock')).toHaveText('0:01');
+    await card.getByRole('button', { name: 'Stop dictation' }).click();
+
+    await expect(editor).toHaveValue(`${before} Dictated by the fake whisper.`);
+    await card.getByRole('button', { name: 'Cancel', exact: true }).click();
+  });
+});
+
 test('throws a recording away on cancel', async ({ page }) => {
   await page.goto('/');
   const box = page.getByPlaceholder('Start a new chat');
