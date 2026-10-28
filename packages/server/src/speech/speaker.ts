@@ -15,14 +15,12 @@ export interface SpeakerOptions {
 }
 
 interface SpeechRequest {
-  messageId: string;
   content: string;
   block: SpeechBlock;
   signal: AbortSignal;
 }
 
 const defaultTimeoutMs = 30_000;
-const rememberedMessages = 200;
 // Language detection needs a few sentences; more only makes osascript's argument longer.
 const maxInspectedLength = 4_000;
 
@@ -31,19 +29,17 @@ const proseOf = (markdown: string) =>
   markdown.replace(/```[\s\S]*?```/g, ' ').slice(0, maxInspectedLength);
 
 export class Speaker {
-  private readonly voices = new Map<string, Promise<SpeakingVoice>>();
-
   constructor(private readonly options: SpeakerOptions) {}
 
   available() {
     return this.options.available();
   }
 
-  async speak({ messageId, content, block, signal }: SpeechRequest) {
+  async speak({ content, block, signal }: SpeechRequest) {
     if (!this.available()) {
       throw new StoreError('speech_unavailable', 'Reading aloud needs macOS speech (`say`).');
     }
-    const voice = await this.voiceFor(messageId, content);
+    const voice = await this.voiceFor(content);
     const timeout = AbortSignal.timeout(this.options.timeoutMs ?? defaultTimeoutMs);
     return this.options
       .synthesize(
@@ -62,17 +58,11 @@ export class Speaker {
       });
   }
 
-  // One voice per message, so its paragraphs never switch voices halfway through.
-  private voiceFor(messageId: string, content: string) {
-    const known = this.voices.get(messageId);
-    if (known) return known;
-    const voice = this.options
+  // Chosen again for every block, so a newly installed voice is used at once. The same message
+  // always detects as the same language, so its blocks still share one voice.
+  private voiceFor(content: string) {
+    return this.options
       .inspect(proseOf(content))
       .then(chooseVoice, (): SpeakingVoice => ({ language: null, identifier: null }));
-    this.voices.set(messageId, voice);
-    if (this.voices.size > rememberedMessages) {
-      this.voices.delete(this.voices.keys().next().value!);
-    }
-    return voice;
   }
 }

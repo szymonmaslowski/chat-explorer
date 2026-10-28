@@ -136,7 +136,6 @@ export function createApp(options: AppOptions) {
   app.post('/api/speech', async (context) => {
     const { messageId, block } = speechBody.parse(await context.req.json());
     const audio = await speaker.speak({
-      messageId,
       content: store.messageContent(messageId),
       block,
       signal: context.req.raw.signal,

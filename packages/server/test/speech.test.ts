@@ -84,7 +84,7 @@ describe('speech text', () => {
 });
 
 describe('speaker', () => {
-  it('detects the language once per message, from its prose', async () => {
+  it('picks the voice from the language of the prose, for every block', async () => {
     const { speaker, inspected, spoken } = createTestSpeaker({
       language: 'pl',
       voices: [daniel, zosia],
@@ -93,13 +93,15 @@ describe('speaker', () => {
     const content = 'Wydaje mi się, że to działa.\n\n```ts\nconst answer = 42;\n```';
     const signal = new AbortController().signal;
     await speaker.speak({
-      messageId: 'm1',
       content,
       block: { kind: 'text', text: 'Pierwszy.' },
       signal,
     });
-    await speaker.speak({ messageId: 'm1', content, block: { kind: 'diagram' }, signal });
-    expect(inspected).toEqual(['Wydaje mi się, że to działa.\n\n ']);
+    await speaker.speak({ content, block: { kind: 'diagram' }, signal });
+    expect(inspected).toEqual([
+      'Wydaje mi się, że to działa.\n\n ',
+      'Wydaje mi się, że to działa.\n\n ',
+    ]);
     expect(spoken).toEqual([
       { text: 'Pierwszy.', voice: zosia.identifier },
       { text: 'Diagram.', voice: zosia.identifier },

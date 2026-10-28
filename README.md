@@ -97,7 +97,7 @@ chat-explorer dictation install
 
 **Listen** next to an answer reads it aloud. Tap a paragraph, list item or code block to pick it: **Play** reads from there, **Comment** comments on the whole block. Selecting text still offers **Comment** for the selection. The player above the reply box has play/pause, 5 seconds back and forward, previous and next block, and stop. With the chain button on, the next block starts when one ends; reading stops at the end of the answer. The block being read is highlighted and kept a little above the middle of the screen. On the iPhone the lock screen controls work too.
 
-- The Mac reads with its own voices (`say`), in the language it detects for the answer. For a better voice, download a Premium or Enhanced one in System Settings → Accessibility → Spoken Content → System voice → Manage Voices. The best installed voice for the language is picked.
+- The Mac reads with its own voices (`say`), in the language it detects for the answer. For a better voice, download a Premium or Enhanced one in System Settings → Accessibility → Spoken Content → System voice → Manage Voices. The best installed voice for the language is picked, from the next block on.
 - Code, diagrams and tables are announced ("Code block, TypeScript, 12 lines") instead of read.
 - macOS only.
 
