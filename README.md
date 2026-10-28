@@ -61,7 +61,7 @@ The daemon can run Claude Code itself, so the phone only needs to reach the daem
 
 4. **Keep the Mac awake on the charger:** System Settings → Battery → Options → "Prevent automatic sleeping on power adapter when the display is off". A MacBook with its lid closed still sleeps unless an external display is connected.
 
-On the phone, open the address. Start a new exploration from the explorations page, or continue an existing one. Comments are listed under their message instead of floating over the text.
+On the phone, open the address. Start a new exploration from the explorations page, or continue an existing one. Comments are listed under their message instead of floating over the text; tap a comment's quote (↑) to scroll to the text it quotes.
 
 ### Background sessions
 

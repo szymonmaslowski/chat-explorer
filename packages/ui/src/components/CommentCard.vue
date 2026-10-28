@@ -11,7 +11,11 @@ const props = defineProps<{
   comment: Comment;
   placement?: { top: number; left: number; width: number };
 }>();
-const emit = defineEmits<{ measure: [height: number]; open: [comment: Comment] }>();
+const emit = defineEmits<{
+  measure: [height: number];
+  open: [comment: Comment];
+  jump: [comment: Comment];
+}>();
 
 const card = ref<HTMLElement | null>(null);
 const editing = ref(false);
@@ -103,7 +107,16 @@ function onEditorKeydown(event: KeyboardEvent) {
         <span v-if="comment.status === 'queued'">· queued</span>
         <span v-if="comment.status === 'submitted'">· sent</span>
       </div>
-      <p v-if="!placement" class="quote">{{ comment.quote }}</p>
+      <button
+        v-if="!placement"
+        type="button"
+        class="quote"
+        title="Show in the text"
+        @click.stop="emit('jump', comment)"
+      >
+        <span class="arrow" aria-hidden="true">↑</span>
+        <span class="quoted">{{ comment.quote }}</span>
+      </button>
       <p class="body">{{ comment.body }}</p>
       <div v-if="isDraft" class="actions">
         <button
@@ -170,10 +183,25 @@ function onEditorKeydown(event: KeyboardEvent) {
 }
 
 .quote {
+  display: flex;
+  gap: 0.35rem;
+  width: 100%;
   margin: 0.1rem 0 0;
-  padding-left: 0.5rem;
+  padding: 0 0 0 0.5rem;
+  border: none;
   border-left: 2px solid var(--border);
+  border-radius: 0;
+  background: none;
   color: var(--text-muted);
+  font-size: inherit;
+  text-align: left;
+}
+
+.quote .arrow {
+  color: var(--accent);
+}
+
+.quote .quoted {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;

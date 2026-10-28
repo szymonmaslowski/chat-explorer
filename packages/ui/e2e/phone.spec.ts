@@ -51,4 +51,26 @@ test.describe('on a phone', () => {
     });
     await expect(page.getByRole('button', { name: 'Comment', exact: true })).toBeVisible();
   });
+
+  test('scrolls from a listed comment to the text it quotes', async ({ page }) => {
+    await openSeededExploration(page);
+    const card = page.locator('.message-comments .comment-card.listed').first();
+    await card.scrollIntoViewIfNeeded();
+    const quote = (await card.locator('.quoted').textContent())!;
+    await card.locator('button.quote').tap();
+
+    const flashedTop = () =>
+      page.evaluate(() => {
+        const flash = CSS.highlights.get('comment-flash');
+        const range = flash && ([...flash][0] as Range | undefined);
+        return range ? { text: range.toString(), top: range.getBoundingClientRect().top } : null;
+      });
+    await expect.poll(async () => (await flashedTop())?.text).toBe(quote);
+    await expect
+      .poll(async () => {
+        const top = (await flashedTop())?.top ?? -1;
+        return top > 0 && top < 844;
+      })
+      .toBe(true);
+  });
 });

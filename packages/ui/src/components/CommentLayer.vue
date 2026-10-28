@@ -420,6 +420,7 @@ watch(
         :key="comment.id"
         :comment="comment"
         @open="openSubmitted"
+        @jump="scrollToComment(comment.id)"
       />
     </Teleport>
 
