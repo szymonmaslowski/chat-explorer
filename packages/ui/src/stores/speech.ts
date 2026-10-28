@@ -44,7 +44,15 @@ export function checkSpeechAvailable() {
 const audio = new Audio();
 let unlocked = false;
 let loadToken = 0;
-const audioUrls = new Map<string, Promise<string>>();
+interface CachedAudio {
+  url: Promise<string>;
+  bytes: number;
+}
+
+// About an hour of speech. Kept after Stop, so playing a block again needs no new request.
+const maxCachedBytes = 20 * 1024 * 1024;
+// Least recently played first: a block moves to the end each time it plays.
+const cachedAudio = new Map<string, CachedAudio>();
 
 // Safari only lets a page start audio from a tap. Playing silence during the tap unlocks this
 // element, so the next blocks can start after the audio has been fetched, even on a locked phone.
@@ -57,20 +65,36 @@ function unlockAudio() {
   audio.play().catch(() => {});
 }
 
-function forgetAudio() {
-  for (const url of audioUrls.values()) void url.then(URL.revokeObjectURL, () => {});
-  audioUrls.clear();
+function evictAudio() {
+  let total = 0;
+  for (const cached of cachedAudio.values()) total += cached.bytes;
+  for (const [key, cached] of cachedAudio) {
+    if (total <= maxCachedBytes) return;
+    cachedAudio.delete(key);
+    total -= cached.bytes;
+    void cached.url.then(URL.revokeObjectURL);
+  }
 }
 
 function audioFor(playback: Playback, index: number) {
   const key = `${playback.messageId}:${index}`;
-  let url = audioUrls.get(key);
-  if (!url) {
-    url = api.speech(playback.messageId, playback.blocks[index]!).then(URL.createObjectURL);
-    audioUrls.set(key, url);
-    url.catch(() => audioUrls.delete(key));
+  const cached = cachedAudio.get(key);
+  if (cached) {
+    cachedAudio.delete(key);
+    cachedAudio.set(key, cached);
+    return cached.url;
   }
-  return url;
+  const entry: CachedAudio = {
+    bytes: 0,
+    url: api.speech(playback.messageId, playback.blocks[index]!).then((audio) => {
+      entry.bytes = audio.size;
+      evictAudio();
+      return URL.createObjectURL(audio);
+    }),
+  };
+  cachedAudio.set(key, entry);
+  entry.url.catch(() => cachedAudio.delete(key));
+  return entry.url;
 }
 
 // A negative position counts back from the end of the block.
@@ -104,12 +128,15 @@ async function load(index: number, position = 0) {
 
 export function playFrom(messageId: string, blocks: SpeechBlock[], index: number) {
   unlockAudio();
-  if (speech.playback?.messageId !== messageId) {
-    forgetAudio();
-    setMediaMetadata();
-  }
+  if (speech.playback?.messageId !== messageId) setMediaMetadata();
   speech.playback = { messageId, blocks, index };
   void load(index);
+}
+
+export function playBlock(messageId: string, blocks: SpeechBlock[], index: number) {
+  const playback = speech.playback;
+  if (playback?.messageId === messageId && playback.index === index) togglePause();
+  else playFrom(messageId, blocks, index);
 }
 
 export function togglePause() {
@@ -123,7 +150,6 @@ export function stopSpeech() {
   audio.pause();
   audio.removeAttribute('src');
   audio.load();
-  forgetAudio();
   Object.assign(speech, {
     playback: null,
     playing: false,

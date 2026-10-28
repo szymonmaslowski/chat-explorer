@@ -147,7 +147,16 @@ blockquote {
   }
 }
 
-/* The block being read aloud. */
+/* A block picked with a tap, and the block being read aloud. */
+.picked {
+  border-radius: 4px;
+  box-shadow: 0 0 0 4px var(--surface-muted);
+}
+
+.picked:not(pre) {
+  background: var(--surface-muted);
+}
+
 .speaking {
   border-radius: 4px;
   box-shadow: 0 0 0 4px var(--accent-soft);

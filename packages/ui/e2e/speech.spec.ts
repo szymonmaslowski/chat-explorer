@@ -1,5 +1,10 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { openSeededExploration } from './helpers';
+
+async function playFrom(page: Page, block: Locator) {
+  await block.click();
+  await page.getByRole('button', { name: 'Read aloud from here' }).click();
+}
 
 test('reads an answer aloud block by block', async ({ page }) => {
   await openSeededExploration(page);
@@ -7,7 +12,7 @@ test('reads an answer aloud block by block', async ({ page }) => {
   const player = page.getByRole('region', { name: 'Reading aloud' });
   const paragraph = (text: string) => answer.locator('.content p', { hasText: text });
 
-  await answer.getByRole('button', { name: 'Read aloud from block 2' }).click();
+  await playFrom(page, paragraph('In-memory cache'));
   await expect(player.locator('.block-count')).toHaveText('2/5');
   await expect(paragraph('In-memory cache')).toHaveClass('speaking');
   await expect(player.locator('.time')).toHaveText(/^0:00 \/ 0:\d[1-9]$|^0:00 \/ 0:[1-9]\d$/);
@@ -39,6 +44,15 @@ test('reads an answer aloud block by block', async ({ page }) => {
   await expect(player).toHaveCount(0);
   await expect(answer.locator('.speaking')).toHaveCount(0);
 
+  const speechRequests: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().endsWith('/api/speech')) speechRequests.push(request.url());
+  });
+  await playFrom(page, paragraph('In-memory cache'));
+  await expect(player.locator('.time')).not.toHaveText('…');
+  expect(speechRequests).toEqual([]);
+  await player.getByRole('button', { name: 'Stop reading' }).click();
+
   await page.reload();
   await page
     .locator('.message.assistant')
@@ -57,13 +71,37 @@ test('continues into the next block and stops at the end of the answer', async (
   const answer = page.locator('.message.assistant').first();
   const player = page.getByRole('region', { name: 'Reading aloud' });
 
-  await answer.getByRole('button', { name: 'Read aloud from block 4' }).click();
+  await playFrom(page, answer.locator('.content p').nth(3));
   await expect(player.locator('.time')).not.toHaveText('…');
   const duration = Number((await player.getByRole('slider').getAttribute('max')) ?? 0);
   await player.getByRole('slider').fill(Math.max(0, duration - 1).toFixed(1));
   await expect(player.locator('.block-count')).toHaveText('5/5', { timeout: 10_000 });
   await expect(answer.locator('.content p').last()).toHaveClass('speaking');
   await expect(player).toHaveCount(0, { timeout: 20_000 });
+});
+
+test('a tapped block offers a comment on the whole block', async ({ page }) => {
+  await openSeededExploration(page);
+  const block = page.locator('.message.assistant .content p', { hasText: 'HTTP caching.' });
+  const comment = page.getByRole('button', { name: 'Comment', exact: true });
+
+  await block.click({ position: { x: 40, y: 8 } });
+  await expect(block).toHaveClass('picked');
+  await expect(page.getByRole('button', { name: 'Read aloud from here' })).toBeVisible();
+  await block.click({ position: { x: 40, y: 8 } });
+  await expect(block).not.toHaveClass('picked');
+  await expect(comment).toHaveCount(0);
+
+  await block.click({ position: { x: 40, y: 8 } });
+  await comment.click();
+  await expect(page.locator('.comment-editor')).toContainText(
+    "you can only purge it through the CDN's API.",
+  );
+  await expect(block).toHaveClass('picked');
+  await page.getByPlaceholder('Your comment').fill('Which CDNs?');
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await expect(page.locator('.comment-card.draft', { hasText: 'Which CDNs?' })).toBeVisible();
+  await expect(block).not.toHaveClass('picked');
 });
 
 test('announces code instead of reading it', async ({ page }) => {

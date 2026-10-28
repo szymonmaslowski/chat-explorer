@@ -33,7 +33,7 @@ or permanently, from inside Claude Code:
 
 In a Claude Code session, run `/explore-chat`. It imports the conversation so far and opens it in the browser. Claude then waits for you there.
 
-- **Comment:** select text in a message and click **Comment**. Tick **Fork** to start a new branch from it, or leave it unticked to continue the current one.
+- **Comment:** select text in a message, or tap a paragraph, and click **Comment**. Tick **Fork** to start a new branch from it, or leave it unticked to continue the current one.
 - **Reply:** write in the box at the bottom. **Submit** sends your comments and message together: each fork comment becomes a new fork, and the inline comments and message become one reply in the current fork.
 - **Queue:** if Claude is still answering, or no session is attached, your submission waits in a queue and you can cancel it.
 - **Map:** the **Map** link shows the tree of forks. `[` and `]` go back and forward.
@@ -95,7 +95,7 @@ chat-explorer dictation install
 
 ### Read aloud
 
-**Listen** next to an answer reads it aloud, and the ▶ beside each paragraph, list item or code block starts from there. The player above the reply box has play/pause, 5 seconds back and forward, previous and next block, and stop. With the chain button on, the next block starts when one ends; reading stops at the end of the answer. The block being read is highlighted and kept a little above the middle of the screen. On the iPhone the lock screen controls work too.
+**Listen** next to an answer reads it aloud. Tap a paragraph, list item or code block to pick it: **Play** reads from there, **Comment** comments on the whole block. Selecting text still offers **Comment** for the selection. The player above the reply box has play/pause, 5 seconds back and forward, previous and next block, and stop. With the chain button on, the next block starts when one ends; reading stops at the end of the answer. The block being read is highlighted and kept a little above the middle of the screen. On the iPhone the lock screen controls work too.
 
 - The Mac reads with its own voices (`say`), in the language it detects for the answer. For a better voice, download a Premium or Enhanced one in System Settings → Accessibility → Spoken Content → System voice → Manage Voices. The best installed voice for the language is picked.
 - Code, diagrams and tables are announced ("Code block, TypeScript, 12 lines") instead of read.

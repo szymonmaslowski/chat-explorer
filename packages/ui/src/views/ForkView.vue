@@ -190,12 +190,6 @@ watch(
   background: var(--background);
 }
 
-/* Covers the read-aloud buttons in the left margin as they scroll under the bars. */
-.top,
-.dock {
-  box-shadow: -2.5rem 0 0 var(--background);
-}
-
 .fork-title {
   font-size: 1.35rem;
   margin: 1.25rem 0 0.5rem;
@@ -203,6 +197,7 @@ watch(
 
 .conversation {
   position: relative;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .conversation :deep(.message) {
