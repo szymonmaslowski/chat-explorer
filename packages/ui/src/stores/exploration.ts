@@ -97,6 +97,9 @@ export function applyEvent(state: ExplorationState, event: ExplorationEvent) {
   }
 }
 
+const firstRetryMs = 1_000;
+const maxRetryMs = 30_000;
+
 function applySnapshot(state: ExplorationState, snapshot: Snapshot) {
   state.exploration = snapshot.exploration;
   state.forks = byId(snapshot.forks);
@@ -135,26 +138,59 @@ function createExplorationStore(explorationId: string) {
   };
 
   // Every (re)connect reloads the snapshot, so events missed while disconnected are never replayed.
-  const source = new EventSource(`/api/explorations/${explorationId}/events`);
-  source.addEventListener('ready', () => {
-    state.connected = true;
-    void load();
-  });
-  // EventSource reports the 404 of a missing exploration only as an error, and keeps retrying.
-  source.addEventListener('error', () => {
-    state.connected = false;
-    if (state.status !== 'loading') return;
-    void load().then(() => {
-      if (state.status === 'missing') source.close();
+  let source: EventSource;
+  let retryMs = firstRetryMs;
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
+  let closed = false;
+
+  // EventSource retries a dropped connection by itself, but gives up for good when an answer is
+  // not an event stream, such as the proxy's 502 while the daemon restarts. Then a new one is opened.
+  const reconnect = () => {
+    clearTimeout(retryTimer);
+    if (closed || source.readyState !== EventSource.CLOSED) return;
+    source = connect();
+  };
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') reconnect();
+  };
+  document.addEventListener('visibilitychange', onVisible);
+
+  function connect() {
+    const next = new EventSource(`/api/explorations/${explorationId}/events`);
+    next.addEventListener('ready', () => {
+      retryMs = firstRetryMs;
+      state.connected = true;
+      void load();
     });
-  });
-  for (const type of eventTypes) {
-    source.addEventListener(type, (message) => {
-      applyEvent(state, JSON.parse((message as MessageEvent<string>).data));
+    // EventSource reports the 404 of a missing exploration only as an error.
+    next.addEventListener('error', () => {
+      state.connected = false;
+      if (state.status === 'loading') {
+        void load().then(() => {
+          if (state.status === 'missing') close();
+        });
+      }
+      if (next.readyState !== EventSource.CLOSED) return;
+      retryTimer = setTimeout(reconnect, retryMs);
+      retryMs = Math.min(retryMs * 2, maxRetryMs);
     });
+    for (const type of eventTypes) {
+      next.addEventListener(type, (message) => {
+        applyEvent(state, JSON.parse((message as MessageEvent<string>).data));
+      });
+    }
+    return next;
   }
 
-  return { state, close: () => source.close() };
+  function close() {
+    closed = true;
+    clearTimeout(retryTimer);
+    document.removeEventListener('visibilitychange', onVisible);
+    source.close();
+  }
+
+  source = connect();
+  return { state, close };
 }
 
 let active: ReturnType<typeof createExplorationStore> | null = null;
