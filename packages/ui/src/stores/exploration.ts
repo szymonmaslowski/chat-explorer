@@ -98,6 +98,23 @@ export function applyEvent(state: ExplorationState, event: ExplorationEvent) {
   }
 }
 
+const changesComment = (change: Change, commentId: string) =>
+  change.type === 'comment.create'
+    ? change.comment.id === commentId
+    : (change.type === 'comment.update' || change.type === 'comment.delete') &&
+      change.commentId === commentId;
+
+// The daemon's notice about a comment can arrive after a later change to it was made here, such
+// as "created, being written" after Save. The changes it has not confirmed yet go on top again,
+// so the notice cannot undo them.
+export function applyServerEvent(state: ExplorationState, event: ExplorationEvent) {
+  applyEvent(state, event);
+  if (event.type !== 'comment.created' && event.type !== 'comment.updated') return;
+  for (const change of outbox.changes.value) {
+    if (changesComment(change, event.comment.id)) applyChange(state, change);
+  }
+}
+
 const firstRetryMs = 1_000;
 const maxRetryMs = 30_000;
 
@@ -253,7 +270,7 @@ function createExplorationStore(explorationId: string) {
     });
     for (const type of eventTypes) {
       next.addEventListener(type, (message) => {
-        applyEvent(state, JSON.parse((message as MessageEvent<string>).data));
+        applyServerEvent(state, JSON.parse((message as MessageEvent<string>).data));
       });
     }
     return next;
