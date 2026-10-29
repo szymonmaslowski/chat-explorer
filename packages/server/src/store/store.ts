@@ -44,6 +44,8 @@ const clearAttachment =
 export interface NewMessage {
   role: Role;
   content: string;
+  // When it was written, for a message imported from a transcript.
+  createdAt?: number;
 }
 
 export interface UserMessageText {
@@ -128,7 +130,13 @@ export class ChatStore {
       );
       let mainFork = this.requireForkRow(mainForkId);
       for (const message of options.messages ?? []) {
-        mainFork = this.appendMessage(mainFork, message.role, message.content, 'import').fork;
+        mainFork = this.appendMessage(
+          mainFork,
+          message.role,
+          message.content,
+          'import',
+          message.createdAt,
+        ).fork;
       }
     });
     return {
@@ -1058,9 +1066,15 @@ export class ChatStore {
     return { message, fork };
   }
 
-  private appendMessage(fork: ForkRow, role: Role, content: string, source: MessageSource) {
+  private appendMessage(
+    fork: ForkRow,
+    role: Role,
+    content: string,
+    source: MessageSource,
+    createdAt = this.now(),
+  ) {
     const id = newId();
-    const createdAt = this.now();
+    const updatedAt = this.now();
     this.db.run(
       `INSERT INTO messages (id, exploration_id, fork_id, parent_id, role, content, source, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -1076,12 +1090,12 @@ export class ChatStore {
     this.db.run(
       'UPDATE forks SET tip_message_id = ?, updated_at = ? WHERE id = ?',
       id,
-      createdAt,
+      updatedAt,
       fork.id,
     );
     this.db.run(
       'UPDATE explorations SET updated_at = ? WHERE id = ?',
-      createdAt,
+      updatedAt,
       fork.exploration_id,
     );
     return { message: this.requireMessageRow(id), fork: this.requireForkRow(fork.id) };

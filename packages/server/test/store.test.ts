@@ -507,3 +507,22 @@ describe('changes the page queued while offline', () => {
     ).toThrow(expect.objectContaining({ code: 'invalid' }));
   });
 });
+
+describe('imported messages', () => {
+  it('keep the time they were written, and the chat counts as updated by the import', () => {
+    const { store, clock } = createTestStore();
+    const written = clock.now - 3 * 24 * 60 * 60 * 1000;
+    const { exploration } = store.createExploration({
+      messages: [
+        { role: 'user', content: 'Old question', createdAt: written },
+        { role: 'assistant', content: 'Old answer', createdAt: written + 60_000 },
+      ],
+    });
+    const snapshot = store.snapshot(exploration.id);
+    expect(snapshot.messages.map(({ createdAt }) => createdAt)).toEqual([
+      written,
+      written + 60_000,
+    ]);
+    expect(snapshot.exploration.updatedAt).toBe(clock.now);
+  });
+});

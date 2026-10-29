@@ -2,6 +2,7 @@
 import type { Comment, Message, MessageFile } from '@shared/types';
 import { computed, onMounted, ref, shallowRef, watch } from 'vue';
 import { renderMarkdown } from '@shared/markdown';
+import { formatDateTime } from '../lib/date-time';
 import { bringToReadingLine } from '../lib/reading-line';
 import { speechBlocks, type SpokenElement } from '../lib/speech-blocks';
 import { checkSpeechAvailable, playFrom, speech, togglePause } from '../stores/speech';
@@ -71,6 +72,9 @@ onMounted(findBlocks);
   >
     <header class="role">
       {{ message.role === 'user' ? 'You' : 'Claude' }}
+      <time class="time" :datetime="new Date(message.createdAt).toISOString()">
+        {{ formatDateTime(message.createdAt) }}
+      </time>
       <button
         v-if="speakable"
         type="button"
@@ -145,6 +149,13 @@ onMounted(findBlocks);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-muted);
+}
+
+.time {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  font-variant-numeric: tabular-nums;
 }
 
 .listen {

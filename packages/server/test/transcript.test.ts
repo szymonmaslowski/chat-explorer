@@ -76,6 +76,34 @@ describe('parseTranscript', () => {
     });
   });
 
+  it('keeps when each message was written, an answer in parts at its last part', () => {
+    const t = transcript();
+    t.user('Question', { timestamp: '2026-10-26T22:32:25.366Z' });
+    t.raw({
+      type: 'assistant',
+      uuid: 'a1',
+      parentUuid: 'u1',
+      timestamp: '2026-10-26T22:32:40.000Z',
+      message: { role: 'assistant', content: [text('First part.')] },
+    });
+    t.raw({
+      type: 'assistant',
+      uuid: 'a2',
+      parentUuid: 'a1',
+      timestamp: '2026-10-26T22:33:05.000Z',
+      message: { role: 'assistant', content: [text('Second part.')] },
+    });
+
+    expect(parseTranscript(t.text()).messages).toEqual([
+      { role: 'user', content: 'Question', createdAt: Date.parse('2026-10-26T22:32:25.366Z') },
+      {
+        role: 'assistant',
+        content: 'First part.\n\nSecond part.',
+        createdAt: Date.parse('2026-10-26T22:33:05.000Z'),
+      },
+    ]);
+  });
+
   it('follows the current branch after a rewind', () => {
     const t = transcript();
     const first = t.user('Question');

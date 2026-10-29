@@ -118,3 +118,17 @@ test('opens the fork created by a submitted fork comment', async ({ page }) => {
   await card.click();
   await expect(page.locator('.fork-title')).toHaveText('Purging cached responses on a CDN');
 });
+
+test('shows the date and time of every message', async ({ page }) => {
+  await openSeededExploration(page);
+  const time = page.locator('.message .role time').first();
+  await expect(time).toHaveAttribute('datetime', /^\d{4}-\d{2}-\d{2}T/);
+  await expect(time).toHaveText(/\d{4}.*\d{1,2}:\d{2}/);
+  await expect(page.locator('.message .role time')).toHaveCount(
+    await page.locator('.message').count(),
+  );
+  if (process.env.TIME_SHOTS) {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: `${process.env.TIME_SHOTS}/message-times-phone.png` });
+  }
+});

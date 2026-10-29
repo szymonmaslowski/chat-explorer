@@ -13,6 +13,7 @@ type ContentBlock =
 interface TranscriptRecord {
   type: string;
   uuid?: string;
+  timestamp?: string;
   parentUuid?: string | null;
   logicalParentUuid?: string;
   subtype?: string;
@@ -105,21 +106,32 @@ function truncateAtExploreChat(chain: TranscriptRecord[]) {
   return invocation === -1 ? chain : chain.slice(0, invocation);
 }
 
+const timeOf = (record: TranscriptRecord) => {
+  const time = record.timestamp ? Date.parse(record.timestamp) : Number.NaN;
+  return Number.isNaN(time) ? undefined : time;
+};
+
+// An answer written in several parts takes the time of its last part, as a live answer is stored
+// once it is complete.
 function toMessages(chain: TranscriptRecord[]) {
   const messages: NewMessage[] = [];
   for (const record of chain) {
     if (record.isSidechain) continue;
+    const createdAt = timeOf(record);
     const userText = userTextOf(record);
     if (userText) {
-      messages.push({ role: 'user', content: userText });
+      messages.push({ role: 'user', content: userText, createdAt });
       continue;
     }
     const assistantText = assistantTextOf(record);
     if (!assistantText) continue;
     const previous = messages.at(-1);
-    if (previous?.role === 'assistant')
+    if (previous?.role === 'assistant') {
       previous.content = `${previous.content}\n\n${assistantText}`;
-    else messages.push({ role: 'assistant', content: assistantText });
+      previous.createdAt = createdAt ?? previous.createdAt;
+    } else {
+      messages.push({ role: 'assistant', content: assistantText, createdAt });
+    }
   }
   return messages;
 }
