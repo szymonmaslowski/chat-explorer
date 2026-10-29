@@ -3,9 +3,11 @@ import type { Comment } from '@shared/types';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { api } from '../api';
 import { useAutosave } from '../composables/useAutosave';
+import { useExpandedArea } from '../composables/useExpandedArea';
 import { useProximityFade } from '../composables/useProximityFade';
 import { insertAtCursor } from '../lib/insert-text';
 import DictationButton from './DictationButton.vue';
+import ExpandButton from './ExpandButton.vue';
 
 // Without a placement the card is listed in the page flow, on narrow and touch screens.
 const props = defineProps<{
@@ -25,6 +27,11 @@ const draftBody = ref(props.comment.editBody ?? '');
 const editor = ref<HTMLTextAreaElement | null>(null);
 const insertDictation = (text: string) => insertAtCursor(editor.value, draftBody, text);
 const busy = ref(false);
+const expanded = ref(false);
+const expandedStyle = useExpandedArea(expanded, { coverDock: false, marginPx: 8 });
+watch(editing, (isEditing) => {
+  if (!isEditing) expanded.value = false;
+});
 const isDraft = computed(() => props.comment.status === 'draft');
 const { opacity, interactive } = useProximityFade(
   card,
@@ -34,7 +41,9 @@ const { opacity, interactive } = useProximityFade(
 let resizeObserver: ResizeObserver | null = null;
 onMounted(() => {
   resizeObserver = new ResizeObserver(([entry]) => {
-    if (entry) emit('measure', entry.borderBoxSize[0]?.blockSize ?? entry.contentRect.height);
+    // Expanded, the card floats over the page, so the cards below keep their places.
+    if (entry && !expanded.value)
+      emit('measure', entry.borderBoxSize[0]?.blockSize ?? entry.contentRect.height);
   });
   if (card.value) resizeObserver.observe(card.value);
 });
@@ -113,15 +122,16 @@ function onEditorKeydown(event: KeyboardEvent) {
   <div
     ref="card"
     class="comment-card"
-    :class="[comment.type, comment.status, { listed: !placement }]"
+    :class="[comment.type, comment.status, { listed: !placement, expanded }]"
     :style="
-      placement && {
+      expandedStyle ??
+      (placement && {
         top: `${placement.top}px`,
         left: `${placement.left}px`,
         width: `${placement.width}px`,
         opacity,
         pointerEvents: interactive ? 'auto' : 'none',
-      }
+      })
     "
     @click="comment.status === 'submitted' && emit('open', comment)"
   >
@@ -129,6 +139,7 @@ function onEditorKeydown(event: KeyboardEvent) {
       <textarea ref="editor" v-model="draftBody" rows="3" @keydown="onEditorKeydown" />
       <div class="actions">
         <DictationButton :hint="comment.quote" @text="insertDictation" />
+        <ExpandButton v-model="expanded" />
         <span class="spacer" />
         <button type="button" :disabled="busy" @click="cancelEditing">Cancel</button>
         <button type="button" class="primary" :disabled="busy || !draftBody.trim()" @click="save">
@@ -187,6 +198,18 @@ function onEditorKeydown(event: KeyboardEvent) {
   position: static;
   box-shadow: none;
   margin-top: 0.4rem;
+}
+
+.comment-card.expanded {
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  margin-top: 0;
+}
+
+.expanded textarea {
+  flex: 1;
+  resize: none;
 }
 
 .comment-card.fork {

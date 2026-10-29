@@ -1,5 +1,7 @@
 <script setup lang="ts">
-defineProps<{ name: 'play' | 'pause' | 'stop' | 'previous' | 'next' | 'chain' }>();
+defineProps<{
+  name: 'play' | 'pause' | 'stop' | 'previous' | 'next' | 'chain' | 'expand' | 'shrink';
+}>();
 </script>
 
 <template>
@@ -9,6 +11,8 @@ defineProps<{ name: 'play' | 'pause' | 'stop' | 'previous' | 'next' | 'chain' }>
     <rect v-else-if="name === 'stop'" x="6" y="6" width="12" height="12" rx="1" />
     <path v-else-if="name === 'previous'" d="M6 5h2v14H6zM20 5v14L9 12z" />
     <path v-else-if="name === 'next'" d="M16 5h2v14h-2zM4 5v14l11-7z" />
+    <path v-else-if="name === 'expand'" d="M14 4h6v6M20 4l-6 6M10 20H4v-6M4 20l6-6" />
+    <path v-else-if="name === 'shrink'" d="M20 4l-6 6M14 5v5h5M4 20l6-6M10 19v-5H5" />
     <path
       v-else
       d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"
@@ -23,7 +27,9 @@ defineProps<{ name: 'play' | 'pause' | 'stop' | 'previous' | 'next' | 'chain' }>
   fill: currentColor;
 }
 
-.media-icon.chain {
+.media-icon.chain,
+.media-icon.expand,
+.media-icon.shrink {
   fill: none;
   stroke: currentColor;
   stroke-width: 2;

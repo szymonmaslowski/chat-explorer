@@ -514,6 +514,14 @@ Nothing typed is lost when the page closes, which iOS does to a home-screen app 
 - Its "↳ Fork" link under the parent's message goes, and the map hides it unless **Show archived forks** is ticked. The map ticks it by itself when opened from an archived fork. The chat list's fork count leaves archived forks out.
 - The archived fork shows "Fork archived, read only." with **Restore**; a fork below it says which fork it was archived with.
 
+### 18. Expanded text boxes
+
+An expand button next to dictation in the reply box, the new-comment editor and a comment card being edited. Expanded, the box is `position: fixed` over the free space and its textarea takes all the height (`useExpandedArea`):
+
+- A comment spans from the bottom of the sticky header to the top of the dock, the reply box from the header to the bottom of the screen. Both take the width of the dock.
+- On a phone the area stops at the top of the keyboard (`visualViewport`), and the button keeps the focus in the text box so the keyboard stays up.
+- An expanded comment card stops reporting its height, so the cards below it keep their places. The reply box shrinks after Submit, a comment when its editor closes.
+
 ## Later
 
 - Hard forks: each fork's answer written by a subagent that only gets `read_fork` for that fork.

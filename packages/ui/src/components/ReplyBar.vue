@@ -3,12 +3,14 @@ import type { Comment, ReplyDraft } from '@shared/types';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { api } from '../api';
 import { useAutosave } from '../composables/useAutosave';
+import { useExpandedArea } from '../composables/useExpandedArea';
 import { insertAtCursor } from '../lib/insert-text';
 import { transferredFiles } from '../lib/transferred-files';
 import { replyFilesOwner, restoreFileDrafts, useFileDrafts } from '../stores/file-drafts';
 import { replyDrafts } from '../stores/reply-drafts';
 import AttachButton from './AttachButton.vue';
 import DictationButton from './DictationButton.vue';
+import ExpandButton from './ExpandButton.vue';
 import FileDraftList from './FileDraftList.vue';
 
 const props = defineProps<{
@@ -23,6 +25,8 @@ const emit = defineEmits<{ submitted: [] }>();
 const sending = ref(false);
 const error = ref('');
 const textarea = ref<HTMLTextAreaElement | null>(null);
+const expanded = ref(false);
+const expandedStyle = useExpandedArea(expanded, { coverDock: true, marginPx: 0 });
 
 const text = computed({
   get: () => replyDrafts.get(props.forkId),
@@ -158,6 +162,7 @@ async function submit() {
     text.value = '';
     newFork.value = false;
     files.clear();
+    expanded.value = false;
     emit('submitted');
   } catch {
     error.value = 'Could not send. Is the chat-explorer daemon running?';
@@ -188,7 +193,8 @@ function onKeydown(event: KeyboardEvent) {
 <template>
   <form
     class="reply-bar"
-    :class="{ 'new-fork': newFork }"
+    :class="{ 'new-fork': newFork, expanded }"
+    :style="expandedStyle ?? undefined"
     @submit.prevent="submit"
     @dragover.prevent
     @drop.prevent="files.add(transferredFiles($event.dataTransfer))"
@@ -219,6 +225,7 @@ function onKeydown(event: KeyboardEvent) {
       </label>
       <AttachButton @files="files.add" />
       <DictationButton :hint="hint" @text="insertDictation" />
+      <ExpandButton v-model="expanded" />
       <span class="spacer" />
       <span v-if="error" class="error">{{ error }}</span>
       <span v-else-if="summary" class="summary muted">{{ summary }}</span>
@@ -233,6 +240,18 @@ function onKeydown(event: KeyboardEvent) {
   border-top: 1px solid var(--border);
   display: grid;
   gap: 0.5rem;
+}
+
+.reply-bar.expanded {
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  background: var(--background);
+}
+
+.expanded textarea {
+  flex: 1;
+  resize: none;
 }
 
 .actions {

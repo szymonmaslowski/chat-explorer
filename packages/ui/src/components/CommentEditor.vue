@@ -3,9 +3,11 @@ import type { CommentType } from '@shared/types';
 import { onMounted, ref, watch } from 'vue';
 import { api } from '../api';
 import { useAutosave } from '../composables/useAutosave';
+import { useExpandedArea } from '../composables/useExpandedArea';
 import type { TextAnchor } from '../lib/anchoring';
 import { insertAtCursor } from '../lib/insert-text';
 import DictationButton from './DictationButton.vue';
+import ExpandButton from './ExpandButton.vue';
 
 const props = defineProps<{
   explorationId: string;
@@ -22,6 +24,8 @@ const body = ref('');
 const asFork = ref(false);
 const error = ref('');
 const textarea = ref<HTMLTextAreaElement | null>(null);
+const expanded = ref(false);
+const expandedStyle = useExpandedArea(expanded, { coverDock: false, marginPx: 8 });
 const insertDictation = (text: string) => insertAtCursor(textarea.value, body, text);
 const type = (): CommentType => (asFork.value ? 'fork' : 'inline');
 const target = () => ({
@@ -85,8 +89,8 @@ function onKeydown(event: KeyboardEvent) {
 <template>
   <div
     class="comment-editor"
-    :class="{ fork: asFork }"
-    :style="{ top: `${top}px`, left: `${left}px`, width: `${width}px` }"
+    :class="{ fork: asFork, expanded }"
+    :style="expandedStyle ?? { top: `${top}px`, left: `${left}px`, width: `${width}px` }"
   >
     <p class="quote">{{ anchor.quote }}</p>
     <textarea
@@ -99,6 +103,7 @@ function onKeydown(event: KeyboardEvent) {
     <div class="actions">
       <label><input v-model="asFork" type="checkbox" /> Fork</label>
       <DictationButton :hint="anchor.quote" @text="insertDictation" />
+      <ExpandButton v-model="expanded" />
       <span class="spacer" />
       <span v-if="error" class="error" role="alert">{{ error }}</span>
       <button type="button" @click="cancel">Cancel</button>
@@ -120,6 +125,19 @@ function onKeydown(event: KeyboardEvent) {
   box-shadow: var(--shadow);
   padding: 0.5rem;
   font-size: 0.85rem;
+}
+
+.comment-editor.expanded {
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  transform: none;
+  margin-top: 0;
+}
+
+.expanded textarea {
+  flex: 1;
+  resize: none;
 }
 
 .comment-editor.fork {
