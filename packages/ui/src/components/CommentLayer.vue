@@ -5,6 +5,8 @@ import { useRoute, useRouter } from 'vue-router';
 import { anchorOfRange, clampToRoot, locateAnchor, type TextAnchor } from '../lib/anchoring';
 import { layoutCards } from '../lib/card-layout';
 import { pointer } from '../lib/pointer';
+import { useCopied } from '../composables/useCopied';
+import { blockClipboardText } from '../lib/clipboard';
 import { blockIndexAt, blockTextRange, speechBlocks } from '../lib/speech-blocks';
 import { playBlock, speech } from '../stores/speech';
 import { useMediaQuery } from '../composables/useMediaQuery';
@@ -29,8 +31,9 @@ const flashMs = 1_400;
 const selectionSettleMs = 300;
 // Keeps the button clear of the selection handles on touch screens.
 const touchButtonOffset = 24;
-const buttonWidth = { mouse: 84, touch: 124 };
-const playButtonWidth = { mouse: 72, touch: 110 };
+// A round icon button and the gap after it; the height matches .comment-button.
+const actionButtonWidth = { mouse: 38, touch: 50 };
+const actionButtonHeight = { mouse: 32, touch: 44 };
 
 const route = useRoute();
 const coarsePointer = useMediaQuery('(pointer: coarse)');
@@ -54,6 +57,7 @@ const selection = ref<ActionsPlacement | null>(null);
 // A block picked with a tap: commented on as a whole, or read aloud from.
 const picked = ref<(ActionsPlacement & { blockIndex: number; speakable: boolean }) | null>(null);
 let pickedElement: HTMLElement | null = null;
+const { copied, copy } = useCopied();
 const actions = computed(() => picked.value ?? selection.value);
 const commentable = computed(() => actions.value !== null && !props.readOnly);
 const playable = computed(() => picked.value?.speakable === true);
@@ -239,10 +243,16 @@ function placeActions(
   const rects = range.getClientRects();
   const lastLine = relative(rects[rects.length - 1] ?? range.getBoundingClientRect());
   const firstLine = relative(firstLineRect(range));
+  const height = coarsePointer.value ? actionButtonHeight.touch : actionButtonHeight.mouse;
+  const below = lastLine.bottom + 4 + (clearHandles && coarsePointer.value ? touchButtonOffset : 0);
+  // The reply box covers what is below it, so at the end of the page the buttons go above the text.
+  const dockTop = document.querySelector('[data-dock]')?.getBoundingClientRect().top ?? Infinity;
+  const layerTop = layer.value!.getBoundingClientRect().top;
+  const underDock = layerTop + below + height > dockTop;
   return {
     messageId: root.dataset.anchorRoot!,
     anchor,
-    buttonTop: lastLine.bottom + 4 + (clearHandles && coarsePointer.value ? touchButtonOffset : 0),
+    buttonTop: underDock ? firstLine.top - 4 - height : below,
     buttonLeft: Math.max(0, Math.min(lastLine.right + 6, layerWidth.value - width)),
     lineTop: firstLine.top,
     lineLeft: firstLine.left,
@@ -262,7 +272,7 @@ function showCommentButton() {
     selection.value = null;
     return;
   }
-  const width = coarsePointer.value ? buttonWidth.touch : buttonWidth.mouse;
+  const width = coarsePointer.value ? actionButtonWidth.touch : actionButtonWidth.mouse;
   selection.value = placeActions(root, clampToRoot(root, selected), width, true);
   if (selection.value) unpick();
 }
@@ -280,13 +290,13 @@ function unpick() {
 
 function pick(root: HTMLElement, element: HTMLElement, blockIndex: number) {
   const speakable = root.dataset.speakable !== undefined;
-  if (props.readOnly && !speakable) return;
+  const buttonCount = 1 + (props.readOnly ? 0 : 1) + (speakable ? 1 : 0);
   const width =
-    (props.readOnly ? 0 : coarsePointer.value ? buttonWidth.touch : buttonWidth.mouse) +
-    (speakable ? (coarsePointer.value ? playButtonWidth.touch : playButtonWidth.mouse) : 0);
+    buttonCount * (coarsePointer.value ? actionButtonWidth.touch : actionButtonWidth.mouse);
   const placement = placeActions(root, blockTextRange(element), width, false);
   if (!placement) return;
   picked.value = { ...placement, blockIndex, speakable };
+  copied.value = false;
   highlightPicked(element);
 }
 
@@ -320,6 +330,8 @@ function playPicked() {
   );
   unpick();
 }
+
+const copyPicked = () => pickedElement && copy(blockClipboardText(pickedElement));
 
 // Touch and keyboard selections have no mouseup, so the button follows a selection that settled.
 function onSelectionChange() {
@@ -442,22 +454,35 @@ watch(
         @pointerdown.prevent
         @mousedown.prevent
         @touchstart.prevent
+        aria-label="Comment"
         @pointerup="openEditor"
         @click="openEditor"
       >
-        Comment
+        <MediaIcon name="comment" />
       </button>
       <button
         v-if="playable"
         type="button"
         class="comment-button play-button"
         :aria-label="pickedPlaying ? 'Pause' : 'Read aloud from here'"
+        :title="pickedPlaying ? 'Pause' : 'Read aloud from here'"
         @pointerdown.prevent
         @mousedown.prevent
         @click="playPicked"
       >
         <MediaIcon :name="pickedPlaying ? 'pause' : 'play'" />
-        {{ pickedPlaying ? 'Pause' : 'Play' }}
+      </button>
+      <button
+        v-if="picked"
+        type="button"
+        class="comment-button"
+        :aria-label="copied ? 'Copied' : 'Copy this block'"
+        :title="copied ? 'Copied' : 'Copy this block'"
+        @pointerdown.prevent
+        @mousedown.prevent
+        @click="copyPicked"
+      >
+        <MediaIcon :name="copied ? 'check' : 'copy'" />
       </button>
     </div>
 
@@ -495,26 +520,27 @@ watch(
 }
 
 .comment-button {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
   border-radius: 999px;
   border-color: var(--text);
   background: var(--text);
   color: var(--background);
   box-shadow: var(--shadow);
-  font-size: 0.8rem;
-  padding: 0.15rem 0.7rem;
-}
-
-.play-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
 }
 
 @media (pointer: coarse) {
   .comment-button {
-    font-size: 1rem;
-    font-weight: 600;
-    padding: 0.6rem 1.3rem;
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .comment-button :deep(.media-icon) {
+    width: 1.25rem;
+    height: 1.25rem;
   }
 }
 </style>

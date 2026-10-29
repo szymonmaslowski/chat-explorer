@@ -2,6 +2,7 @@
 import type { Comment, Message, MessageFile } from '@shared/types';
 import { computed, onMounted, ref, shallowRef, watch } from 'vue';
 import { renderMarkdown } from '@shared/markdown';
+import { useCopied } from '../composables/useCopied';
 import { formatDateTime } from '../lib/date-time';
 import { bringToReadingLine } from '../lib/reading-line';
 import { speechBlocks, type SpokenElement } from '../lib/speech-blocks';
@@ -28,6 +29,9 @@ const currentIndex = computed(() =>
 );
 
 void checkSpeechAvailable();
+
+const { copied, copy } = useCopied();
+const copyMessage = () => copy({ plain: props.message.content, html: html.value });
 
 function findBlocks() {
   blocks.value =
@@ -84,6 +88,17 @@ onMounted(findBlocks);
       >
         <MediaIcon :name="currentIndex !== -1 && speech.playing ? 'pause' : 'play'" />
         Listen
+      </button>
+      <button
+        v-if="message.role === 'assistant' && message.content"
+        type="button"
+        class="listen"
+        :aria-label="copied ? 'Copied' : 'Copy the answer'"
+        title="Copy the whole answer"
+        @click="copyMessage"
+      >
+        <MediaIcon :name="copied ? 'check' : 'copy'" />
+        {{ copied ? 'Copied' : 'Copy' }}
       </button>
     </header>
     <div v-for="comment in quotedComments" :key="comment.id" class="quoted-comment">
