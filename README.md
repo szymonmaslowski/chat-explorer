@@ -101,9 +101,23 @@ chat-explorer dictation install
 
 **Listen** next to an answer reads it aloud. Tap a paragraph, list item or code block to pick it: **Play** reads from there, **Comment** comments on the whole block. Selecting text still offers **Comment** for the selection. The player above the reply box has play/pause, 5 seconds back and forward, previous and next block, and stop. With the chain button on, the next block starts when one ends; reading stops at the end of the answer. The block being read is highlighted and kept a little above the middle of the screen. On the iPhone the lock screen controls work too.
 
-- The Mac reads with its own voices (`say`), in the language it detects for the answer. For a better voice, download a Premium or Enhanced one in System Settings → Accessibility → Spoken Content → System voice → Manage Voices. The best installed voice for the language is picked, from the next block on.
+The speed button cycles 0.8×, 0.9×, 1×, 1.1× and 1.25×, without changing the pitch, and is remembered per browser.
+
+For a natural voice, install [Chatterbox](https://github.com/resemble-ai/chatterbox), an open-source speech model that runs on your machine:
+
+```
+chat-explorer speech install
+```
+
+- `speech install` needs Python 3.11 to 3.13 (on a Mac: `brew install python@3.13`). It creates a Python environment in `~/.chat-explorer/speech/venv`, installs `chatterbox-mlx` on Apple Silicon or `chatterbox-tts` elsewhere, downloads the Chatterbox Multilingual model (about 3 GB) from Hugging Face into `~/.chat-explorer/speech/huggingface`, and reads one sentence. It needs about 5 GB of disk.
+- The daemon uses Chatterbox as soon as the install finishes, with no restart. It speaks 23 languages, Polish and English among them; an answer in any other language is read with `say`.
+- Chatterbox is slower than playback (on an M2 Max, 25 seconds of speech take about 30 seconds), so the daemon renders every new answer in the background as soon as it arrives. Playing it later is instant. A block nobody rendered yet takes a few seconds before it starts, and pressing Play moves it, and then the rest of its answer, to the front of the queue.
+- While the model is loaded it holds about 5 GB of memory; it stops after 10 minutes without work. It runs on the GPU.
+- Rendered speech is kept in `~/.chat-explorer/speech-cache` up to 1 GB, least recently played removed first.
+- To go back to the Mac voices, set `"speech": { "engine": "say" }` in `config.json` and restart the daemon. `chat-explorer speech uninstall` deletes the Python environment, the model and the rendered speech.
+- Without Chatterbox the Mac reads with its own voices (`say`), in the language it detects for the answer. For a better one, download a Premium or Enhanced voice in System Settings → Accessibility → Spoken Content → System voice → Manage Voices. The best installed voice for the language is picked, from the next block on.
 - Code, diagrams and tables are announced ("Code block, TypeScript, 12 lines") instead of read.
-- macOS only.
+- Language detection uses macOS, so reading aloud works on a Mac only for now. Chatterbox itself also runs on Linux (on the CPU, or an NVIDIA GPU), untested.
 
 ## CLI
 
@@ -142,6 +156,7 @@ chat-explorer dictation install|uninstall   download or delete the Whisper model
 | `idleMinutes`  | `60`       | Stop a background session after this long with no work   |
 | `maxSessions`  | `3`        | Background sessions running at once                      |
 | `dictation`    | see below  | `{ "model": "large-v3-turbo-q5_0", "language": "auto" }` |
+| `speech`       | see below  | `{ "engine": "chatterbox", "cacheMegabytes": 1024 }`     |
 
 The daemon listens on `127.0.0.1` only and rejects requests from other websites. Requests through `publicUrl` are accepted too, so anyone who can reach that address can start Claude sessions on your Mac. Keep it inside your tailnet (`tailscale serve`, not `tailscale funnel`).
 

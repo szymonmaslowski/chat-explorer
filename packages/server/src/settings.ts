@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { z } from 'zod';
 import type { Config } from './config.js';
 import { defaultWhisperModel, whisperModels } from './dictation/models.js';
+import { speechEngineNames } from './speech/engines.js';
 import { claudeModels, defaultClaudeModel } from './shared/models.js';
 
 const settingsSchema = z
@@ -18,6 +19,14 @@ const settingsSchema = z
       .object({
         model: z.enum(whisperModels).default(defaultWhisperModel),
         language: z.string().default('auto'),
+      })
+      .strict()
+      .prefault({}),
+    speech: z
+      .object({
+        // Chatterbox when installed, otherwise the Mac's own voices.
+        engine: z.enum(speechEngineNames).default('chatterbox'),
+        cacheMegabytes: z.number().positive().default(1024),
       })
       .strict()
       .prefault({}),

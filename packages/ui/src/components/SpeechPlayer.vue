@@ -3,8 +3,10 @@ import {
   goToBlock,
   seekTo,
   setChain,
+  setRate,
   skip,
   speech,
+  speechRates,
   speechSkipSeconds,
   stopSpeech,
   togglePause,
@@ -15,6 +17,8 @@ const clock = (seconds: number) => {
   const wholeSeconds = Math.floor(seconds);
   return `${Math.floor(wholeSeconds / 60)}:${String(wholeSeconds % 60).padStart(2, '0')}`;
 };
+
+const nextRate = () => speechRates[(speechRates.indexOf(speech.rate) + 1) % speechRates.length]!;
 
 function onSeek(event: Event) {
   if (event.target instanceof HTMLInputElement) seekTo(Number(event.target.value));
@@ -35,7 +39,7 @@ function onSeek(event: Event) {
         @input="onSeek"
       />
       <span class="time">
-        {{ speech.loading ? '…' : `${clock(speech.currentTime)} / ${clock(speech.duration)}` }}
+        {{ speech.loading ? 'Preparing…' : `${clock(speech.currentTime)} / ${clock(speech.duration)}` }}
       </span>
       <span class="block-count">
         {{ speech.playback.index + 1 }}/{{ speech.playback.blocks.length }}
@@ -84,6 +88,15 @@ function onSeek(event: Event) {
         <MediaIcon name="next" />
       </button>
       <span class="spacer" />
+      <button
+        type="button"
+        class="rate"
+        aria-label="Reading speed"
+        :title="`Reading speed, tap for ${nextRate()}×`"
+        @click="setRate(nextRate())"
+      >
+        {{ speech.rate }}×
+      </button>
       <button
         type="button"
         class="chain"
@@ -141,6 +154,10 @@ function onSeek(event: Event) {
 
 .spacer {
   flex: 1;
+}
+
+.rate {
+  min-width: 3.2rem;
 }
 
 .chain {

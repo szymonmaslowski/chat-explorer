@@ -30,7 +30,7 @@ test('reads an answer aloud block by block', async ({ page }) => {
   await expect(player.locator('.block-count')).toHaveText('3/5');
   await expect(paragraph('Shared cache (Redis')).toHaveClass('speaking');
   await expect(paragraph('In-memory cache')).not.toHaveClass('speaking');
-  await expect(player.locator('.time')).not.toHaveText('…');
+  await expect(player.locator('.time')).not.toHaveText('Preparing…');
 
   await player.getByRole('button', { name: 'Back 5 seconds' }).click();
   await expect(player.locator('.block-count')).toHaveText('2/5');
@@ -39,6 +39,14 @@ test('reads an answer aloud block by block', async ({ page }) => {
   await expect(chain).toHaveAttribute('aria-pressed', 'true');
   await chain.click();
   await expect(chain).toHaveAttribute('aria-pressed', 'false');
+
+  const speed = player.getByRole('button', { name: 'Reading speed' });
+  await expect(speed).toHaveText('1×');
+  await speed.click();
+  await expect(speed).toHaveText('1.1×');
+  await page.reload();
+  await playFrom(page, paragraph('In-memory cache'));
+  await expect(player.getByRole('button', { name: 'Reading speed' })).toHaveText('1.1×');
 
   await player.getByRole('button', { name: 'Stop reading' }).click();
   await expect(player).toHaveCount(0);
@@ -49,7 +57,7 @@ test('reads an answer aloud block by block', async ({ page }) => {
     if (request.url().endsWith('/api/speech')) speechRequests.push(request.url());
   });
   await playFrom(page, paragraph('In-memory cache'));
-  await expect(player.locator('.time')).not.toHaveText('…');
+  await expect(player.locator('.time')).not.toHaveText('Preparing…');
   expect(speechRequests).toEqual([]);
   await player.getByRole('button', { name: 'Stop reading' }).click();
 
@@ -72,7 +80,7 @@ test('continues into the next block and stops at the end of the answer', async (
   const player = page.getByRole('region', { name: 'Reading aloud' });
 
   await playFrom(page, answer.locator('.content p').nth(3));
-  await expect(player.locator('.time')).not.toHaveText('…');
+  await expect(player.locator('.time')).not.toHaveText('Preparing…');
   const duration = Number((await player.getByRole('slider').getAttribute('max')) ?? 0);
   await player.getByRole('slider').fill(Math.max(0, duration - 1).toFixed(1));
   await expect(player.locator('.block-count')).toHaveText('5/5', { timeout: 10_000 });

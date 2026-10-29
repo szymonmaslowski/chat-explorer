@@ -522,6 +522,26 @@ An expand button next to dictation in the reply box, the new-comment editor and 
 - On a phone the area stops at the top of the keyboard (`visualViewport`), and the button keeps the focus in the text box so the keyboard stays up.
 - An expanded comment card stops reporting its height, so the cards below it keep their places. The reply box shrinks after Submit, a comment when its editor closes.
 
+### 19. Natural voice
+
+Chatterbox Multilingual (Resemble AI, MIT) instead of `say`, chosen after listening to samples. Measured on an M2 Max with the same two paragraphs:
+
+| | `say` (Zosia Enhanced, Zoe Premium) | Chatterbox, MLX build |
+|---|---|---|
+| 25 s of speech | 0.5–1.1 s | about 30 s |
+| First sentence | under 1 s | about 4.5 s |
+| Memory | 19 MB | about 5 GB while loaded |
+| Disk | none | 3 GB model, 1.5 GB Python packages |
+
+The PyTorch build on the Mac GPU was 6× slower than playback, so the Mac uses the MLX build, `chatterbox-mlx` 1.0.1. Its multilingual path passes an argument its alignment analyser does not take; the worker patches that at load time.
+
+- **Engines.** `SpeechEngine` has `say` and `chatterbox`. `speech.engine` in `config.json` picks the order: `"chatterbox"` (default) tries Chatterbox, then `say`; `"say"` uses only `say`. A message is read by the first engine that is installed and speaks its language. Chatterbox is installed once `~/.chat-explorer/speech/installed` exists, which `speech install` writes last.
+- **Worker.** `speech_worker.py` holds the model and turns one JSON line on stdin into an MP3 file (soundfile, no ffmpeg). The daemon starts it on the first render (about 8 s with loading), sends one request at a time, and stops it after 10 idle minutes. A crash rejects the render with the last lines the worker wrote to stderr; the next render starts a new worker.
+- **Blocks without a browser.** The page and the daemon share `speech-blocks.ts` and the markdown renderer. The daemon parses the HTML with linkedom; the UI tests check both find the same blocks.
+- **Rendering ahead.** A live answer from Claude queues all its blocks. One render runs at a time: blocks someone is waiting for first, then the rest of the answer they listen to, then other answers in arrival order. A reader who stops waiting does not stop the render; it goes on into the cache.
+- **Cache.** `~/.chat-explorer/speech-cache/<sha256 of engine, voice, text>`, up to `speech.cacheMegabytes` (1024), least recently played removed first. `say` audio is cached too.
+- **Player.** Reading speed 0.8× to 1.25× through `playbackRate`, which keeps the pitch; "Preparing…" while a block is being rendered.
+
 ## Later
 
 - Hard forks: each fork's answer written by a subagent that only gets `read_fork` for that fork.

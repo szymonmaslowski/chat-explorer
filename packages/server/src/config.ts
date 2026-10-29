@@ -16,6 +16,8 @@ export function loadConfig() {
     sessionsPath: join(home, 'sessions'),
     modelsPath: join(home, 'models'),
     filesPath: join(home, 'files'),
+    speechPath: join(home, 'speech'),
+    speechCachePath: join(home, 'speech-cache'),
     baseUrl: `http://127.0.0.1:${port}`,
   };
 }

@@ -11,12 +11,23 @@ interface Playback {
 
 export const speechSkipSeconds = 5;
 const chainStorageKey = 'chat-explorer.speech-chain';
+const rateStorageKey = 'chat-explorer.speech-rate';
+export const speechRates = [0.8, 0.9, 1, 1.1, 1.25];
 
 function readChain() {
   try {
     return localStorage.getItem(chainStorageKey) !== 'off';
   } catch {
     return true;
+  }
+}
+
+function readRate() {
+  try {
+    const stored = Number(localStorage.getItem(rateStorageKey));
+    return speechRates.includes(stored) ? stored : 1;
+  } catch {
+    return 1;
   }
 }
 
@@ -28,6 +39,7 @@ export const speech = reactive({
   currentTime: 0,
   duration: 0,
   chain: readChain(),
+  rate: readRate(),
   error: '',
 });
 
@@ -42,6 +54,8 @@ export function checkSpeechAvailable() {
 }
 
 const audio = new Audio();
+// A new source resets playbackRate to this, so every block keeps the chosen speed.
+audio.defaultPlaybackRate = speech.rate;
 let unlocked = false;
 let loadToken = 0;
 interface CachedAudio {
@@ -182,6 +196,17 @@ export function skip(seconds: number) {
 
 export function seekTo(seconds: number) {
   if (speech.playback && !speech.loading) audio.currentTime = seconds;
+}
+
+// The browser keeps the pitch at any speed.
+export function setRate(rate: number) {
+  speech.rate = rate;
+  audio.defaultPlaybackRate = rate;
+  audio.playbackRate = rate;
+  updatePositionState();
+  try {
+    localStorage.setItem(rateStorageKey, String(rate));
+  } catch {}
 }
 
 export function setChain(chain: boolean) {

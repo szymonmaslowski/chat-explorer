@@ -14,6 +14,7 @@ import {
   uninstallDictation,
 } from '../dictation/install.js';
 import { loadSettings, SettingsError } from '../settings.js';
+import { installSpeech, uninstallSpeech } from '../speech/install.js';
 import { relativeTime } from '../shared/time.js';
 import type { ExplorationListItem } from '../shared/types.js';
 import { packageVersion } from '../version.js';
@@ -37,6 +38,8 @@ Commands:
   dictation install [--model <name>]
                               Download the Whisper model for dictation
   dictation uninstall         Delete the Whisper models
+  speech install              Install Chatterbox, the natural voice for reading aloud
+  speech uninstall            Delete Chatterbox and the rendered speech
   mcp                         Run the stdio MCP server (used by the Claude Code plugin)
   hook <name>                 Run a Claude Code hook handler (used by the plugin)
   --version                   Print the version`;
@@ -185,6 +188,23 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
       return;
     }
     throw new UsageError('chat-explorer dictation install|uninstall');
+  },
+
+  async speech([action]) {
+    if (action === 'install') {
+      await installSpeech({ config, log: (line) => console.log(line) });
+      console.log(
+        'Chatterbox is ready. New answers are read with it, rendered as they arrive. Set "speech": { "engine": "say" } in config.json to go back to the Mac voices.',
+      );
+      return;
+    }
+    if (action === 'uninstall') {
+      const removed = await uninstallSpeech(config);
+      for (const path of removed) console.log(`Removed ${path}.`);
+      if (removed.length === 0) console.log('Chatterbox is not installed.');
+      return;
+    }
+    throw new UsageError('chat-explorer speech install|uninstall');
   },
 
   async mcp() {

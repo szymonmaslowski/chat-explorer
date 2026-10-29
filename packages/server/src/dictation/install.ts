@@ -70,7 +70,7 @@ export async function ensureModel(input: {
   return { downloaded: true };
 }
 
-async function checkDiskSpace(directory: string, bytes: number) {
+export async function checkDiskSpace(directory: string, bytes: number) {
   const stats = await statfs(directory);
   const freeBytes = stats.bavail * stats.bsize;
   if (freeBytes < bytes + spareBytes) {

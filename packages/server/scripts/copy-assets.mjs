@@ -12,3 +12,5 @@ if (!existsSync(uiDist)) {
 cpSync(uiDist, `${dist}/ui`, { recursive: true });
 // Background sessions load this copy, so they always match the daemon's version.
 cpSync(plugin, `${dist}/plugin`, { recursive: true });
+const speechWorker = fileURLToPath(new URL('../src/speech/speech_worker.py', import.meta.url));
+cpSync(speechWorker, `${dist}/speech/speech_worker.py`);

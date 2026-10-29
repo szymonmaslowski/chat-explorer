@@ -8,8 +8,10 @@ import { Transcriber } from '../src/dictation/transcriber.js';
 import type { WhisperRun } from '../src/dictation/whisper.js';
 import { BackgroundSessions } from '../src/sessions/background-sessions.js';
 import { FileStorage } from '../src/files/file-storage.js';
+import type { SpeechEngine, SpeechEngineName } from '../src/speech/engines.js';
 import { Speaker } from '../src/speech/speaker.js';
-import type { SpeechInspection } from '../src/speech/voices.js';
+import { SpeechCache } from '../src/speech/speech-cache.js';
+import { chooseVoice, type SpeechInspection } from '../src/speech/voices.js';
 import type { LaunchSpec, SessionProcess } from '../src/sessions/launch-claude.js';
 import type { ExplorationEvent } from '../src/shared/types.js';
 import { EventBus } from '../src/store/event-bus.js';
@@ -117,30 +119,60 @@ export function createTestTranscriber(options: { timeoutMs?: number } = {}) {
 
 export interface FakeSpeechCall {
   text: string;
-  voice: string | null;
+  voice: string;
 }
 
+// Speaks like `say` (a Mac voice chosen for the language) or like Chatterbox (any language in
+// `languages`, rendered ahead). A held engine finishes each call only when `finishNext` runs.
+export function createFakeEngine(
+  name: SpeechEngineName,
+  options: { languages?: string[]; held?: boolean } = {},
+) {
+  const spoken: FakeSpeechCall[] = [];
+  const unfinished: (() => void)[] = [];
+  const engine: SpeechEngine = {
+    name,
+    contentType: name === 'say' ? 'audio/mp4' : 'audio/mpeg',
+    rendersAhead: name === 'chatterbox',
+    timeoutMs: 1_000,
+    available: () => true,
+    voiceFor: (inspection) =>
+      name === 'say'
+        ? (chooseVoice(inspection).identifier ?? '')
+        : inspection.language && options.languages?.includes(inspection.language)
+          ? inspection.language
+          : null,
+    synthesize: (text, voice) =>
+      new Promise((resolve) => {
+        spoken.push({ text, voice });
+        const finish = () => resolve(new TextEncoder().encode(`${name}:${text}`));
+        if (options.held) unfinished.push(finish);
+        else finish();
+      }),
+  };
+  const finishNext = () => unfinished.shift()?.();
+  return { engine, spoken, finishNext };
+}
+
+// Engines in order of preference; `spoken` records the last one, `say` unless given others.
 export function createTestSpeaker(
   inspection: SpeechInspection = {
     language: 'en',
     voices: [{ identifier: 'com.apple.voice.compact.en-GB.Daniel', language: 'en-GB', quality: 1 }],
     preferredVoice: null,
   },
+  fakeEngines = [createFakeEngine('say')],
 ) {
   const inspected: string[] = [];
-  const spoken: FakeSpeechCall[] = [];
   const speaker = new Speaker({
-    available: () => true,
+    engines: fakeEngines.map(({ engine }) => engine),
     inspect: async (text) => {
       inspected.push(text);
       return inspection;
     },
-    synthesize: async (text, voice) => {
-      spoken.push({ text, voice });
-      return new TextEncoder().encode(`audio:${text}`);
-    },
+    cache: new SpeechCache(mkdtempSync(join(tmpdir(), 'chat-explorer-speech-cache-')), 1_000_000),
   });
-  return { speaker, inspected, spoken };
+  return { speaker, inspected, spoken: fakeEngines.at(-1)!.spoken };
 }
 
 export function createTestApp(options: { publicUrl?: string } = {}) {

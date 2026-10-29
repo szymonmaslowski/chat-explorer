@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Comment, Message, MessageFile } from '@shared/types';
 import { computed, onMounted, ref, shallowRef, watch } from 'vue';
-import { renderMarkdown } from '../lib/markdown';
+import { renderMarkdown } from '@shared/markdown';
 import { bringToReadingLine } from '../lib/reading-line';
 import { speechBlocks, type SpokenElement } from '../lib/speech-blocks';
 import { checkSpeechAvailable, playFrom, speech, togglePause } from '../stores/speech';

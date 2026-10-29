@@ -28,6 +28,7 @@ describe('settings', () => {
       idleMinutes: 60,
       maxSessions: 3,
       dictation: { model: 'large-v3-turbo-q5_0', language: 'auto' },
+      speech: { engine: 'chatterbox', cacheMegabytes: 1024 },
     });
   });
 

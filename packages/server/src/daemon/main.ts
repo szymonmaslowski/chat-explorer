@@ -14,8 +14,10 @@ import { findTranscript } from '../import/transcript.js';
 import { BackgroundSessions } from '../sessions/background-sessions.js';
 import { claudeLauncher } from '../sessions/launch-claude.js';
 import { loadSettings, SettingsError } from '../settings.js';
-import { inspectSpeech, macosSpeechAvailable, synthesizeSpeech } from '../speech/macos.js';
+import { chatterboxEngine } from '../speech/chatterbox.js';
+import { inspectSpeech, sayEngine } from '../speech/macos.js';
 import { Speaker } from '../speech/speaker.js';
+import { SpeechCache } from '../speech/speech-cache.js';
 import { Database } from '../db/database.js';
 import { EventBus } from '../store/event-bus.js';
 import { FeedbackHub } from '../store/feedback-hub.js';
@@ -52,15 +54,23 @@ const fileStorage = new FileStorage(store, config.filesPath);
 const staleDraftSweepMs = 60 * 60 * 1000;
 void fileStorage.removeStaleDrafts();
 setInterval(() => void fileStorage.removeStaleDrafts(), staleDraftSweepMs).unref();
-const speechAvailable = macosSpeechAvailable();
+const chatterbox = chatterboxEngine(config.speechPath);
 const speaker = new Speaker({
-  available: () => speechAvailable,
+  engines: settings.speech.engine === 'say' ? [sayEngine()] : [chatterbox, sayEngine()],
   inspect: inspectSpeech,
-  synthesize: synthesizeSpeech,
+  cache: new SpeechCache(config.speechCachePath, settings.speech.cacheMegabytes * 1024 * 1024),
+});
+bus.subscribe((_explorationId, event) => {
+  if (event.type !== 'message.added') return;
+  const { message } = event;
+  if (message.role === 'assistant' && message.source === 'live') {
+    void speaker.prepare(message.id, message.content);
+  }
 });
 
 const shutdown = () => {
   sessions.stopAll();
+  chatterbox.stop();
   hub.stop();
   server.close();
   server.closeAllConnections();

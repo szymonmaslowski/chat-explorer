@@ -156,12 +156,13 @@ export function createApp(options: AppOptions) {
 
   app.post('/api/speech', async (context) => {
     const { messageId, block } = speechBody.parse(await context.req.json());
-    const audio = await speaker.speak({
+    const { audio, contentType } = await speaker.speak({
+      messageId,
       content: store.messageContent(messageId),
       block,
       signal: context.req.raw.signal,
     });
-    return context.body(audio, 200, { 'content-type': 'audio/mp4' });
+    return context.body(audio, 200, { 'content-type': contentType });
   });
 
   app.post(

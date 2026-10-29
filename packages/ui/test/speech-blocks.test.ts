@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { renderMarkdown } from '../src/lib/markdown';
+import { renderMarkdown } from '@shared/markdown';
+import { messageSpeechBlocks } from '@shared/message-speech-blocks';
 import { speechBlocks } from '../src/lib/speech-blocks';
 
+// The daemon renders answers ahead of time, so it must find the same blocks without a browser.
 function blocksOf(markdown: string) {
   const root = document.createElement('div');
   root.innerHTML = renderMarkdown(markdown);
-  return speechBlocks(root).map(({ element, block }) => ({ tag: element.tagName, block }));
+  const blocks = speechBlocks(root);
+  expect(messageSpeechBlocks(markdown)).toEqual(blocks.map(({ block }) => block));
+  return blocks.map(({ element, block }) => ({ tag: element.tagName, block }));
 }
 
 describe('speech blocks', () => {

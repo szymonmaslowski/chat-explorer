@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { z } from 'zod';
 import { findOnPath } from '../dictation/availability.js';
-import type { SpeechInspection } from './voices.js';
+import type { SpeechEngine } from './engines.js';
+import { chooseVoice, type SpeechInspection } from './voices.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -71,4 +72,18 @@ export async function synthesizeSpeech(text: string, voice: string | null, signa
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+}
+
+export function sayEngine(): SpeechEngine {
+  const available = macosSpeechAvailable();
+  return {
+    name: 'say',
+    contentType: 'audio/mp4',
+    rendersAhead: false,
+    timeoutMs: 30_000,
+    available: () => available,
+    // An empty voice is the system voice.
+    voiceFor: (inspection) => chooseVoice(inspection).identifier ?? '',
+    synthesize: (text, voice, signal) => synthesizeSpeech(text, voice || null, signal),
+  };
 }
