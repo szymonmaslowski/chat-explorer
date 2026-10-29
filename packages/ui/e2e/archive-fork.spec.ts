@@ -20,6 +20,8 @@ test('archives a fork out of sight and restores it', async ({ page, request }) =
 
   await page.goto(`/e/${explorationId}/f/${child.id}`);
   await page.getByRole('button', { name: 'Archive fork' }).click();
+  await expect(page.locator('.fork-archive')).not.toContainText('Fork archived');
+  await page.getByRole('button', { name: 'Confirm' }).click();
   await expect(page.locator('.fork-archive')).toContainText('Fork archived, read only.');
   await expect(page.getByPlaceholder('Reply to Claude')).toHaveCount(0);
 

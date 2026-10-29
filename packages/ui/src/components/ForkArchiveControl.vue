@@ -3,6 +3,7 @@ import type { Fork } from '@shared/types';
 import { ref } from 'vue';
 import { api, ApiError } from '../api';
 import { forkTitle } from '../lib/conversation';
+import ConfirmButton from './ConfirmButton.vue';
 
 const props = defineProps<{ explorationId: string; fork: Fork; archivedBy: Fork | null }>();
 
@@ -20,7 +21,7 @@ async function setArchived(archive: boolean) {
 
 <template>
   <div class="fork-archive">
-    <button v-if="!archivedBy" type="button" @click="setArchived(true)">Archive fork</button>
+    <ConfirmButton v-if="!archivedBy" label="Archive fork" @confirm="setArchived(true)" />
     <p v-else class="archived">
       <template v-if="archivedBy.id === fork.id">Fork archived, read only.</template>
       <template v-else>
