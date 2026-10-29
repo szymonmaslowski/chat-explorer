@@ -53,7 +53,7 @@ You don't need a terminal session to continue. When you submit and no session is
 
 The daemon can run Claude Code itself, so the phone only needs to reach the daemon.
 
-1. **Run the daemon at login:** `chat-explorer service install` (macOS). It also restarts the daemon after a crash. `chat-explorer service uninstall` removes it.
+1. **Run the daemon at login:** `chat-explorer service install` (macOS). It also restarts the daemon after a crash. Once it is installed, `chat-explorer start` and the plugin start the daemon through it rather than on their own, so the daemon running is always the one launchd restarts; `chat-explorer status` warns if it is not. `chat-explorer service uninstall` removes it.
 2. **Reach it through Tailscale.** Install Tailscale on the Mac and the phone, signed in to the same account. On the Mac run `tailscale serve --bg 4517`. It prints an `https://<mac>.<tailnet>.ts.net` address, reachable only from your own devices. If Tailscale asks you to enable HTTPS certificates for the tailnet, do that first.
 3. **Tell chat-explorer that address,** so the links Claude prints open on the phone and the daemon accepts requests from it. In `~/.chat-explorer/config.json`:
 

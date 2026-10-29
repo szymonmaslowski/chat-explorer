@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, openSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { Config } from '../config.js';
+import { serviceRunsFor, startService } from './service.js';
 
 interface Health {
   name: 'chat-explorer';
@@ -69,7 +70,7 @@ export async function ensureDaemon(config: Config, target: DaemonTarget) {
     }
     await stopDaemon(config);
   }
-  spawnDaemon(config, target.daemonEntry ?? defaultDaemonEntry);
+  await startDaemon(config, target.daemonEntry);
   return { health: await waitForHealth(config), started: true };
 }
 
@@ -83,6 +84,13 @@ export async function stopDaemon(config: Config) {
     await sleep(pollIntervalMs);
   }
   throw new DaemonStartError(`The daemon on port ${config.port} did not stop.`);
+}
+
+// A daemon started beside the login service holds the port, so the service's own start finds it
+// taken and gives up, and the daemon left running is not the one launchd restarts.
+async function startDaemon(config: Config, daemonEntry: string | undefined) {
+  if (!daemonEntry && serviceRunsFor(config)) await startService();
+  else spawnDaemon(config, daemonEntry ?? defaultDaemonEntry);
 }
 
 function spawnDaemon(config: Config, daemonEntry: string) {

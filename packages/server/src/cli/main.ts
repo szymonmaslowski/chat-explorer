@@ -4,6 +4,7 @@ import { parseArgs } from 'node:util';
 import { createDaemonClient, DaemonError } from '../client/http.js';
 import { apiVersion, loadConfig } from '../config.js';
 import { DaemonStartError, ensureDaemon, probe, stopDaemon } from '../daemon/control.js';
+import { servicePid, serviceRunsFor } from '../daemon/service.js';
 import { dictationAvailability } from '../dictation/availability.js';
 import { whisperModelPath, whisperModels } from '../dictation/models.js';
 import { openBrowser } from '../open-browser.js';
@@ -73,6 +74,11 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
     }
     const { version, pid } = current.health;
     console.log(`chat-explorer ${version} is running at ${config.baseUrl} (pid ${pid}).`);
+    if (serviceRunsFor(config) && (await servicePid()) !== pid) {
+      console.log(
+        'This daemon was not started by the login service, so restarting the service does not replace it. Run: chat-explorer stop && chat-explorer start',
+      );
+    }
     const { model } = loadSettings(config).dictation;
     const dictation = dictationAvailability(whisperModelPath(config.modelsPath, model));
     console.log(`Dictation: ${dictation.available ? 'ready' : dictation.reason}`);

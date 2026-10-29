@@ -1,19 +1,8 @@
-import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { homedir, userInfo } from 'node:os';
-import { dirname, join } from 'node:path';
-import { promisify } from 'node:util';
+import { dirname } from 'node:path';
 import type { Config } from '../config.js';
 import { DaemonStartError, defaultDaemonEntry, stopDaemon, waitForHealth } from './control.js';
-
-const label = 'local.chat-explorer.daemon';
-const launchAgentPath = join(homedir(), 'Library', 'LaunchAgents', `${label}.plist`);
-const runCommand = promisify(execFile);
-const userDomain = () => `gui/${userInfo().uid}`;
-
-const escapeXml = (text: string) =>
-  text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const xmlString = (text: string) => `<string>${escapeXml(text)}</string>`;
+import { launchAgentPath, runCommand, serviceLabel, userDomain, xmlString } from './service.js';
 
 export function launchAgentPlist(input: {
   nodePath: string;
@@ -31,7 +20,7 @@ export function launchAgentPlist(input: {
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  ${xmlString(label)}
+  ${xmlString(serviceLabel)}
   <key>ProgramArguments</key>
   <array>
     ${xmlString(input.nodePath)}
@@ -66,7 +55,7 @@ function requireMacos() {
 }
 
 const unload = () =>
-  runCommand('launchctl', ['bootout', `${userDomain()}/${label}`]).catch(() => {});
+  runCommand('launchctl', ['bootout', `${userDomain()}/${serviceLabel}`]).catch(() => {});
 
 export async function installService(config: Config) {
   requireMacos();
