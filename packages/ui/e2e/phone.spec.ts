@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test';
-import { openSeededExploration } from './helpers';
+import { expect } from '@playwright/test';
+import { openSeededExploration, test } from './helpers';
 
 test('starts a new exploration and reports a Claude that cannot start', async ({ page }) => {
   await page.goto('/');

@@ -1,5 +1,5 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
-import { openSeededExploration } from './helpers';
+import { expect, type Locator, type Page } from '@playwright/test';
+import { openSeededExploration, test } from './helpers';
 
 async function playFrom(page: Page, block: Locator) {
   await block.click();

@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test';
-import { attachFakeSession, deliverAndAnswer, detachFakeSession } from './helpers';
+import { expect } from '@playwright/test';
+import { attachFakeSession, deliverAndAnswer, detachFakeSession, test } from './helpers';
 
 test('sends a reply to a new fork and leaves the current fork as it was', async ({
   page,

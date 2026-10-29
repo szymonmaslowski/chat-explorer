@@ -1,5 +1,5 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
-import { clearReply, openSeededExploration } from './helpers';
+import { expect, type Locator, type Page } from '@playwright/test';
+import { clearReply, openSeededExploration, test } from './helpers';
 
 const shots = process.env.EXPAND_SHOTS;
 

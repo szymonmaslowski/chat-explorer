@@ -17,6 +17,7 @@ export class ApiError extends Error {
   constructor(
     readonly code: string,
     message: string,
+    readonly status: number,
   ) {
     super(message);
   }
@@ -40,8 +41,9 @@ async function send(path: string, init: RequestOptions) {
     keepalive: init.keepalive,
   });
   if (!response.ok) {
-    const body = await response.json();
-    throw new ApiError(body.error ?? 'error', body.message ?? response.statusText);
+    // A proxy in front of a stopped daemon answers with an HTML page.
+    const body: { error?: string; message?: string } = await response.json().catch(() => ({}));
+    throw new ApiError(body.error ?? 'error', body.message ?? response.statusText, response.status);
   }
   return response;
 }
@@ -86,15 +88,17 @@ export const api = {
     explorationId: string,
     forkId: string,
     globalMessage: string,
-    options: { newFork: boolean; fileIds: string[] },
+    options: { id: string; newFork: boolean; fileIds: string[] },
+    keepalive = false,
   ) =>
     call<QueuedSubmission>(`/api/explorations/${explorationId}/submit`, {
       json: { forkId, globalMessage, ...options },
+      keepalive,
     }),
-  cancelSubmission: (submissionId: string) =>
+  cancelSubmission: (submissionId: string, keepalive = false) =>
     call<{ globalMessage: string; newFork: boolean; files: MessageFile[] }>(
       `/api/submissions/${submissionId}`,
-      { method: 'DELETE' },
+      { method: 'DELETE', keepalive },
     ),
   createComment: (explorationId: string, comment: NewComment, keepalive = false) =>
     call<Comment>(`/api/explorations/${explorationId}/comments`, { json: comment, keepalive }),
@@ -114,8 +118,8 @@ export const api = {
       json: draft,
       keepalive,
     }),
-  deleteComment: (commentId: string) =>
-    call<{ ok: true }>(`/api/comments/${commentId}`, { method: 'DELETE' }),
+  deleteComment: (commentId: string, keepalive = false) =>
+    call<{ ok: true }>(`/api/comments/${commentId}`, { method: 'DELETE', keepalive }),
   toggleForkAll: (explorationId: string, forkId: string) =>
     call<Comment[]>(`/api/explorations/${explorationId}/comments/fork-all`, { json: { forkId } }),
 };

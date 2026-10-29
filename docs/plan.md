@@ -542,6 +542,16 @@ The PyTorch build on the Mac GPU was 6× slower than playback, so the Mac uses t
 - **Cache.** `~/.chat-explorer/speech-cache/<sha256 of engine, voice, text>`, up to `speech.cacheMegabytes` (1024), least recently played removed first. `say` audio is cached too.
 - **Player.** Reading speed 0.8× to 1.25× through `playbackRate`, which keeps the pitch; "Preparing…" while a block is being rendered.
 
+### 20. Working offline
+
+The phone loses the connection, and the daemon restarts; neither should lose or block what is typed.
+
+- **Live updates.** `EventSource` gives up for good when an answer is not an event stream, such as Tailscale Serve's 502 while the daemon restarts. The page then opens a new one after 1 s, backing off to 30 s, and at once when the tab comes back to the front. On every connect it first sends its queued changes, then reloads the chat.
+- **Outbox.** Comment create, update and delete, the reply draft, submit and cancel go through one queue in `localStorage`, sent strictly in order. A change is sent again while the daemon cannot be reached (no answer, or 502, 503, 504); one the daemon refuses is dropped, shown under the title, and the chat is reloaded. Every tab shares the queue; a Web Lock lets one tab at a time send it. Typing folds into the last unsent change of the same comment or reply box; deleting a comment or cancelling a submit the daemon never got removes it from the queue instead.
+- **Shown at once.** The page applies a queued change to its own copy of the chat, and again on top of every reloaded chat until the change is sent. While the daemon cannot be reached, comments show "not sent yet", a queued submission "waits for the connection", and the status counts the changes waiting. An open editor keeps its text whatever the daemon reports.
+- **Ids from the page.** Comments and submissions get their ids on the page (same alphabet and length as the daemon's), so later changes can refer to them before the daemon has them. Creating with an id that exists in the same chat returns the existing one, so a request repeated after a lost answer does nothing twice; a repeated delete or cancel that finds nothing counts as done.
+- Not offline: uploading files, starting a chat, archiving, Fork all.
+
 ## Later
 
 - Hard forks: each fork's answer written by a subagent that only gets `read_fork` for that fork.

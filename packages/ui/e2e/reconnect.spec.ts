@@ -1,6 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { expect } from '@playwright/test';
 import type { Snapshot } from '@shared/types';
-import { openSeededExploration } from './helpers';
+import { openSeededExploration, test } from './helpers';
 
 test('opens the live updates again after the daemon answered with an error page', async ({
   page,

@@ -7,6 +7,7 @@ import { useExpandedArea } from '../composables/useExpandedArea';
 import { insertAtCursor } from '../lib/insert-text';
 import { transferredFiles } from '../lib/transferred-files';
 import { replyFilesOwner, restoreFileDrafts, useFileDrafts } from '../stores/file-drafts';
+import { newId, outbox } from '../stores/outbox';
 import { replyDrafts } from '../stores/reply-drafts';
 import AttachButton from './AttachButton.vue';
 import DictationButton from './DictationButton.vue';
@@ -22,8 +23,6 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ submitted: [] }>();
 
-const sending = ref(false);
-const error = ref('');
 const textarea = ref<HTMLTextAreaElement | null>(null);
 const expanded = ref(false);
 const expandedStyle = useExpandedArea(expanded, { coverDock: true, marginPx: 0 });
@@ -66,7 +65,6 @@ const replyEmpty = computed(
 );
 const canSubmit = computed(
   () =>
-    !sending.value &&
     !files.uploading.value &&
     editingCount.value === 0 &&
     summary.value !== '' &&
@@ -82,11 +80,11 @@ const currentDraft = () => ({
   fileIds: files.readyIds.value,
 });
 let pending: { forkId: string; draft: ReturnType<typeof currentDraft> } | null = null;
-const autosave = useAutosave(async (keepalive) => {
+const autosave = useAutosave(() => {
   if (!pending) return;
   const { forkId, draft } = pending;
   pending = null;
-  await api.saveReplyDraft(forkId, draft, keepalive);
+  outbox.add({ type: 'reply-draft.save', explorationId: props.explorationId, forkId, draft });
 });
 
 function applyDraft(draft: ReplyDraft) {
@@ -128,7 +126,12 @@ watch(
 // Another device may have changed the draft meanwhile; a box being typed in is left alone.
 async function refreshFromDaemon() {
   if (document.visibilityState !== 'visible') return;
-  if (autosave.isDirty() || files.uploading.value || document.activeElement === textarea.value) {
+  if (
+    autosave.isDirty() ||
+    outbox.isPending(props.forkId) ||
+    files.uploading.value ||
+    document.activeElement === textarea.value
+  ) {
     return;
   }
   const forkId = props.forkId;
@@ -146,29 +149,23 @@ async function refreshFromDaemon() {
 onMounted(() => document.addEventListener('visibilitychange', refreshFromDaemon));
 onBeforeUnmount(() => document.removeEventListener('visibilitychange', refreshFromDaemon));
 
-async function submit() {
+function submit() {
   if (!canSubmit.value) return;
-  sending.value = true;
-  error.value = '';
-  try {
-    const forkId = props.forkId;
-    await autosave.finish(() =>
-      api.submit(props.explorationId, forkId, text.value, {
-        newFork: newFork.value,
-        fileIds: files.readyIds.value,
-      }),
-    );
-    lastSaved.set(forkId, emptyDraft);
-    text.value = '';
-    newFork.value = false;
-    files.clear();
-    expanded.value = false;
-    emit('submitted');
-  } catch {
-    error.value = 'Could not send. Is the chat-explorer daemon running?';
-  } finally {
-    sending.value = false;
-  }
+  const { explorationId, forkId } = props;
+  const submission = {
+    id: newId(),
+    forkId,
+    globalMessage: text.value,
+    newFork: newFork.value,
+    files: files.drafts.value.flatMap((draft) => (draft.file ? [draft.file] : [])),
+  };
+  autosave.finish(() => outbox.add({ type: 'submit', explorationId, submission }));
+  lastSaved.set(forkId, emptyDraft);
+  text.value = '';
+  newFork.value = false;
+  files.clear();
+  expanded.value = false;
+  emit('submitted');
 }
 
 async function toggleForkAll() {
@@ -227,8 +224,7 @@ function onKeydown(event: KeyboardEvent) {
       <DictationButton :hint="hint" @text="insertDictation" />
       <ExpandButton v-model="expanded" />
       <span class="spacer" />
-      <span v-if="error" class="error">{{ error }}</span>
-      <span v-else-if="summary" class="summary muted">{{ summary }}</span>
+      <span v-if="summary" class="summary muted">{{ summary }}</span>
       <button type="submit" class="primary" :disabled="!canSubmit">Submit</button>
     </div>
   </form>
@@ -278,11 +274,6 @@ function onKeydown(event: KeyboardEvent) {
 }
 
 .summary {
-  font-size: 0.85rem;
-}
-
-.error {
-  color: var(--danger);
   font-size: 0.85rem;
 }
 </style>

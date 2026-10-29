@@ -133,6 +133,8 @@ export type ExplorationEvent =
   | { type: 'session.error'; message: string | null };
 
 export interface NewComment {
+  // Made by the page when it queues the comment, so a repeated request creates it only once.
+  id?: string;
   messageId: string;
   viewForkId: string;
   quote: string;

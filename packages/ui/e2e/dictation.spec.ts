@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test';
-import { clearReply, openSeededExploration } from './helpers';
+import { expect } from '@playwright/test';
+import { clearReply, openSeededExploration, test } from './helpers';
 
 test('dictates a reply into the text box', async ({ page }) => {
   await openSeededExploration(page);

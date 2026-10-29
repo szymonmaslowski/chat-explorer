@@ -1,31 +1,10 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import { attachFakeSession, deliverAndAnswer, detachFakeSession } from './helpers';
+import { expect, type Page } from '@playwright/test';
+import { answeredChat, selectAnswer, test } from './helpers';
 
 const saved = (page: Page, path: string) =>
   page.waitForResponse(
     (response) => response.url().includes(path) && response.request().method() !== 'GET',
   );
-
-async function answeredChat(request: APIRequestContext) {
-  const { explorationId } = await (
-    await request.post('/api/explorations', { data: { message: 'Explain caching' } })
-  ).json();
-  await attachFakeSession(request, explorationId);
-  await deliverAndAnswer(request, explorationId, 'Caching keeps a copy of a response nearby.');
-  await detachFakeSession(request);
-  return explorationId as string;
-}
-
-async function selectAnswer(page: Page) {
-  await page.locator('.message.assistant .content p').evaluate((paragraph) => {
-    const range = document.createRange();
-    range.setStart(paragraph.firstChild!, 0);
-    range.setEnd(paragraph.firstChild!, 7);
-    window.getSelection()!.removeAllRanges();
-    window.getSelection()!.addRange(range);
-    paragraph.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-  });
-}
 
 test('keeps the reply box, its fork tick and its files through a reload', async ({
   page,
@@ -92,6 +71,8 @@ test('keeps an edit of a saved comment apart from its saved text until Save', as
   await expect(card).toContainText('First version');
   await expect(page.locator('.reply-bar .summary')).toHaveText('1 comment');
 
+  // A card fades while the cursor is near it, and the new one appears where the cursor is.
+  await page.mouse.move(0, 0);
   await card.hover();
   await card.getByRole('button', { name: 'Edit' }).click();
   const edited = saved(page, '/api/comments/');
@@ -105,6 +86,8 @@ test('keeps an edit of a saved comment apart from its saved text until Save', as
   await expect(card).toContainText('First version');
   await expect(page.locator('.reply-bar .summary')).toHaveText('1 comment');
 
+  // A card fades while the cursor is near it, and the new one appears where the cursor is.
+  await page.mouse.move(0, 0);
   await card.hover();
   await card.getByRole('button', { name: 'Edit' }).click();
   await card.locator('textarea').fill('Third version');

@@ -1,5 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
-import { attachFakeSession, deliverAndAnswer, detachFakeSession } from './helpers';
+import { expect, type Page } from '@playwright/test';
+import { attachFakeSession, deliverAndAnswer, detachFakeSession, test } from './helpers';
 
 // A 1×1 PNG, so the thumbnail really decodes.
 const pngBase64 =

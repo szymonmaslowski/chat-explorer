@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { CommentType } from '@shared/types';
 import { onMounted, ref, watch } from 'vue';
-import { api } from '../api';
 import { useAutosave } from '../composables/useAutosave';
 import { useExpandedArea } from '../composables/useExpandedArea';
 import type { TextAnchor } from '../lib/anchoring';
 import { insertAtCursor } from '../lib/insert-text';
+import { newId, outbox } from '../stores/outbox';
 import DictationButton from './DictationButton.vue';
 import ExpandButton from './ExpandButton.vue';
 
@@ -22,7 +22,6 @@ const emit = defineEmits<{ created: [commentId: string]; close: [] }>();
 
 const body = ref('');
 const asFork = ref(false);
-const error = ref('');
 const textarea = ref<HTMLTextAreaElement | null>(null);
 const expanded = ref(false);
 const expandedStyle = useExpandedArea(expanded, { coverDock: false, marginPx: 8 });
@@ -36,47 +35,62 @@ const target = () => ({
 
 // The comment is stored from the first words on, as one still being written (empty body), so a
 // closed page brings it back in its editor.
-let commentId: string | null = null;
-const autosave = useAutosave(async (keepalive) => {
-  if (commentId) {
-    await api.updateComment(commentId, { editBody: body.value, type: type() }, keepalive);
+const commentId = newId();
+let created = false;
+const autosave = useAutosave(() => {
+  const { explorationId } = props;
+  if (created) {
+    outbox.add({
+      type: 'comment.update',
+      explorationId,
+      commentId,
+      changes: { editBody: body.value, type: type() },
+    });
     return;
   }
   if (!body.value.trim()) return;
-  const comment = await api.createComment(
-    props.explorationId,
-    { ...target(), body: '', editBody: body.value, type: type() },
-    keepalive,
-  );
-  commentId = comment.id;
-  emit('created', comment.id);
+  outbox.add({
+    type: 'comment.create',
+    explorationId,
+    comment: { id: commentId, ...target(), body: '', editBody: body.value, type: type() },
+  });
+  created = true;
+  emit('created', commentId);
 });
 watch([body, asFork], autosave.changed);
 
 onMounted(() => textarea.value?.focus());
 
-async function close(operation: () => Promise<unknown>) {
-  error.value = '';
-  try {
-    await autosave.finish(operation);
-    emit('close');
-  } catch {
-    error.value = 'Could not save. Is the chat-explorer daemon running?';
-  }
+function close(action: () => void) {
+  autosave.finish(action);
+  emit('close');
 }
 
 function save() {
   if (!body.value.trim()) return;
-  void close(() =>
-    commentId
-      ? api.updateComment(commentId, { body: body.value, editBody: null, type: type() })
-      : api.createComment(props.explorationId, { ...target(), body: body.value, type: type() }),
+  const { explorationId } = props;
+  close(() =>
+    outbox.add(
+      created
+        ? {
+            type: 'comment.update',
+            explorationId,
+            commentId,
+            changes: { body: body.value, editBody: null, type: type() },
+          }
+        : {
+            type: 'comment.create',
+            explorationId,
+            comment: { id: commentId, ...target(), body: body.value, type: type() },
+          },
+    ),
   );
 }
 
 function cancel() {
-  void close(async () => {
-    if (commentId) await api.deleteComment(commentId);
+  close(() => {
+    if (created)
+      outbox.add({ type: 'comment.delete', explorationId: props.explorationId, commentId });
   });
 }
 
@@ -105,7 +119,6 @@ function onKeydown(event: KeyboardEvent) {
       <DictationButton :hint="anchor.quote" @text="insertDictation" />
       <ExpandButton v-model="expanded" />
       <span class="spacer" />
-      <span v-if="error" class="error" role="alert">{{ error }}</span>
       <button type="button" @click="cancel">Cancel</button>
       <button type="button" class="primary" :disabled="!body.trim()" @click="save">Save</button>
     </div>

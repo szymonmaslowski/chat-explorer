@@ -12,6 +12,7 @@ import type {
 } from '@shared/types';
 import { nextTick, reactive, watch } from 'vue';
 import { api, ApiError } from '../api';
+import { outbox, type Change } from './outbox';
 
 export interface ExplorationState {
   explorationId: string;
@@ -100,6 +101,79 @@ export function applyEvent(state: ExplorationState, event: ExplorationEvent) {
 const firstRetryMs = 1_000;
 const maxRetryMs = 30_000;
 
+// Shows a change before the daemon has it, as the daemon will once it does.
+export function applyChange(state: ExplorationState, change: Change) {
+  if (change.explorationId !== state.explorationId) return;
+  const now = Date.now();
+  switch (change.type) {
+    case 'comment.create': {
+      const { id, editBody, type, ...comment } = change.comment;
+      const existing = state.comments.get(id);
+      state.comments.set(id, {
+        ...comment,
+        id,
+        explorationId: state.explorationId,
+        editBody: editBody ?? null,
+        type: type ?? 'inline',
+        status: existing?.status ?? 'draft',
+        submissionId: existing?.submissionId ?? null,
+        replyMessageId: null,
+        createdForkId: null,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      });
+      break;
+    }
+    case 'comment.update': {
+      const comment = state.comments.get(change.commentId);
+      const { body, editBody, type } = change.changes;
+      if (!comment) break;
+      state.comments.set(comment.id, {
+        ...comment,
+        body: body ?? comment.body,
+        editBody: editBody === undefined ? comment.editBody : editBody,
+        type: type ?? comment.type,
+        updatedAt: now,
+      });
+      break;
+    }
+    case 'comment.delete':
+      state.comments.delete(change.commentId);
+      break;
+    case 'reply-draft.save':
+      break;
+    case 'submit': {
+      const { id, forkId, globalMessage, newFork, files } = change.submission;
+      state.queuedSubmissions.set(id, {
+        id,
+        explorationId: state.explorationId,
+        forkId,
+        globalMessage: globalMessage.trim(),
+        newFork,
+        createdAt: now,
+      });
+      for (const comment of state.comments.values()) {
+        if (comment.viewForkId === forkId && comment.status === 'draft') {
+          state.comments.set(comment.id, { ...comment, status: 'queued', submissionId: id });
+        }
+      }
+      for (const file of files) state.files.set(file.id, { ...file, submissionId: id });
+      break;
+    }
+    case 'submission.cancel':
+      state.queuedSubmissions.delete(change.submissionId);
+      for (const comment of state.comments.values()) {
+        if (comment.submissionId === change.submissionId) {
+          state.comments.set(comment.id, { ...comment, status: 'draft', submissionId: null });
+        }
+      }
+      for (const file of state.files.values()) {
+        if (file.submissionId === change.submissionId) state.files.delete(file.id);
+      }
+      break;
+  }
+}
+
 function applySnapshot(state: ExplorationState, snapshot: Snapshot) {
   state.exploration = snapshot.exploration;
   state.forks = byId(snapshot.forks);
@@ -111,6 +185,7 @@ function applySnapshot(state: ExplorationState, snapshot: Snapshot) {
   state.sessionStatus = snapshot.sessionStatus;
   state.sessionError = snapshot.sessionError;
   state.status = 'ready';
+  for (const change of outbox.changes.value) applyChange(state, change);
 }
 
 function createExplorationStore(explorationId: string) {
@@ -157,10 +232,12 @@ function createExplorationStore(explorationId: string) {
 
   function connect() {
     const next = new EventSource(`/api/explorations/${explorationId}/events`);
-    next.addEventListener('ready', () => {
+    // Changes made while offline go first, so the reloaded chat already has them.
+    next.addEventListener('ready', async () => {
       retryMs = firstRetryMs;
       state.connected = true;
-      void load();
+      await outbox.flush();
+      await load();
     });
     // EventSource reports the 404 of a missing exploration only as an error.
     next.addEventListener('error', () => {
@@ -208,6 +285,18 @@ export function whenActiveExplorationLoaded() {
     );
   });
 }
+
+outbox.onChange((change) => {
+  if (active) applyChange(active.state, change);
+});
+
+// A change the daemon refused leaves the page showing it, so the chat is loaded again.
+outbox.onFailure(async (explorationId) => {
+  if (active?.state.explorationId !== explorationId) return;
+  const state = active.state;
+  const snapshot = await api.snapshot(explorationId).catch(() => null);
+  if (snapshot) applySnapshot(state, snapshot);
+});
 
 export function openExploration(explorationId: string) {
   if (active?.state.explorationId === explorationId) return active.state;

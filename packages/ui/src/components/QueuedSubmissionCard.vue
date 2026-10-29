@@ -1,41 +1,36 @@
 <script setup lang="ts">
-import type { QueuedSubmission } from '@shared/types';
-import { ref } from 'vue';
-import { api, ApiError } from '../api';
+import type { MessageFile, QueuedSubmission } from '@shared/types';
+import { computed } from 'vue';
 import { replyFilesOwner, restoreFileDrafts } from '../stores/file-drafts';
+import { outbox } from '../stores/outbox';
 import { replyDrafts } from '../stores/reply-drafts';
 
 const props = defineProps<{
   submission: QueuedSubmission;
   commentCount: number;
-  fileCount: number;
+  files: MessageFile[];
 }>();
 
-const error = ref('');
-const cancelling = ref(false);
+const fileCount = computed(() => props.files.length);
+const unsent = computed(() => outbox.stalled.value && outbox.isPending(props.submission.id));
 
-async function cancel() {
-  cancelling.value = true;
-  try {
-    const { globalMessage, files } = await api.cancelSubmission(props.submission.id);
-    if (globalMessage) replyDrafts.restore(props.submission.forkId, globalMessage);
-    restoreFileDrafts(replyFilesOwner(props.submission.forkId), files);
-  } catch (caught) {
-    error.value =
-      caught instanceof ApiError && caught.code === 'already_sent'
-        ? 'Already sent to Claude.'
-        : 'Could not cancel.';
-  } finally {
-    cancelling.value = false;
-  }
+// The message and files go back into the reply box at once; the daemon gets the cancel when it
+// can be reached.
+function cancel() {
+  const { id, forkId, globalMessage, explorationId } = props.submission;
+  const files = props.files.map((file) => ({ ...file, submissionId: null }));
+  outbox.add({ type: 'submission.cancel', explorationId, submissionId: id });
+  if (globalMessage) replyDrafts.restore(forkId, globalMessage);
+  restoreFileDrafts(replyFilesOwner(forkId), files);
 }
 </script>
 
 <template>
   <div class="queued-submission">
     <div>
-      <strong>Queued</strong><template v-if="submission.newFork"> as a new fork</template>, sent
-      when Claude is free.
+      <strong>Queued</strong><template v-if="submission.newFork"> as a new fork</template>,
+      <template v-if="unsent">waits for the connection.</template>
+      <template v-else>sent when Claude is free.</template>
       <span class="muted">
         <template v-if="commentCount">
           {{ commentCount }} comment{{ commentCount === 1 ? '' : 's' }}
@@ -46,9 +41,8 @@ async function cancel() {
         <template v-if="fileCount">{{ fileCount }} file{{ fileCount === 1 ? '' : 's' }}</template>
       </span>
       <p v-if="submission.globalMessage" class="message">{{ submission.globalMessage }}</p>
-      <p v-if="error" class="error">{{ error }}</p>
     </div>
-    <button :disabled="cancelling" @click="cancel">Cancel</button>
+    <button @click="cancel">Cancel</button>
   </div>
 </template>
 
@@ -68,10 +62,5 @@ async function cancel() {
 .message {
   margin: 0.4rem 0 0;
   white-space: pre-wrap;
-}
-
-.error {
-  margin: 0.4rem 0 0;
-  color: var(--danger);
 }
 </style>

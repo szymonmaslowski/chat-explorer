@@ -1,4 +1,26 @@
-import { expect, type APIRequestContext, type Page } from '@playwright/test';
+import { test as base, expect, type APIRequestContext, type Page } from '@playwright/test';
+
+// The page shows a change before the daemon has it. Each test waits until its changes are sent,
+// so the next one starts from what the daemon really holds.
+export const test = base.extend<{ sentChanges: void }>({
+  sentChanges: [
+    async ({ page }, use) => {
+      await use();
+      await expect
+        .poll(() =>
+          page
+            .evaluate(
+              () =>
+                JSON.parse(localStorage.getItem('chat-explorer.outbox') ?? '{"queue":[]}').queue
+                  .length,
+            )
+            .catch(() => 0),
+        )
+        .toBe(0);
+    },
+    { auto: true },
+  ],
+});
 
 export async function openSeededExploration(page: Page) {
   const explorations: { id: string; title: string }[] = await (
@@ -47,4 +69,26 @@ export async function clearReply(page: Page) {
   );
   await page.getByPlaceholder('Reply to Claude').fill('');
   await saved;
+}
+
+export async function answeredChat(request: APIRequestContext) {
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'Explain caching' } })
+  ).json();
+  await attachFakeSession(request, explorationId);
+  await deliverAndAnswer(request, explorationId, 'Caching keeps a copy of a response nearby.');
+  await detachFakeSession(request);
+  return explorationId as string;
+}
+
+// Selects the first word of the answer, as a reader dragging over it would.
+export async function selectAnswer(page: Page) {
+  await page.locator('.message.assistant .content p').evaluate((paragraph) => {
+    const range = document.createRange();
+    range.setStart(paragraph.firstChild!, 0);
+    range.setEnd(paragraph.firstChild!, 7);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+    paragraph.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
 }

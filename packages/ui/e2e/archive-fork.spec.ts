@@ -1,6 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { expect } from '@playwright/test';
 import type { Snapshot } from '@shared/types';
-import { attachFakeSession, deliverAndAnswer, detachFakeSession } from './helpers';
+import { attachFakeSession, deliverAndAnswer, detachFakeSession, test } from './helpers';
 
 test('archives a fork out of sight and restores it', async ({ page, request }) => {
   const { explorationId } = await (

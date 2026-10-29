@@ -39,7 +39,9 @@ function onSeek(event: Event) {
         @input="onSeek"
       />
       <span class="time">
-        {{ speech.loading ? 'Preparing…' : `${clock(speech.currentTime)} / ${clock(speech.duration)}` }}
+        {{
+          speech.loading ? 'Preparing…' : `${clock(speech.currentTime)} / ${clock(speech.duration)}`
+        }}
       </span>
       <span class="block-count">
         {{ speech.playback.index + 1 }}/{{ speech.playback.blocks.length }}

@@ -1,3 +1,4 @@
 import { customAlphabet } from 'nanoid';
+import { idAlphabet, idLength } from '../shared/ids.js';
 
-export const newId = customAlphabet('0123456789abcdefghjkmnpqrstvwxyz', 10);
+export const newId = customAlphabet(idAlphabet, idLength);

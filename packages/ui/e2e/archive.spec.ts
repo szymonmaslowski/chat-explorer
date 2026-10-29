@@ -1,4 +1,5 @@
-import { expect, test } from '@playwright/test';
+import { expect } from '@playwright/test';
+import { test } from './helpers';
 
 test('archives, restores and deletes an exploration', async ({ page }) => {
   const response = await page.request.post('/api/explorations', {

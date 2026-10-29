@@ -1,5 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
-import { clearReply, openSeededExploration } from './helpers';
+import { expect, type Page } from '@playwright/test';
+import { clearReply, openSeededExploration, test } from './helpers';
 
 const paragraphBox = async (page: Page, paragraph: string) => {
   const locator = page.locator('.content p', { hasText: paragraph }).first();

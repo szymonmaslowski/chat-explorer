@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import type { Comment } from '@shared/types';
+import type { Comment, CommentChanges } from '@shared/types';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { api } from '../api';
 import { useAutosave } from '../composables/useAutosave';
 import { useExpandedArea } from '../composables/useExpandedArea';
 import { useProximityFade } from '../composables/useProximityFade';
 import { insertAtCursor } from '../lib/insert-text';
+import { outbox } from '../stores/outbox';
 import DictationButton from './DictationButton.vue';
 import ExpandButton from './ExpandButton.vue';
 
@@ -26,7 +26,6 @@ const editing = ref(props.comment.editBody !== null);
 const draftBody = ref(props.comment.editBody ?? '');
 const editor = ref<HTMLTextAreaElement | null>(null);
 const insertDictation = (text: string) => insertAtCursor(editor.value, draftBody, text);
-const busy = ref(false);
 const expanded = ref(false);
 const expandedStyle = useExpandedArea(expanded, { coverDock: false, marginPx: 8 });
 watch(editing, (isEditing) => {
@@ -49,9 +48,21 @@ onMounted(() => {
 });
 onBeforeUnmount(() => resizeObserver?.disconnect());
 
-const autosave = useAutosave((keepalive) =>
-  api.updateComment(props.comment.id, { editBody: draftBody.value }, keepalive),
-);
+const update = (changes: CommentChanges) =>
+  outbox.add({
+    type: 'comment.update',
+    explorationId: props.comment.explorationId,
+    commentId: props.comment.id,
+    changes,
+  });
+const remove = () =>
+  outbox.add({
+    type: 'comment.delete',
+    explorationId: props.comment.explorationId,
+    commentId: props.comment.id,
+  });
+
+const autosave = useAutosave(() => update({ editBody: draftBody.value }));
 watch(draftBody, () => {
   if (editing.value) autosave.changed();
 });
@@ -67,50 +78,27 @@ watch(
   },
 );
 
-const run = async (action: () => Promise<unknown>) => {
-  busy.value = true;
-  try {
-    await action();
-  } finally {
-    busy.value = false;
-  }
-};
-
 async function startEditing() {
   draftBody.value = props.comment.body;
   editing.value = true;
-  void autosave.finish(() => api.updateComment(props.comment.id, { editBody: props.comment.body }));
+  autosave.finish(() => update({ editBody: props.comment.body }));
   await nextTick();
   editor.value?.focus();
 }
 
-const save = () =>
-  run(async () => {
-    if (!draftBody.value.trim()) return;
-    await autosave.finish(() =>
-      api.updateComment(props.comment.id, { body: draftBody.value, editBody: null }),
-    );
-    editing.value = false;
-  });
+function save() {
+  if (!draftBody.value.trim()) return;
+  autosave.finish(() => update({ body: draftBody.value, editBody: null }));
+  editing.value = false;
+}
 
 // A comment that was never saved has nothing to go back to, so cancelling deletes it.
-const cancelEditing = () =>
-  run(async () => {
-    await autosave.finish(async () => {
-      if (props.comment.body) await api.updateComment(props.comment.id, { editBody: null });
-      else await api.deleteComment(props.comment.id);
-    });
-    editing.value = false;
-  });
+function cancelEditing() {
+  autosave.finish(() => (props.comment.body ? update({ editBody: null }) : remove()));
+  editing.value = false;
+}
 
-const toggleType = () =>
-  run(() =>
-    api.updateComment(props.comment.id, {
-      type: props.comment.type === 'fork' ? 'inline' : 'fork',
-    }),
-  );
-
-const remove = () => run(() => api.deleteComment(props.comment.id));
+const toggleType = () => update({ type: props.comment.type === 'fork' ? 'inline' : 'fork' });
 
 function onEditorKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') void cancelEditing();
@@ -141,8 +129,8 @@ function onEditorKeydown(event: KeyboardEvent) {
         <DictationButton :hint="comment.quote" @text="insertDictation" />
         <ExpandButton v-model="expanded" />
         <span class="spacer" />
-        <button type="button" :disabled="busy" @click="cancelEditing">Cancel</button>
-        <button type="button" class="primary" :disabled="busy || !draftBody.trim()" @click="save">
+        <button type="button" @click="cancelEditing">Cancel</button>
+        <button type="button" class="primary" :disabled="!draftBody.trim()" @click="save">
           Save
         </button>
       </div>
@@ -152,6 +140,9 @@ function onEditorKeydown(event: KeyboardEvent) {
         {{ comment.type === 'fork' ? 'Fork' : 'Comment' }}
         <span v-if="comment.status === 'queued'">· queued</span>
         <span v-if="comment.status === 'submitted'">· sent</span>
+        <span v-if="outbox.stalled.value && outbox.isPending(comment.id)" class="unsent">
+          · not sent yet
+        </span>
       </div>
       <button
         v-if="!placement"
@@ -167,14 +158,13 @@ function onEditorKeydown(event: KeyboardEvent) {
       <div v-if="isDraft" class="actions">
         <button
           type="button"
-          :disabled="busy"
           :title="comment.type === 'fork' ? 'Answer in this fork instead' : 'Start a new fork'"
           @click="toggleType"
         >
           {{ comment.type === 'fork' ? 'Unfork' : 'Fork' }}
         </button>
-        <button type="button" :disabled="busy" @click="startEditing">Edit</button>
-        <button type="button" :disabled="busy" @click="remove">Delete</button>
+        <button type="button" @click="startEditing">Edit</button>
+        <button type="button" @click="remove">Delete</button>
       </div>
     </template>
   </div>
@@ -230,6 +220,10 @@ function onEditorKeydown(event: KeyboardEvent) {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--accent);
+}
+
+.label .unsent {
+  color: var(--warning);
 }
 
 .fork .label {

@@ -69,8 +69,8 @@ const replyForksAt = (messageId: string) =>
   );
 const filesOfMessage = (messageId: string) =>
   [...state.value.files.values()].filter((file) => file.messageId === messageId);
-const fileCountOf = (submissionId: string) =>
-  [...state.value.files.values()].filter((file) => file.submissionId === submissionId).length;
+const filesOfSubmission = (submissionId: string) =>
+  [...state.value.files.values()].filter((file) => file.submissionId === submissionId);
 const commentCountOf = (submissionId: string) =>
   [...state.value.comments.values()].filter((comment) => comment.submissionId === submissionId)
     .length;
@@ -206,7 +206,7 @@ watch(
         :key="submission.id"
         :submission="submission"
         :comment-count="commentCountOf(submission.id)"
-        :file-count="fileCountOf(submission.id)"
+        :files="filesOfSubmission(submission.id)"
       />
 
       <div class="dock" data-dock>

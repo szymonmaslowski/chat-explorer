@@ -2,6 +2,7 @@
 import { api } from '../api';
 import type { ExplorationState } from '../stores/exploration';
 import ConfirmButton from './ConfirmButton.vue';
+import OutboxFailures from './OutboxFailures.vue';
 import SessionStatusBar from './SessionStatusBar.vue';
 import ThemeSwitch from './ThemeSwitch.vue';
 
@@ -33,6 +34,7 @@ defineProps<{ state: ExplorationState }>();
       Archived, read only.
       <ConfirmButton label="Restore" @confirm="api.unarchive(state.explorationId)" />
     </p>
+    <OutboxFailures :exploration-id="state.explorationId" />
     <slot />
   </header>
 </template>

@@ -470,3 +470,40 @@ describe('archiving a fork', () => {
     expect(() => store.archiveFork(child.id)).toThrow(expect.objectContaining({ code: 'invalid' }));
   });
 });
+
+describe('changes the page queued while offline', () => {
+  it('creates a comment with the id the page made, once however often it is sent', () => {
+    const { store, explorationId, mainForkId, answer } = setup();
+    const comment = {
+      id: 'k3m9p2v7xa',
+      messageId: answer.id,
+      viewForkId: mainForkId,
+      quote: 'some text',
+      startOffset: 16,
+      endOffset: 25,
+      body: 'Written offline',
+    };
+    expect(store.createComment(explorationId, comment).id).toBe('k3m9p2v7xa');
+    store.updateComment('k3m9p2v7xa', { body: 'Changed after' });
+    expect(store.createComment(explorationId, comment).body).toBe('Changed after');
+    expect(store.snapshot(explorationId).comments).toHaveLength(1);
+  });
+
+  it('queues a submission with the id the page made, once however often it is sent', () => {
+    const { store, explorationId, mainForkId } = setup();
+    store.submit(explorationId, mainForkId, 'Sent offline', { id: 'q8r2t5w9zb' });
+    store.submit(explorationId, mainForkId, 'Sent offline', { id: 'q8r2t5w9zb' });
+    expect(store.snapshot(explorationId).queuedSubmissions.map(({ id }) => id)).toEqual([
+      'q8r2t5w9zb',
+    ]);
+  });
+
+  it('refuses an id another chat already uses', () => {
+    const { store, explorationId, mainForkId } = setup();
+    store.submit(explorationId, mainForkId, 'Mine', { id: 'q8r2t5w9zb' });
+    const other = seedConversation(store);
+    expect(() =>
+      store.submit(other.explorationId, other.mainForkId, 'Theirs', { id: 'q8r2t5w9zb' }),
+    ).toThrow(expect.objectContaining({ code: 'invalid' }));
+  });
+});

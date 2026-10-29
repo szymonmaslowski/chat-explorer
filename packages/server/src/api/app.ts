@@ -11,6 +11,7 @@ import { maxFileBytes } from '../files/kinds.js';
 import { findTranscript, readTranscript } from '../import/transcript.js';
 import type { BackgroundSessions } from '../sessions/background-sessions.js';
 import type { Speaker } from '../speech/speaker.js';
+import { idPattern } from '../shared/ids.js';
 import { claudeModels, type ClaudeModel } from '../shared/models.js';
 import type { ExplorationListItem, ExplorationView, Snapshot } from '../shared/types.js';
 import { StoreError } from '../store/errors.js';
@@ -48,7 +49,9 @@ const newExplorationBody = z
   .object({ message: z.string().trim().default(''), model: model.optional(), fileIds })
   .refine((body) => body.message || body.fileIds.length > 0, 'Write a message or attach a file.');
 const explorationSettingsBody = z.object({ model });
+const clientId = z.string().regex(idPattern).optional();
 const newCommentBody = z.object({
+  id: clientId,
   messageId: z.string(),
   viewForkId: z.string(),
   quote: z.string(),
@@ -66,6 +69,7 @@ const commentChangesBody = z.object({
 const replyDraftBody = z.object({ text: z.string(), newFork: z.boolean(), fileIds });
 const forkBody = z.object({ forkId: z.string() });
 const submitBody = z.object({
+  id: clientId,
   forkId: z.string(),
   globalMessage: z.string().default(''),
   newFork: z.boolean().default(false),
@@ -309,9 +313,11 @@ export function createApp(options: AppOptions) {
   });
 
   app.post('/api/explorations/:id/submit', async (context) => {
-    const { forkId, globalMessage, newFork, fileIds } = submitBody.parse(await context.req.json());
+    const { id, forkId, globalMessage, newFork, fileIds } = submitBody.parse(
+      await context.req.json(),
+    );
     return context.json(
-      store.submit(context.req.param('id'), forkId, globalMessage, { newFork, fileIds }),
+      store.submit(context.req.param('id'), forkId, globalMessage, { id, newFork, fileIds }),
       201,
     );
   });

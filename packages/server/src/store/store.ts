@@ -407,6 +407,10 @@ export class ChatStore {
   }
 
   createComment(explorationId: string, input: NewComment) {
+    const existing = input.id
+      ? this.existingRow<CommentRow>('comments', input.id, explorationId)
+      : null;
+    if (existing) return toComment(existing);
     const viewFork = this.requireWritableFork(input.viewForkId, explorationId);
     const isOnPath = this.pathTo(viewFork.tip_message_id).some((row) => row.id === input.messageId);
     if (!isOnPath) {
@@ -421,7 +425,7 @@ export class ChatStore {
     if (input.startOffset < 0 || input.endOffset <= input.startOffset) {
       throw new StoreError('invalid', 'The comment anchor offsets are out of order.');
     }
-    const id = newId();
+    const id = input.id ?? newId();
     const createdAt = this.now();
     this.db.run(
       `INSERT INTO comments (id, exploration_id, message_id, view_fork_id, quote, start_offset,
@@ -497,9 +501,13 @@ export class ChatStore {
     explorationId: string,
     forkId: string,
     globalMessage: string,
-    options: { newFork?: boolean; fileIds?: string[] } = {},
+    options: { id?: string; newFork?: boolean; fileIds?: string[] } = {},
   ) {
     const { newFork = false, fileIds = [] } = options;
+    const existing = options.id
+      ? this.existingRow<SubmissionRow>('submissions', options.id, explorationId)
+      : null;
+    if (existing) return toQueuedSubmission(existing);
     const fork = this.requireWritableFork(forkId, explorationId);
     const drafts = this.draftsIn(forkId);
     const files = fileIds.map((fileId) => this.requireDraftFile(fileId));
@@ -521,7 +529,7 @@ export class ChatStore {
     if (drafts.some((draft) => draft.edit_body !== null)) {
       throw new StoreError('invalid', 'Save or cancel the comments being edited first.');
     }
-    const id = newId();
+    const id = options.id ?? newId();
     this.db.transaction(() => {
       this.db.run(
         `INSERT INTO submissions
@@ -1200,6 +1208,19 @@ export class ChatStore {
     const row = this.db.get<MessageRow>('SELECT * FROM messages WHERE id = ?', messageId);
     if (!row) throw new StoreError('not_found', `Message ${messageId} does not exist.`);
     return row;
+  }
+
+  // A repeated request with an id the page made finds what the first one created.
+  private existingRow<Row extends { exploration_id: string | null }>(
+    table: 'comments' | 'submissions',
+    id: string,
+    explorationId: string,
+  ) {
+    const row = this.db.get<Row>(`SELECT * FROM ${table} WHERE id = ?`, id);
+    if (row && row.exploration_id !== explorationId) {
+      throw new StoreError('invalid', `Id ${id} is already taken.`);
+    }
+    return row ?? null;
   }
 
   private requireCommentRow(commentId: string) {

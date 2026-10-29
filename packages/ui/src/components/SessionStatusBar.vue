@@ -4,6 +4,7 @@ import type { SessionStatus } from '@shared/types';
 import { computed } from 'vue';
 import { api } from '../api';
 import { modelLabels } from '../lib/models';
+import { outbox } from '../stores/outbox';
 
 const props = defineProps<{
   status: SessionStatus;
@@ -20,7 +21,15 @@ const labels: Record<SessionStatus, string> = {
   detached: 'No session attached',
 };
 
-const label = computed(() => (props.connected ? labels[props.status] : 'Reconnecting…'));
+const waiting = computed(
+  () =>
+    outbox.changes.value.filter((change) => change.explorationId === props.explorationId).length,
+);
+const label = computed(() => {
+  const state = props.connected ? labels[props.status] : 'Reconnecting…';
+  if (!waiting.value || (props.connected && !outbox.stalled.value)) return state;
+  return `${state} · ${waiting.value} change${waiting.value === 1 ? '' : 's'} waiting`;
+});
 const selectedModel = computed({
   get: () => props.model,
   set: (model) => {
