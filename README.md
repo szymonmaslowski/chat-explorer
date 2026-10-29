@@ -41,6 +41,7 @@ In a Claude Code session, run `/explore-chat`. It imports the conversation so fa
 - **Map:** the **Map** link shows the tree of forks. `[` and `]` go back and forward.
 - **Continue later:** run `/explore-chat <id>` in any session. The id is in the status bar and in `chat-explorer list`.
 - **Archive:** **Archive** in the list moves an exploration to **Archived**, where it is read only. **Restore** brings it back; **Delete** hides it. A deleted exploration stays in the database until `chat-explorer purge <id>`; `chat-explorer restore <id>` brings it back as archived.
+- **Archive a fork:** **Archive fork** under a fork's title hides it, and the forks below it, from the map and from the link under its parent message. It stays reachable through **Show archived forks** on the map, read only, until **Restore**.
 
 Press Esc in the terminal to stop Claude waiting for feedback.
 

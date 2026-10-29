@@ -18,6 +18,17 @@ export function mainFork(forks: Map<string, Fork>) {
   return [...forks.values()].find((fork) => fork.parentForkId === null) ?? null;
 }
 
+// Archiving a fork covers the forks below it, so this finds the fork itself or the nearest
+// archived one above it.
+export function archivingFork(fork: Fork, forks: Map<string, Fork>) {
+  let current: Fork | undefined = fork;
+  while (current) {
+    if (current.archivedAt !== null) return current;
+    current = current.parentForkId ? forks.get(current.parentForkId) : undefined;
+  }
+  return null;
+}
+
 export function quotedCommentsOf(messageId: string, comments: Map<string, Comment>) {
   return [...comments.values()]
     .filter((comment) => comment.replyMessageId === messageId)

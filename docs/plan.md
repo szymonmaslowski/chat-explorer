@@ -505,6 +505,15 @@ Nothing typed is lost when the page closes, which iOS does to a home-screen app 
 - **When:** a second after the last change, at least every 5 seconds while typing goes on, and on `visibilitychange` to hidden or `pagehide` with `fetch(…, { keepalive: true })`. Saves and Save, Cancel and Submit run one at a time in order (`useAutosave`), so a late save never undoes them.
 - The new-chat box and a dictation in progress are not saved.
 
+### 17. Archived forks
+
+**Archive fork** under a fork's title sets `forks.archived_at` (`POST /api/forks/:id/archive`, `/unarchive`). The forks below it count as archived too.
+
+- An archived fork is read only: submits and new comments fail with `archived`. Drafts can still be saved, so text typed just before archiving comes back on restore.
+- The main fork cannot be archived; archiving the chat does that. A fork with a queued message in it or below it cannot be archived until the message is answered or cancelled.
+- Its "↳ Fork" link under the parent's message goes, and the map hides it unless **Show archived forks** is ticked. The map ticks it by itself when opened from an archived fork. The chat list's fork count leaves archived forks out.
+- The archived fork shows "Fork archived, read only." with **Restore**; a fork below it says which fork it was archived with.
+
 ## Later
 
 - Hard forks: each fork's answer written by a subagent that only gets `read_fork` for that fork.

@@ -146,7 +146,13 @@ export class ChatStore {
     return this.db
       .all<ExplorationRow & { fork_count: number }>(
         `SELECT explorations.*,
-           (SELECT count(*) FROM forks WHERE forks.exploration_id = explorations.id) AS fork_count
+           (WITH RECURSIVE shown(id) AS (
+              SELECT id FROM forks
+               WHERE exploration_id = explorations.id AND parent_fork_id IS NULL
+              UNION ALL
+              SELECT forks.id FROM forks JOIN shown ON forks.parent_fork_id = shown.id
+               WHERE forks.archived_at IS NULL
+            ) SELECT count(*) FROM shown) AS fork_count
          FROM explorations WHERE ${filters[view]}`,
       )
       .map((row) => ({ ...toExploration(row), forkCount: row.fork_count }));
@@ -244,6 +250,40 @@ export class ChatStore {
     this.requireExplorationRow(explorationId);
     this.db.run('UPDATE explorations SET archived_at = NULL WHERE id = ?', explorationId);
     return this.publishExplorationUpdate(explorationId);
+  }
+
+  archiveFork(forkId: string) {
+    const row = this.requireForkRow(forkId);
+    this.requireWritable(row.exploration_id);
+    if (row.parent_fork_id === null) {
+      throw new StoreError(
+        'invalid',
+        'The main fork cannot be archived. Archive the chat instead.',
+      );
+    }
+    const queued = this.db.get<{ id: string }>(
+      `WITH RECURSIVE subtree(id) AS (
+         SELECT ?
+         UNION ALL
+         SELECT forks.id FROM forks JOIN subtree ON forks.parent_fork_id = subtree.id
+       )
+       SELECT submissions.id FROM submissions JOIN subtree ON submissions.fork_id = subtree.id
+        WHERE submissions.status = 'queued'`,
+      forkId,
+    );
+    if (queued) {
+      throw new StoreError(
+        'invalid',
+        'A message in this fork is still queued. Cancel it or wait for the answer first.',
+      );
+    }
+    return this.setForkArchivedAt(forkId, this.now());
+  }
+
+  unarchiveFork(forkId: string) {
+    const row = this.requireForkRow(forkId);
+    this.requireWritable(row.exploration_id);
+    return this.setForkArchivedAt(forkId, null);
   }
 
   isArchived(explorationId: string) {
@@ -367,8 +407,7 @@ export class ChatStore {
   }
 
   createComment(explorationId: string, input: NewComment) {
-    this.requireWritable(explorationId);
-    const viewFork = this.requireForkRow(input.viewForkId, explorationId);
+    const viewFork = this.requireWritableFork(input.viewForkId, explorationId);
     const isOnPath = this.pathTo(viewFork.tip_message_id).some((row) => row.id === input.messageId);
     if (!isOnPath) {
       throw new StoreError(
@@ -433,8 +472,7 @@ export class ChatStore {
   }
 
   toggleForkAll(explorationId: string, forkId: string) {
-    this.requireWritable(explorationId);
-    this.requireForkRow(forkId, explorationId);
+    this.requireWritableFork(forkId, explorationId);
     const drafts = this.draftsIn(forkId);
     if (drafts.length === 0) return [];
     const type: CommentType = drafts.every((draft) => draft.type === 'fork') ? 'inline' : 'fork';
@@ -462,8 +500,7 @@ export class ChatStore {
     options: { newFork?: boolean; fileIds?: string[] } = {},
   ) {
     const { newFork = false, fileIds = [] } = options;
-    this.requireWritable(explorationId);
-    const fork = this.requireForkRow(forkId, explorationId);
+    const fork = this.requireWritableFork(forkId, explorationId);
     const drafts = this.draftsIn(forkId);
     const files = fileIds.map((fileId) => this.requireDraftFile(fileId));
     const message = globalMessage.trim();
@@ -1115,6 +1152,34 @@ export class ChatStore {
       );
     }
     return row;
+  }
+
+  // A fork is read only while it or a fork above it is archived. Drafts can still be saved, so
+  // text typed just before archiving is kept for when the fork is restored.
+  private requireWritableFork(forkId: string, explorationId?: string) {
+    const row = this.requireForkRow(forkId, explorationId);
+    this.requireWritable(row.exploration_id);
+    const archived = this.db.get<{ id: string }>(
+      `WITH RECURSIVE lineage(id, parent_fork_id, archived_at) AS (
+         SELECT id, parent_fork_id, archived_at FROM forks WHERE id = ?
+         UNION ALL
+         SELECT forks.id, forks.parent_fork_id, forks.archived_at
+           FROM forks JOIN lineage ON forks.id = lineage.parent_fork_id
+       )
+       SELECT id FROM lineage WHERE archived_at IS NOT NULL LIMIT 1`,
+      forkId,
+    );
+    if (archived) {
+      throw new StoreError('archived', `Fork ${forkId} is archived. Restore it to continue.`);
+    }
+    return row;
+  }
+
+  private setForkArchivedAt(forkId: string, archivedAt: number | null) {
+    this.db.run('UPDATE forks SET archived_at = ? WHERE id = ?', archivedAt, forkId);
+    const fork = toFork(this.requireForkRow(forkId));
+    this.publish([[fork.explorationId, { type: 'fork.updated', fork }]]);
+    return fork;
   }
 
   private publishExplorationUpdate(explorationId: string) {

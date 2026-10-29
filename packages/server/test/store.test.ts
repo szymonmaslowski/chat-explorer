@@ -422,3 +422,51 @@ describe('archive and delete', () => {
     }
   });
 });
+
+describe('archiving a fork', () => {
+  function forkFrom(
+    store: ReturnType<typeof setup>['store'],
+    explorationId: string,
+    parentForkId: string,
+    message: string,
+  ) {
+    store.submit(explorationId, parentForkId, message, { newFork: true });
+    store.deliverQueued(explorationId);
+    return store.snapshot(explorationId).forks.find((fork) => fork.summary === message)!;
+  }
+
+  it('makes a fork and the forks below it read only until it is restored', () => {
+    const { store, clock, explorationId, mainForkId, answer } = setup();
+    const child = forkFrom(store, explorationId, mainForkId, 'Child');
+    const grandchild = forkFrom(store, explorationId, child.id, 'Grandchild');
+    expect(store.listExplorations()[0]!.forkCount).toBe(3);
+
+    clock.now += 1000;
+    expect(store.archiveFork(child.id).archivedAt).toBe(clock.now);
+    expect(store.listExplorations()[0]!.forkCount).toBe(1);
+    for (const forkId of [child.id, grandchild.id]) {
+      expect(() => store.submit(explorationId, forkId, 'more')).toThrow(
+        expect.objectContaining({ code: 'archived' }),
+      );
+      expect(() =>
+        draft(store, explorationId, { messageId: answer.id, viewForkId: forkId, body: 'x' }),
+      ).toThrow(expect.objectContaining({ code: 'archived' }));
+    }
+    store.saveReplyDraft(grandchild.id, { text: 'Typed just before', newFork: false, fileIds: [] });
+    store.submit(explorationId, mainForkId, 'Main goes on');
+
+    expect(store.unarchiveFork(child.id).archivedAt).toBeNull();
+    expect(store.listExplorations()[0]!.forkCount).toBe(3);
+    store.submit(explorationId, grandchild.id, 'more');
+  });
+
+  it('refuses the main fork and a fork with a queued message', () => {
+    const { store, explorationId, mainForkId } = setup();
+    expect(() => store.archiveFork(mainForkId)).toThrow(
+      expect.objectContaining({ code: 'invalid' }),
+    );
+    const child = forkFrom(store, explorationId, mainForkId, 'Child');
+    store.submit(explorationId, child.id, 'Still waiting', { newFork: true });
+    expect(() => store.archiveFork(child.id)).toThrow(expect.objectContaining({ code: 'invalid' }));
+  });
+});

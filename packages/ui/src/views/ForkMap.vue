@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { Fork } from '@shared/types';
 import { stratify, tree } from 'd3-hierarchy';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import ExplorationHeader from '../components/ExplorationHeader.vue';
-import { forkPath, forkTitle } from '../lib/conversation';
+import { archivingFork, forkPath, forkTitle } from '../lib/conversation';
 import { openExploration } from '../stores/exploration';
 
 const props = defineProps<{ explorationId: string; currentForkId?: string }>();
@@ -15,12 +15,30 @@ const verticalGap = 56;
 const padding = 16;
 
 const state = computed(() => openExploration(props.explorationId));
+const archivedForks = computed(
+  () =>
+    new Set(
+      [...state.value.forks.values()]
+        .filter((fork) => archivingFork(fork, state.value.forks))
+        .map((fork) => fork.id),
+    ),
+);
+// Shown from the start when the map opens from an archived fork, so it is not missing.
+const chosenShowArchived = ref<boolean | null>(null);
+const showArchived = computed({
+  get: () =>
+    chosenShowArchived.value ??
+    (props.currentForkId !== undefined && archivedForks.value.has(props.currentForkId)),
+  set: (shown) => (chosenShowArchived.value = shown),
+});
 
 const forkUrl = (fork: Fork) =>
   fork.parentForkId ? `/e/${props.explorationId}/f/${fork.id}` : `/e/${props.explorationId}`;
 
 const layout = computed(() => {
-  const forks = [...state.value.forks.values()];
+  const forks = [...state.value.forks.values()].filter(
+    (fork) => showArchived.value || !archivedForks.value.has(fork.id),
+  );
   if (forks.length === 0) return null;
   const root = stratify<Fork>()
     .id((fork) => fork.id)
@@ -41,6 +59,7 @@ const layout = computed(() => {
       ...position(node.x, node.y),
       messageCount: messageCounts.get(fork.id) ?? 0,
       awaitingAnswer: last?.role === 'user',
+      archived: archivedForks.value.has(fork.id),
     };
   });
   const edges = root.links().map(({ source, target }) => {
@@ -71,6 +90,11 @@ const layout = computed(() => {
       <template #links>· <span>Map</span></template>
     </ExplorationHeader>
 
+    <label v-if="archivedForks.size > 0" class="show-archived">
+      <input v-model="showArchived" type="checkbox" />
+      Show archived forks ({{ archivedForks.size }})
+    </label>
+
     <p v-if="state.status === 'loading'" class="muted">Loading…</p>
     <p v-else-if="state.status !== 'ready'" class="muted">This chat is not available.</p>
 
@@ -87,7 +111,7 @@ const layout = computed(() => {
         :key="box.fork.id"
         :to="forkUrl(box.fork)"
         class="fork-box"
-        :class="{ current: box.fork.id === currentForkId }"
+        :class="{ current: box.fork.id === currentForkId, archived: box.archived }"
         :style="{
           left: `${box.left}px`,
           top: `${box.top}px`,
@@ -99,6 +123,7 @@ const layout = computed(() => {
         <span class="meta">
           {{ box.messageCount }} message{{ box.messageCount === 1 ? '' : 's' }}
           <span v-if="box.awaitingAnswer" class="awaiting">· awaiting answer</span>
+          <span v-if="box.archived">· archived</span>
         </span>
       </RouterLink>
     </div>
@@ -112,6 +137,14 @@ const layout = computed(() => {
 
 .top {
   margin-bottom: 1rem;
+}
+
+.show-archived {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
 }
 
 .canvas {
@@ -146,6 +179,11 @@ const layout = computed(() => {
 
 .fork-box:hover {
   border-color: var(--accent);
+}
+
+.fork-box.archived {
+  border-style: dashed;
+  opacity: 0.6;
 }
 
 .fork-box.current {

@@ -3,13 +3,20 @@ import { computed, nextTick, onBeforeUnmount, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import CommentLayer from '../components/CommentLayer.vue';
 import ExplorationHeader from '../components/ExplorationHeader.vue';
+import ForkArchiveControl from '../components/ForkArchiveControl.vue';
 import ConversationMessage from '../components/ConversationMessage.vue';
 import QueuedSubmissionCard from '../components/QueuedSubmissionCard.vue';
 import ReplyBar from '../components/ReplyBar.vue';
 import SessionError from '../components/SessionError.vue';
 import SpeechPlayer from '../components/SpeechPlayer.vue';
 import { useMediaQuery } from '../composables/useMediaQuery';
-import { forkPath, forkTitle, mainFork, quotedCommentsOf } from '../lib/conversation';
+import {
+  archivingFork,
+  forkPath,
+  forkTitle,
+  mainFork,
+  quotedCommentsOf,
+} from '../lib/conversation';
 import { openExploration } from '../stores/exploration';
 import { stopSpeech } from '../stores/speech';
 
@@ -21,10 +28,14 @@ const flashMs = 1_400;
 const route = useRoute();
 const compact = useMediaQuery('(max-width: 700px), (hover: none)');
 const state = computed(() => openExploration(props.explorationId));
-const archived = computed(() => Boolean(state.value.exploration?.archivedAt));
+const chatArchived = computed(() => Boolean(state.value.exploration?.archivedAt));
 const fork = computed(() =>
   props.forkId ? (state.value.forks.get(props.forkId) ?? null) : mainFork(state.value.forks),
 );
+const archivedBy = computed(() =>
+  fork.value ? archivingFork(fork.value, state.value.forks) : null,
+);
+const archived = computed(() => chatArchived.value || archivedBy.value !== null);
 const parentFork = computed(() =>
   fork.value?.parentForkId ? (state.value.forks.get(fork.value.parentForkId) ?? null) : null,
 );
@@ -45,13 +56,15 @@ const queuedSubmissions = computed(() =>
     (submission) => submission.forkId === fork.value?.id,
   ),
 );
-// Forks started from a reply; forks from comments are reached through their comment.
+// Forks started from a reply, unless archived; forks from comments are reached through their
+// comment.
 const replyForksAt = (messageId: string) =>
   [...state.value.forks.values()].filter(
     (child) =>
       child.baseMessageId === messageId &&
       child.originCommentId === null &&
       child.parentForkId !== null &&
+      child.archivedAt === null &&
       child.id !== fork.value?.id,
   );
 const filesOfMessage = (messageId: string) =>
@@ -135,6 +148,12 @@ watch(
 
     <template v-else>
       <h1 class="fork-title">{{ forkTitle(fork) }}</h1>
+      <ForkArchiveControl
+        v-if="fork.parentForkId && !chatArchived"
+        :exploration-id="explorationId"
+        :fork="fork"
+        :archived-by="archivedBy"
+      />
       <p v-if="path.length === 0" class="muted">
         No messages yet.<template v-if="!archived"> Write the first one below.</template>
       </p>

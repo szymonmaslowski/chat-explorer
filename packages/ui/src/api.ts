@@ -4,6 +4,7 @@ import type {
   CommentChanges,
   Exploration,
   ExplorationListItem,
+  Fork,
   MessageFile,
   NewComment,
   QueuedSubmission,
@@ -99,6 +100,9 @@ export const api = {
     call<Comment>(`/api/explorations/${explorationId}/comments`, { json: comment, keepalive }),
   updateComment: (commentId: string, changes: CommentChanges, keepalive = false) =>
     call<Comment>(`/api/comments/${commentId}`, { method: 'PATCH', json: changes, keepalive }),
+  archiveFork: (forkId: string) => call<Fork>(`/api/forks/${forkId}/archive`, { method: 'POST' }),
+  unarchiveFork: (forkId: string) =>
+    call<Fork>(`/api/forks/${forkId}/unarchive`, { method: 'POST' }),
   replyDraft: (forkId: string) => call<ReplyDraft>(`/api/forks/${forkId}/reply-draft`),
   saveReplyDraft: (
     forkId: string,

@@ -107,4 +107,7 @@ export const migrations = [
     updated_at INTEGER NOT NULL
   );
   `,
+  `
+  ALTER TABLE forks ADD COLUMN archived_at INTEGER;
+  `,
 ];

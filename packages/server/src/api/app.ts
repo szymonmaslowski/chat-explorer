@@ -315,6 +315,14 @@ export function createApp(options: AppOptions) {
     );
   });
 
+  app.post('/api/forks/:id/archive', (context) =>
+    context.json(store.archiveFork(context.req.param('id'))),
+  );
+
+  app.post('/api/forks/:id/unarchive', (context) =>
+    context.json(store.unarchiveFork(context.req.param('id'))),
+  );
+
   app.get('/api/forks/:id/reply-draft', (context) =>
     context.json(store.replyDraft(context.req.param('id'))),
   );

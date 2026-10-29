@@ -36,6 +36,8 @@ export interface Fork {
   summary: string;
   createdAt: number;
   updatedAt: number;
+  // Set on the fork the reader archived; the forks below it count as archived too.
+  archivedAt: number | null;
 }
 
 export interface Message {
