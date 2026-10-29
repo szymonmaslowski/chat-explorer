@@ -38,7 +38,8 @@ const newFork = computed({
 const insertDictation = (dictated: string) => insertAtCursor(textarea.value, text, dictated);
 const files = useFileDrafts(() => replyFilesOwner(props.forkId));
 const fileCount = computed(() => files.readyIds.value.length);
-const editingCount = computed(() => props.drafts.filter((draft) => draft.editBody !== null).length);
+const beingEdited = computed(() => props.drafts.filter((draft) => draft.editBody !== null));
+const editingCount = computed(() => beingEdited.value.length);
 const readyDrafts = computed(() => props.drafts.filter((draft) => draft.editBody === null));
 const forkCount = computed(() => readyDrafts.value.filter((draft) => draft.type === 'fork').length);
 const inlineCount = computed(() => readyDrafts.value.length - forkCount.value);
@@ -53,7 +54,6 @@ const summary = computed(() => {
     .filter(Boolean)
     .join(', ');
   return [
-    editingCount.value ? `${plural(editingCount.value, 'comment')} being edited` : '',
     forkCount.value ? plural(forkCount.value, 'fork') : '',
     newFork.value && reply ? `new fork with ${reply}` : reply,
   ]
@@ -224,7 +224,14 @@ function onKeydown(event: KeyboardEvent) {
       <DictationButton :hint="hint" @text="insertDictation" />
       <ExpandButton v-model="expanded" />
       <span class="spacer" />
-      <span v-if="summary" class="summary muted">{{ summary }}</span>
+      <span v-if="editingCount || summary" class="summary muted">
+        <RouterLink
+          v-if="editingCount"
+          :to="{ hash: `#c-${beingEdited[0]!.id}` }"
+          title="Save or cancel it to submit"
+          >{{ plural(editingCount, 'comment') }} being edited</RouterLink
+        ><template v-if="editingCount && summary">, </template>{{ summary }}
+      </span>
       <button type="submit" class="primary" :disabled="!canSubmit">Submit</button>
     </div>
   </form>

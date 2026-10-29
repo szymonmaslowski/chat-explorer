@@ -82,8 +82,8 @@ export async function answeredChat(request: APIRequestContext) {
 }
 
 // Selects the first word of the answer, as a reader dragging over it would.
-export async function selectAnswer(page: Page) {
-  await page.locator('.message.assistant .content p').evaluate((paragraph) => {
+export async function selectAnswer(page: Page, paragraphIndex = 0) {
+  await page.locator('.message.assistant .content p').nth(paragraphIndex).evaluate((paragraph) => {
     const range = document.createRange();
     range.setStart(paragraph.firstChild!, 0);
     range.setEnd(paragraph.firstChild!, 7);

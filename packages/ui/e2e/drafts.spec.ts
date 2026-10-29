@@ -1,5 +1,12 @@
 import { expect, type Page } from '@playwright/test';
-import { answeredChat, selectAnswer, test } from './helpers';
+import {
+  answeredChat,
+  attachFakeSession,
+  deliverAndAnswer,
+  detachFakeSession,
+  selectAnswer,
+  test,
+} from './helpers';
 
 const saved = (page: Page, path: string) =>
   page.waitForResponse(
@@ -95,4 +102,43 @@ test('keeps an edit of a saved comment apart from its saved text until Save', as
   await page.reload();
   await expect(card).toContainText('Third version');
   await expect(card.locator('textarea')).toHaveCount(0);
+});
+
+test('keeps a comment being edited out of the header tray and links to it from the reply bar', async ({
+  page,
+  request,
+}) => {
+  const paragraphs = Array.from(
+    { length: 30 },
+    (_, index) => `Paragraph ${index + 1} of the answer.`,
+  );
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'Explain it at length' } })
+  ).json();
+  await attachFakeSession(request, explorationId);
+  await deliverAndAnswer(request, explorationId, paragraphs.join('\n\n'));
+  await detachFakeSession(request);
+  await page.goto(`/e/${explorationId}`);
+  await page.locator('.message.assistant .content p').nth(9).scrollIntoViewIfNeeded();
+  await selectAnswer(page, 9);
+  await page.getByRole('button', { name: 'Comment', exact: true }).click();
+  await page.getByPlaceholder('Your comment').fill('Still thinking');
+  await page.keyboard.press('ControlOrMeta+Enter');
+  const card = page.locator('.comment-card.draft');
+  await card.evaluate((element) => element.scrollIntoView({ block: 'center' }));
+  await page.mouse.move(0, 0);
+  await card.hover();
+  await card.getByRole('button', { name: 'Edit' }).click();
+
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await expect(page.locator('#comment-tray .chip')).toHaveCount(0);
+  await expect(card.locator('textarea')).toHaveValue('Still thinking');
+  await expect(card).not.toBeInViewport();
+
+  await page
+    .locator('.reply-bar .summary')
+    .getByRole('link', { name: '1 comment being edited' })
+    .click();
+  await expect(card).toBeInViewport();
+  await card.getByRole('button', { name: 'Cancel' }).click();
 });

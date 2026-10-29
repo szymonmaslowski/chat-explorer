@@ -123,9 +123,16 @@ function updateTray() {
   const header = document.querySelector('[data-sticky-header]');
   const limit = header ? header.getBoundingClientRect().bottom : 0;
   const inTray = new Set<string>();
+  // A chip has no editor, so a comment being edited keeps its card.
   for (const comment of props.comments) {
     const range = anchors.value.get(comment.id);
-    if (comment.status === 'draft' && range && firstLineRect(range).bottom < limit) {
+    const beingEdited = comment.editBody !== null;
+    if (
+      comment.status === 'draft' &&
+      !beingEdited &&
+      range &&
+      firstLineRect(range).bottom < limit
+    ) {
       inTray.add(comment.id);
     }
   }
@@ -383,7 +390,10 @@ watch(
   [() => route.hash, anchors],
   ([hash]) => {
     if (!hash.startsWith('#c-') || hash === handledHash) return;
-    if (scrollToComment(hash.slice(3))) handledHash = hash;
+    if (!scrollToComment(hash.slice(3))) return;
+    handledHash = hash;
+    // So the same link scrolls there again the next time.
+    void router.replace({ hash: '' }).then(() => (handledHash = ''));
   },
   { flush: 'post' },
 );
