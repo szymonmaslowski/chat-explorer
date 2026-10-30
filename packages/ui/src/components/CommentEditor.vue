@@ -66,25 +66,42 @@ function close(action: () => void) {
   emit('close');
 }
 
+function addSaved() {
+  const { explorationId } = props;
+  outbox.add(
+    created
+      ? {
+          type: 'comment.update',
+          explorationId,
+          commentId,
+          changes: { body: body.value, editBody: null, type: type() },
+        }
+      : {
+          type: 'comment.create',
+          explorationId,
+          comment: { id: commentId, ...target(), body: body.value, type: type() },
+        },
+  );
+}
+
 function save() {
   if (!body.value.trim()) return;
-  const { explorationId } = props;
-  close(() =>
-    outbox.add(
-      created
-        ? {
-            type: 'comment.update',
-            explorationId,
-            commentId,
-            changes: { body: body.value, editBody: null, type: type() },
-          }
-        : {
-            type: 'comment.create',
-            explorationId,
-            comment: { id: commentId, ...target(), body: body.value, type: type() },
-          },
-    ),
-  );
+  close(addSaved);
+}
+
+function forkNow() {
+  if (!body.value.trim()) return;
+  const { explorationId, viewForkId } = props;
+  close(() => {
+    addSaved();
+    outbox.add({
+      type: 'fork-now',
+      explorationId,
+      submissionId: newId(),
+      forkId: viewForkId,
+      commentId,
+    });
+  });
 }
 
 function cancel() {
@@ -120,6 +137,9 @@ function onKeydown(event: KeyboardEvent) {
       <ExpandButton v-model="expanded" />
       <span class="spacer" />
       <button type="button" @click="cancel">Cancel</button>
+      <button v-if="asFork" type="button" :disabled="!body.trim()" @click="forkNow">
+        Fork now
+      </button>
       <button type="button" class="primary" :disabled="!body.trim()" @click="save">Save</button>
     </div>
   </div>

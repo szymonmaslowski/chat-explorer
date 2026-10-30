@@ -75,6 +75,7 @@ const submitBody = z.object({
   newFork: z.boolean().default(false),
   fileIds,
 });
+const forkNowBody = z.object({ id: clientId });
 const uploadBody = z.object({ file: z.instanceof(File) });
 // Multipart framing around a file at the size limit.
 const uploadOverheadBytes = 64 * 1024;
@@ -305,6 +306,11 @@ export function createApp(options: AppOptions) {
   app.delete('/api/comments/:id', (context) => {
     store.deleteComment(context.req.param('id'));
     return context.json({ ok: true });
+  });
+
+  app.post('/api/comments/:id/fork-now', async (context) => {
+    const { id } = forkNowBody.parse(await context.req.json());
+    return context.json(store.forkNow(context.req.param('id'), { id }), 201);
   });
 
   app.post('/api/explorations/:id/comments/fork-all', async (context) => {

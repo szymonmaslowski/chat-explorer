@@ -220,6 +220,60 @@ describe('submission queue', () => {
     );
   });
 
+  it('sends one fork comment on its own, leaving the other drafts and the reply box', () => {
+    const { store, explorationId, mainForkId, answer } = setup();
+    const inline = draft(store, explorationId, {
+      messageId: answer.id,
+      viewForkId: mainForkId,
+      body: 'inline',
+    });
+    const fork = draft(store, explorationId, {
+      messageId: answer.id,
+      viewForkId: mainForkId,
+      body: 'fork now',
+      type: 'fork',
+    });
+    store.saveReplyDraft(mainForkId, { text: 'still typing', newFork: false, fileIds: [] });
+
+    const submission = store.forkNow(fork.id);
+
+    expect(submission).toMatchObject({ forkId: mainForkId, globalMessage: '', newFork: false });
+    let snapshot = store.snapshot(explorationId);
+    const statusOf = (commentId: string) =>
+      snapshot.comments.find((comment) => comment.id === commentId)!.status;
+    expect(statusOf(inline.id)).toBe('draft');
+    expect(statusOf(fork.id)).toBe('queued');
+    expect(snapshot.replyDrafts.map((replyDraft) => replyDraft.text)).toEqual(['still typing']);
+
+    store.deliverQueued(explorationId);
+
+    const pending = store.pendingForks(explorationId);
+    expect(pending).toHaveLength(1);
+    expect(pending[0]!.isNewFork).toBe(true);
+    expect(pending[0]!.userMessages[0]!.text).toBe('> some text\nfork now');
+    snapshot = store.snapshot(explorationId);
+    expect(statusOf(fork.id)).toBe('submitted');
+    expect(statusOf(inline.id)).toBe('draft');
+  });
+
+  it('refuses Fork now on an inline comment or one being edited', () => {
+    const { store, explorationId, mainForkId, answer } = setup();
+    const inline = draft(store, explorationId, {
+      messageId: answer.id,
+      viewForkId: mainForkId,
+      body: 'inline',
+    });
+    const fork = draft(store, explorationId, {
+      messageId: answer.id,
+      viewForkId: mainForkId,
+      body: 'fork',
+      type: 'fork',
+    });
+    store.updateComment(fork.id, { editBody: 'fork, changed' });
+    expect(() => store.forkNow(inline.id)).toThrow(expect.objectContaining({ code: 'invalid' }));
+    expect(() => store.forkNow(fork.id)).toThrow(expect.objectContaining({ code: 'invalid' }));
+  });
+
   it('restores drafts and returns the message when a queued submission is cancelled', () => {
     const { store, explorationId, mainForkId, answer } = setup();
     draft(store, explorationId, { messageId: answer.id, viewForkId: mainForkId, body: 'inline' });
@@ -493,6 +547,21 @@ describe('changes the page queued while offline', () => {
     const { store, explorationId, mainForkId } = setup();
     store.submit(explorationId, mainForkId, 'Sent offline', { id: 'q8r2t5w9zb' });
     store.submit(explorationId, mainForkId, 'Sent offline', { id: 'q8r2t5w9zb' });
+    expect(store.snapshot(explorationId).queuedSubmissions.map(({ id }) => id)).toEqual([
+      'q8r2t5w9zb',
+    ]);
+  });
+
+  it('starts a fork now with the id the page made, once however often it is sent', () => {
+    const { store, explorationId, mainForkId, answer } = setup();
+    const fork = draft(store, explorationId, {
+      messageId: answer.id,
+      viewForkId: mainForkId,
+      body: 'fork',
+      type: 'fork',
+    });
+    store.forkNow(fork.id, { id: 'q8r2t5w9zb' });
+    store.forkNow(fork.id, { id: 'q8r2t5w9zb' });
     expect(store.snapshot(explorationId).queuedSubmissions.map(({ id }) => id)).toEqual([
       'q8r2t5w9zb',
     ]);

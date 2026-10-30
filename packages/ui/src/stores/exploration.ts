@@ -177,6 +177,21 @@ export function applyChange(state: ExplorationState, change: Change) {
       for (const file of files) state.files.set(file.id, { ...file, submissionId: id });
       break;
     }
+    case 'fork-now': {
+      const { submissionId: id, forkId, commentId } = change;
+      state.queuedSubmissions.set(id, {
+        id,
+        explorationId: state.explorationId,
+        forkId,
+        globalMessage: '',
+        newFork: false,
+        createdAt: now,
+      });
+      const comment = state.comments.get(commentId);
+      if (comment)
+        state.comments.set(commentId, { ...comment, status: 'queued', submissionId: id });
+      break;
+    }
     case 'submission.cancel':
       state.queuedSubmissions.delete(change.submissionId);
       for (const comment of state.comments.values()) {

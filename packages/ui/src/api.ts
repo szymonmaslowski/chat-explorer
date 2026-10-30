@@ -95,6 +95,11 @@ export const api = {
       json: { forkId, globalMessage, ...options },
       keepalive,
     }),
+  forkNow: (commentId: string, submissionId: string, keepalive = false) =>
+    call<QueuedSubmission>(`/api/comments/${commentId}/fork-now`, {
+      json: { id: submissionId },
+      keepalive,
+    }),
   cancelSubmission: (submissionId: string, keepalive = false) =>
     call<{ globalMessage: string; newFork: boolean; files: MessageFile[] }>(
       `/api/submissions/${submissionId}`,

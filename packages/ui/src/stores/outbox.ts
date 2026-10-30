@@ -23,6 +23,13 @@ export type Change =
   | { type: 'comment.delete'; explorationId: string; commentId: string }
   | { type: 'reply-draft.save'; explorationId: string; forkId: string; draft: ReplyDraftChange }
   | { type: 'submit'; explorationId: string; submission: SubmissionChange }
+  | {
+      type: 'fork-now';
+      explorationId: string;
+      submissionId: string;
+      forkId: string;
+      commentId: string;
+    }
   | { type: 'submission.cancel'; explorationId: string; submissionId: string };
 
 interface QueuedChange {
@@ -94,6 +101,7 @@ const subjectOf = (change: Change) => {
       return change.forkId;
     case 'submit':
       return change.submission.id;
+    case 'fork-now':
     case 'submission.cancel':
       return change.submissionId;
   }
@@ -115,16 +123,15 @@ function merge(waiting: Change, next: Change): Change | null {
 
 // Deleting a comment or cancelling a submission the daemon never got needs no request at all.
 function withdraw(stored: StoredOutbox, change: Change) {
-  const created =
+  const created: Change['type'][] =
     change.type === 'comment.delete'
-      ? 'comment.create'
+      ? ['comment.create']
       : change.type === 'submission.cancel'
-        ? 'submit'
-        : null;
-  if (!created) return false;
+        ? ['submit', 'fork-now']
+        : [];
   const subject = subjectOf(change);
   const creation = stored.queue.find(
-    (queued) => queued.change.type === created && subjectOf(queued.change) === subject,
+    (queued) => created.includes(queued.change.type) && subjectOf(queued.change) === subject,
   );
   if (!creation || creation.key === stored.sendingKey) return false;
   stored.queue = stored.queue.filter(
@@ -166,6 +173,8 @@ function send(change: Change) {
         keepalive,
       );
     }
+    case 'fork-now':
+      return api.forkNow(change.commentId, change.submissionId, keepalive);
     case 'submission.cancel':
       return api.cancelSubmission(change.submissionId, keepalive);
   }
@@ -185,7 +194,9 @@ function failureMessage(change: Change, error: unknown) {
   if (change.type === 'submission.cancel' && error instanceof ApiError) {
     if (error.code === 'already_sent') return 'Could not cancel: already sent to Claude.';
   }
-  return change.type === 'submit' ? `Could not send: ${reason}` : `Could not save: ${reason}`;
+  return change.type === 'submit' || change.type === 'fork-now'
+    ? `Could not send: ${reason}`
+    : `Could not save: ${reason}`;
 }
 
 function remove(key: number) {

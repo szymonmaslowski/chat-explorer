@@ -5,7 +5,7 @@ import { useAutosave } from '../composables/useAutosave';
 import { useExpandedArea } from '../composables/useExpandedArea';
 import { useProximityFade } from '../composables/useProximityFade';
 import { insertAtCursor } from '../lib/insert-text';
-import { outbox } from '../stores/outbox';
+import { newId, outbox } from '../stores/outbox';
 import DictationButton from './DictationButton.vue';
 import ExpandButton from './ExpandButton.vue';
 
@@ -99,6 +99,14 @@ function cancelEditing() {
 }
 
 const toggleType = () => update({ type: props.comment.type === 'fork' ? 'inline' : 'fork' });
+const forkNow = () =>
+  outbox.add({
+    type: 'fork-now',
+    explorationId: props.comment.explorationId,
+    submissionId: newId(),
+    forkId: props.comment.viewForkId,
+    commentId: props.comment.id,
+  });
 
 function onEditorKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') void cancelEditing();
@@ -162,6 +170,14 @@ function onEditorKeydown(event: KeyboardEvent) {
           @click="toggleType"
         >
           {{ comment.type === 'fork' ? 'Unfork' : 'Fork' }}
+        </button>
+        <button
+          v-if="comment.type === 'fork'"
+          type="button"
+          title="Start this fork without waiting for Submit"
+          @click="forkNow"
+        >
+          Fork now
         </button>
         <button type="button" @click="startEditing">Edit</button>
         <button type="button" @click="remove">Delete</button>

@@ -539,24 +539,7 @@ export class ChatStore {
     }
     const id = options.id ?? newId();
     this.db.transaction(() => {
-      this.db.run(
-        `INSERT INTO submissions
-           (id, exploration_id, fork_id, global_message, new_fork, status, created_at)
-         VALUES (?, ?, ?, ?, ?, 'queued', ?)`,
-        id,
-        explorationId,
-        forkId,
-        message,
-        newFork ? 1 : 0,
-        this.now(),
-      );
-      for (const draft of drafts) {
-        this.db.run(
-          "UPDATE comments SET status = 'queued', submission_id = ? WHERE id = ?",
-          id,
-          draft.id,
-        );
-      }
+      this.insertSubmission({ id, explorationId, forkId, message, newFork }, drafts);
       for (const file of files) {
         this.db.run(
           'UPDATE files SET exploration_id = ?, submission_id = ? WHERE id = ?',
@@ -568,16 +551,35 @@ export class ChatStore {
       this.db.run('UPDATE files SET draft_fork_id = NULL WHERE draft_fork_id = ?', forkId);
       this.db.run('DELETE FROM reply_drafts WHERE fork_id = ?', forkId);
     });
-    const submission = toQueuedSubmission(this.requireSubmissionRow(id));
-    this.publishCommentUpdates(
-      explorationId,
-      drafts.map((draft) => draft.id),
-    );
-    this.publish([[explorationId, { type: 'submission.queued', submission }]]);
+    const submission = this.publishSubmission(explorationId, id, drafts);
     if (files.length > 0) {
       this.publish([[explorationId, { type: 'files.updated', files: this.filesOf(id) }]]);
     }
     return submission;
+  }
+
+  // Sends one fork comment on its own; the other drafts and the reply box stay as they are.
+  forkNow(commentId: string, options: { id?: string } = {}) {
+    const comment = this.requireCommentRow(commentId);
+    const explorationId = comment.exploration_id;
+    const existing = options.id
+      ? this.existingRow<SubmissionRow>('submissions', options.id, explorationId)
+      : null;
+    if (existing) return toQueuedSubmission(existing);
+    const draft = this.requireDraft(commentId);
+    this.requireWritableFork(draft.view_fork_id, explorationId);
+    if (draft.type !== 'fork') {
+      throw new StoreError('invalid', 'Only a fork comment can start a fork on its own.');
+    }
+    if (draft.edit_body !== null) {
+      throw new StoreError('invalid', 'Save or cancel the comment being edited first.');
+    }
+    const id = options.id ?? newId();
+    const forkId = draft.view_fork_id;
+    this.db.transaction(() => {
+      this.insertSubmission({ id, explorationId, forkId, message: '', newFork: false }, [draft]);
+    });
+    return this.publishSubmission(explorationId, id, [draft]);
   }
 
   cancelSubmission(submissionId: string) {
@@ -1114,6 +1116,46 @@ export class ChatStore {
        SELECT messages.* FROM path JOIN messages ON messages.id = path.id ORDER BY path.depth DESC`,
       messageId,
     );
+  }
+
+  private insertSubmission(
+    submission: {
+      id: string;
+      explorationId: string;
+      forkId: string;
+      message: string;
+      newFork: boolean;
+    },
+    drafts: CommentRow[],
+  ) {
+    this.db.run(
+      `INSERT INTO submissions
+         (id, exploration_id, fork_id, global_message, new_fork, status, created_at)
+       VALUES (?, ?, ?, ?, ?, 'queued', ?)`,
+      submission.id,
+      submission.explorationId,
+      submission.forkId,
+      submission.message,
+      submission.newFork ? 1 : 0,
+      this.now(),
+    );
+    for (const draft of drafts) {
+      this.db.run(
+        "UPDATE comments SET status = 'queued', submission_id = ? WHERE id = ?",
+        submission.id,
+        draft.id,
+      );
+    }
+  }
+
+  private publishSubmission(explorationId: string, submissionId: string, drafts: CommentRow[]) {
+    const submission = toQueuedSubmission(this.requireSubmissionRow(submissionId));
+    this.publishCommentUpdates(
+      explorationId,
+      drafts.map((draft) => draft.id),
+    );
+    this.publish([[explorationId, { type: 'submission.queued', submission }]]);
+    return submission;
   }
 
   private draftsIn(forkId: string) {
