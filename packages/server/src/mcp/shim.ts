@@ -17,6 +17,10 @@ const heartbeatIntervalMs = 15_000;
 const feedbackRoundMs = 240_000;
 // The plugin gives this server a 24 h tool timeout; returning earlier avoids a hard failure.
 const defaultFeedbackTimeoutSeconds = 23 * 60 * 60;
+// Claude follows an instruction in the result better than one from the skill read long before,
+// and a session that drops the loop leaves the user's messages queued.
+const keepListening =
+  'Call await_feedback again now. Keep listening until the user interrupts you in the terminal.';
 
 export interface ShimOptions {
   config: Config;
@@ -288,8 +292,9 @@ export function createShim(options: ShimOptions) {
           { json: { shimId, waitMs }, signal },
         );
         if (result.status === 'detached' || result.status === 'deleted') attachment = null;
-        if (result.status !== 'timeout' || Date.now() >= deadline || signal.aborted) {
-          return json(result);
+        if (result.status !== 'timeout') return json(result);
+        if (Date.now() >= deadline || signal.aborted) {
+          return json({ ...result, next: keepListening });
         }
       }
     }),

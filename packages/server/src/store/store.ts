@@ -38,6 +38,7 @@ import { newId } from './ids.js';
 
 export const attachmentLivenessMs = 45_000;
 const forkSummaryLength = 80;
+const repliesToExcerptLength = 300;
 const clearAttachment =
   'attached_shim_id = NULL, attached_session_id = NULL, attached_seen_at = NULL';
 
@@ -60,6 +61,9 @@ export interface PendingFork {
   baseMessageId: string | null;
   inReplyTo: string;
   userMessages: UserMessageText[];
+  // The start of the message the user answered, so Claude can tell which answer they mean when
+  // one session answers many forks.
+  repliesTo: { messageId: string; excerpt: string } | null;
 }
 
 export interface ForkMapEntry {
@@ -86,12 +90,12 @@ export interface Attachment {
 
 type PendingEvent = [explorationId: string, event: ExplorationEvent];
 
-const summaryFrom = (text: string) => {
+const shortened = (text: string, length: number) => {
   const singleLine = text.replace(/\s+/g, ' ').trim();
-  return singleLine.length > forkSummaryLength
-    ? `${singleLine.slice(0, forkSummaryLength - 1)}…`
-    : singleLine;
+  return singleLine.length > length ? `${singleLine.slice(0, length - 1)}…` : singleLine;
 };
+const summaryFrom = (text: string) => shortened(text, forkSummaryLength);
+const excerptOf = (text: string) => shortened(text, repliesToExcerptLength);
 
 const quoteBlock = (quote: string) =>
   quote
@@ -757,6 +761,7 @@ export class ChatStore {
         const isNewFork =
           fork.parent_fork_id !== null &&
           trailingUserMessages[0]?.parent_id === fork.base_message_id;
+        const answered = path.at(-trailingUserMessages.length - 1);
         return {
           forkId: fork.id,
           parentForkId: fork.parent_fork_id,
@@ -767,6 +772,9 @@ export class ChatStore {
             id: row.id,
             text: this.messageText(row),
           })),
+          repliesTo: answered
+            ? { messageId: answered.id, excerpt: excerptOf(this.messageText(answered)) }
+            : null,
         };
       });
   }

@@ -23,6 +23,7 @@ defineProps<{ state: ExplorationState }>();
           :connected="state.connected"
           :exploration-id="state.explorationId"
           :model="state.exploration?.model"
+          :has-queued="state.queuedSubmissions.size > 0"
         />
         <ThemeSwitch />
       </div>

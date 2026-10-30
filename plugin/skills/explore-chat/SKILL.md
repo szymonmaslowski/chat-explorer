@@ -24,12 +24,13 @@ Argument: `$ARGUMENTS` (an exploration id, or empty).
 Repeat until the user interrupts you in the terminal:
 
 1. Call `await_feedback`.
-   - `timeout`: call it again.
+   - `timeout`: call it again at once. Never end your turn on a timeout: the user may write at any moment, and their messages wait until you call it.
    - `detached` (another session took over) or `deleted`: tell the user in one line and stop.
    - `feedback`: answer every fork in `forks`, as below.
 2. For each fork in `forks`:
    - `userMessages` is what the user wrote. A quoted block (`> ...`) is text the user selected, and the line after it is their comment on that text. Answer all comments and messages of the fork in one reply.
-   - Answer only from that fork's own conversation, never from what was said in other forks. If you are not sure what the fork contains (a new fork, after compaction, after attaching), call `read_fork` first.
+   - Answer only from that fork's own conversation, never from what was said in other forks. The newest message in your context may belong to another fork: `repliesTo` gives the start of the message the user answered, so read their words against that message.
+   - Call `read_fork` first when the fork is not the one you answered last, when it is new, or after compaction or attaching. Skip it only when you answered this same fork last.
    - Call `add_message` with the fork's `forkId`, its `inReplyTo`, and your answer in markdown.
    - For a new fork (`isNewFork: true`), call `update_fork` with a summary under 60 characters of what the fork is about. For an existing fork, update the summary only when its topic changed.
 3. After your first answer, and whenever the topic shifts, call `update_exploration` with a short title and a one-sentence summary.

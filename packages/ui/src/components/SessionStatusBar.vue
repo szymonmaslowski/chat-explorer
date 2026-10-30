@@ -11,6 +11,7 @@ const props = defineProps<{
   connected: boolean;
   explorationId: string;
   model: ClaudeModel | undefined;
+  hasQueued: boolean;
 }>();
 
 const labels: Record<SessionStatus, string> = {
@@ -48,6 +49,13 @@ const selectedModel = computed({
         :title="`Or run /explore-chat ${explorationId} in Claude Code`"
       >
         · starts when you submit
+      </span>
+      <span
+        v-if="connected && status === 'attached' && hasQueued"
+        class="stopped"
+        :title="`Or run /explore-chat ${explorationId} in Claude Code`"
+      >
+        · messages wait: tell Claude in its terminal to continue
       </span>
     </span>
     <select
@@ -88,6 +96,10 @@ const selectedModel = computed({
 .starting .dot {
   background: var(--warning);
   animation: pulse 1.2s ease-in-out infinite;
+}
+
+.stopped {
+  color: var(--warning);
 }
 
 .offline .dot {

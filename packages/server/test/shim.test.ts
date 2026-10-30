@@ -138,6 +138,7 @@ describe('MCP shim', () => {
     await call('start_exploration', { sessionId: 'session-a' });
     expect((await call('await_feedback', { timeoutSeconds: 1 })).value).toEqual({
       status: 'timeout',
+      next: expect.stringContaining('Call await_feedback again'),
     });
   });
 

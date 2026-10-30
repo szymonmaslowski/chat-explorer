@@ -299,6 +299,24 @@ describe('submission queue', () => {
     );
   });
 
+  it('tells which message each pending fork answers', () => {
+    const { store, explorationId, mainForkId, answer } = setup();
+    draft(store, explorationId, {
+      messageId: answer.id,
+      viewForkId: mainForkId,
+      body: 'Go deeper',
+      type: 'fork',
+    });
+    store.submit(explorationId, mainForkId, 'Carry on here');
+    store.deliverQueued(explorationId);
+    const [main, newFork] = store.pendingForks(explorationId);
+    expect(main!.repliesTo).toEqual({
+      messageId: answer.id,
+      excerpt: 'Answer one with some text to quote',
+    });
+    expect(newFork!.repliesTo!.messageId).toBe(answer.id);
+  });
+
   it('returns every unanswered user message of a fork that was skipped', () => {
     const { store, explorationId, mainForkId } = setup();
     store.submit(explorationId, mainForkId, 'one');
