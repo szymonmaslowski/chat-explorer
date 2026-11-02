@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { defaultGroupName } from '@shared/notes';
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import ConfirmButton from '../components/ConfirmButton.vue';
 import ExplorationHeader from '../components/ExplorationHeader.vue';
@@ -127,6 +127,18 @@ function changeNoteGroup(noteId: string, groupId: string | null) {
   selectedNoteId.value = null;
 }
 
+function toggleSelected(noteId: string) {
+  selectedNoteId.value = selectedNoteId.value === noteId ? null : noteId;
+}
+
+function deselectOutsideNotes(event: MouseEvent) {
+  if (event.target instanceof Element && !event.target.closest('.note')) {
+    selectedNoteId.value = null;
+  }
+}
+onMounted(() => document.addEventListener('click', deselectOutsideNotes));
+onBeforeUnmount(() => document.removeEventListener('click', deselectOutsideNotes));
+
 // A `#n-` link opens the note's group, then scrolls to the note and selects it.
 let handledHash = '';
 watch(
@@ -216,7 +228,7 @@ watch(
             :selected="selectedNoteId === note.id"
             :read-only="readOnly"
             :other-groups="otherGroups"
-            @select="selectedNoteId = note.id"
+            @toggle-selected="toggleSelected(note.id)"
             @edit="editingNoteId = note.id"
             @delete="deleteNote(note.id)"
             @change-group="changeNoteGroup(note.id, $event)"

@@ -46,7 +46,15 @@ test('adds, edits and deletes notes, starting the General group', async ({ page,
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(topics(page)).toHaveText(['Preparing topic…', 'Oat milk']);
 
-  await page.locator('.note', { hasText: 'Oat milk' }).click();
+  const oatMilk = page.locator('.note', { hasText: 'Oat milk' });
+  await oatMilk.click();
+  await expect(oatMilk).toHaveClass(/selected/);
+  await oatMilk.locator('.topic').click();
+  await expect(oatMilk).not.toHaveClass(/selected/);
+  await oatMilk.click();
+  await page.mouse.click(10, 650);
+  await expect(oatMilk).not.toHaveClass(/selected/);
+  await oatMilk.click();
   await page.getByRole('button', { name: 'Delete' }).click();
   await page.getByRole('button', { name: 'Confirm' }).click();
   await expect(topics(page)).toHaveText(['Preparing topic…']);

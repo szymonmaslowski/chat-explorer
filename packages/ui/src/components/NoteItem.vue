@@ -12,7 +12,7 @@ const props = defineProps<{
   otherGroups: NoteGroup[];
 }>();
 const emit = defineEmits<{
-  select: [];
+  toggleSelected: [];
   edit: [];
   delete: [];
   // Null asks for a new group.
@@ -30,6 +30,12 @@ watch(
   },
 );
 
+// Ending a text selection inside the note is not a tap on it.
+function onClick() {
+  if (window.getSelection()?.toString()) return;
+  emit('toggleSelected');
+}
+
 function changeGroup(groupId: string | null) {
   choosingGroup.value = false;
   emit('changeGroup', groupId);
@@ -37,12 +43,7 @@ function changeGroup(groupId: string | null) {
 </script>
 
 <template>
-  <article
-    :id="`n-${note.id}`"
-    class="note"
-    :class="{ selected, expanded }"
-    @click="!selected && emit('select')"
-  >
+  <article :id="`n-${note.id}`" class="note" :class="{ selected, expanded }" @click="onClick">
     <h3 class="topic" :class="{ preparing: note.topic === null }">
       {{ note.topic ?? 'Preparing topic…' }}
       <span v-if="outbox.stalled.value && outbox.isPending(note.id)" class="unsent">
