@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { defaultGroupName } from '@shared/notes';
+import { defaultGroupName, reorderedIds } from '@shared/notes';
+import type { Note } from '@shared/types';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import ConfirmButton from '../components/ConfirmButton.vue';
@@ -8,7 +9,17 @@ import NoteEditor from '../components/NoteEditor.vue';
 import NoteGroupForm from '../components/NoteGroupForm.vue';
 import NoteGroupStrip from '../components/NoteGroupStrip.vue';
 import NoteItem from '../components/NoteItem.vue';
-import { notesInGroup, sortedGroups } from '../lib/notes';
+import { useDragSort } from '../composables/useDragSort';
+import {
+  dropAnchor,
+  dropRange,
+  notesInGroup,
+  readChecklistOrder,
+  sortedGroups,
+  storeChecklistOrder,
+  uncheckedFirst,
+  type ChecklistOrder,
+} from '../lib/notes';
 import { openExploration } from '../stores/exploration';
 import { newId, outbox } from '../stores/outbox';
 
@@ -32,6 +43,29 @@ const otherGroups = computed(() =>
   groups.value.filter((group) => group.id !== activeGroup.value?.id),
 );
 const nextGroupName = computed(() => defaultGroupName(groups.value.map((group) => group.name)));
+const checklistOrder = ref<ChecklistOrder>('original');
+watch(
+  () => activeGroup.value?.id,
+  (groupId) => {
+    if (groupId) checklistOrder.value = readChecklistOrder(groupId);
+  },
+  { immediate: true },
+);
+const keepsParts = computed(
+  () => Boolean(activeGroup.value?.checklist) && checklistOrder.value === 'unchecked-first',
+);
+const shownNotes = computed(() => (keepsParts.value ? uncheckedFirst(notes.value) : notes.value));
+const notesList = ref<HTMLElement | null>(null);
+const {
+  draggedId,
+  offset: dragOffset,
+  indicatorTop,
+  start: startDrag,
+} = useDragSort({
+  container: notesList,
+  range: (noteId) => dropRange(shownNotes.value, noteId, keepsParts.value),
+  onDrop: reorderNote,
+});
 
 const selectedNoteId = ref<string | null>(null);
 const editingNoteId = ref<string | null>(null);
@@ -110,6 +144,27 @@ function createNote(note: { topic: string; description: string }) {
 function updateNote(noteId: string, changes: { topic: string; description: string }) {
   outbox.add({ type: 'note.update', explorationId: props.explorationId, noteId, changes });
   editingNoteId.value = null;
+}
+
+function setChecklistOrder(order: ChecklistOrder) {
+  checklistOrder.value = order;
+  if (activeGroup.value) storeChecklistOrder(activeGroup.value.id, order);
+}
+
+function toggleChecked(note: Note) {
+  outbox.add({
+    type: 'note.update',
+    explorationId: props.explorationId,
+    noteId: note.id,
+    changes: { checked: !note.checked },
+  });
+}
+
+function reorderNote(noteId: string, index: number) {
+  const afterNoteId = dropAnchor(shownNotes.value, notes.value, noteId, index, keepsParts.value);
+  const noteIds = notes.value.map((note) => note.id);
+  if (reorderedIds(noteIds, noteId, afterNoteId).join() === noteIds.join()) return;
+  outbox.add({ type: 'note.reorder', explorationId: props.explorationId, noteId, afterNoteId });
 }
 
 function deleteNote(noteId: string) {
@@ -206,7 +261,24 @@ watch(
         />
       </section>
 
-      <section class="notes">
+      <div v-if="activeGroup?.checklist && notes.length > 0" class="checklist-order">
+        <button
+          type="button"
+          :aria-pressed="checklistOrder === 'original'"
+          @click="setChecklistOrder('original')"
+        >
+          Original order
+        </button>
+        <button
+          type="button"
+          :aria-pressed="checklistOrder === 'unchecked-first'"
+          @click="setChecklistOrder('unchecked-first')"
+        >
+          Unchecked first
+        </button>
+      </div>
+
+      <section ref="notesList" class="notes">
         <p v-if="notes.length === 0 && !creatingNote" class="muted empty">No notes yet.</p>
         <template v-if="!readOnly">
           <NoteEditor v-if="creatingNote" @save="createNote" @cancel="creatingNote = false" />
@@ -214,7 +286,7 @@ watch(
             + New note
           </button>
         </template>
-        <template v-for="note in notes" :key="note.id">
+        <template v-for="note in shownNotes" :key="note.id">
           <NoteEditor
             v-if="editingNoteId === note.id"
             :topic="note.topic ?? ''"
@@ -227,13 +299,22 @@ watch(
             :note="note"
             :selected="selectedNoteId === note.id"
             :read-only="readOnly"
+            :checklist="activeGroup?.checklist ?? false"
             :other-groups="otherGroups"
+            :data-drag-id="note.id"
+            :class="{ dragged: draggedId === note.id }"
+            :style="
+              draggedId === note.id ? { transform: `translateY(${dragOffset}px)` } : undefined
+            "
             @toggle-selected="toggleSelected(note.id)"
+            @toggle-checked="toggleChecked(note)"
+            @drag-start="startDrag($event, note.id)"
             @edit="editingNoteId = note.id"
             @delete="deleteNote(note.id)"
             @change-group="changeNoteGroup(note.id, $event)"
           />
         </template>
+        <div v-if="indicatorTop !== null" class="drop-line" :style="{ top: `${indicatorTop}px` }" />
       </section>
     </template>
 
@@ -268,11 +349,52 @@ watch(
   margin-top: 0.5rem;
 }
 
+.checklist-order {
+  display: inline-flex;
+  margin-bottom: 0.5rem;
+}
+
+.checklist-order button {
+  font-size: 0.8rem;
+  padding: 0.15rem 0.6rem;
+}
+
+.checklist-order button:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.checklist-order button:last-child {
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+}
+
+.checklist-order button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
 .notes {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
   padding-bottom: 3rem;
+}
+
+.dragged {
+  position: relative;
+  z-index: 2;
+  box-shadow: var(--shadow);
+}
+
+.drop-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  margin-top: -2px;
+  background: var(--accent);
+  pointer-events: none;
 }
 
 .empty {

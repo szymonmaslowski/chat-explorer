@@ -12,10 +12,10 @@ import type {
   SessionStatus,
   Snapshot,
 } from '@shared/types';
-import { defaultGroupName } from '@shared/notes';
+import { defaultGroupName, reorderedIds } from '@shared/notes';
 import { nextTick, reactive, watch } from 'vue';
 import { api, ApiError } from '../api';
-import { applyNoteOrder, renumberGroup } from '../lib/notes';
+import { applyNoteOrder, notesInGroup, renumberGroup } from '../lib/notes';
 import { outbox, subjectOf, type Change } from './outbox';
 
 export interface ExplorationState {
@@ -140,32 +140,35 @@ function deleteNoteGroup(state: ExplorationState, groupId: string) {
   }
 }
 
-const eventSubject = (event: ExplorationEvent) => {
+const eventSubjects = (event: ExplorationEvent) => {
   switch (event.type) {
     case 'comment.created':
     case 'comment.updated':
-      return event.comment.id;
+      return [event.comment.id];
     case 'note-group.created':
     case 'note-group.updated':
-      return event.group.id;
+      return [event.group.id];
     case 'note.created':
     case 'note.updated':
+      return [event.note.id];
     case 'note.group-changed':
-      return event.note.id;
+      return [event.note.id, ...event.noteIds];
+    case 'notes.reordered':
+      return event.noteIds;
     default:
-      return null;
+      return [];
   }
 };
 
 // The daemon's notice about a comment or a note can arrive after a later change to it was made
-// here, such as "created, being written" after Save. The changes it has not confirmed yet go on
-// top again, so the notice cannot undo them.
+// here, such as "created, being written" after Save, or an order from before the last drag. The
+// changes it has not confirmed yet go on top again, so the notice cannot undo them.
 export function applyServerEvent(state: ExplorationState, event: ExplorationEvent) {
   applyEvent(state, event);
-  const subject = eventSubject(event);
-  if (subject === null) return;
+  const subjects = new Set(eventSubjects(event));
+  if (subjects.size === 0) return;
   for (const change of outbox.changes.value) {
-    if (subjectOf(change) === subject) applyChange(state, change);
+    if (subjects.has(subjectOf(change))) applyChange(state, change);
   }
 }
 
@@ -329,6 +332,13 @@ export function applyChange(state: ExplorationState, change: Change) {
     case 'note.delete':
       state.notes.delete(change.noteId);
       break;
+    case 'note.reorder': {
+      const note = state.notes.get(change.noteId);
+      if (!note) break;
+      const noteIds = notesInGroup(state.notes, note.groupId).map((each) => each.id);
+      applyNoteOrder(state.notes, reorderedIds(noteIds, note.id, change.afterNoteId));
+      break;
+    }
     case 'note.change-group': {
       const note = state.notes.get(change.noteId);
       if (!note || note.groupId === change.groupId) break;

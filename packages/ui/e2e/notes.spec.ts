@@ -143,3 +143,61 @@ test('opens a note from a link', async ({ page, request }) => {
   await page.goto(`/e/${explorationId}/notes?group=missing#n-${note.id}`);
   await expect(page.locator(`#n-${note.id}`)).toHaveClass(/selected/);
 });
+
+test('ticks checklist notes, sorts them and drags them into place', async ({
+  page,
+  context,
+  request,
+}) => {
+  const explorationId = await newChat(request);
+  const group = await (
+    await request.post(`/api/explorations/${explorationId}/note-groups`, {
+      data: { name: 'Shopping', checklist: true },
+    })
+  ).json();
+  for (const topic of ['Chocolate', 'Milk', 'Lemon']) {
+    await request.post(`/api/explorations/${explorationId}/notes`, {
+      data: { groupId: group.id, topic },
+    });
+  }
+  await page.goto(`/e/${explorationId}/notes`);
+  await expect(topics(page)).toHaveText(['Lemon', 'Milk', 'Chocolate']);
+
+  await page.locator('.note', { hasText: 'Milk' }).click();
+  await page.getByRole('button', { name: 'Check', exact: true }).click();
+  await expect(page.locator('.note', { hasText: 'Milk' })).toHaveClass(/checked/);
+  await page.getByRole('button', { name: 'Unchecked first' }).click();
+  await expect(topics(page)).toHaveText(['Lemon', 'Chocolate', 'Milk']);
+  await page.reload();
+  await expect(topics(page)).toHaveText(['Lemon', 'Chocolate', 'Milk']);
+  await page.getByRole('button', { name: 'Original order' }).click();
+  await expect(topics(page)).toHaveText(['Lemon', 'Milk', 'Chocolate']);
+
+  await page.locator('.note', { hasText: 'Chocolate' }).click();
+  const handle = page.getByRole('button', { name: 'Drag to reorder' });
+  const box = (await handle.boundingBox())!;
+  const top = (await page.locator('.note', { hasText: 'Lemon' }).boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, top.y + 4, { steps: 8 });
+  await expect(page.locator('.drop-line')).toBeVisible();
+  await page.mouse.up();
+  await expect(topics(page)).toHaveText(['Chocolate', 'Lemon', 'Milk']);
+  await page.reload();
+  await expect(topics(page)).toHaveText(['Chocolate', 'Lemon', 'Milk']);
+
+  await context.setOffline(true);
+  await page.locator('.note', { hasText: 'Lemon' }).click();
+  await page.getByRole('button', { name: 'Check', exact: true }).click();
+  await expect(page.locator('.note', { hasText: 'Lemon' })).toContainText('not sent yet');
+  await context.setOffline(false);
+  await expect(page.locator('.note', { hasText: 'Lemon' })).not.toContainText('not sent yet', {
+    timeout: 10_000,
+  });
+  const snapshot = await (await request.get(`/api/explorations/${explorationId}`)).json();
+  expect(
+    snapshot.notes
+      .filter((each: { checked: boolean }) => each.checked)
+      .map((each: { topic: string }) => each.topic),
+  ).toEqual(expect.arrayContaining(['Lemon', 'Milk']));
+});

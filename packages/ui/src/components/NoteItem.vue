@@ -9,12 +9,15 @@ const props = defineProps<{
   note: Note;
   selected: boolean;
   readOnly: boolean;
+  checklist: boolean;
   otherGroups: NoteGroup[];
 }>();
 const emit = defineEmits<{
   toggleSelected: [];
   edit: [];
   delete: [];
+  toggleChecked: [];
+  dragStart: [event: PointerEvent];
   // Null asks for a new group.
   changeGroup: [groupId: string | null];
 }>();
@@ -43,7 +46,12 @@ function changeGroup(groupId: string | null) {
 </script>
 
 <template>
-  <article :id="`n-${note.id}`" class="note" :class="{ selected, expanded }" @click="onClick">
+  <article
+    :id="`n-${note.id}`"
+    class="note"
+    :class="{ selected, expanded, checked: checklist && note.checked }"
+    @click="onClick"
+  >
     <h3 class="topic" :class="{ preparing: note.topic === null }">
       {{ note.topic ?? 'Preparing topic…' }}
       <span v-if="outbox.stalled.value && outbox.isPending(note.id)" class="unsent">
@@ -52,6 +60,19 @@ function changeGroup(groupId: string | null) {
     </h3>
     <div v-if="html" class="description" v-html="html" />
     <div v-if="selected" class="actions" @click.stop>
+      <button
+        v-if="!readOnly"
+        type="button"
+        class="handle"
+        aria-label="Drag to reorder"
+        title="Drag to reorder"
+        @pointerdown="emit('dragStart', $event)"
+      >
+        ⠿
+      </button>
+      <button v-if="checklist && !readOnly" type="button" @click="emit('toggleChecked')">
+        {{ note.checked ? 'Uncheck' : 'Check' }}
+      </button>
       <button v-if="html" type="button" @click="expanded = !expanded">
         {{ expanded ? 'Collapse' : 'Expand' }}
       </button>
@@ -100,6 +121,16 @@ function changeGroup(groupId: string | null) {
   background: var(--surface);
   border-color: var(--border);
   cursor: default;
+}
+
+.checked .topic,
+.checked .description {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.checked .topic {
+  text-decoration: line-through;
 }
 
 .topic {
@@ -166,6 +197,14 @@ function changeGroup(groupId: string | null) {
 .group-choices button {
   padding: 0.1rem 0.5rem;
   font-size: 0.75rem;
+}
+
+.actions .handle {
+  touch-action: none;
+  cursor: grab;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.1rem 0.45rem;
 }
 
 .group-choices .muted {

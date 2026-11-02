@@ -12,6 +12,7 @@ vi.mock('../src/api', async (importOriginal) => {
       createNote: unreachable,
       updateNote: unreachable,
       changeNoteGroup: unreachable,
+      reorderNote: unreachable,
       snapshot: unreachable,
     },
   };
@@ -19,7 +20,7 @@ vi.mock('../src/api', async (importOriginal) => {
 
 const { applyChange, applyServerEvent } = await import('../src/stores/exploration');
 const { outbox } = await import('../src/stores/outbox');
-const { notesInGroup } = await import('../src/lib/notes');
+const { dropAnchor, dropRange, notesInGroup, uncheckedFirst } = await import('../src/lib/notes');
 
 const explorationId = 'e';
 
@@ -125,5 +126,51 @@ describe('notes shown before the daemon has them', () => {
       note: { ...note('a', 'g1', 1), topic: 'Older' },
     });
     expect(state.notes.get('a')?.topic).toBe('Newer');
+  });
+});
+
+describe('dragging a note', () => {
+  const ticked = (each: Note) => ({ ...each, checked: true });
+  // Stored order a, b, c, d, e; b and d are ticked, so unchecked first shows a, c, e, b, d.
+  const stored = [
+    note('a', 'g', 1),
+    ticked(note('b', 'g', 2)),
+    note('c', 'g', 3),
+    ticked(note('d', 'g', 4)),
+    note('e', 'g', 5),
+  ];
+  const sorted = uncheckedFirst(stored);
+
+  it('goes after its new neighbour above, or to the top', () => {
+    expect(dropAnchor(stored, stored, 'e', 2, false)).toBe('b');
+    expect(dropAnchor(stored, stored, 'c', 0, false)).toBeNull();
+    expect(dropAnchor(stored, stored, 'a', 4, false)).toBe('e');
+  });
+
+  it('stays in its part when unchecked notes come first', () => {
+    expect(dropRange(sorted, 'c', true)).toEqual({ first: 0, last: 2 });
+    expect(dropRange(sorted, 'b', true)).toEqual({ first: 3, last: 4 });
+    expect(dropRange(sorted, 'b', false)).toEqual({ first: 0, last: 4 });
+  });
+
+  it('goes just before the note below when it lands first in its part', () => {
+    // d dropped first among the ticked notes (shown a, c, e | d, b) goes before b.
+    expect(dropAnchor(sorted, stored, 'd', 3, true)).toBe('a');
+    // e dropped first overall goes to the top.
+    expect(dropAnchor(sorted, stored, 'e', 0, true)).toBeNull();
+    // e dropped after a, inside the unchecked part.
+    expect(dropAnchor(sorted, stored, 'e', 1, true)).toBe('a');
+  });
+
+  it('is shown at once, and a pending drag survives an older order', () => {
+    const state = stateWith(
+      [group('g1', 'General', 1)],
+      [note('a', 'g1', 1), note('b', 'g1', 2), note('c', 'g1', 3)],
+    );
+    outbox.add({ type: 'note.reorder', explorationId, noteId: 'c', afterNoteId: null });
+    applyChange(state, outbox.changes.value.at(-1)!);
+    expect(topicsIn(state, 'g1')).toEqual(['c', 'a', 'b']);
+    applyServerEvent(state, { type: 'notes.reordered', groupId: 'g1', noteIds: ['a', 'b', 'c'] });
+    expect(topicsIn(state, 'g1')).toEqual(['c', 'a', 'b']);
   });
 });

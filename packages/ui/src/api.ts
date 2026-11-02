@@ -145,6 +145,11 @@ export const api = {
     call<Note>(`/api/notes/${noteId}`, { method: 'PATCH', json: changes, keepalive }),
   deleteNote: (noteId: string, keepalive = false) =>
     call<{ ok: true }>(`/api/notes/${noteId}`, { method: 'DELETE', keepalive }),
+  reorderNote: (noteId: string, afterNoteId: string | null, keepalive = false) =>
+    call<{ groupId: string; noteIds: string[] }>(`/api/notes/${noteId}/reorder`, {
+      json: { afterNoteId },
+      keepalive,
+    }),
   changeNoteGroup: (noteId: string, groupId: string, keepalive = false) =>
     call<{ note: Note; noteIds: string[] }>(`/api/notes/${noteId}/group`, {
       method: 'PUT',
