@@ -111,7 +111,7 @@ function changeGroup(groupId: string | null) {
       <button
         v-if="checklist && !readOnly"
         type="button"
-        class="check"
+        class="check-button"
         :class="{ on: note.checked }"
         :aria-label="note.checked ? 'Uncheck' : 'Check'"
         :title="note.checked ? 'Uncheck' : 'Check'"
@@ -255,7 +255,7 @@ function changeGroup(groupId: string | null) {
   padding: 0.2rem 0.45rem;
 }
 
-.actions .check {
+.actions .check-button {
   margin-left: auto;
 }
 
