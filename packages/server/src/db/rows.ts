@@ -10,6 +10,9 @@ import type {
   Message,
   MessageFile,
   MessageSource,
+  Note,
+  NoteAuthor,
+  NoteGroup,
   QueuedSubmission,
   Role,
 } from '../shared/types.js';
@@ -92,6 +95,36 @@ export interface ReplyDraftRow {
   exploration_id: string;
   text: string;
   new_fork: number;
+  updated_at: number;
+}
+
+export interface NoteGroupRow {
+  id: string;
+  exploration_id: string;
+  name: string;
+  checklist: number;
+  position: number;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface NoteRow {
+  id: string;
+  exploration_id: string;
+  group_id: string;
+  topic: string | null;
+  description: string;
+  checked: number;
+  position: number;
+  source_fork_id: string | null;
+  source_message_id: string | null;
+  source_quote: string | null;
+  source_start_offset: number | null;
+  source_end_offset: number | null;
+  source_comment_id: string | null;
+  created_by: NoteAuthor;
+  deletion_requested_at: number | null;
+  created_at: number;
   updated_at: number;
 }
 
@@ -179,4 +212,32 @@ export const toQueuedSubmission = (row: SubmissionRow): QueuedSubmission => ({
   globalMessage: row.global_message,
   newFork: row.new_fork === 1,
   createdAt: row.created_at,
+});
+
+export const toNoteGroup = (row: NoteGroupRow): NoteGroup => ({
+  id: row.id,
+  explorationId: row.exploration_id,
+  name: row.name,
+  checklist: row.checklist === 1,
+  position: row.position,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+export const toNote = (row: NoteRow): Note => ({
+  id: row.id,
+  explorationId: row.exploration_id,
+  groupId: row.group_id,
+  topic: row.topic,
+  description: row.description,
+  checked: row.checked === 1,
+  position: row.position,
+  sourceForkId: row.source_fork_id,
+  sourceMessageId: row.source_message_id,
+  sourceQuote: row.source_quote,
+  sourceCommentId: row.source_comment_id,
+  createdBy: row.created_by,
+  deletionRequestedAt: row.deletion_requested_at,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
 });

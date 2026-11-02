@@ -5,11 +5,15 @@ import {
   toFork,
   toMessage,
   toMessageFile,
+  toNote,
+  toNoteGroup,
   toQueuedSubmission,
   type CommentRow,
   type ExplorationRow,
   type FileRow,
   type ForkRow,
+  type NoteGroupRow,
+  type NoteRow,
   type ReplyDraftRow,
   type MessageRow,
   type SubmissionRow,
@@ -26,12 +30,17 @@ import type {
   ForkKind,
   MessageSource,
   NewComment,
+  NewNote,
+  NewNoteGroup,
+  NoteChanges,
+  NoteGroupChanges,
   QueuedSubmission,
   ReplyDraft,
   Role,
   Snapshot,
 } from '../shared/types.js';
 import { defaultClaudeModel, type ClaudeModel } from '../shared/models.js';
+import { defaultGroupName, reorderedIds } from '../shared/notes.js';
 import { StoreError } from './errors.js';
 import type { EventBus } from './event-bus.js';
 import { newId } from './ids.js';
@@ -202,6 +211,18 @@ export class ChatStore {
       replyDrafts: this.db
         .all<ReplyDraftRow>('SELECT * FROM reply_drafts WHERE exploration_id = ?', explorationId)
         .map((row) => this.toReplyDraft(row)),
+      noteGroups: this.db
+        .all<NoteGroupRow>(
+          'SELECT * FROM note_groups WHERE exploration_id = ? ORDER BY position, rowid',
+          explorationId,
+        )
+        .map(toNoteGroup),
+      notes: this.db
+        .all<NoteRow>(
+          'SELECT * FROM notes WHERE exploration_id = ? ORDER BY position, rowid',
+          explorationId,
+        )
+        .map(toNote),
     };
   }
 
@@ -984,6 +1005,197 @@ export class ChatStore {
     return this.replyDraft(forkId);
   }
 
+  createNoteGroup(explorationId: string, input: NewNoteGroup) {
+    const existing = input.id
+      ? this.existingRow<NoteGroupRow>('note_groups', input.id, explorationId)
+      : null;
+    if (existing) return toNoteGroup(existing);
+    this.requireWritable(explorationId);
+    const id = input.id ?? newId();
+    const createdAt = this.now();
+    this.db.run(
+      `INSERT INTO note_groups (id, exploration_id, name, checklist, position, created_at, updated_at)
+       VALUES (?, ?, ?, ?,
+         (SELECT coalesce(max(position), 0) + 1 FROM note_groups WHERE exploration_id = ?), ?, ?)`,
+      id,
+      explorationId,
+      input.name?.trim() || this.defaultGroupNameIn(explorationId),
+      input.checklist ? 1 : 0,
+      explorationId,
+      createdAt,
+      createdAt,
+    );
+    const group = toNoteGroup(this.requireNoteGroupRow(id));
+    this.publish([[explorationId, { type: 'note-group.created', group }]]);
+    return group;
+  }
+
+  updateNoteGroup(groupId: string, changes: NoteGroupChanges) {
+    const row = this.requireNoteGroupRow(groupId);
+    this.requireWritable(row.exploration_id);
+    const name =
+      changes.name === undefined
+        ? row.name
+        : changes.name.trim() || this.defaultGroupNameIn(row.exploration_id, groupId);
+    const checklist = changes.checklist === undefined ? row.checklist : changes.checklist ? 1 : 0;
+    this.db.run(
+      'UPDATE note_groups SET name = ?, checklist = ?, updated_at = ? WHERE id = ?',
+      name,
+      checklist,
+      this.now(),
+      groupId,
+    );
+    const group = toNoteGroup(this.requireNoteGroupRow(groupId));
+    this.publish([[row.exploration_id, { type: 'note-group.updated', group }]]);
+    return group;
+  }
+
+  // Its notes go with it.
+  deleteNoteGroup(groupId: string) {
+    const row = this.requireNoteGroupRow(groupId);
+    this.requireWritable(row.exploration_id);
+    this.db.run('DELETE FROM note_groups WHERE id = ?', groupId);
+    this.publish([[row.exploration_id, { type: 'note-group.deleted', groupId }]]);
+  }
+
+  // A new note goes first in its group.
+  createNote(explorationId: string, input: NewNote) {
+    const existing = input.id ? this.existingRow<NoteRow>('notes', input.id, explorationId) : null;
+    if (existing) return toNote(existing);
+    this.requireWritable(explorationId);
+    const group = this.requireNoteGroupRow(input.groupId, explorationId);
+    const topic = input.topic?.trim() ?? '';
+    const description = input.description?.trim() ?? '';
+    if (!topic && !description) {
+      throw new StoreError('invalid', 'A note needs a topic or a description.');
+    }
+    const id = input.id ?? newId();
+    const createdAt = this.now();
+    const noteIds = this.db.transaction(() => {
+      this.db.run(
+        `INSERT INTO notes (id, exploration_id, group_id, topic, description, position, created_by,
+           created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 0, 'user', ?, ?)`,
+        id,
+        explorationId,
+        group.id,
+        topic || null,
+        description,
+        createdAt,
+        createdAt,
+      );
+      return this.renumberNotes(group.id);
+    });
+    const note = toNote(this.requireNoteRow(id));
+    this.publish([
+      [explorationId, { type: 'note.created', note }],
+      [explorationId, { type: 'notes.reordered', groupId: group.id, noteIds }],
+    ]);
+    return note;
+  }
+
+  updateNote(noteId: string, changes: NoteChanges) {
+    const row = this.requireNoteRow(noteId);
+    this.requireWritable(row.exploration_id);
+    const topic = changes.topic === undefined ? row.topic : changes.topic.trim() || null;
+    const description = changes.description?.trim() ?? row.description;
+    if (!topic && !description) {
+      throw new StoreError('invalid', 'A note needs a topic or a description.');
+    }
+    const checked = changes.checked === undefined ? row.checked : changes.checked ? 1 : 0;
+    this.db.run(
+      'UPDATE notes SET topic = ?, description = ?, checked = ?, updated_at = ? WHERE id = ?',
+      topic,
+      description,
+      checked,
+      this.now(),
+      noteId,
+    );
+    const note = toNote(this.requireNoteRow(noteId));
+    this.publish([[row.exploration_id, { type: 'note.updated', note }]]);
+    return note;
+  }
+
+  deleteNote(noteId: string) {
+    const row = this.requireNoteRow(noteId);
+    this.requireWritable(row.exploration_id);
+    this.db.run('DELETE FROM notes WHERE id = ?', noteId);
+    this.publish([[row.exploration_id, { type: 'note.deleted', noteId }]]);
+  }
+
+  // Applied to the order as it is now, so moves made elsewhere since the page loaded are kept.
+  reorderNote(noteId: string, afterNoteId: string | null) {
+    const row = this.requireNoteRow(noteId);
+    this.requireWritable(row.exploration_id);
+    const noteIds = this.db.transaction(() => {
+      const noteIds = reorderedIds(this.noteIdsIn(row.group_id), noteId, afterNoteId);
+      this.writeNoteOrder(noteIds);
+      return noteIds;
+    });
+    this.publish([
+      [row.exploration_id, { type: 'notes.reordered', groupId: row.group_id, noteIds }],
+    ]);
+    return { groupId: row.group_id, noteIds };
+  }
+
+  // The note goes first in its new group.
+  changeNoteGroup(noteId: string, groupId: string) {
+    const row = this.requireNoteRow(noteId);
+    this.requireWritable(row.exploration_id);
+    const group = this.requireNoteGroupRow(groupId, row.exploration_id);
+    const noteIds = this.db.transaction(() => {
+      if (group.id === row.group_id) return this.noteIdsIn(group.id);
+      this.db.run(
+        'UPDATE notes SET group_id = ?, position = 0, updated_at = ? WHERE id = ?',
+        group.id,
+        this.now(),
+        noteId,
+      );
+      this.renumberNotes(row.group_id);
+      return this.renumberNotes(group.id);
+    });
+    const note = toNote(this.requireNoteRow(noteId));
+    this.publish([[row.exploration_id, { type: 'note.group-changed', note, noteIds }]]);
+    return { note, noteIds };
+  }
+
+  private defaultGroupNameIn(explorationId: string, exceptGroupId?: string) {
+    const names = this.db
+      .all<{ name: string }>(
+        'SELECT name FROM note_groups WHERE exploration_id = ? AND id IS NOT ?',
+        explorationId,
+        exceptGroupId ?? null,
+      )
+      .map(({ name }) => name);
+    return defaultGroupName(names);
+  }
+
+  private noteIdsIn(groupId: string) {
+    return this.db
+      .all<{ id: string }>(
+        'SELECT id FROM notes WHERE group_id = ? ORDER BY position, rowid',
+        groupId,
+      )
+      .map(({ id }) => id);
+  }
+
+  private writeNoteOrder(noteIds: string[]) {
+    noteIds.forEach((noteId, index) => {
+      this.db.run(
+        'UPDATE notes SET position = ? WHERE id = ? AND position != ?',
+        index + 1,
+        noteId,
+        index + 1,
+      );
+    });
+  }
+
+  private renumberNotes(groupId: string) {
+    const noteIds = this.noteIdsIn(groupId);
+    this.writeNoteOrder(noteIds);
+    return noteIds;
+  }
+
   private toReplyDraft(row: ReplyDraftRow): ReplyDraft {
     return {
       forkId: row.fork_id,
@@ -1276,7 +1488,7 @@ export class ChatStore {
 
   // A repeated request with an id the page made finds what the first one created.
   private existingRow<Row extends { exploration_id: string | null }>(
-    table: 'comments' | 'submissions',
+    table: 'comments' | 'submissions' | 'note_groups' | 'notes',
     id: string,
     explorationId: string,
   ) {
@@ -1290,6 +1502,20 @@ export class ChatStore {
   private requireCommentRow(commentId: string) {
     const row = this.db.get<CommentRow>('SELECT * FROM comments WHERE id = ?', commentId);
     if (!row) throw new StoreError('not_found', `Comment ${commentId} does not exist.`);
+    return row;
+  }
+
+  private requireNoteGroupRow(groupId: string, explorationId?: string) {
+    const row = this.db.get<NoteGroupRow>('SELECT * FROM note_groups WHERE id = ?', groupId);
+    if (!row || (explorationId !== undefined && row.exploration_id !== explorationId)) {
+      throw new StoreError('not_found', `Note group ${groupId} does not exist.`);
+    }
+    return row;
+  }
+
+  private requireNoteRow(noteId: string) {
+    const row = this.db.get<NoteRow>('SELECT * FROM notes WHERE id = ?', noteId);
+    if (!row) throw new StoreError('not_found', `Note ${noteId} does not exist.`);
     return row;
   }
 

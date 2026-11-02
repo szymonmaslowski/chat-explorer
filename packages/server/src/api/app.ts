@@ -76,6 +76,28 @@ const submitBody = z.object({
   fileIds,
 });
 const forkNowBody = z.object({ id: clientId });
+const newNoteGroupBody = z.object({
+  id: clientId,
+  name: z.string().optional(),
+  checklist: z.boolean().optional(),
+});
+const noteGroupChangesBody = z.object({
+  name: z.string().optional(),
+  checklist: z.boolean().optional(),
+});
+const newNoteBody = z.object({
+  id: clientId,
+  groupId: z.string(),
+  topic: z.string().optional(),
+  description: z.string().optional(),
+});
+const noteChangesBody = z.object({
+  topic: z.string().optional(),
+  description: z.string().optional(),
+  checked: z.boolean().optional(),
+});
+const noteReorderBody = z.object({ afterNoteId: z.string().nullable() });
+const noteGroupBody = z.object({ groupId: z.string() });
 const uploadBody = z.object({ file: z.instanceof(File) });
 // Multipart framing around a file at the size limit.
 const uploadOverheadBytes = 64 * 1024;
@@ -343,6 +365,46 @@ export function createApp(options: AppOptions) {
   app.put('/api/forks/:id/reply-draft', async (context) => {
     const draft = replyDraftBody.parse(await context.req.json());
     return context.json(store.saveReplyDraft(context.req.param('id'), draft));
+  });
+
+  app.post('/api/explorations/:id/note-groups', async (context) => {
+    const body = newNoteGroupBody.parse(await context.req.json());
+    return context.json(store.createNoteGroup(context.req.param('id'), body), 201);
+  });
+
+  app.patch('/api/note-groups/:id', async (context) => {
+    const body = noteGroupChangesBody.parse(await context.req.json());
+    return context.json(store.updateNoteGroup(context.req.param('id'), body));
+  });
+
+  app.delete('/api/note-groups/:id', (context) => {
+    store.deleteNoteGroup(context.req.param('id'));
+    return context.json({ ok: true });
+  });
+
+  app.post('/api/explorations/:id/notes', async (context) => {
+    const body = newNoteBody.parse(await context.req.json());
+    return context.json(store.createNote(context.req.param('id'), body), 201);
+  });
+
+  app.patch('/api/notes/:id', async (context) => {
+    const body = noteChangesBody.parse(await context.req.json());
+    return context.json(store.updateNote(context.req.param('id'), body));
+  });
+
+  app.delete('/api/notes/:id', (context) => {
+    store.deleteNote(context.req.param('id'));
+    return context.json({ ok: true });
+  });
+
+  app.post('/api/notes/:id/reorder', async (context) => {
+    const { afterNoteId } = noteReorderBody.parse(await context.req.json());
+    return context.json(store.reorderNote(context.req.param('id'), afterNoteId));
+  });
+
+  app.put('/api/notes/:id/group', async (context) => {
+    const { groupId } = noteGroupBody.parse(await context.req.json());
+    return context.json(store.changeNoteGroup(context.req.param('id'), groupId));
   });
 
   app.delete('/api/submissions/:id', (context) =>

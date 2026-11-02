@@ -72,6 +72,37 @@ export interface Comment {
   updatedAt: number;
 }
 
+export type NoteAuthor = 'user' | 'claude';
+
+export interface NoteGroup {
+  id: string;
+  explorationId: string;
+  name: string;
+  checklist: boolean;
+  position: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Note {
+  id: string;
+  explorationId: string;
+  groupId: string;
+  // Null until Claude writes one for a note that has only a description.
+  topic: string | null;
+  description: string;
+  checked: boolean;
+  position: number;
+  sourceForkId: string | null;
+  sourceMessageId: string | null;
+  sourceQuote: string | null;
+  sourceCommentId: string | null;
+  createdBy: NoteAuthor;
+  deletionRequestedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface QueuedSubmission {
   id: string;
   explorationId: string;
@@ -110,6 +141,8 @@ export interface Snapshot {
   queuedSubmissions: QueuedSubmission[];
   files: MessageFile[];
   replyDrafts: ReplyDraft[];
+  noteGroups: NoteGroup[];
+  notes: Note[];
   sessionStatus: SessionStatus;
   sessionError: string | null;
 }
@@ -124,6 +157,14 @@ export type ExplorationEvent =
   | { type: 'submission.queued'; submission: QueuedSubmission }
   | { type: 'submission.cancelled'; submissionId: string }
   | { type: 'submission.delivered'; submissionId: string }
+  | { type: 'note-group.created'; group: NoteGroup }
+  | { type: 'note-group.updated'; group: NoteGroup }
+  | { type: 'note-group.deleted'; groupId: string }
+  | { type: 'note.created'; note: Note }
+  | { type: 'note.updated'; note: Note }
+  | { type: 'note.deleted'; noteId: string }
+  | { type: 'notes.reordered'; groupId: string; noteIds: string[] }
+  | { type: 'note.group-changed'; note: Note; noteIds: string[] }
   | { type: 'files.updated'; files: MessageFile[] }
   | { type: 'files.released'; fileIds: string[] }
   | { type: 'exploration.updated'; exploration: Exploration }
@@ -149,6 +190,31 @@ export interface CommentChanges {
   body?: string;
   editBody?: string | null;
   type?: CommentType;
+}
+
+export interface NewNoteGroup {
+  id?: string;
+  // Empty takes the next default name.
+  name?: string;
+  checklist?: boolean;
+}
+
+export interface NoteGroupChanges {
+  name?: string;
+  checklist?: boolean;
+}
+
+export interface NewNote {
+  id?: string;
+  groupId: string;
+  topic?: string;
+  description?: string;
+}
+
+export interface NoteChanges {
+  topic?: string;
+  description?: string;
+  checked?: boolean;
 }
 
 export type SpeechBlock =

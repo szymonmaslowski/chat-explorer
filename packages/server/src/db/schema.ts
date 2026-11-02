@@ -110,4 +110,49 @@ export const migrations = [
   `
   ALTER TABLE forks ADD COLUMN archived_at INTEGER;
   `,
+  `
+  CREATE TABLE note_groups (
+    id TEXT PRIMARY KEY,
+    exploration_id TEXT NOT NULL REFERENCES explorations (id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    checklist INTEGER NOT NULL DEFAULT 0,
+    position INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX note_groups_by_exploration ON note_groups (exploration_id, position);
+
+  CREATE TABLE notes (
+    id TEXT PRIMARY KEY,
+    exploration_id TEXT NOT NULL REFERENCES explorations (id) ON DELETE CASCADE,
+    group_id TEXT NOT NULL REFERENCES note_groups (id) ON DELETE CASCADE,
+    topic TEXT,
+    description TEXT NOT NULL DEFAULT '',
+    checked INTEGER NOT NULL DEFAULT 0,
+    position INTEGER NOT NULL,
+    source_fork_id TEXT,
+    source_message_id TEXT,
+    source_quote TEXT,
+    source_start_offset INTEGER,
+    source_end_offset INTEGER,
+    source_comment_id TEXT,
+    created_by TEXT NOT NULL CHECK (created_by IN ('user', 'claude')),
+    deletion_requested_at INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX notes_by_exploration ON notes (exploration_id);
+  CREATE INDEX notes_by_group ON notes (group_id, position);
+
+  -- The first CHECK on type had no name, so it could not be dropped. Swapping the column once
+  -- gives it a named one, which later types change with DROP and ADD CONSTRAINT.
+  ALTER TABLE comments ADD COLUMN new_type TEXT NOT NULL DEFAULT 'inline'
+    CONSTRAINT comment_type CHECK (new_type IN ('inline', 'fork', 'note'));
+  UPDATE comments SET new_type = type;
+  ALTER TABLE comments DROP COLUMN type;
+  ALTER TABLE comments RENAME COLUMN new_type TO type;
+  ALTER TABLE comments ADD COLUMN note_group_id TEXT
+    REFERENCES note_groups (id) ON DELETE SET NULL;
+  ALTER TABLE comments ADD COLUMN created_note_id TEXT REFERENCES notes (id) ON DELETE SET NULL;
+  `,
 ];
