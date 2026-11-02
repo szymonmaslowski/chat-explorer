@@ -42,7 +42,7 @@ const maxFeedbackWaitMs = 280_000;
 // About ten minutes of 16 kHz mono 16-bit WAV.
 const maxRecordingBytes = 20 * 1024 * 1024;
 
-const commentType = z.enum(['inline', 'fork']);
+const commentType = z.enum(['inline', 'fork', 'note']);
 const model = z.enum(claudeModels);
 const fileIds = z.array(z.string()).default([]);
 const newExplorationBody = z
@@ -60,11 +60,13 @@ const newCommentBody = z.object({
   body: z.string().default(''),
   editBody: z.string().optional(),
   type: commentType.optional(),
+  noteGroupId: z.string().min(1).nullable().optional(),
 });
 const commentChangesBody = z.object({
   body: z.string().optional(),
   editBody: z.string().nullable().optional(),
   type: commentType.optional(),
+  noteGroupId: z.string().min(1).nullable().optional(),
 });
 const replyDraftBody = z.object({ text: z.string(), newFork: z.boolean(), fileIds });
 const forkBody = z.object({ forkId: z.string() });

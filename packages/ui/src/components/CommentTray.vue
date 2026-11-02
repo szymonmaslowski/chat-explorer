@@ -58,6 +58,11 @@ const hiddenCount = computed(() => props.comments.length - shown.value.length);
   background: var(--fork-soft);
 }
 
+.chip.note {
+  border-color: var(--note);
+  background: var(--note-soft);
+}
+
 .more {
   font-size: 0.8rem;
   padding: 0.15rem 0.6rem;

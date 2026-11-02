@@ -72,6 +72,8 @@ export interface CommentRow {
   submission_id: string | null;
   reply_message_id: string | null;
   created_fork_id: string | null;
+  note_group_id: string | null;
+  created_note_id: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -190,6 +192,8 @@ export const toComment = (row: CommentRow): Comment => ({
   submissionId: row.submission_id,
   replyMessageId: row.reply_message_id,
   createdForkId: row.created_fork_id,
+  noteGroupId: row.note_group_id,
+  createdNoteId: row.created_note_id,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });

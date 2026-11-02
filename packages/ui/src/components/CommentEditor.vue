@@ -1,10 +1,13 @@
 <script setup lang="ts">
+import { defaultGroupName } from '@shared/notes';
 import type { CommentType } from '@shared/types';
-import { onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useAutosave } from '../composables/useAutosave';
 import { useExpandedArea } from '../composables/useExpandedArea';
 import type { TextAnchor } from '../lib/anchoring';
 import { insertAtCursor } from '../lib/insert-text';
+import { sortedGroups } from '../lib/notes';
+import { openExploration } from '../stores/exploration';
 import { newId, outbox } from '../stores/outbox';
 import DictationButton from './DictationButton.vue';
 import ExpandButton from './ExpandButton.vue';
@@ -20,13 +23,38 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ created: [commentId: string]; close: [] }>();
 
+const commentTypes: { type: CommentType; label: string }[] = [
+  { type: 'inline', label: 'Comment' },
+  { type: 'fork', label: 'Fork' },
+  { type: 'note', label: 'Note' },
+];
+const newGroupChoice = 'new-group';
+
 const body = ref('');
-const asFork = ref(false);
+const type = ref<CommentType>('inline');
+// Null leaves the group to the daemon: the first one, or a new General.
+const noteGroupId = ref<string | null>(null);
+const groups = computed(() => sortedGroups(openExploration(props.explorationId).noteGroups));
+const pickedGroup = computed({
+  get: () => noteGroupId.value ?? groups.value[0]?.id ?? '',
+  set: (choice: string) => {
+    if (choice !== newGroupChoice) {
+      noteGroupId.value = choice || null;
+      return;
+    }
+    const id = newId();
+    outbox.add({
+      type: 'note-group.create',
+      explorationId: props.explorationId,
+      group: { id, name: defaultGroupName(groups.value.map((group) => group.name)) },
+    });
+    noteGroupId.value = id;
+  },
+});
 const textarea = ref<HTMLTextAreaElement | null>(null);
 const expanded = ref(false);
 const expandedStyle = useExpandedArea(expanded, { coverDock: false, marginPx: 8 });
 const insertDictation = (text: string) => insertAtCursor(textarea.value, body, text);
-const type = (): CommentType => (asFork.value ? 'fork' : 'inline');
 const target = () => ({
   messageId: props.messageId,
   viewForkId: props.viewForkId,
@@ -44,7 +72,7 @@ const autosave = useAutosave(() => {
       type: 'comment.update',
       explorationId,
       commentId,
-      changes: { editBody: body.value, type: type() },
+      changes: { editBody: body.value, type: type.value, noteGroupId: noteGroupId.value },
     });
     return;
   }
@@ -52,12 +80,19 @@ const autosave = useAutosave(() => {
   outbox.add({
     type: 'comment.create',
     explorationId,
-    comment: { id: commentId, ...target(), body: '', editBody: body.value, type: type() },
+    comment: {
+      id: commentId,
+      ...target(),
+      body: '',
+      editBody: body.value,
+      type: type.value,
+      noteGroupId: noteGroupId.value,
+    },
   });
   created = true;
   emit('created', commentId);
 });
-watch([body, asFork], autosave.changed);
+watch([body, type, noteGroupId], autosave.changed);
 
 onMounted(() => textarea.value?.focus());
 
@@ -74,12 +109,23 @@ function addSaved() {
           type: 'comment.update',
           explorationId,
           commentId,
-          changes: { body: body.value, editBody: null, type: type() },
+          changes: {
+            body: body.value,
+            editBody: null,
+            type: type.value,
+            noteGroupId: noteGroupId.value,
+          },
         }
       : {
           type: 'comment.create',
           explorationId,
-          comment: { id: commentId, ...target(), body: body.value, type: type() },
+          comment: {
+            id: commentId,
+            ...target(),
+            body: body.value,
+            type: type.value,
+            noteGroupId: noteGroupId.value,
+          },
         },
   );
 }
@@ -120,7 +166,7 @@ function onKeydown(event: KeyboardEvent) {
 <template>
   <div
     class="comment-editor"
-    :class="{ fork: asFork, expanded }"
+    :class="[type, { expanded }]"
     :style="expandedStyle ?? { top: `${top}px`, left: `${left}px`, width: `${width}px` }"
   >
     <p class="quote">{{ anchor.quote }}</p>
@@ -132,12 +178,21 @@ function onKeydown(event: KeyboardEvent) {
       @keydown="onKeydown"
     />
     <div class="actions">
-      <label><input v-model="asFork" type="checkbox" /> Fork</label>
+      <div class="types" role="radiogroup" aria-label="Comment type">
+        <label v-for="option in commentTypes" :key="option.type">
+          <input v-model="type" type="radio" :value="option.type" /> {{ option.label }}
+        </label>
+      </div>
+      <select v-if="type === 'note'" v-model="pickedGroup" aria-label="Note group">
+        <option v-if="groups.length === 0" value="">General (new)</option>
+        <option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }}</option>
+        <option :value="newGroupChoice">New group…</option>
+      </select>
       <DictationButton :hint="anchor.quote" @text="insertDictation" />
       <ExpandButton v-model="expanded" />
       <span class="spacer" />
       <button type="button" @click="cancel">Cancel</button>
-      <button v-if="asFork" type="button" :disabled="!body.trim()" @click="forkNow">
+      <button v-if="type === 'fork'" type="button" :disabled="!body.trim()" @click="forkNow">
         Fork now
       </button>
       <button type="button" class="primary" :disabled="!body.trim()" @click="save">Save</button>
@@ -175,6 +230,21 @@ function onKeydown(event: KeyboardEvent) {
 
 .comment-editor.fork {
   border-left-color: var(--fork);
+}
+
+.comment-editor.note {
+  border-left-color: var(--note);
+}
+
+.types {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.types label {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
 }
 
 .quote {

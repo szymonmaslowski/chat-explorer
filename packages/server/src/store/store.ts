@@ -32,6 +32,7 @@ import type {
   NewComment,
   NewNote,
   NewNoteGroup,
+  NoteAuthor,
   NoteChanges,
   NoteGroupChanges,
   QueuedSubmission,
@@ -458,12 +459,13 @@ export class ChatStore {
     if (input.startOffset < 0 || input.endOffset <= input.startOffset) {
       throw new StoreError('invalid', 'The comment anchor offsets are out of order.');
     }
+    if (input.noteGroupId) this.requireNoteGroupRow(input.noteGroupId, explorationId);
     const id = input.id ?? newId();
     const createdAt = this.now();
     this.db.run(
       `INSERT INTO comments (id, exploration_id, message_id, view_fork_id, quote, start_offset,
-         end_offset, body, edit_body, type, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
+         end_offset, body, edit_body, type, note_group_id, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
       id,
       explorationId,
       input.messageId,
@@ -474,6 +476,7 @@ export class ChatStore {
       input.body.trim(),
       input.editBody ?? null,
       input.type ?? 'inline',
+      input.noteGroupId ?? null,
       createdAt,
       createdAt,
     );
@@ -488,11 +491,14 @@ export class ChatStore {
     if (changes.body !== undefined && !changes.body.trim()) {
       throw new StoreError('invalid', 'A comment body cannot be empty.');
     }
+    if (changes.noteGroupId) this.requireNoteGroupRow(changes.noteGroupId, row.exploration_id);
     this.db.run(
-      'UPDATE comments SET body = ?, edit_body = ?, type = ?, updated_at = ? WHERE id = ?',
+      `UPDATE comments SET body = ?, edit_body = ?, type = ?, note_group_id = ?, updated_at = ?
+       WHERE id = ?`,
       changes.body?.trim() ?? row.body,
       changes.editBody === undefined ? row.edit_body : changes.editBody,
       changes.type ?? row.type,
+      changes.noteGroupId === undefined ? row.note_group_id : changes.noteGroupId,
       this.now(),
       commentId,
     );
@@ -510,7 +516,7 @@ export class ChatStore {
 
   toggleForkAll(explorationId: string, forkId: string) {
     this.requireWritableFork(forkId, explorationId);
-    const drafts = this.draftsIn(forkId);
+    const drafts = this.draftsIn(forkId).filter((draft) => draft.type !== 'note');
     if (drafts.length === 0) return [];
     const type: CommentType = drafts.every((draft) => draft.type === 'fork') ? 'inline' : 'fork';
     const updatedAt = this.now();
@@ -552,7 +558,7 @@ export class ChatStore {
       newFork &&
       !message &&
       files.length === 0 &&
-      drafts.every((draft) => draft.type === 'fork')
+      !drafts.some((draft) => draft.type === 'inline')
     ) {
       throw new StoreError('invalid', 'A new fork needs a message, a file or an inline comment.');
     }
@@ -562,9 +568,17 @@ export class ChatStore {
     if (drafts.some((draft) => draft.edit_body !== null)) {
       throw new StoreError('invalid', 'Save or cancel the comments being edited first.');
     }
+    const noteDrafts = drafts.filter((draft) => draft.type === 'note');
+    const claudeDrafts = drafts.filter((draft) => draft.type !== 'note');
+    // Note comments alone ask nothing of Claude, so their submission is done at once. It is still
+    // stored, so a repeated request finds it.
+    const forClaude = claudeDrafts.length > 0 || message !== '' || files.length > 0;
     const id = options.id ?? newId();
-    this.db.transaction(() => {
-      this.insertSubmission({ id, explorationId, forkId, message, newFork }, drafts);
+    const noteEvents = this.db.transaction(() => {
+      this.insertSubmission(
+        { id, explorationId, forkId, message, newFork, delivered: !forClaude },
+        claudeDrafts,
+      );
       for (const file of files) {
         this.db.run(
           'UPDATE files SET exploration_id = ?, submission_id = ? WHERE id = ?',
@@ -575,8 +589,11 @@ export class ChatStore {
       }
       this.db.run('UPDATE files SET draft_fork_id = NULL WHERE draft_fork_id = ?', forkId);
       this.db.run('DELETE FROM reply_drafts WHERE fork_id = ?', forkId);
+      return this.notesFromComments(noteDrafts);
     });
-    const submission = this.publishSubmission(explorationId, id, drafts);
+    this.publish(noteEvents);
+    if (!forClaude) return toQueuedSubmission(this.requireSubmissionRow(id));
+    const submission = this.publishSubmission(explorationId, id, claudeDrafts);
     if (files.length > 0) {
       this.publish([[explorationId, { type: 'files.updated', files: this.filesOf(id) }]]);
     }
@@ -602,7 +619,10 @@ export class ChatStore {
     const id = options.id ?? newId();
     const forkId = draft.view_fork_id;
     this.db.transaction(() => {
-      this.insertSubmission({ id, explorationId, forkId, message: '', newFork: false }, [draft]);
+      this.insertSubmission(
+        { id, explorationId, forkId, message: '', newFork: false, delivered: false },
+        [draft],
+      );
     });
     return this.publishSubmission(explorationId, id, [draft]);
   }
@@ -1011,21 +1031,7 @@ export class ChatStore {
       : null;
     if (existing) return toNoteGroup(existing);
     this.requireWritable(explorationId);
-    const id = input.id ?? newId();
-    const createdAt = this.now();
-    this.db.run(
-      `INSERT INTO note_groups (id, exploration_id, name, checklist, position, created_at, updated_at)
-       VALUES (?, ?, ?, ?,
-         (SELECT coalesce(max(position), 0) + 1 FROM note_groups WHERE exploration_id = ?), ?, ?)`,
-      id,
-      explorationId,
-      input.name?.trim() || this.defaultGroupNameIn(explorationId),
-      input.checklist ? 1 : 0,
-      explorationId,
-      createdAt,
-      createdAt,
-    );
-    const group = toNoteGroup(this.requireNoteGroupRow(id));
+    const group = toNoteGroup(this.insertNoteGroup(explorationId, input));
     this.publish([[explorationId, { type: 'note-group.created', group }]]);
     return group;
   }
@@ -1070,28 +1076,17 @@ export class ChatStore {
       throw new StoreError('invalid', 'A note needs a topic or a description.');
     }
     const id = input.id ?? newId();
-    const createdAt = this.now();
-    const noteIds = this.db.transaction(() => {
-      this.db.run(
-        `INSERT INTO notes (id, exploration_id, group_id, topic, description, position, created_by,
-           created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 0, 'user', ?, ?)`,
+    const events = this.db.transaction(() =>
+      this.insertNote({
         id,
-        explorationId,
-        group.id,
-        topic || null,
+        groupId: group.id,
+        topic: topic || null,
         description,
-        createdAt,
-        createdAt,
-      );
-      return this.renumberNotes(group.id);
-    });
-    const note = toNote(this.requireNoteRow(id));
-    this.publish([
-      [explorationId, { type: 'note.created', note }],
-      [explorationId, { type: 'notes.reordered', groupId: group.id, noteIds }],
-    ]);
-    return note;
+        createdBy: 'user',
+      }),
+    );
+    this.publish(events);
+    return toNote(this.requireNoteRow(id));
   }
 
   updateNote(noteId: string, changes: NoteChanges) {
@@ -1157,6 +1152,118 @@ export class ChatStore {
     const note = toNote(this.requireNoteRow(noteId));
     this.publish([[row.exploration_id, { type: 'note.group-changed', note, noteIds }]]);
     return { note, noteIds };
+  }
+
+  private insertNoteGroup(explorationId: string, input: NewNoteGroup) {
+    const id = input.id ?? newId();
+    const createdAt = this.now();
+    this.db.run(
+      `INSERT INTO note_groups (id, exploration_id, name, checklist, position, created_at, updated_at)
+       VALUES (?, ?, ?, ?,
+         (SELECT coalesce(max(position), 0) + 1 FROM note_groups WHERE exploration_id = ?), ?, ?)`,
+      id,
+      explorationId,
+      input.name?.trim() || this.defaultGroupNameIn(explorationId),
+      input.checklist ? 1 : 0,
+      explorationId,
+      createdAt,
+      createdAt,
+    );
+    return this.requireNoteGroupRow(id);
+  }
+
+  // Goes first in its group. Returns the events to publish once the transaction is over.
+  private insertNote(input: {
+    id: string;
+    groupId: string;
+    topic: string | null;
+    description: string;
+    createdBy: NoteAuthor;
+    source?: {
+      forkId: string;
+      messageId: string;
+      quote: string | null;
+      startOffset: number | null;
+      endOffset: number | null;
+      commentId: string | null;
+    };
+  }): PendingEvent[] {
+    const group = this.requireNoteGroupRow(input.groupId);
+    const createdAt = this.now();
+    this.db.run(
+      `INSERT INTO notes (id, exploration_id, group_id, topic, description, position,
+         source_fork_id, source_message_id, source_quote, source_start_offset, source_end_offset,
+         source_comment_id, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      input.id,
+      group.exploration_id,
+      group.id,
+      input.topic,
+      input.description,
+      input.source?.forkId ?? null,
+      input.source?.messageId ?? null,
+      input.source?.quote ?? null,
+      input.source?.startOffset ?? null,
+      input.source?.endOffset ?? null,
+      input.source?.commentId ?? null,
+      input.createdBy,
+      createdAt,
+      createdAt,
+    );
+    const noteIds = this.renumberNotes(group.id);
+    const note = toNote(this.requireNoteRow(input.id));
+    return [
+      [group.exploration_id, { type: 'note.created', note }],
+      [group.exploration_id, { type: 'notes.reordered', groupId: group.id, noteIds }],
+    ];
+  }
+
+  // A note comment becomes a note at once, in the group picked in the comment box, or the first
+  // group, or a new one when the chat has none.
+  private notesFromComments(comments: CommentRow[]) {
+    const events: PendingEvent[] = [];
+    for (const comment of comments) {
+      const explorationId = comment.exploration_id;
+      let group = comment.note_group_id
+        ? this.requireNoteGroupRow(comment.note_group_id)
+        : this.db.get<NoteGroupRow>(
+            'SELECT * FROM note_groups WHERE exploration_id = ? ORDER BY position, rowid LIMIT 1',
+            explorationId,
+          );
+      if (!group) {
+        group = this.insertNoteGroup(explorationId, {});
+        events.push([explorationId, { type: 'note-group.created', group: toNoteGroup(group) }]);
+      }
+      const noteId = newId();
+      events.push(
+        ...this.insertNote({
+          id: noteId,
+          groupId: group.id,
+          topic: null,
+          description: `${quoteBlock(comment.quote)}\n\n${comment.body}`,
+          createdBy: 'user',
+          source: {
+            forkId: comment.view_fork_id,
+            messageId: comment.message_id,
+            quote: comment.quote,
+            startOffset: comment.start_offset,
+            endOffset: comment.end_offset,
+            commentId: comment.id,
+          },
+        }),
+      );
+      this.db.run(
+        "UPDATE comments SET status = 'submitted', created_note_id = ?, updated_at = ? WHERE id = ?",
+        noteId,
+        this.now(),
+        comment.id,
+      );
+      events.push([
+        explorationId,
+        { type: 'comment.updated', comment: toComment(this.requireCommentRow(comment.id)) },
+      ]);
+    }
+    return events;
   }
 
   private defaultGroupNameIn(explorationId: string, exceptGroupId?: string) {
@@ -1345,19 +1452,23 @@ export class ChatStore {
       forkId: string;
       message: string;
       newFork: boolean;
+      delivered: boolean;
     },
     drafts: CommentRow[],
   ) {
+    const createdAt = this.now();
     this.db.run(
       `INSERT INTO submissions
-         (id, exploration_id, fork_id, global_message, new_fork, status, created_at)
-       VALUES (?, ?, ?, ?, ?, 'queued', ?)`,
+         (id, exploration_id, fork_id, global_message, new_fork, status, created_at, delivered_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       submission.id,
       submission.explorationId,
       submission.forkId,
       submission.message,
       submission.newFork ? 1 : 0,
-      this.now(),
+      submission.delivered ? 'delivered' : 'queued',
+      createdAt,
+      submission.delivered ? createdAt : null,
     );
     for (const draft of drafts) {
       this.db.run(

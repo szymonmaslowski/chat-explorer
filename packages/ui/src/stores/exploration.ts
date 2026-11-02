@@ -193,6 +193,8 @@ export function applyChange(state: ExplorationState, change: Change) {
         submissionId: existing?.submissionId ?? null,
         replyMessageId: null,
         createdForkId: null,
+        noteGroupId: change.comment.noteGroupId ?? existing?.noteGroupId ?? null,
+        createdNoteId: null,
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
       });
@@ -200,13 +202,14 @@ export function applyChange(state: ExplorationState, change: Change) {
     }
     case 'comment.update': {
       const comment = state.comments.get(change.commentId);
-      const { body, editBody, type } = change.changes;
+      const { body, editBody, type, noteGroupId } = change.changes;
       if (!comment) break;
       state.comments.set(comment.id, {
         ...comment,
         body: body ?? comment.body,
         editBody: editBody === undefined ? comment.editBody : editBody,
         type: type ?? comment.type,
+        noteGroupId: noteGroupId === undefined ? comment.noteGroupId : noteGroupId,
         updatedAt: now,
       });
       break;
@@ -218,18 +221,31 @@ export function applyChange(state: ExplorationState, change: Change) {
       break;
     case 'submit': {
       const { id, forkId, globalMessage, newFork, files } = change.submission;
-      state.queuedSubmissions.set(id, {
-        id,
-        explorationId: state.explorationId,
-        forkId,
-        globalMessage: globalMessage.trim(),
-        newFork,
-        createdAt: now,
-      });
-      for (const comment of state.comments.values()) {
-        if (comment.viewForkId === forkId && comment.status === 'draft') {
-          state.comments.set(comment.id, { ...comment, status: 'queued', submissionId: id });
-        }
+      const drafts = [...state.comments.values()].filter(
+        (comment) => comment.viewForkId === forkId && comment.status === 'draft',
+      );
+      // Note comments become notes without Claude; they wait here only for the daemon.
+      for (const comment of drafts) {
+        const isNote = comment.type === 'note';
+        state.comments.set(comment.id, {
+          ...comment,
+          status: 'queued',
+          submissionId: isNote ? null : id,
+        });
+      }
+      const forClaude =
+        globalMessage.trim() !== '' ||
+        files.length > 0 ||
+        drafts.some((comment) => comment.type !== 'note');
+      if (forClaude) {
+        state.queuedSubmissions.set(id, {
+          id,
+          explorationId: state.explorationId,
+          forkId,
+          globalMessage: globalMessage.trim(),
+          newFork,
+          createdAt: now,
+        });
       }
       for (const file of files) state.files.set(file.id, { ...file, submissionId: id });
       break;

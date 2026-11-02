@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { Database } from '../src/db/database.js';
 import { migrations } from '../src/db/schema.js';
 import { defaultGroupName, reorderedIds } from '../src/shared/notes.js';
-import { createTestApp, createTestStore, seedConversation } from './helpers.js';
+import { createTestApp, createTestStore, draft, seedConversation } from './helpers.js';
 
 function setup() {
   const context = createTestStore();
@@ -298,5 +298,111 @@ describe('migration 8', () => {
       /comment_type/,
     );
     database.close();
+  });
+});
+
+describe('note comments', () => {
+  function noteComment(
+    context: ReturnType<typeof setup>,
+    input: { body: string; noteGroupId?: string | null },
+  ) {
+    return context.store.createComment(context.explorationId, {
+      messageId: context.answer.id,
+      viewForkId: context.mainForkId,
+      quote: 'some text',
+      startOffset: 16,
+      endOffset: 25,
+      type: 'note',
+      ...input,
+    });
+  }
+
+  it('turns into a note on Submit without asking Claude anything', () => {
+    const context = setup();
+    const { store, explorationId, mainForkId, answer } = context;
+    const shopping = store.createNoteGroup(explorationId, { name: 'Shopping' });
+    store.createNoteGroup(explorationId, { name: 'Backlog' });
+    const comment = noteComment(context, { body: 'Buy this', noteGroupId: shopping.id });
+
+    store.submit(explorationId, mainForkId, '');
+
+    const snapshot = store.snapshot(explorationId);
+    const [note] = snapshot.notes;
+    expect(note).toMatchObject({
+      groupId: shopping.id,
+      topic: null,
+      description: '> some text\n\nBuy this',
+      sourceForkId: mainForkId,
+      sourceMessageId: answer.id,
+      sourceQuote: 'some text',
+      sourceCommentId: comment.id,
+      createdBy: 'user',
+    });
+    expect(snapshot.comments[0]).toMatchObject({ status: 'submitted', createdNoteId: note!.id });
+    expect(snapshot.queuedSubmissions).toEqual([]);
+    expect(store.pendingForks(explorationId)).toEqual([]);
+  });
+
+  it('starts a General group when the chat has none, or takes the first one', () => {
+    const context = setup();
+    const { store, explorationId, mainForkId } = context;
+    noteComment(context, { body: 'First' });
+    store.submit(explorationId, mainForkId, '');
+    const [general] = store.snapshot(explorationId).noteGroups;
+    expect(general!.name).toBe('General');
+    store.createNoteGroup(explorationId, { name: 'Later' });
+    noteComment(context, { body: 'Second' });
+    store.submit(explorationId, mainForkId, '');
+    expect(store.snapshot(explorationId).notes.map((note) => note.groupId)).toEqual([
+      general!.id,
+      general!.id,
+    ]);
+  });
+
+  it('sends the rest of a mixed Submit to Claude and keeps the notes on cancel', () => {
+    const context = setup();
+    const { store, explorationId, mainForkId, answer } = context;
+    noteComment(context, { body: 'Keep this' });
+    draft(store, explorationId, { messageId: answer.id, viewForkId: mainForkId, body: 'Why?' });
+    const submission = store.submit(explorationId, mainForkId, 'And more');
+    expect(store.queuedSubmissions(explorationId)).toHaveLength(1);
+    store.cancelSubmission(submission.id);
+    const snapshot = store.snapshot(explorationId);
+    expect(snapshot.notes).toHaveLength(1);
+    expect(snapshot.comments.map((comment) => [comment.type, comment.status])).toEqual([
+      ['note', 'submitted'],
+      ['inline', 'draft'],
+    ]);
+  });
+
+  it('makes one note for a repeated Submit', () => {
+    const context = setup();
+    const { store, explorationId, mainForkId } = context;
+    noteComment(context, { body: 'Once' });
+    store.submit(explorationId, mainForkId, '', { id: 'sbm0000001' });
+    store.submit(explorationId, mainForkId, '', { id: 'sbm0000001' });
+    expect(store.snapshot(explorationId).notes).toHaveLength(1);
+  });
+
+  it('needs more than notes to start a new fork, and Fork all leaves notes alone', () => {
+    const context = setup();
+    const { store, explorationId, mainForkId, answer } = context;
+    noteComment(context, { body: 'A note' });
+    expect(() => store.submit(explorationId, mainForkId, '', { newFork: true })).toThrow(
+      expect.objectContaining({ code: 'invalid' }),
+    );
+    draft(store, explorationId, { messageId: answer.id, viewForkId: mainForkId, body: 'Ask' });
+    expect(store.toggleForkAll(explorationId, mainForkId).map((comment) => comment.type)).toEqual([
+      'fork',
+    ]);
+  });
+
+  it('rejects a group from another chat', () => {
+    const context = setup();
+    const other = seedConversation(context.store);
+    const otherGroup = context.store.createNoteGroup(other.explorationId, {});
+    expect(() => noteComment(context, { body: 'x', noteGroupId: otherGroup.id })).toThrow(
+      expect.objectContaining({ code: 'not_found' }),
+    );
   });
 });

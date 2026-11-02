@@ -3,7 +3,7 @@ import type { ClaudeModel } from './models.js';
 export type Role = 'user' | 'assistant';
 export type MessageSource = 'import' | 'live';
 export type ForkKind = 'soft' | 'hard';
-export type CommentType = 'inline' | 'fork';
+export type CommentType = 'inline' | 'fork' | 'note';
 export type CommentStatus = 'draft' | 'queued' | 'submitted';
 export type SessionStatus = 'starting' | 'listening' | 'answering' | 'attached' | 'detached';
 
@@ -68,6 +68,9 @@ export interface Comment {
   submissionId: string | null;
   replyMessageId: string | null;
   createdForkId: string | null;
+  // A note comment becomes a note in this group on Submit; null takes the first group.
+  noteGroupId: string | null;
+  createdNoteId: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -184,12 +187,14 @@ export interface NewComment {
   body: string;
   editBody?: string;
   type?: CommentType;
+  noteGroupId?: string | null;
 }
 
 export interface CommentChanges {
   body?: string;
   editBody?: string | null;
   type?: CommentType;
+  noteGroupId?: string | null;
 }
 
 export interface NewNoteGroup {

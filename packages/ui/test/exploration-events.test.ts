@@ -41,6 +41,8 @@ it('keeps a Save made here when the older "created" notice arrives after it', ()
     submissionId: null,
     replyMessageId: null,
     createdForkId: null,
+    noteGroupId: null,
+    createdNoteId: null,
     createdAt: 0,
     updatedAt: 0,
   };

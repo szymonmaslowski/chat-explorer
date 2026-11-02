@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Comment, ReplyDraft } from '@shared/types';
+import type { Comment, CommentType, ReplyDraft } from '@shared/types';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { api } from '../api';
 import { useAutosave } from '../composables/useAutosave';
@@ -41,9 +41,13 @@ const fileCount = computed(() => files.readyIds.value.length);
 const beingEdited = computed(() => props.drafts.filter((draft) => draft.editBody !== null));
 const editingCount = computed(() => beingEdited.value.length);
 const readyDrafts = computed(() => props.drafts.filter((draft) => draft.editBody === null));
-const forkCount = computed(() => readyDrafts.value.filter((draft) => draft.type === 'fork').length);
-const inlineCount = computed(() => readyDrafts.value.length - forkCount.value);
-const allForks = computed(() => props.drafts.length > 0 && forkCount.value === props.drafts.length);
+const countOf = (type: CommentType) =>
+  readyDrafts.value.filter((draft) => draft.type === type).length;
+const forkCount = computed(() => countOf('fork'));
+const inlineCount = computed(() => countOf('inline'));
+const noteCount = computed(() => countOf('note'));
+const forkableCount = computed(() => props.drafts.filter((draft) => draft.type !== 'note').length);
+const allForks = computed(() => forkableCount.value > 0 && forkCount.value === forkableCount.value);
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
 const summary = computed(() => {
   const reply = [
@@ -54,6 +58,7 @@ const summary = computed(() => {
     .filter(Boolean)
     .join(', ');
   return [
+    noteCount.value ? plural(noteCount.value, 'note') : '',
     forkCount.value ? plural(forkCount.value, 'fork') : '',
     newFork.value && reply ? `new fork with ${reply}` : reply,
   ]
@@ -208,7 +213,7 @@ function onKeydown(event: KeyboardEvent) {
     <div class="actions">
       <button
         type="button"
-        :disabled="drafts.length === 0"
+        :disabled="forkableCount === 0"
         :title="allForks ? 'Answer all comments in this fork' : 'Start a fork for every comment'"
         @click="toggleForkAll"
       >

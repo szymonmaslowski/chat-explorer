@@ -9,6 +9,8 @@
   --accent-soft: light-dark(rgb(79 70 229 / 0.14), rgb(139 133 255 / 0.2));
   --fork: light-dark(#c2410c, #fb923c);
   --fork-soft: light-dark(rgb(234 88 12 / 0.16), rgb(251 146 60 / 0.2));
+  --note: light-dark(#0f766e, #2dd4bf);
+  --note-soft: light-dark(rgb(13 148 136 / 0.14), rgb(45 212 191 / 0.18));
   --success: light-dark(#15803d, #4ade80);
   --warning: light-dark(#b45309, #fbbf24);
   --caution: light-dark(#f59e0b, #fbbf24);
@@ -172,6 +174,10 @@ blockquote {
 
 ::highlight(comment-fork) {
   background-color: var(--fork-soft);
+}
+
+::highlight(comment-note) {
+  background-color: var(--note-soft);
 }
 
 ::highlight(comment-submitted) {

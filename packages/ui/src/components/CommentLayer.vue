@@ -150,6 +150,7 @@ function paintHighlights() {
   const groups: Record<string, Range[]> = {
     'comment-inline': [],
     'comment-fork': [],
+    'comment-note': [],
     'comment-submitted': [],
   };
   for (const comment of props.comments) {
@@ -364,6 +365,8 @@ function closeEditor() {
 function openSubmitted(comment: Comment) {
   if (comment.createdForkId) {
     void router.push(`/e/${props.explorationId}/f/${comment.createdForkId}`);
+  } else if (comment.createdNoteId) {
+    void router.push(`/e/${props.explorationId}/notes#n-${comment.createdNoteId}`);
   } else if (comment.replyMessageId) {
     void router.push({ hash: `#m-${comment.replyMessageId}` });
   }

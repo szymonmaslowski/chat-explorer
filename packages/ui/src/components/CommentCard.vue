@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Comment, CommentChanges } from '@shared/types';
+import type { Comment, CommentChanges, CommentType } from '@shared/types';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useAutosave } from '../composables/useAutosave';
 import { useExpandedArea } from '../composables/useExpandedArea';
@@ -32,6 +32,7 @@ watch(editing, (isEditing) => {
   if (!isEditing) expanded.value = false;
 });
 const isDraft = computed(() => props.comment.status === 'draft');
+const typeLabels: Record<CommentType, string> = { inline: 'Comment', fork: 'Fork', note: 'Note' };
 const { opacity, interactive } = useProximityFade(
   card,
   computed(() => editing.value || !props.placement),
@@ -145,9 +146,11 @@ function onEditorKeydown(event: KeyboardEvent) {
     </template>
     <template v-else>
       <div class="label">
-        {{ comment.type === 'fork' ? 'Fork' : 'Comment' }}
+        {{ typeLabels[comment.type] }}
         <span v-if="comment.status === 'queued'">· queued</span>
-        <span v-if="comment.status === 'submitted'">· sent</span>
+        <span v-if="comment.status === 'submitted'">
+          · {{ comment.type === 'note' ? 'saved' : 'sent' }}
+        </span>
         <span v-if="outbox.stalled.value && outbox.isPending(comment.id)" class="unsent">
           · not sent yet
         </span>
@@ -165,6 +168,7 @@ function onEditorKeydown(event: KeyboardEvent) {
       <p class="body">{{ comment.body }}</p>
       <div v-if="isDraft" class="actions">
         <button
+          v-if="comment.type !== 'note'"
           type="button"
           :title="comment.type === 'fork' ? 'Answer in this fork instead' : 'Start a new fork'"
           @click="toggleType"
@@ -244,6 +248,14 @@ function onEditorKeydown(event: KeyboardEvent) {
 
 .fork .label {
   color: var(--fork);
+}
+
+.comment-card.note {
+  border-left-color: var(--note);
+}
+
+.note .label {
+  color: var(--note);
 }
 
 .submitted .label {

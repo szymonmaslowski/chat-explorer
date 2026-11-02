@@ -1,5 +1,5 @@
 import { expect, type APIRequestContext, type Page } from '@playwright/test';
-import { test } from './helpers';
+import { answeredChat, selectAnswer, test } from './helpers';
 
 async function newChat(request: APIRequestContext) {
   const { explorationId } = await (
@@ -200,4 +200,35 @@ test('ticks checklist notes, sorts them and drags them into place', async ({
       .filter((each: { checked: boolean }) => each.checked)
       .map((each: { topic: string }) => each.topic),
   ).toEqual(expect.arrayContaining(['Lemon', 'Milk']));
+});
+
+test('turns a note comment into a note on Submit', async ({ page, request }) => {
+  const explorationId = await answeredChat(request);
+  await request.post(`/api/explorations/${explorationId}/note-groups`, {
+    data: { name: 'Facts' },
+  });
+  await request.post(`/api/explorations/${explorationId}/note-groups`, {
+    data: { name: 'Backlog' },
+  });
+  await page.goto(`/e/${explorationId}`);
+  await selectAnswer(page);
+  await page.getByRole('button', { name: 'Comment', exact: true }).click();
+  await page.getByLabel('Note', { exact: true }).check();
+  await page.getByLabel('Note group').selectOption({ label: 'Backlog' });
+  await page.getByPlaceholder('Your comment').fill('Check this later');
+  await page.keyboard.press('ControlOrMeta+Enter');
+
+  const card = page.locator('.comment-card.note');
+  await expect(card).toContainText('Note');
+  await expect(page.locator('.reply-bar .summary')).toHaveText('1 note');
+  await page.getByRole('button', { name: 'Submit' }).click();
+  await expect(card).toContainText('saved');
+  await expect(page.locator('.queued-submission')).toHaveCount(0);
+
+  await card.click();
+  await expect(page).toHaveURL(new RegExp(`/e/${explorationId}/notes\\?group=.*#n-`));
+  await expect(page.getByRole('tab', { name: 'Backlog' })).toHaveAttribute('aria-selected', 'true');
+  const note = page.locator('.note.selected');
+  await expect(note.locator('.topic')).toHaveText('Preparing topic…');
+  await expect(note.locator('.description')).toContainText('Check this later');
 });
