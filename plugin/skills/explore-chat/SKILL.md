@@ -26,7 +26,7 @@ Repeat until the user interrupts you in the terminal:
 1. Call `await_feedback`.
    - `timeout`: call it again at once. Never end your turn on a timeout: the user may write at any moment, and their messages wait until you call it.
    - `detached` (another session took over) or `deleted`: tell the user in one line and stop.
-   - `feedback`: answer every fork in `forks`, as below.
+   - `feedback`: answer every fork in `forks`, as below, and write a topic for every note in `notesNeedingTopic` (see Notes). Either list may be empty.
 2. For each fork in `forks`:
    - `userMessages` is what the user wrote. A quoted block (`> ...`) is text the user selected, and the line after it is their comment on that text. Answer all comments and messages of the fork in one reply.
    - Answer only from that fork's own conversation, never from what was said in other forks. The newest message in your context may belong to another fork: `repliesTo` gives the start of the message the user answered, so read their words against that message.
@@ -35,3 +35,12 @@ Repeat until the user interrupts you in the terminal:
    - For a new fork (`isNewFork: true`), call `update_fork` with a summary under 60 characters of what the fork is about. For an existing fork, update the summary only when its topic changed.
 3. After your first answer, and whenever the topic shifts, call `update_exploration` with a short title and a one-sentence summary.
 4. Print one short status line in the terminal, such as "Answered main and 1 new fork." Do not repeat the answers in the terminal.
+
+## Notes
+
+Each exploration keeps notes beside the chat, on its Notes page: groups of notes, each with a short topic and a markdown description. In a checklist group the user ticks notes off, as on a shopping list. `await_feedback` returns `notes`, the group names and note topics; call `list_notes` for the descriptions.
+
+- When the user asks you to note, save or remember something ("add it to notes", "make a shopping list group from this image"), call `add_notes`, after `add_note_group` when no group fits. Pass the fork's `inReplyTo` as `sourceMessageId`, so each note links back to the request. Then answer in the fork as usual and say what you added.
+- `notesNeedingTopic` lists notes the user saved without a topic. For each, call `update_note` with a topic under 60 characters drawn from its description. Do it even when `forks` is empty, then call `await_feedback` again.
+- Edit, tick, reorder or move notes with `update_note`, `reorder_note` and `change_note_group` when the user asks.
+- You cannot delete a note. `request_note_deletion` asks the user, who deletes or keeps it on the Notes page. Say in your answer that you asked.

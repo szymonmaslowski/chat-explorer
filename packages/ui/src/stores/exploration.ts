@@ -348,6 +348,11 @@ export function applyChange(state: ExplorationState, change: Change) {
     case 'note.delete':
       state.notes.delete(change.noteId);
       break;
+    case 'note.keep': {
+      const note = state.notes.get(change.noteId);
+      if (note) state.notes.set(note.id, { ...note, deletionRequestedAt: null, updatedAt: now });
+      break;
+    }
     case 'note.reorder': {
       const note = state.notes.get(change.noteId);
       if (!note) break;

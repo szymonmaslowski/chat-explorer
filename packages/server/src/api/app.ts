@@ -140,6 +140,20 @@ const speechBody = z.object({
     z.object({ kind: z.literal('image'), description: z.string().max(maxSpeechTextLength) }),
   ]),
 });
+const claudeNoteGroupBody = shimBody.extend({
+  name: z.string().optional(),
+  checklist: z.boolean().optional(),
+});
+const claudeNotesBody = shimBody.extend({
+  groupId: z.string(),
+  notes: z
+    .array(z.object({ topic: z.string().optional(), description: z.string().optional() }))
+    .min(1),
+  sourceMessageId: z.string().optional(),
+});
+const claudeNoteChangesBody = shimBody.extend(noteChangesBody.shape);
+const claudeNoteReorderBody = shimBody.extend(noteReorderBody.shape);
+const claudeNoteGroupChangeBody = shimBody.extend(noteGroupBody.shape);
 const feedbackBody = shimBody.extend({
   waitMs: z.number().int().positive().max(maxFeedbackWaitMs),
 });
@@ -409,6 +423,10 @@ export function createApp(options: AppOptions) {
     return context.json(store.changeNoteGroup(context.req.param('id'), groupId));
   });
 
+  app.post('/api/notes/:id/keep', (context) =>
+    context.json(store.keepNote(context.req.param('id'))),
+  );
+
   app.delete('/api/submissions/:id', (context) =>
     context.json(store.cancelSubmission(context.req.param('id'))),
   );
@@ -523,6 +541,50 @@ export function createApp(options: AppOptions) {
       signal: context.req.raw.signal,
     });
     return context.json(result);
+  });
+
+  internal.get('/explorations/:id/notes', (context) =>
+    context.json(store.readNotes(context.req.param('id'), context.req.query('groupId'))),
+  );
+
+  internal.post('/explorations/:id/note-groups', async (context) => {
+    const explorationId = context.req.param('id');
+    const { shimId, ...group } = claudeNoteGroupBody.parse(await context.req.json());
+    store.requireAttachedShim(explorationId, shimId);
+    return context.json(store.createNoteGroup(explorationId, group), 201);
+  });
+
+  internal.post('/explorations/:id/notes', async (context) => {
+    const body = claudeNotesBody.parse(await context.req.json());
+    return context.json(store.addNotes({ explorationId: context.req.param('id'), ...body }), 201);
+  });
+
+  // Claude changes a note only while its session is attached to the note's chat.
+  const attachedNoteId = (noteId: string, shimId: string) => {
+    store.requireAttachedShim(store.noteExplorationId(noteId), shimId);
+    return noteId;
+  };
+
+  internal.patch('/notes/:id', async (context) => {
+    const { shimId, ...changes } = claudeNoteChangesBody.parse(await context.req.json());
+    return context.json(store.updateNote(attachedNoteId(context.req.param('id'), shimId), changes));
+  });
+
+  internal.post('/notes/:id/reorder', async (context) => {
+    const { shimId, afterNoteId } = claudeNoteReorderBody.parse(await context.req.json());
+    const noteId = attachedNoteId(context.req.param('id'), shimId);
+    return context.json(store.reorderNote(noteId, afterNoteId));
+  });
+
+  internal.put('/notes/:id/group', async (context) => {
+    const { shimId, groupId } = claudeNoteGroupChangeBody.parse(await context.req.json());
+    const noteId = attachedNoteId(context.req.param('id'), shimId);
+    return context.json(store.changeNoteGroup(noteId, groupId));
+  });
+
+  internal.post('/notes/:id/deletion-request', async (context) => {
+    const { shimId } = shimBody.parse(await context.req.json());
+    return context.json(store.requestNoteDeletion(attachedNoteId(context.req.param('id'), shimId)));
   });
 
   internal.get('/sessions/:sessionId/exploration', (context) =>

@@ -92,6 +92,38 @@ export interface ForkRead {
   omitted: { count: number; forks: { id: string; summary: string }[] } | null;
 }
 
+export interface NoteNeedingTopic {
+  noteId: string;
+  groupId: string;
+  description: string;
+}
+
+// Group names and note topics, which Claude gets with every feedback.
+export interface NotesIndex {
+  groups: {
+    id: string;
+    name: string;
+    checklist: boolean;
+    notes: { id: string; topic: string | null; checked: boolean }[];
+  }[];
+}
+
+export interface NotesRead {
+  groups: {
+    id: string;
+    name: string;
+    checklist: boolean;
+    notes: {
+      id: string;
+      topic: string | null;
+      description: string;
+      checked: boolean;
+      createdBy: NoteAuthor;
+      deletionRequested: boolean;
+    }[];
+  }[];
+}
+
 export interface Attachment {
   shimId: string;
   sessionId: string | null;
@@ -661,12 +693,17 @@ export class ChatStore {
     };
   }
 
-  explorationsWithQueuedSubmissions() {
+  // Queued submissions, and notes waiting for a topic from Claude.
+  explorationsAwaitingClaude() {
     return this.db
       .all<{ exploration_id: string }>(
-        `SELECT DISTINCT exploration_id FROM submissions
-         JOIN explorations ON explorations.id = submissions.exploration_id
-         WHERE status = 'queued' AND archived_at IS NULL AND deleted_at IS NULL`,
+        `SELECT DISTINCT waiting.exploration_id FROM (
+           SELECT exploration_id FROM submissions WHERE status = 'queued'
+           UNION
+           SELECT exploration_id FROM notes WHERE topic IS NULL
+         ) AS waiting
+         JOIN explorations ON explorations.id = waiting.exploration_id
+         WHERE archived_at IS NULL AND deleted_at IS NULL`,
       )
       .map((row) => row.exploration_id);
   }
@@ -1152,6 +1189,142 @@ export class ChatStore {
     const note = toNote(this.requireNoteRow(noteId));
     this.publish([[row.exploration_id, { type: 'note.group-changed', note, noteIds }]]);
     return { note, noteIds };
+  }
+
+  // Claude's notes go first in the group in the order given, linked to the message that asked.
+  addNotes(input: {
+    shimId: string;
+    explorationId: string;
+    groupId: string;
+    notes: { topic?: string | undefined; description?: string | undefined }[];
+    sourceMessageId?: string | undefined;
+  }) {
+    const { explorationId } = input;
+    this.requireAttachedShim(explorationId, input.shimId);
+    this.requireWritable(explorationId);
+    const group = this.requireNoteGroupRow(input.groupId, explorationId);
+    const notes = input.notes.map((note) => ({
+      id: newId(),
+      topic: note.topic?.trim() ?? '',
+      description: note.description?.trim() ?? '',
+    }));
+    if (notes.some((note) => !note.topic && !note.description)) {
+      throw new StoreError('invalid', 'Every note needs a topic or a description.');
+    }
+    const message = input.sourceMessageId ? this.requireMessageRow(input.sourceMessageId) : null;
+    if (message && message.exploration_id !== explorationId) {
+      throw new StoreError('not_found', `Message ${input.sourceMessageId} does not exist.`);
+    }
+    const source = message
+      ? {
+          forkId: message.fork_id,
+          messageId: message.id,
+          quote: null,
+          startOffset: null,
+          endOffset: null,
+          commentId: null,
+        }
+      : undefined;
+    const events = this.db.transaction(() =>
+      notes.toReversed().flatMap((note) =>
+        this.insertNote({
+          id: note.id,
+          groupId: group.id,
+          topic: note.topic || null,
+          description: note.description,
+          createdBy: 'claude',
+          source,
+        }),
+      ),
+    );
+    this.publish(events);
+    return { noteIds: notes.map((note) => note.id) };
+  }
+
+  notesNeedingTopic(explorationId: string): NoteNeedingTopic[] {
+    return this.db
+      .all<NoteRow>(
+        'SELECT * FROM notes WHERE exploration_id = ? AND topic IS NULL ORDER BY created_at, rowid',
+        explorationId,
+      )
+      .map((row) => ({ noteId: row.id, groupId: row.group_id, description: row.description }));
+  }
+
+  notesIndex(explorationId: string): NotesIndex {
+    return {
+      groups: this.groupsWithNotes(explorationId).map(({ group, notes }) => ({
+        id: group.id,
+        name: group.name,
+        checklist: group.checklist === 1,
+        notes: notes.map((note) => ({
+          id: note.id,
+          topic: note.topic,
+          checked: note.checked === 1,
+        })),
+      })),
+    };
+  }
+
+  readNotes(explorationId: string, groupId?: string): NotesRead {
+    this.requireExplorationRow(explorationId);
+    if (groupId !== undefined) this.requireNoteGroupRow(groupId, explorationId);
+    return {
+      groups: this.groupsWithNotes(explorationId)
+        .filter(({ group }) => groupId === undefined || group.id === groupId)
+        .map(({ group, notes }) => ({
+          id: group.id,
+          name: group.name,
+          checklist: group.checklist === 1,
+          notes: notes.map((note) => ({
+            id: note.id,
+            topic: note.topic,
+            description: note.description,
+            checked: note.checked === 1,
+            createdBy: note.created_by,
+            deletionRequested: note.deletion_requested_at !== null,
+          })),
+        })),
+    };
+  }
+
+  noteExplorationId(noteId: string) {
+    return this.requireNoteRow(noteId).exploration_id;
+  }
+
+  // Claude never deletes a note itself: the page shows the request and the user decides.
+  requestNoteDeletion(noteId: string) {
+    return this.setDeletionRequestedAt(noteId, this.now());
+  }
+
+  keepNote(noteId: string) {
+    return this.setDeletionRequestedAt(noteId, null);
+  }
+
+  private setDeletionRequestedAt(noteId: string, requestedAt: number | null) {
+    const row = this.requireNoteRow(noteId);
+    this.requireWritable(row.exploration_id);
+    this.db.run(
+      'UPDATE notes SET deletion_requested_at = ?, updated_at = ? WHERE id = ?',
+      requestedAt,
+      this.now(),
+      noteId,
+    );
+    const note = toNote(this.requireNoteRow(noteId));
+    this.publish([[row.exploration_id, { type: 'note.updated', note }]]);
+    return note;
+  }
+
+  private groupsWithNotes(explorationId: string) {
+    const notes = this.db.all<NoteRow>(
+      'SELECT * FROM notes WHERE exploration_id = ? ORDER BY position, rowid',
+      explorationId,
+    );
+    return this.db
+      .all<NoteGroupRow>(
+        'SELECT * FROM note_groups WHERE exploration_id = ? ORDER BY position, rowid',
+        explorationId,
+      )
+      .map((group) => ({ group, notes: notes.filter((note) => note.group_id === group.id) }));
   }
 
   private insertNoteGroup(explorationId: string, input: NewNoteGroup) {

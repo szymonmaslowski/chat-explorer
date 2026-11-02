@@ -133,6 +133,54 @@ describe('MCP shim', () => {
     ]);
   });
 
+  it('lets Claude keep notes and write their topics', async () => {
+    const { call } = await connectClient();
+    const { value: started } = await call('start_exploration', { sessionId: 'session-a' });
+    const { explorationId, mainForkId } = started;
+    const waiting = call('await_feedback', { timeoutSeconds: 30 });
+    await daemonRequest(`/api/explorations/${explorationId}/submit`, {
+      forkId: mainForkId,
+      globalMessage: 'Make a shopping list',
+    });
+    const { value: feedback } = await waiting;
+    expect(feedback).toMatchObject({ notesNeedingTopic: [], notes: { groups: [] } });
+
+    const { value: group } = await call('add_note_group', { name: 'Shopping', checklist: true });
+    const { value: added } = await call('add_notes', {
+      groupId: group.id,
+      notes: [{ topic: 'Lemon' }, { topic: 'Milk' }],
+      sourceMessageId: feedback.forks[0].inReplyTo,
+    });
+    const [lemon, milk] = added.noteIds;
+    await call('update_note', { noteId: lemon, checked: true });
+    await call('reorder_note', { noteId: milk, afterNoteId: null });
+    const { value: other } = await call('add_note_group', {});
+    await call('change_note_group', { noteId: lemon, groupId: other.id });
+    await call('request_note_deletion', { noteId: milk });
+
+    const { value: notes } = await call('list_notes');
+    expect(notes.groups).toMatchObject([
+      { name: 'Shopping', notes: [{ topic: 'Milk', deletionRequested: true }] },
+      { name: 'Group 2', notes: [{ topic: 'Lemon', checked: true, createdBy: 'claude' }] },
+    ]);
+
+    const userNote = await daemonRequest(`/api/explorations/${explorationId}/notes`, {
+      groupId: group.id,
+      description: 'Bread for the weekend',
+    });
+    const { value: topics } = await call('await_feedback', { timeoutSeconds: 30 });
+    expect(topics).toMatchObject({
+      status: 'feedback',
+      forks: [{ forkId: mainForkId }],
+      notesNeedingTopic: [{ noteId: userNote.id, description: 'Bread for the weekend' }],
+    });
+    await call('update_note', { noteId: userNote.id, topic: 'Bread' });
+    expect((await call('list_notes', { groupId: group.id })).value.groups[0].notes).toMatchObject([
+      { topic: 'Bread' },
+      { topic: 'Milk' },
+    ]);
+  });
+
   it('returns timeout when nothing arrives', async () => {
     const { call } = await connectClient();
     await call('start_exploration', { sessionId: 'session-a' });

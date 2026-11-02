@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router';
 import CommentLayer from '../components/CommentLayer.vue';
 import ExplorationHeader from '../components/ExplorationHeader.vue';
 import ForkArchiveControl from '../components/ForkArchiveControl.vue';
+import NoteDeletionNotice from '../components/NoteDeletionNotice.vue';
 import ConversationMessage from '../components/ConversationMessage.vue';
 import QueuedSubmissionCard from '../components/QueuedSubmissionCard.vue';
 import ReplyBar from '../components/ReplyBar.vue';
@@ -135,6 +136,7 @@ watch(
       <div id="comment-tray" />
     </ExplorationHeader>
 
+    <NoteDeletionNotice :exploration-id="explorationId" :notes="state.notes" />
     <SessionError
       v-if="state.sessionError"
       :exploration-id="explorationId"

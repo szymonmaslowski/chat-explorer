@@ -1,5 +1,5 @@
 import { expect, type APIRequestContext, type Page } from '@playwright/test';
-import { answeredChat, selectAnswer, test } from './helpers';
+import { answeredChat, attachFakeSession, detachFakeSession, selectAnswer, test } from './helpers';
 
 async function newChat(request: APIRequestContext) {
   const { explorationId } = await (
@@ -231,4 +231,42 @@ test('turns a note comment into a note on Submit', async ({ page, request }) => 
   const note = page.locator('.note.selected');
   await expect(note.locator('.topic')).toHaveText('Preparing topic…');
   await expect(note.locator('.description')).toContainText('Check this later');
+});
+
+test('shows the topic Claude writes and its requests to delete', async ({ page, request }) => {
+  const explorationId = await newChat(request);
+  const group = await (
+    await request.post(`/api/explorations/${explorationId}/note-groups`, { data: {} })
+  ).json();
+  const create = async (body: object) =>
+    (
+      await request.post(`/api/explorations/${explorationId}/notes`, {
+        data: { groupId: group.id, ...body },
+      })
+    ).json();
+  const unnamed = await create({ description: 'Bread for the weekend' });
+  const doomed = await create({ topic: 'Old idea' });
+  const kept = await create({ topic: 'Keeper' });
+  await page.goto(`/e/${explorationId}/notes`);
+  await expect(topics(page)).toHaveText(['Keeper', 'Old idea', 'Preparing topic…']);
+
+  await attachFakeSession(request, explorationId);
+  const asClaude = (path: string, data: object, method = 'POST') =>
+    request.fetch(`/api/internal${path}`, { method, data: { shimId: 'e2e-shim', ...data } });
+  await asClaude(`/notes/${unnamed.id}`, { topic: 'Bread' }, 'PATCH');
+  await asClaude(`/notes/${doomed.id}/deletion-request`, {});
+  await asClaude(`/notes/${kept.id}/deletion-request`, {});
+  await detachFakeSession(request);
+
+  await expect(topics(page)).toHaveText(['Keeper', 'Old idea', 'Bread']);
+  await expect(page.locator('.deletion-notice')).toContainText('Claude asks to delete 2 notes.');
+  const keeper = page.locator('.note', { hasText: 'Keeper' });
+  await keeper.getByRole('button', { name: 'Keep' }).click();
+  await expect(keeper).not.toHaveClass(/deletion-requested/);
+  await page
+    .locator('.note', { hasText: 'Old idea' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await expect(topics(page)).toHaveText(['Keeper', 'Bread']);
+  await expect(page.locator('.deletion-notice')).toHaveCount(0);
 });

@@ -450,9 +450,9 @@ describe('archive and delete', () => {
     store.detach('shim-a');
     store.submit(explorationId, mainForkId, 'later');
     store.archiveExploration(explorationId);
-    expect(store.explorationsWithQueuedSubmissions()).toEqual([]);
+    expect(store.explorationsAwaitingClaude()).toEqual([]);
     store.unarchiveExploration(explorationId);
-    expect(store.explorationsWithQueuedSubmissions()).toEqual([explorationId]);
+    expect(store.explorationsAwaitingClaude()).toEqual([explorationId]);
   });
 
   it('hides a deleted exploration and restores it as archived', () => {

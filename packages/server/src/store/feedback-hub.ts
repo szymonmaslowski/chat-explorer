@@ -1,9 +1,20 @@
 import type { SessionStatus } from '../shared/types.js';
 import type { EventBus } from './event-bus.js';
-import { attachmentLivenessMs, type ChatStore, type PendingFork } from './store.js';
+import {
+  attachmentLivenessMs,
+  type ChatStore,
+  type NoteNeedingTopic,
+  type NotesIndex,
+  type PendingFork,
+} from './store.js';
 
 export type FeedbackResult =
-  | { status: 'feedback'; forks: PendingFork[] }
+  | {
+      status: 'feedback';
+      forks: PendingFork[];
+      notesNeedingTopic: NoteNeedingTopic[];
+      notes: NotesIndex;
+    }
   | { status: 'timeout' }
   | { status: 'detached' }
   | { status: 'deleted' };
@@ -25,6 +36,9 @@ export class FeedbackHub {
   private readonly waiters = new Set<Waiter>();
   private readonly lastPollEndedAt = new Map<string, number>();
   private readonly lastStatus = new Map<string, SessionStatus>();
+  // Notes already handed to the attached session for a topic. Without this a session that never
+  // writes one would get the same note back at once on every call, in a loop.
+  private readonly handedNotes = new Map<string, { shimId: string; noteIds: Set<string> }>();
   private readonly statusTimer: NodeJS.Timeout;
 
   constructor(
@@ -36,13 +50,17 @@ export class FeedbackHub {
     bus.subscribe((explorationId, event) => {
       if (event.type === 'session.status') return;
       // Deferred so every subscriber sees `submission.queued` before the delivery events it triggers.
-      if (event.type === 'submission.queued') {
+      const needsTopic =
+        (event.type === 'note.created' || event.type === 'note.updated') &&
+        event.note.topic === null;
+      if (event.type === 'submission.queued' || needsTopic) {
         queueMicrotask(() => this.wakeWithFeedback(explorationId));
       }
       if (event.type === 'session.attached') this.settleOthers(explorationId, event.shimId);
       if (event.type === 'exploration.deleted') {
         this.settleAll(explorationId, { status: 'deleted' });
         this.lastStatus.delete(explorationId);
+        this.handedNotes.delete(explorationId);
         return;
       }
       if (event.type === 'exploration.updated' && event.exploration.archivedAt !== null) {
@@ -117,7 +135,22 @@ export class FeedbackHub {
     this.store.requireAttachedShim(explorationId, shimId);
     this.store.deliverQueued(explorationId);
     const forks = this.store.pendingForks(explorationId);
-    return forks.length > 0 ? { status: 'feedback', forks } : null;
+    let handed = this.handedNotes.get(explorationId);
+    if (handed?.shimId !== shimId) {
+      handed = { shimId, noteIds: new Set() };
+      this.handedNotes.set(explorationId, handed);
+    }
+    const notesNeedingTopic = this.store
+      .notesNeedingTopic(explorationId)
+      .filter((note) => !handed.noteIds.has(note.noteId));
+    if (forks.length === 0 && notesNeedingTopic.length === 0) return null;
+    for (const note of notesNeedingTopic) handed.noteIds.add(note.noteId);
+    return {
+      status: 'feedback',
+      forks,
+      notesNeedingTopic,
+      notes: this.store.notesIndex(explorationId),
+    };
   }
 
   private isListening(explorationId: string) {

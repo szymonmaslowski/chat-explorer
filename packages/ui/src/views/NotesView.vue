@@ -8,6 +8,7 @@ import ExplorationHeader from '../components/ExplorationHeader.vue';
 import NoteEditor from '../components/NoteEditor.vue';
 import NoteGroupForm from '../components/NoteGroupForm.vue';
 import NoteGroupStrip from '../components/NoteGroupStrip.vue';
+import NoteDeletionNotice from '../components/NoteDeletionNotice.vue';
 import NoteItem from '../components/NoteItem.vue';
 import { useDragSort } from '../composables/useDragSort';
 import {
@@ -167,6 +168,10 @@ function reorderNote(noteId: string, index: number) {
   outbox.add({ type: 'note.reorder', explorationId: props.explorationId, noteId, afterNoteId });
 }
 
+function keepNote(noteId: string) {
+  outbox.add({ type: 'note.keep', explorationId: props.explorationId, noteId });
+}
+
 function deleteNote(noteId: string) {
   outbox.add({ type: 'note.delete', explorationId: props.explorationId, noteId });
   selectedNoteId.value = null;
@@ -228,6 +233,7 @@ watch(
     <p v-else-if="state.status !== 'ready'" class="muted">This chat is not available.</p>
 
     <template v-else>
+      <NoteDeletionNotice :exploration-id="explorationId" :notes="state.notes" />
       <section class="groups">
         <NoteGroupStrip
           v-if="groups.length > 0 || !readOnly"
@@ -311,6 +317,7 @@ watch(
             @drag-start="startDrag($event, note.id)"
             @edit="editingNoteId = note.id"
             @delete="deleteNote(note.id)"
+            @keep="keepNote(note.id)"
             @change-group="changeNoteGroup(note.id, $event)"
           />
         </template>

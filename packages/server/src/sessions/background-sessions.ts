@@ -54,7 +54,10 @@ export class BackgroundSessions implements StartingSessions {
       if (event.type === 'message.added' || event.type === 'session.attached') {
         if (session) session.lastActiveAt = this.now();
       }
-      if (event.type === 'submission.queued') {
+      const needsTopic =
+        (event.type === 'note.created' || event.type === 'note.updated') &&
+        event.note.topic === null;
+      if (event.type === 'submission.queued' || needsTopic) {
         if (session) session.lastActiveAt = this.now();
         else this.startIfUnattended(explorationId);
       }
@@ -133,10 +136,11 @@ export class BackgroundSessions implements StartingSessions {
     }
   }
 
-  // Covers queued feedback that no event will pick up: left from before a daemon restart, or queued
-  // while a session from elsewhere was attached and then went away. A failed start is not retried.
+  // Covers queued feedback and notes without a topic that no event will pick up: left from before a
+  // daemon restart, or made while a session from elsewhere was attached and then went away. A
+  // failed start is not retried.
   startForUnansweredQueues() {
-    for (const explorationId of this.options.store.explorationsWithQueuedSubmissions()) {
+    for (const explorationId of this.options.store.explorationsAwaitingClaude()) {
       if (!this.running.has(explorationId) && !this.errors.has(explorationId)) {
         this.startIfUnattended(explorationId);
       }
@@ -182,7 +186,8 @@ export class BackgroundSessions implements StartingSessions {
       session.attached &&
       !session.stopping &&
       store.pendingForks(explorationId).length === 0 &&
-      store.queuedSubmissions(explorationId).length === 0
+      store.queuedSubmissions(explorationId).length === 0 &&
+      store.notesNeedingTopic(explorationId).length === 0
     );
   }
 
@@ -197,7 +202,9 @@ export class BackgroundSessions implements StartingSessions {
     // Claude Code may exit before its MCP server has detached, and the new session could not attach.
     const attachment = store.attachment(explorationId);
     if (attachment?.sessionId === session.sessionId) store.detach(attachment.shimId);
-    const hasQueued = store.queuedSubmissions(explorationId).length > 0;
+    const hasQueued =
+      store.queuedSubmissions(explorationId).length > 0 ||
+      store.notesNeedingTopic(explorationId).length > 0;
     if (session.restartAfterExit || (session.stopping && hasQueued)) {
       this.startIfUnattended(explorationId);
       this.options.onStatusChange(explorationId);

@@ -7,9 +7,9 @@ import { createDaemonClient, DaemonError } from '../client/http.js';
 import { apiVersion, loadConfig, type Config } from '../config.js';
 import { DaemonStartError, ensureDaemon } from '../daemon/control.js';
 import { openBrowser } from '../open-browser.js';
-import type { ExplorationListItem } from '../shared/types.js';
+import type { ExplorationListItem, Note, NoteGroup } from '../shared/types.js';
 import type { FeedbackResult } from '../store/feedback-hub.js';
-import type { ForkMapEntry, ForkRead } from '../store/store.js';
+import type { ForkMapEntry, ForkRead, NotesRead } from '../store/store.js';
 import { packageVersion } from '../version.js';
 
 const heartbeatIntervalMs = 15_000;
@@ -274,10 +274,168 @@ export function createShim(options: ShimOptions) {
   );
 
   server.registerTool(
+    'list_notes',
+    {
+      description:
+        "Read the attached exploration's notes in full: every group with its notes in order. await_feedback already gives group names and note topics.",
+      inputSchema: { groupId: z.string().optional().describe('Only this group') },
+    },
+    tool(async ({ groupId }: { groupId?: string | undefined }) => {
+      const { explorationId } = requireAttachment();
+      const query = groupId ? `?groupId=${encodeURIComponent(groupId)}` : '';
+      return json(
+        await request<NotesRead>(`/api/internal/explorations/${explorationId}/notes${query}`),
+      );
+    }),
+  );
+
+  server.registerTool(
+    'add_note_group',
+    {
+      description:
+        'Create a note group in the attached exploration. A checklist group lets the user tick its notes, as for a shopping list.',
+      inputSchema: {
+        name: z.string().optional().describe('Defaults to General, or Group N'),
+        checklist: z.boolean().optional(),
+      },
+    },
+    tool(
+      async ({
+        name,
+        checklist,
+      }: {
+        name?: string | undefined;
+        checklist?: boolean | undefined;
+      }) => {
+        const { explorationId } = requireAttachment();
+        return json(
+          await request<NoteGroup>(`/api/internal/explorations/${explorationId}/note-groups`, {
+            json: { shimId, name, checklist },
+          }),
+        );
+      },
+    ),
+  );
+
+  server.registerTool(
+    'add_notes',
+    {
+      description:
+        'Add notes to a group, first in the group in the order given. Each needs a topic (a short title) or a description (markdown). Pass sourceMessageId, the inReplyTo of the request that asked for them, so each note links back to it.',
+      inputSchema: {
+        groupId: z.string(),
+        notes: z
+          .array(z.object({ topic: z.string().optional(), description: z.string().optional() }))
+          .min(1),
+        sourceMessageId: z.string().optional(),
+      },
+    },
+    tool(
+      async (args: {
+        groupId: string;
+        notes: { topic?: string | undefined; description?: string | undefined }[];
+        sourceMessageId?: string | undefined;
+      }) => {
+        const { explorationId } = requireAttachment();
+        return json(
+          await request<{ noteIds: string[] }>(
+            `/api/internal/explorations/${explorationId}/notes`,
+            { json: { shimId, ...args } },
+          ),
+        );
+      },
+    ),
+  );
+
+  server.registerTool(
+    'update_note',
+    {
+      description:
+        "Change a note's topic or description, or tick it (checked) in a checklist group. Also how you write the topic of a note in notesNeedingTopic.",
+      inputSchema: {
+        noteId: z.string(),
+        topic: z.string().optional(),
+        description: z.string().optional(),
+        checked: z.boolean().optional(),
+      },
+    },
+    tool(
+      async ({
+        noteId,
+        ...changes
+      }: {
+        noteId: string;
+        topic?: string | undefined;
+        description?: string | undefined;
+        checked?: boolean | undefined;
+      }) => {
+        requireAttachment();
+        return json(
+          await request<Note>(`/api/internal/notes/${noteId}`, {
+            method: 'PATCH',
+            json: { shimId, ...changes },
+          }),
+        );
+      },
+    ),
+  );
+
+  server.registerTool(
+    'reorder_note',
+    {
+      description:
+        'Move a note within its group: after another note of the same group, or to the top with afterNoteId null.',
+      inputSchema: { noteId: z.string(), afterNoteId: z.string().nullable() },
+    },
+    tool(async ({ noteId, afterNoteId }: { noteId: string; afterNoteId: string | null }) => {
+      requireAttachment();
+      return json(
+        await request(`/api/internal/notes/${noteId}/reorder`, {
+          json: { shimId, afterNoteId },
+        }),
+      );
+    }),
+  );
+
+  server.registerTool(
+    'change_note_group',
+    {
+      description: 'Move a note to another group of the same exploration. It goes first there.',
+      inputSchema: { noteId: z.string(), groupId: z.string() },
+    },
+    tool(async ({ noteId, groupId }: { noteId: string; groupId: string }) => {
+      requireAttachment();
+      return json(
+        await request(`/api/internal/notes/${noteId}/group`, {
+          method: 'PUT',
+          json: { shimId, groupId },
+        }),
+      );
+    }),
+  );
+
+  server.registerTool(
+    'request_note_deletion',
+    {
+      description:
+        'Ask the user to delete a note. You cannot delete notes yourself: the page shows the request and the user deletes or keeps the note. Returns at once.',
+      inputSchema: { noteId: z.string() },
+    },
+    tool(async ({ noteId }: { noteId: string }) => {
+      requireAttachment();
+      return json(
+        await request<Note>(`/api/internal/notes/${noteId}/deletion-request`, {
+          json: { shimId },
+        }),
+      );
+    }),
+  );
+
+  server.registerTool(
     'await_feedback',
     {
       description:
-        'Wait for the user to submit comments or messages in the browser. Returns every fork awaiting an answer, with its unanswered user messages. On "timeout" call it again; on "detached" or "deleted" stop.',
+        'Wait for the user to submit comments or messages in the browser. Returns every fork awaiting an answer, with its unanswered user messages, the notes that need a topic from you, and the note groups with their topics. On "timeout" call it again; on "detached" or "deleted" stop.',
       inputSchema: {
         timeoutSeconds: z.number().int().positive().optional(),
       },

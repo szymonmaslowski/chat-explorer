@@ -406,3 +406,113 @@ describe('note comments', () => {
     );
   });
 });
+
+describe('Claude and notes', () => {
+  function attached() {
+    const context = setup();
+    context.store.attach({
+      explorationId: context.explorationId,
+      shimId: 'shim-a',
+      sessionId: 'session-a',
+      takeover: false,
+    });
+    return context;
+  }
+
+  it('adds notes first in the group, in order, linked to the message that asked', () => {
+    const { store, explorationId, mainForkId, answer } = attached();
+    const group = store.createNoteGroup(explorationId, { name: 'Shopping', checklist: true });
+    store.createNote(explorationId, { groupId: group.id, topic: 'Old' });
+    const { noteIds } = store.addNotes({
+      shimId: 'shim-a',
+      explorationId,
+      groupId: group.id,
+      notes: [{ topic: 'Lemon' }, { topic: 'Milk', description: '1.5%' }],
+      sourceMessageId: answer.id,
+    });
+    const notes = store.snapshot(explorationId).notes;
+    expect(notes.map((note) => note.topic)).toEqual(['Lemon', 'Milk', 'Old']);
+    expect(notes.map((note) => note.id).slice(0, 2)).toEqual(noteIds);
+    expect(notes[0]).toMatchObject({
+      createdBy: 'claude',
+      sourceForkId: mainForkId,
+      sourceMessageId: answer.id,
+      sourceQuote: null,
+    });
+  });
+
+  it('lets only the attached session add notes', () => {
+    const { store, explorationId } = attached();
+    const group = store.createNoteGroup(explorationId, {});
+    expect(() =>
+      store.addNotes({
+        shimId: 'other',
+        explorationId,
+        groupId: group.id,
+        notes: [{ topic: 'x' }],
+      }),
+    ).toThrow(expect.objectContaining({ code: 'detached' }));
+  });
+
+  it('marks a note for deletion until the user keeps or deletes it', () => {
+    const { store, notes, events } = seedNotes(['A']);
+    const requested = store.requestNoteDeletion(notes[0]!.id);
+    expect(requested.deletionRequestedAt).not.toBeNull();
+    expect(events.at(-1)).toEqual({ type: 'note.updated', note: requested });
+    expect(store.keepNote(notes[0]!.id).deletionRequestedAt).toBeNull();
+  });
+
+  it('reads notes in full or as an index of topics', () => {
+    const { store, explorationId, group, notes } = seedNotes(['A', 'B']);
+    store.requestNoteDeletion(notes[1]!.id);
+    expect(store.notesIndex(explorationId)).toEqual({
+      groups: [
+        {
+          id: group.id,
+          name: 'General',
+          checklist: false,
+          notes: [
+            { id: notes[0]!.id, topic: 'A', checked: false },
+            { id: notes[1]!.id, topic: 'B', checked: false },
+          ],
+        },
+      ],
+    });
+    expect(store.readNotes(explorationId, group.id).groups[0]!.notes[1]).toMatchObject({
+      topic: 'B',
+      description: '',
+      createdBy: 'user',
+      deletionRequested: true,
+    });
+  });
+
+  it('wakes a waiting session for a note without a topic, once', async () => {
+    const { store, hub, explorationId } = attached();
+    const group = store.createNoteGroup(explorationId, {});
+    const waiting = hub.waitForFeedback({ explorationId, shimId: 'shim-a', waitMs: 60_000 });
+    const note = store.createNote(explorationId, { groupId: group.id, description: 'Words' });
+    expect(await waiting).toMatchObject({
+      status: 'feedback',
+      forks: [],
+      notesNeedingTopic: [{ noteId: note.id, groupId: group.id, description: 'Words' }],
+      notes: { groups: [{ id: group.id, notes: [{ id: note.id, topic: null }] }] },
+    });
+    expect(await hub.waitForFeedback({ explorationId, shimId: 'shim-a', waitMs: 10 })).toEqual({
+      status: 'timeout',
+    });
+    store.updateNote(note.id, { topic: 'Named' });
+    expect(store.notesNeedingTopic(explorationId)).toEqual([]);
+    hub.stop();
+  });
+
+  it('starts a background session for a note without a topic', () => {
+    const { store, explorationId, launches } = setup();
+    const group = store.createNoteGroup(explorationId, {});
+    store.createNote(explorationId, { groupId: group.id, topic: 'Has one' });
+    expect(launches).toHaveLength(0);
+    expect(store.explorationsAwaitingClaude()).toEqual([]);
+    store.createNote(explorationId, { groupId: group.id, description: 'Needs one' });
+    expect(launches).toHaveLength(1);
+    expect(store.explorationsAwaitingClaude()).toEqual([explorationId]);
+  });
+});

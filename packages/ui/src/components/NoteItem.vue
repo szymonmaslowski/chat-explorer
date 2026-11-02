@@ -16,6 +16,7 @@ const emit = defineEmits<{
   toggleSelected: [];
   edit: [];
   delete: [];
+  keep: [];
   toggleChecked: [];
   dragStart: [event: PointerEvent];
   // Null asks for a new group.
@@ -49,7 +50,12 @@ function changeGroup(groupId: string | null) {
   <article
     :id="`n-${note.id}`"
     class="note"
-    :class="{ selected, expanded, checked: checklist && note.checked }"
+    :class="{
+      selected,
+      expanded,
+      checked: checklist && note.checked,
+      'deletion-requested': note.deletionRequestedAt !== null,
+    }"
     @click="onClick"
   >
     <h3 class="topic" :class="{ preparing: note.topic === null }">
@@ -59,6 +65,11 @@ function changeGroup(groupId: string | null) {
       </span>
     </h3>
     <div v-if="html" class="description" v-html="html" />
+    <div v-if="note.deletionRequestedAt !== null && !readOnly" class="deletion-request" @click.stop>
+      <span>Claude asks to delete this note.</span>
+      <button type="button" class="danger" @click="emit('delete')">Delete</button>
+      <button type="button" @click="emit('keep')">Keep</button>
+    </div>
     <div v-if="selected" class="actions" @click.stop>
       <button
         v-if="!readOnly"
@@ -129,8 +140,29 @@ function changeGroup(groupId: string | null) {
   opacity: 0.6;
 }
 
-.checked .topic {
+.checked .topic,
+.deletion-requested .topic {
   text-decoration: line-through;
+}
+
+.deletion-request {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--warning);
+}
+
+.deletion-request button {
+  padding: 0.1rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+.deletion-request .danger {
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 .topic {
