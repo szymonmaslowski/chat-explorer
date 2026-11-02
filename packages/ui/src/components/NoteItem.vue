@@ -145,8 +145,11 @@ function changeGroup(groupId: string | null) {
   scroll-margin-top: 8rem;
 }
 
-.note:hover {
-  background: var(--surface-muted);
+/* A touch screen keeps hover on whatever ends up under the finger, so only a mouse gets it. */
+@media (hover: hover) {
+  .note:hover {
+    background: var(--surface-muted);
+  }
 }
 
 .note.selected {

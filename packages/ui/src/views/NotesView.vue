@@ -419,9 +419,11 @@ watch(
   font-size: 0.95rem;
 }
 
-.new-note:hover {
-  color: var(--text);
-  border-color: var(--accent);
+@media (hover: hover) {
+  .new-note:hover {
+    color: var(--text);
+    border-color: var(--accent);
+  }
 }
 
 .delete-dialog {
