@@ -4,6 +4,7 @@ import type { Note, NoteGroup } from '@shared/types';
 import { computed, ref, watch } from 'vue';
 import { outbox } from '../stores/outbox';
 import ConfirmButton from './ConfirmButton.vue';
+import MediaIcon from './MediaIcon.vue';
 
 const props = defineProps<{
   note: Note;
@@ -79,24 +80,43 @@ function changeGroup(groupId: string | null) {
         title="Drag to reorder"
         @pointerdown="emit('dragStart', $event)"
       >
-        ⠿
+        <MediaIcon name="grip" />
       </button>
-      <button v-if="checklist && !readOnly" type="button" @click="emit('toggleChecked')">
-        {{ note.checked ? 'Uncheck' : 'Check' }}
+      <button
+        v-if="checklist && !readOnly"
+        type="button"
+        :class="{ on: note.checked }"
+        :aria-label="note.checked ? 'Uncheck' : 'Check'"
+        :title="note.checked ? 'Uncheck' : 'Check'"
+        @click="emit('toggleChecked')"
+      >
+        <MediaIcon name="check" />
       </button>
-      <button v-if="html" type="button" @click="expanded = !expanded">
-        {{ expanded ? 'Collapse' : 'Expand' }}
+      <button
+        v-if="html"
+        type="button"
+        :aria-label="expanded ? 'Collapse' : 'Expand'"
+        :title="expanded ? 'Collapse' : 'Expand'"
+        @click="expanded = !expanded"
+      >
+        <MediaIcon :name="expanded ? 'shrink' : 'expand'" />
       </button>
       <template v-if="!readOnly">
-        <button type="button" @click="emit('edit')">Edit</button>
+        <button type="button" aria-label="Edit" title="Edit" @click="emit('edit')">
+          <MediaIcon name="edit" />
+        </button>
         <button
           type="button"
           :aria-expanded="choosingGroup"
+          aria-label="Move"
+          title="Move to another group"
           @click="choosingGroup = !choosingGroup"
         >
-          Move
+          <MediaIcon name="move" />
         </button>
-        <ConfirmButton label="Delete" danger @confirm="emit('delete')" />
+        <ConfirmButton label="Delete" danger title="Delete" @confirm="emit('delete')">
+          <MediaIcon name="trash" /><span class="visually-hidden">Delete</span>
+        </ConfirmButton>
       </template>
     </div>
     <div v-if="selected && choosingGroup" class="group-choices" role="menu" @click.stop>
@@ -225,7 +245,21 @@ function changeGroup(groupId: string | null) {
   margin-top: 0.4rem;
 }
 
-.actions button,
+.actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  min-height: 1.75rem;
+  padding: 0.2rem 0.45rem;
+}
+
+.actions button.on {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
 .group-choices button {
   padding: 0.1rem 0.5rem;
   font-size: 0.75rem;
@@ -234,9 +268,6 @@ function changeGroup(groupId: string | null) {
 .actions .handle {
   touch-action: none;
   cursor: grab;
-  font-size: 1rem;
-  line-height: 1;
-  padding: 0.1rem 0.45rem;
 }
 
 .group-choices .muted {
@@ -244,7 +275,11 @@ function changeGroup(groupId: string | null) {
 }
 
 @media (pointer: coarse) {
-  .actions button,
+  .actions button {
+    min-width: 2.75rem;
+    min-height: 2.25rem;
+  }
+
   .group-choices button {
     padding: 0.2rem 0.8rem;
     font-size: 0.875rem;

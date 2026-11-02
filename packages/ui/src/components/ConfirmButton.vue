@@ -36,7 +36,8 @@ onBeforeUnmount(disarm);
 
 <template>
   <button ref="button" type="button" :class="{ armed, danger }" @click="onClick">
-    {{ armed ? 'Confirm' : label }}
+    <template v-if="armed">Confirm</template>
+    <slot v-else>{{ label }}</slot>
   </button>
 </template>
 

@@ -11,7 +11,11 @@ defineProps<{
     | 'shrink'
     | 'copy'
     | 'check'
-    | 'comment';
+    | 'comment'
+    | 'edit'
+    | 'move'
+    | 'trash'
+    | 'grip';
 }>();
 </script>
 
@@ -33,6 +37,13 @@ defineProps<{
       v-else-if="name === 'comment'"
       d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-9l-5 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"
     />
+    <path v-else-if="name === 'edit'" d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4" />
+    <path
+      v-else-if="name === 'move'"
+      d="M3 7a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1zM10 13h6M13 10l3 3-3 3"
+    />
+    <path v-else-if="name === 'trash'" d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
+    <path v-else-if="name === 'grip'" d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" />
     <path
       v-else
       d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"
@@ -52,11 +63,19 @@ defineProps<{
 .media-icon.shrink,
 .media-icon.copy,
 .media-icon.check,
-.media-icon.comment {
+.media-icon.comment,
+.media-icon.edit,
+.media-icon.move,
+.media-icon.trash,
+.media-icon.grip {
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
   stroke-linejoin: round;
   stroke-linecap: round;
+}
+
+.media-icon.grip {
+  stroke-width: 3.5;
 }
 </style>
