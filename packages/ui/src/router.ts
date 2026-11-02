@@ -3,6 +3,7 @@ import { whenActiveExplorationLoaded } from './stores/exploration';
 import ExplorationsList from './views/ExplorationsList.vue';
 import ForkMap from './views/ForkMap.vue';
 import ForkView from './views/ForkView.vue';
+import NotesView from './views/NotesView.vue';
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -24,13 +25,14 @@ export const router = createRouter({
         currentForkId: route.query.from,
       }),
     },
+    { path: '/e/:explorationId/notes', component: NotesView, props: true },
   ],
   async scrollBehavior(to, from, savedPosition) {
     if (savedPosition) {
       await whenActiveExplorationLoaded();
       return savedPosition;
     }
-    // Views scroll to `#m-` and `#c-` targets themselves once the content has rendered.
+    // Views scroll to `#m-`, `#c-` and `#n-` targets themselves once the content has rendered.
     if (to.hash || to.path === from.path) return false;
     if (!to.meta.opensAtEnd) return { top: 0 };
     await whenActiveExplorationLoaded();

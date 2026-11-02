@@ -129,7 +129,8 @@ watch(
   <div class="page fork-view">
     <ExplorationHeader :state="state" class="top" data-sticky-header>
       <template v-if="fork" #links>
-        · <RouterLink :to="`/e/${explorationId}/map?from=${fork.id}`">Map</RouterLink>
+        · <RouterLink :to="`/e/${explorationId}/map?from=${fork.id}`">Map</RouterLink> ·
+        <RouterLink :to="`/e/${explorationId}/notes`">Notes</RouterLink>
       </template>
       <div id="comment-tray" />
     </ExplorationHeader>

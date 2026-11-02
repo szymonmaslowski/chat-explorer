@@ -87,7 +87,9 @@ const layout = computed(() => {
 <template>
   <div class="map-page">
     <ExplorationHeader :state="state" class="top">
-      <template #links>· <span>Map</span></template>
+      <template #links>
+        · <span>Map</span> · <RouterLink :to="`/e/${explorationId}/notes`">Notes</RouterLink>
+      </template>
     </ExplorationHeader>
 
     <label v-if="archivedForks.size > 0" class="show-archived">

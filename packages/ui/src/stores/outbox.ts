@@ -1,5 +1,13 @@
 import { idAlphabet, idLength } from '@shared/ids';
-import type { CommentChanges, MessageFile, NewComment } from '@shared/types';
+import type {
+  CommentChanges,
+  MessageFile,
+  NewComment,
+  NewNote,
+  NewNoteGroup,
+  NoteChanges,
+  NoteGroupChanges,
+} from '@shared/types';
 import { computed, reactive, ref } from 'vue';
 import { api, ApiError } from '../api';
 
@@ -30,7 +38,19 @@ export type Change =
       forkId: string;
       commentId: string;
     }
-  | { type: 'submission.cancel'; explorationId: string; submissionId: string };
+  | { type: 'submission.cancel'; explorationId: string; submissionId: string }
+  | { type: 'note-group.create'; explorationId: string; group: NewNoteGroup & { id: string } }
+  | {
+      type: 'note-group.update';
+      explorationId: string;
+      groupId: string;
+      changes: NoteGroupChanges;
+    }
+  | { type: 'note-group.delete'; explorationId: string; groupId: string }
+  | { type: 'note.create'; explorationId: string; note: NewNote & { id: string } }
+  | { type: 'note.update'; explorationId: string; noteId: string; changes: NoteChanges }
+  | { type: 'note.delete'; explorationId: string; noteId: string }
+  | { type: 'note.change-group'; explorationId: string; noteId: string; groupId: string };
 
 interface QueuedChange {
   key: number;
@@ -90,7 +110,7 @@ let retryMs = firstRetryMs;
 let retryTimer: ReturnType<typeof setTimeout> | undefined;
 let flushing: Promise<void> | null = null;
 
-const subjectOf = (change: Change) => {
+export const subjectOf = (change: Change) => {
   switch (change.type) {
     case 'comment.create':
       return change.comment.id;
@@ -104,6 +124,17 @@ const subjectOf = (change: Change) => {
     case 'fork-now':
     case 'submission.cancel':
       return change.submissionId;
+    case 'note-group.create':
+      return change.group.id;
+    case 'note-group.update':
+    case 'note-group.delete':
+      return change.groupId;
+    case 'note.create':
+      return change.note.id;
+    case 'note.update':
+    case 'note.delete':
+    case 'note.change-group':
+      return change.noteId;
   }
 };
 
@@ -118,17 +149,26 @@ function merge(waiting: Change, next: Change): Change | null {
     return { ...waiting, comment: editBody === null ? rest : { ...rest, editBody } };
   }
   if (waiting.type === 'reply-draft.save' && next.type === 'reply-draft.save') return next;
+  if (waiting.type === 'note.update' && next.type === 'note.update') {
+    return { ...next, changes: { ...waiting.changes, ...next.changes } };
+  }
+  if (waiting.type === 'note-group.update' && next.type === 'note-group.update') {
+    return { ...next, changes: { ...waiting.changes, ...next.changes } };
+  }
   return null;
 }
 
-// Deleting a comment or cancelling a submission the daemon never got needs no request at all.
+// Deleting a comment or a note, or cancelling a submission, the daemon never got needs no request
+// at all.
 function withdraw(stored: StoredOutbox, change: Change) {
   const created: Change['type'][] =
     change.type === 'comment.delete'
       ? ['comment.create']
-      : change.type === 'submission.cancel'
-        ? ['submit', 'fork-now']
-        : [];
+      : change.type === 'note.delete'
+        ? ['note.create']
+        : change.type === 'submission.cancel'
+          ? ['submit', 'fork-now']
+          : [];
   const subject = subjectOf(change);
   const creation = stored.queue.find(
     (queued) => created.includes(queued.change.type) && subjectOf(queued.change) === subject,
@@ -177,6 +217,20 @@ function send(change: Change) {
       return api.forkNow(change.commentId, change.submissionId, keepalive);
     case 'submission.cancel':
       return api.cancelSubmission(change.submissionId, keepalive);
+    case 'note-group.create':
+      return api.createNoteGroup(change.explorationId, change.group, keepalive);
+    case 'note-group.update':
+      return api.updateNoteGroup(change.groupId, change.changes, keepalive);
+    case 'note-group.delete':
+      return api.deleteNoteGroup(change.groupId, keepalive);
+    case 'note.create':
+      return api.createNote(change.explorationId, change.note, keepalive);
+    case 'note.update':
+      return api.updateNote(change.noteId, change.changes, keepalive);
+    case 'note.delete':
+      return api.deleteNote(change.noteId, keepalive);
+    case 'note.change-group':
+      return api.changeNoteGroup(change.noteId, change.groupId, keepalive);
   }
 }
 
@@ -185,7 +239,10 @@ const isUnreachable = (error: unknown) =>
 
 // What a repeated delete or cancel finds once the first one went through.
 const alreadyDone = (change: Change, error: unknown) =>
-  (change.type === 'comment.delete' || change.type === 'submission.cancel') &&
+  (change.type === 'comment.delete' ||
+    change.type === 'note.delete' ||
+    change.type === 'note-group.delete' ||
+    change.type === 'submission.cancel') &&
   error instanceof ApiError &&
   error.code === 'not_found';
 

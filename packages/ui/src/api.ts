@@ -7,6 +7,12 @@ import type {
   Fork,
   MessageFile,
   NewComment,
+  NewNote,
+  NewNoteGroup,
+  Note,
+  NoteChanges,
+  NoteGroup,
+  NoteGroupChanges,
   QueuedSubmission,
   ReplyDraft,
   Snapshot,
@@ -127,4 +133,22 @@ export const api = {
     call<{ ok: true }>(`/api/comments/${commentId}`, { method: 'DELETE', keepalive }),
   toggleForkAll: (explorationId: string, forkId: string) =>
     call<Comment[]>(`/api/explorations/${explorationId}/comments/fork-all`, { json: { forkId } }),
+  createNoteGroup: (explorationId: string, group: NewNoteGroup, keepalive = false) =>
+    call<NoteGroup>(`/api/explorations/${explorationId}/note-groups`, { json: group, keepalive }),
+  updateNoteGroup: (groupId: string, changes: NoteGroupChanges, keepalive = false) =>
+    call<NoteGroup>(`/api/note-groups/${groupId}`, { method: 'PATCH', json: changes, keepalive }),
+  deleteNoteGroup: (groupId: string, keepalive = false) =>
+    call<{ ok: true }>(`/api/note-groups/${groupId}`, { method: 'DELETE', keepalive }),
+  createNote: (explorationId: string, note: NewNote, keepalive = false) =>
+    call<Note>(`/api/explorations/${explorationId}/notes`, { json: note, keepalive }),
+  updateNote: (noteId: string, changes: NoteChanges, keepalive = false) =>
+    call<Note>(`/api/notes/${noteId}`, { method: 'PATCH', json: changes, keepalive }),
+  deleteNote: (noteId: string, keepalive = false) =>
+    call<{ ok: true }>(`/api/notes/${noteId}`, { method: 'DELETE', keepalive }),
+  changeNoteGroup: (noteId: string, groupId: string, keepalive = false) =>
+    call<{ note: Note; noteIds: string[] }>(`/api/notes/${noteId}/group`, {
+      method: 'PUT',
+      json: { groupId },
+      keepalive,
+    }),
 };

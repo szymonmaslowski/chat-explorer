@@ -5,14 +5,18 @@ import type {
   Fork,
   Message,
   MessageFile,
+  Note,
+  NoteGroup,
   QueuedSubmission,
   ReplyDraft,
   SessionStatus,
   Snapshot,
 } from '@shared/types';
+import { defaultGroupName } from '@shared/notes';
 import { nextTick, reactive, watch } from 'vue';
 import { api, ApiError } from '../api';
-import { outbox, type Change } from './outbox';
+import { applyNoteOrder, renumberGroup } from '../lib/notes';
+import { outbox, subjectOf, type Change } from './outbox';
 
 export interface ExplorationState {
   explorationId: string;
@@ -25,6 +29,8 @@ export interface ExplorationState {
   files: Map<string, MessageFile>;
   // As loaded; the reply box takes over from there and saves its own changes.
   replyDrafts: Map<string, ReplyDraft>;
+  noteGroups: Map<string, NoteGroup>;
+  notes: Map<string, Note>;
   sessionStatus: SessionStatus;
   sessionError: string | null;
   connected: boolean;
@@ -42,6 +48,14 @@ const eventTypes: ExplorationEvent['type'][] = [
   'submission.delivered',
   'files.updated',
   'files.released',
+  'note-group.created',
+  'note-group.updated',
+  'note-group.deleted',
+  'note.created',
+  'note.updated',
+  'note.deleted',
+  'notes.reordered',
+  'note.group-changed',
   'exploration.updated',
   'exploration.deleted',
   'session.status',
@@ -81,6 +95,27 @@ export function applyEvent(state: ExplorationState, event: ExplorationEvent) {
     case 'files.released':
       for (const fileId of event.fileIds) state.files.delete(fileId);
       break;
+    case 'note-group.created':
+    case 'note-group.updated':
+      state.noteGroups.set(event.group.id, event.group);
+      break;
+    case 'note-group.deleted':
+      deleteNoteGroup(state, event.groupId);
+      break;
+    case 'note.created':
+    case 'note.updated':
+      state.notes.set(event.note.id, event.note);
+      break;
+    case 'note.deleted':
+      state.notes.delete(event.noteId);
+      break;
+    case 'notes.reordered':
+      applyNoteOrder(state.notes, event.noteIds);
+      break;
+    case 'note.group-changed':
+      state.notes.set(event.note.id, event.note);
+      applyNoteOrder(state.notes, event.noteIds);
+      break;
     case 'exploration.updated':
       state.exploration = event.exploration;
       break;
@@ -98,20 +133,39 @@ export function applyEvent(state: ExplorationState, event: ExplorationEvent) {
   }
 }
 
-const changesComment = (change: Change, commentId: string) =>
-  change.type === 'comment.create'
-    ? change.comment.id === commentId
-    : (change.type === 'comment.update' || change.type === 'comment.delete') &&
-      change.commentId === commentId;
+function deleteNoteGroup(state: ExplorationState, groupId: string) {
+  state.noteGroups.delete(groupId);
+  for (const note of state.notes.values()) {
+    if (note.groupId === groupId) state.notes.delete(note.id);
+  }
+}
 
-// The daemon's notice about a comment can arrive after a later change to it was made here, such
-// as "created, being written" after Save. The changes it has not confirmed yet go on top again,
-// so the notice cannot undo them.
+const eventSubject = (event: ExplorationEvent) => {
+  switch (event.type) {
+    case 'comment.created':
+    case 'comment.updated':
+      return event.comment.id;
+    case 'note-group.created':
+    case 'note-group.updated':
+      return event.group.id;
+    case 'note.created':
+    case 'note.updated':
+    case 'note.group-changed':
+      return event.note.id;
+    default:
+      return null;
+  }
+};
+
+// The daemon's notice about a comment or a note can arrive after a later change to it was made
+// here, such as "created, being written" after Save. The changes it has not confirmed yet go on
+// top again, so the notice cannot undo them.
 export function applyServerEvent(state: ExplorationState, event: ExplorationEvent) {
   applyEvent(state, event);
-  if (event.type !== 'comment.created' && event.type !== 'comment.updated') return;
+  const subject = eventSubject(event);
+  if (subject === null) return;
   for (const change of outbox.changes.value) {
-    if (changesComment(change, event.comment.id)) applyChange(state, change);
+    if (subjectOf(change) === subject) applyChange(state, change);
   }
 }
 
@@ -203,6 +257,86 @@ export function applyChange(state: ExplorationState, change: Change) {
         if (file.submissionId === change.submissionId) state.files.delete(file.id);
       }
       break;
+    case 'note-group.create': {
+      const { id, name, checklist } = change.group;
+      const existing = state.noteGroups.get(id);
+      const others = [...state.noteGroups.values()].filter((group) => group.id !== id);
+      state.noteGroups.set(id, {
+        id,
+        explorationId: state.explorationId,
+        name: name?.trim() || defaultGroupName(others.map((group) => group.name)),
+        checklist: checklist ?? false,
+        position: existing?.position ?? Math.max(0, ...others.map((group) => group.position)) + 1,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      });
+      break;
+    }
+    case 'note-group.update': {
+      const group = state.noteGroups.get(change.groupId);
+      if (!group) break;
+      const { name, checklist } = change.changes;
+      const otherNames = [...state.noteGroups.values()]
+        .filter((other) => other.id !== group.id)
+        .map((other) => other.name);
+      state.noteGroups.set(group.id, {
+        ...group,
+        name: name === undefined ? group.name : name.trim() || defaultGroupName(otherNames),
+        checklist: checklist ?? group.checklist,
+        updatedAt: now,
+      });
+      break;
+    }
+    case 'note-group.delete':
+      deleteNoteGroup(state, change.groupId);
+      break;
+    case 'note.create': {
+      const { id, groupId, topic, description } = change.note;
+      const existing = state.notes.get(id);
+      state.notes.set(id, {
+        id,
+        explorationId: state.explorationId,
+        groupId,
+        topic: topic?.trim() || null,
+        description: description?.trim() ?? '',
+        checked: existing?.checked ?? false,
+        position: existing?.position ?? 0,
+        sourceForkId: null,
+        sourceMessageId: null,
+        sourceQuote: null,
+        sourceCommentId: null,
+        createdBy: 'user',
+        deletionRequestedAt: null,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      });
+      renumberGroup(state.notes, groupId);
+      break;
+    }
+    case 'note.update': {
+      const note = state.notes.get(change.noteId);
+      if (!note) break;
+      const { topic, description, checked } = change.changes;
+      state.notes.set(note.id, {
+        ...note,
+        topic: topic === undefined ? note.topic : topic.trim() || null,
+        description: description?.trim() ?? note.description,
+        checked: checked ?? note.checked,
+        updatedAt: now,
+      });
+      break;
+    }
+    case 'note.delete':
+      state.notes.delete(change.noteId);
+      break;
+    case 'note.change-group': {
+      const note = state.notes.get(change.noteId);
+      if (!note || note.groupId === change.groupId) break;
+      state.notes.set(note.id, { ...note, groupId: change.groupId, position: 0, updatedAt: now });
+      renumberGroup(state.notes, note.groupId);
+      renumberGroup(state.notes, change.groupId);
+      break;
+    }
   }
 }
 
@@ -214,6 +348,8 @@ function applySnapshot(state: ExplorationState, snapshot: Snapshot) {
   state.queuedSubmissions = byId(snapshot.queuedSubmissions);
   state.files = byId(snapshot.files);
   state.replyDrafts = new Map(snapshot.replyDrafts.map((draft) => [draft.forkId, draft]));
+  state.noteGroups = byId(snapshot.noteGroups);
+  state.notes = byId(snapshot.notes);
   state.sessionStatus = snapshot.sessionStatus;
   state.sessionError = snapshot.sessionError;
   state.status = 'ready';
@@ -231,6 +367,8 @@ function createExplorationStore(explorationId: string) {
     queuedSubmissions: new Map(),
     files: new Map(),
     replyDrafts: new Map(),
+    noteGroups: new Map(),
+    notes: new Map(),
     sessionStatus: 'detached',
     sessionError: null,
     connected: false,
