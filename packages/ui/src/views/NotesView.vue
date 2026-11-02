@@ -159,6 +159,7 @@ function toggleChecked(note: Note) {
     noteId: note.id,
     changes: { checked: !note.checked },
   });
+  selectedNoteId.value = null;
 }
 
 function reorderNote(noteId: string, index: number) {

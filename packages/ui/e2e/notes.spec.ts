@@ -166,6 +166,7 @@ test('ticks checklist notes, sorts them and drags them into place', async ({
   await page.locator('.note', { hasText: 'Milk' }).click();
   await page.getByRole('button', { name: 'Check', exact: true }).click();
   await expect(page.locator('.note', { hasText: 'Milk' })).toHaveClass(/checked/);
+  await expect(page.locator('.note', { hasText: 'Milk' })).not.toHaveClass(/selected/);
   await page.getByRole('button', { name: 'Unchecked first' }).click();
   await expect(topics(page)).toHaveText(['Lemon', 'Chocolate', 'Milk']);
   await page.reload();
