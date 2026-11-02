@@ -83,16 +83,6 @@ function changeGroup(groupId: string | null) {
         <MediaIcon name="grip" />
       </button>
       <button
-        v-if="checklist && !readOnly"
-        type="button"
-        :class="{ on: note.checked }"
-        :aria-label="note.checked ? 'Uncheck' : 'Check'"
-        :title="note.checked ? 'Uncheck' : 'Check'"
-        @click="emit('toggleChecked')"
-      >
-        <MediaIcon name="check" />
-      </button>
-      <button
         v-if="html"
         type="button"
         :aria-label="expanded ? 'Collapse' : 'Expand'"
@@ -118,6 +108,17 @@ function changeGroup(groupId: string | null) {
           <MediaIcon name="trash" /><span class="visually-hidden">Delete</span>
         </ConfirmButton>
       </template>
+      <button
+        v-if="checklist && !readOnly"
+        type="button"
+        class="check"
+        :class="{ on: note.checked }"
+        :aria-label="note.checked ? 'Uncheck' : 'Check'"
+        :title="note.checked ? 'Uncheck' : 'Check'"
+        @click="emit('toggleChecked')"
+      >
+        <MediaIcon name="check" />
+      </button>
     </div>
     <div v-if="selected && choosingGroup" class="group-choices" role="menu" @click.stop>
       <span class="muted">Move to</span>
@@ -252,6 +253,10 @@ function changeGroup(groupId: string | null) {
   min-width: 2rem;
   min-height: 1.75rem;
   padding: 0.2rem 0.45rem;
+}
+
+.actions .check {
+  margin-left: auto;
 }
 
 .actions button.on {
