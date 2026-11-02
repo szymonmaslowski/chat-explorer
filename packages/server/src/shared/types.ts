@@ -68,7 +68,7 @@ export interface Comment {
   submissionId: string | null;
   replyMessageId: string | null;
   createdForkId: string | null;
-  // A note comment becomes a note in this group on Submit; null takes the first group.
+  // A note comment becomes a note in this group on Submit; null makes a new group then.
   noteGroupId: string | null;
   createdNoteId: string | null;
   createdAt: number;

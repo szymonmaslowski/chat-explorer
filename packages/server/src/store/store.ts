@@ -1391,20 +1391,18 @@ export class ChatStore {
     ];
   }
 
-  // A note comment becomes a note at once, in the group picked in the comment box, or the first
-  // group, or a new one when the chat has none.
+  // A note comment becomes a note at once, in the group picked in the comment box. The ones that
+  // asked for a new group share one, made only now.
   private notesFromComments(comments: CommentRow[]) {
     const events: PendingEvent[] = [];
+    let newGroup: NoteGroupRow | null = null;
     for (const comment of comments) {
       const explorationId = comment.exploration_id;
       let group = comment.note_group_id
         ? this.requireNoteGroupRow(comment.note_group_id)
-        : this.db.get<NoteGroupRow>(
-            'SELECT * FROM note_groups WHERE exploration_id = ? ORDER BY position, rowid LIMIT 1',
-            explorationId,
-          );
+        : newGroup;
       if (!group) {
-        group = this.insertNoteGroup(explorationId, {});
+        group = newGroup = this.insertNoteGroup(explorationId, {});
         events.push([explorationId, { type: 'note-group.created', group: toNoteGroup(group) }]);
       }
       const noteId = newId();

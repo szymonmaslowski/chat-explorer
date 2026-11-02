@@ -343,20 +343,17 @@ describe('note comments', () => {
     expect(store.pendingForks(explorationId)).toEqual([]);
   });
 
-  it('starts a General group when the chat has none, or takes the first one', () => {
+  it('makes a new group only on Submit, one for all the comments that ask for it', () => {
     const context = setup();
     const { store, explorationId, mainForkId } = context;
+    store.createNoteGroup(explorationId, { name: 'Facts' });
     noteComment(context, { body: 'First' });
+    noteComment(context, { body: 'Second', noteGroupId: null });
+    expect(store.snapshot(explorationId).noteGroups).toHaveLength(1);
     store.submit(explorationId, mainForkId, '');
-    const [general] = store.snapshot(explorationId).noteGroups;
-    expect(general!.name).toBe('General');
-    store.createNoteGroup(explorationId, { name: 'Later' });
-    noteComment(context, { body: 'Second' });
-    store.submit(explorationId, mainForkId, '');
-    expect(store.snapshot(explorationId).notes.map((note) => note.groupId)).toEqual([
-      general!.id,
-      general!.id,
-    ]);
+    const { noteGroups, notes } = store.snapshot(explorationId);
+    expect(noteGroups.map((group) => group.name)).toEqual(['Facts', 'Group 2']);
+    expect(notes.map((note) => note.groupId)).toEqual([noteGroups[1]!.id, noteGroups[1]!.id]);
   });
 
   it('sends the rest of a mixed Submit to Claude and keeps the notes on cancel', () => {

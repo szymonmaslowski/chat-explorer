@@ -28,27 +28,22 @@ const commentTypes: { type: CommentType; label: string }[] = [
   { type: 'fork', label: 'Fork' },
   { type: 'note', label: 'Note' },
 ];
-const newGroupChoice = 'new-group';
+const newGroupChoice = '';
 
 const body = ref('');
 const type = ref<CommentType>('inline');
-// Null leaves the group to the daemon: the first one, or a new General.
-const noteGroupId = ref<string | null>(null);
 const groups = computed(() => sortedGroups(openExploration(props.explorationId).noteGroups));
+const newGroupName = computed(() => defaultGroupName(groups.value.map((group) => group.name)));
+// Undefined until the reader picks a group, which means the first one. Null asks for a new group,
+// made on Submit, so a comment never sent leaves no empty group behind.
+const chosenGroupId = ref<string | null | undefined>(undefined);
+const noteGroupId = computed(() =>
+  chosenGroupId.value === undefined ? (groups.value[0]?.id ?? null) : chosenGroupId.value,
+);
 const pickedGroup = computed({
-  get: () => noteGroupId.value ?? groups.value[0]?.id ?? '',
+  get: () => noteGroupId.value ?? newGroupChoice,
   set: (choice: string) => {
-    if (choice !== newGroupChoice) {
-      noteGroupId.value = choice || null;
-      return;
-    }
-    const id = newId();
-    outbox.add({
-      type: 'note-group.create',
-      explorationId: props.explorationId,
-      group: { id, name: defaultGroupName(groups.value.map((group) => group.name)) },
-    });
-    noteGroupId.value = id;
+    chosenGroupId.value = choice === newGroupChoice ? null : choice;
   },
 });
 const textarea = ref<HTMLTextAreaElement | null>(null);
@@ -184,9 +179,8 @@ function onKeydown(event: KeyboardEvent) {
         </label>
       </div>
       <select v-if="type === 'note'" v-model="pickedGroup" aria-label="Note group">
-        <option v-if="groups.length === 0" value="">General (new)</option>
         <option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }}</option>
-        <option :value="newGroupChoice">New group…</option>
+        <option :value="newGroupChoice">{{ newGroupName }} (new)</option>
       </select>
       <DictationButton :hint="anchor.quote" @text="insertDictation" />
       <ExpandButton v-model="expanded" />

@@ -233,6 +233,31 @@ test('turns a note comment into a note on Submit', async ({ page, request }) => 
   await expect(note.locator('.description')).toContainText('Check this later');
 });
 
+test('makes the new group a note comment asks for only on Submit', async ({ page, request }) => {
+  const explorationId = await answeredChat(request);
+  await request.post(`/api/explorations/${explorationId}/note-groups`, {
+    data: { name: 'Facts' },
+  });
+  const groupNames = async () =>
+    (await (await request.get(`/api/explorations/${explorationId}`)).json()).noteGroups.map(
+      (group: { name: string }) => group.name,
+    );
+  await page.goto(`/e/${explorationId}`);
+  await selectAnswer(page);
+  await page.getByRole('button', { name: 'Comment', exact: true }).click();
+  await page.getByLabel('Note', { exact: true }).check();
+  await expect(page.getByLabel('Note group')).toHaveValue(/.+/);
+  await page.getByLabel('Note group').selectOption({ label: 'Group 2 (new)' });
+  await page.getByPlaceholder('Your comment').fill('In a group of its own');
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await expect(page.locator('.reply-bar .summary')).toHaveText('1 note');
+  expect(await groupNames()).toEqual(['Facts']);
+
+  await page.getByRole('button', { name: 'Submit' }).click();
+  await expect(page.locator('.comment-card.note')).toContainText('saved');
+  expect(await groupNames()).toEqual(['Facts', 'Group 2']);
+});
+
 test('shows the topic Claude writes and its requests to delete', async ({ page, request }) => {
   const explorationId = await newChat(request);
   const group = await (
