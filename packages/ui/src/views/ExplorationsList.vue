@@ -52,7 +52,10 @@ async function removeFromList(explorationId: string, change: (id: string) => Pro
     </p>
     <ul v-else-if="explorations" class="explorations">
       <li v-for="exploration in explorations" :key="exploration.id" class="exploration">
-        <RouterLink :to="`/e/${exploration.id}/map`" class="open">
+        <RouterLink
+          :to="exploration.forkCount > 1 ? `/e/${exploration.id}/map` : `/e/${exploration.id}`"
+          class="open"
+        >
           <span class="title">{{ exploration.title || 'Untitled chat' }}</span>
           <span v-if="exploration.summary" class="summary">{{ exploration.summary }}</span>
           <span class="meta muted">

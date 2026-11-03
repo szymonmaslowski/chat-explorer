@@ -101,6 +101,16 @@ test('opens an exploration from the list on its map', async ({ page }) => {
   await expect(page.locator('.fork-box')).toHaveCount(2);
 });
 
+test('opens a chat without forks on its conversation', async ({ page, request }) => {
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'Only the main fork' } })
+  ).json();
+  await page.goto('/');
+  await page.locator('.exploration', { hasText: explorationId }).click();
+  await expect(page).toHaveURL(new RegExp(`/e/${explorationId}$`));
+  await expect(page.locator('.message').first()).toContainText('Only the main fork');
+});
+
 test('opens a fork from the map at its end', async ({ page }) => {
   const explorationId = await openSeededExploration(page);
   await page.goto(`/e/${explorationId}/map`);
