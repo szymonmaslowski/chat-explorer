@@ -1,9 +1,19 @@
 <script setup lang="ts">
 import { renderMarkdown } from '@shared/markdown';
 import type { Note, NoteGroup } from '@shared/types';
-import { computed, ref, watch } from 'vue';
+import { computed, ref, shallowRef, watch } from 'vue';
 import { useCopied } from '../composables/useCopied';
+import { bringToReadingLine } from '../lib/reading-line';
+import { blockIndexAt, speechBlocks, type SpokenElement } from '../lib/speech-blocks';
 import { outbox } from '../stores/outbox';
+import {
+  checkSpeechAvailable,
+  playBlock,
+  playFrom,
+  speech,
+  speechSourceId,
+  togglePause,
+} from '../stores/speech';
 import ConfirmButton from './ConfirmButton.vue';
 import MediaIcon from './MediaIcon.vue';
 
@@ -30,6 +40,24 @@ const choosingGroup = ref(false);
 const { copied, copy } = useCopied();
 const html = computed(() => (props.note.description ? renderMarkdown(props.note.description) : ''));
 
+const article = ref<HTMLElement | null>(null);
+const descriptionElement = ref<HTMLElement | null>(null);
+const blocks = shallowRef<SpokenElement[]>([]);
+const pickedIndex = ref<number | null>(null);
+const pickedTop = ref(0);
+const speechSource = computed(() => ({ text: props.note.description }));
+const listenable = computed(
+  () => speech.available && props.selected && expanded.value && blocks.value.length > 0,
+);
+const speakingIndex = computed(() =>
+  speech.playback?.id === speechSourceId(speechSource.value) ? speech.playback.index : -1,
+);
+const pickedPlaying = computed(
+  () => speech.playing && pickedIndex.value !== null && speakingIndex.value === pickedIndex.value,
+);
+
+void checkSpeechAvailable();
+
 watch(
   () => props.selected,
   (selected) => {
@@ -37,10 +65,68 @@ watch(
   },
 );
 
+watch(
+  [html, descriptionElement],
+  () => {
+    blocks.value = descriptionElement.value ? speechBlocks(descriptionElement.value) : [];
+  },
+  { flush: 'post' },
+);
+
+watch(listenable, (canListen) => {
+  if (!canListen) pickBlock(null);
+});
+
+watch(
+  [speakingIndex, blocks],
+  ([index], [previousIndex]) => {
+    for (const [position, { element }] of blocks.value.entries()) {
+      element.classList.toggle('speaking', position === index);
+    }
+    const current = blocks.value[index];
+    if (current && index !== previousIndex) bringToReadingLine(current.element);
+  },
+  { flush: 'post' },
+);
+
+function pickBlock(index: number | null) {
+  if (pickedIndex.value !== null)
+    blocks.value[pickedIndex.value]?.element.classList.remove('picked');
+  pickedIndex.value = index;
+  const element = index === null ? undefined : blocks.value[index]?.element;
+  if (!element || !article.value) return;
+  element.classList.add('picked');
+  pickedTop.value = element.getBoundingClientRect().top - article.value.getBoundingClientRect().top;
+}
+
+// In an expanded note, a tap on a block of the description picks it to read aloud from there.
+function pickBlockAt(target: EventTarget | null) {
+  if (!listenable.value || !(target instanceof Element) || target.closest('a')) return false;
+  if (!descriptionElement.value?.contains(target)) return false;
+  const index = blockIndexAt(blocks.value, target);
+  if (index === -1) return false;
+  pickBlock(index === pickedIndex.value ? null : index);
+  return true;
+}
+
 // Ending a text selection inside the note is not a tap on it.
-function onClick() {
+function onClick(event: MouseEvent) {
   if (window.getSelection()?.toString()) return;
+  if (pickBlockAt(event.target)) return;
   emit('toggleSelected');
+}
+
+const spokenBlocks = () => blocks.value.map(({ block }) => block);
+
+function listen() {
+  if (speakingIndex.value === -1) playFrom(speechSource.value, spokenBlocks(), 0);
+  else togglePause();
+}
+
+function playPicked() {
+  if (pickedIndex.value === null) return;
+  playBlock(speechSource.value, spokenBlocks(), pickedIndex.value);
+  pickBlock(null);
 }
 
 function changeGroup(groupId: string | null) {
@@ -51,6 +137,7 @@ function changeGroup(groupId: string | null) {
 
 <template>
   <article
+    ref="article"
     :id="`n-${note.id}`"
     class="note"
     :class="{
@@ -67,7 +154,28 @@ function changeGroup(groupId: string | null) {
         · not sent yet
       </span>
     </h3>
-    <div v-if="html" class="description" v-html="html" />
+    <button
+      v-if="listenable"
+      type="button"
+      class="listen"
+      :aria-label="speakingIndex === -1 ? 'Listen' : speech.playing ? 'Pause' : 'Resume'"
+      @click.stop="listen"
+    >
+      <MediaIcon :name="speakingIndex !== -1 && speech.playing ? 'pause' : 'play'" />
+      {{ speakingIndex === -1 ? 'Listen' : speech.playing ? 'Pause' : 'Resume' }}
+    </button>
+    <div v-if="html" ref="descriptionElement" class="description" v-html="html" />
+    <button
+      v-if="pickedIndex !== null"
+      type="button"
+      class="block-play"
+      :style="{ top: `${pickedTop}px` }"
+      :aria-label="pickedPlaying ? 'Pause' : 'Read aloud from here'"
+      :title="pickedPlaying ? 'Pause' : 'Read aloud from here'"
+      @click.stop="playPicked"
+    >
+      <MediaIcon :name="pickedPlaying ? 'pause' : 'play'" />
+    </button>
     <div v-if="note.deletionRequestedAt !== null && !readOnly" class="deletion-request" @click.stop>
       <span>Claude asks to delete this note.</span>
       <button type="button" class="danger" @click="emit('delete')">Delete</button>
@@ -152,6 +260,7 @@ function changeGroup(groupId: string | null) {
 
 <style scoped>
 .note {
+  position: relative;
   padding: 0.6rem 0.75rem;
   border: 1px solid transparent;
   border-radius: var(--radius);
@@ -201,6 +310,27 @@ function changeGroup(groupId: string | null) {
 .deletion-request .danger {
   color: var(--danger);
   border-color: var(--danger);
+}
+
+.listen {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.block-play {
+  position: absolute;
+  right: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  min-height: 1.75rem;
+  padding: 0.2rem 0.45rem;
+  box-shadow: var(--shadow);
 }
 
 .topic {
@@ -304,7 +434,8 @@ function changeGroup(groupId: string | null) {
 
 @media (pointer: coarse) {
   .actions button,
-  .note-id button {
+  .note-id button,
+  .block-play {
     min-width: 2.75rem;
     min-height: 2.25rem;
   }

@@ -4,7 +4,7 @@ import { api, type SpeechSource } from '../api';
 import { encodeWav } from '../lib/wav';
 
 interface Playback {
-  // The message id, or the draft text itself.
+  // The message id, or the text itself.
   id: string;
   source: SpeechSource;
   blocks: SpeechBlock[];
@@ -143,7 +143,7 @@ async function load(index: number, position = 0) {
 }
 
 export const speechSourceId = (source: SpeechSource) =>
-  'messageId' in source ? source.messageId : `draft:${source.draft}`;
+  'messageId' in source ? source.messageId : `text:${source.text}`;
 
 export function playFrom(source: SpeechSource, blocks: SpeechBlock[], index: number) {
   const id = speechSourceId(source);

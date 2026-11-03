@@ -344,3 +344,46 @@ test('shows the topic Claude writes and its requests to delete', async ({ page, 
   await expect(topics(page)).toHaveText(['Keeper', 'Bread']);
   await expect(page.locator('.deletion-notice')).toHaveCount(0);
 });
+
+test('reads an expanded note aloud, from the start or from a tapped block', async ({
+  page,
+  request,
+}) => {
+  const explorationId = await newChat(request);
+  const group = await (
+    await request.post(`/api/explorations/${explorationId}/note-groups`, { data: {} })
+  ).json();
+  const note = await (
+    await request.post(`/api/explorations/${explorationId}/notes`, {
+      data: {
+        groupId: group.id,
+        topic: 'Read me',
+        description: 'First paragraph.\n\nSecond paragraph.\n\nThird paragraph.',
+      },
+    })
+  ).json();
+  await page.goto(`/e/${explorationId}/notes`);
+  const item = page.locator(`#n-${note.id}`);
+  const player = page.getByRole('region', { name: 'Reading aloud' });
+  const paragraph = (text: string) => item.locator('.description p', { hasText: text });
+
+  await item.click();
+  await expect(item.getByRole('button', { name: 'Listen' })).toHaveCount(0);
+  await item.getByRole('button', { name: 'Expand' }).click();
+  await item.getByRole('button', { name: 'Listen' }).click();
+  await expect(player.locator('.block-count')).toHaveText('1/3');
+  await expect(paragraph('First')).toHaveClass(/speaking/);
+  await expect(item.getByRole('button', { name: 'Pause' }).first()).toBeVisible();
+
+  await paragraph('Third').click();
+  await expect(item).toHaveClass(/selected/);
+  await expect(paragraph('Third')).toHaveClass(/picked/);
+  await item.getByRole('button', { name: 'Read aloud from here' }).click();
+  await expect(player.locator('.block-count')).toHaveText('3/3');
+  await expect(paragraph('Third')).toHaveClass(/speaking/);
+
+  await player.getByRole('button', { name: 'Pause' }).click();
+  await expect(item).toHaveClass(/selected/);
+  await page.getByRole('link', { name: 'Map' }).click();
+  await expect(player).toHaveCount(0);
+});

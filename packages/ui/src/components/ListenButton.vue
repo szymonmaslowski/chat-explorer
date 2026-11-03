@@ -16,7 +16,7 @@ const props = defineProps<{ text: string }>();
 void checkSpeechAvailable();
 
 const draft = computed(() => props.text.trim());
-const current = computed(() => speech.playback?.id === speechSourceId({ draft: draft.value }));
+const current = computed(() => speech.playback?.id === speechSourceId({ text: draft.value }));
 
 function listen() {
   if (current.value) {
@@ -26,7 +26,7 @@ function listen() {
   const rendered = document.createElement('div');
   rendered.innerHTML = renderMarkdown(draft.value);
   const blocks = speechBlocks(rendered).map(({ block }) => block);
-  if (blocks.length > 0) playFrom({ draft: draft.value }, blocks, 0);
+  if (blocks.length > 0) playFrom({ text: draft.value }, blocks, 0);
 }
 </script>
 

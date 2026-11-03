@@ -10,6 +10,7 @@ import NoteGroupForm from '../components/NoteGroupForm.vue';
 import NoteGroupStrip from '../components/NoteGroupStrip.vue';
 import NoteDeletionNotice from '../components/NoteDeletionNotice.vue';
 import NoteItem from '../components/NoteItem.vue';
+import SpeechPlayer from '../components/SpeechPlayer.vue';
 import { useDragSort } from '../composables/useDragSort';
 import {
   dropAnchor,
@@ -23,6 +24,7 @@ import {
 } from '../lib/notes';
 import { openExploration } from '../stores/exploration';
 import { newId, outbox } from '../stores/outbox';
+import { stopSpeech } from '../stores/speech';
 
 const props = defineProps<{ explorationId: string }>();
 
@@ -193,12 +195,13 @@ function toggleSelected(noteId: string) {
 }
 
 function deselectOutsideNotes(event: MouseEvent) {
-  if (event.target instanceof Element && !event.target.closest('.note')) {
+  if (event.target instanceof Element && !event.target.closest('.note, .speech-player')) {
     selectedNoteId.value = null;
   }
 }
 onMounted(() => document.addEventListener('click', deselectOutsideNotes));
 onBeforeUnmount(() => document.removeEventListener('click', deselectOutsideNotes));
+onBeforeUnmount(stopSpeech);
 
 // A `#n-` link opens the note's group, then scrolls to the note and selects it.
 let handledHash = '';
@@ -324,6 +327,9 @@ watch(
         </template>
         <div v-if="indicatorTop !== null" class="drop-line" :style="{ top: `${indicatorTop}px` }" />
       </section>
+      <div class="dock" data-dock>
+        <SpeechPlayer />
+      </div>
     </template>
 
     <dialog ref="deleteDialog" class="delete-dialog" @cancel="deleteDialog?.close()">
@@ -340,6 +346,13 @@ watch(
 </template>
 
 <style scoped>
+.dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  background: var(--background);
+}
+
 .top {
   position: sticky;
   top: 0;

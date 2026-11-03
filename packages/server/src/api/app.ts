@@ -137,10 +137,10 @@ const speechBlock = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('image'), description: z.string().max(maxSpeechTextLength) }),
 ]);
-// A block of a message, or of text still being written, whose whole text picks the voice.
+// A block of a message, or of other text (a draft, a note); the whole text picks the voice.
 const speechBody = z.union([
   z.object({ messageId: z.string(), block: speechBlock }),
-  z.object({ draft: z.string().max(maxSpeechTextLength), block: speechBlock }),
+  z.object({ text: z.string().max(maxSpeechTextLength), block: speechBlock }),
 ]);
 const claudeNoteGroupBody = shimBody.extend({
   name: z.string().optional(),
@@ -204,7 +204,7 @@ export function createApp(options: AppOptions) {
     const { audio, contentType } = await speaker.speak({
       ...('messageId' in body
         ? { messageId: body.messageId, content: store.messageContent(body.messageId) }
-        : { messageId: null, content: body.draft }),
+        : { messageId: null, content: body.text }),
       block: body.block,
       signal: context.req.raw.signal,
     });

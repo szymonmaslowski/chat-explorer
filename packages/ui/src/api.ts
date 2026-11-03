@@ -58,8 +58,8 @@ async function call<Result>(path: string, init: RequestOptions = {}) {
   return (await (await send(path, init)).json()) as Result;
 }
 
-// Text being written is read before it is a message.
-export type SpeechSource = { messageId: string } | { draft: string };
+// Text that is not a message: a draft or a note.
+export type SpeechSource = { messageId: string } | { text: string };
 
 export const api = {
   settings: () =>

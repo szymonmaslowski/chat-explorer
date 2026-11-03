@@ -15,7 +15,7 @@ export interface SpeakerOptions {
 }
 
 interface SpeechRequest {
-  // Null for text that is not a message yet.
+  // Null for text that is not a message: a draft or a note.
   messageId: string | null;
   content: string;
   block: SpeechBlock;
