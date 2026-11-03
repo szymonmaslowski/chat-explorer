@@ -144,6 +144,33 @@ test('opens a note from a link', async ({ page, request }) => {
   await expect(page.locator(`#n-${note.id}`)).toHaveClass(/selected/);
 });
 
+test('opens a related note from a link in another note', async ({ page, request }) => {
+  const explorationId = await newChat(request);
+  const [first, second] = await Promise.all(
+    ['General', 'Other'].map(async (name) =>
+      (
+        await request.post(`/api/explorations/${explorationId}/note-groups`, { data: { name } })
+      ).json(),
+    ),
+  );
+  const linked = await (
+    await request.post(`/api/explorations/${explorationId}/notes`, {
+      data: { groupId: first.id, topic: 'Linked' },
+    })
+  ).json();
+  await request.post(`/api/explorations/${explorationId}/notes`, {
+    data: {
+      groupId: second.id,
+      topic: 'Mentions it',
+      description: `See [Linked](#n-${linked.id})`,
+    },
+  });
+  await page.goto(`/e/${explorationId}/notes?group=${second.id}`);
+  await page.getByRole('link', { name: 'Linked' }).click();
+  await expect(page.getByRole('tab', { name: 'General' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator(`#n-${linked.id}`)).toHaveClass(/selected/);
+});
+
 test('ticks checklist notes, sorts them and drags them into place', async ({
   page,
   context,
