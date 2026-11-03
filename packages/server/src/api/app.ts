@@ -78,6 +78,7 @@ const submitBody = z.object({
   fileIds,
 });
 const forkNowBody = z.object({ id: clientId });
+const noteForkBody = z.object({ id: clientId, forkId: clientId, message: z.string() });
 const newNoteGroupBody = z.object({
   id: clientId,
   name: z.string().optional(),
@@ -424,6 +425,11 @@ export function createApp(options: AppOptions) {
   app.put('/api/notes/:id/group', async (context) => {
     const { groupId } = noteGroupBody.parse(await context.req.json());
     return context.json(store.changeNoteGroup(context.req.param('id'), groupId));
+  });
+
+  app.post('/api/notes/:id/fork', async (context) => {
+    const { id, forkId, message } = noteForkBody.parse(await context.req.json());
+    return context.json(store.forkFromNote(context.req.param('id'), message, { id, forkId }), 201);
   });
 
   app.post('/api/notes/:id/keep', (context) =>

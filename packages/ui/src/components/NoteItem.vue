@@ -16,6 +16,7 @@ import {
 } from '../stores/speech';
 import ConfirmButton from './ConfirmButton.vue';
 import MediaIcon from './MediaIcon.vue';
+import NoteForkComposer from './NoteForkComposer.vue';
 
 const props = defineProps<{
   note: Note;
@@ -33,10 +34,12 @@ const emit = defineEmits<{
   dragStart: [event: PointerEvent];
   // Null asks for a new group.
   changeGroup: [groupId: string | null];
+  fork: [message: string];
 }>();
 
 const expanded = ref(false);
 const choosingGroup = ref(false);
+const forking = ref(false);
 const { copied, copy } = useCopied();
 const html = computed(() => (props.note.description ? renderMarkdown(props.note.description) : ''));
 
@@ -129,6 +132,11 @@ function playPicked() {
   pickBlock(null);
 }
 
+function createFork(message: string) {
+  forking.value = false;
+  emit('fork', message);
+}
+
 function changeGroup(groupId: string | null) {
   choosingGroup.value = false;
   emit('changeGroup', groupId);
@@ -207,6 +215,15 @@ function changeGroup(groupId: string | null) {
         </button>
         <button
           type="button"
+          :aria-expanded="forking"
+          aria-label="New fork"
+          title="New fork about this note"
+          @click="forking = !forking"
+        >
+          <MediaIcon name="fork" />
+        </button>
+        <button
+          type="button"
           :aria-expanded="choosingGroup"
           aria-label="Move"
           title="Move to another group"
@@ -242,6 +259,13 @@ function changeGroup(groupId: string | null) {
         <MediaIcon :name="copied ? 'check' : 'copy'" />
       </button>
     </div>
+    <NoteForkComposer
+      v-if="forking && !readOnly"
+      :topic="note.topic"
+      @click.stop
+      @create="createFork"
+      @cancel="forking = false"
+    />
     <div v-if="selected && choosingGroup" class="group-choices" role="menu" @click.stop>
       <span class="muted">Move to</span>
       <button

@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 import { Database } from '../src/db/database.js';
 import { migrations } from '../src/db/schema.js';
-import { defaultGroupName, reorderedIds } from '../src/shared/notes.js';
+import { defaultGroupName, noteForkMessage, reorderedIds } from '../src/shared/notes.js';
 import { createTestApp, createTestStore, draft, seedConversation } from './helpers.js';
 
 function setup() {
@@ -269,6 +269,78 @@ describe('notes API', () => {
       json: { groupId: group.id },
     });
     expect(response.status).toBe(400);
+  });
+});
+
+describe('forking from a note', () => {
+  it('starts a fork of the main fork at once, holding the message that names the note', () => {
+    const { store, explorationId, mainForkId, answer, events } = setup();
+    const group = store.createNoteGroup(explorationId, {});
+    const note = store.createNote(explorationId, { groupId: group.id, topic: 'Cache [v2]' });
+    const comment = draft(store, explorationId, {
+      messageId: answer.id,
+      viewForkId: mainForkId,
+      body: 'Unrelated draft',
+    });
+
+    const submission = store.forkFromNote(note.id, '  How do we invalidate it?  ', {
+      id: 'sbm0000001',
+      forkId: 'frk0000001',
+    });
+
+    expect(submission).toMatchObject({ forkId: 'frk0000001', newFork: false });
+    expect(
+      store.snapshot(explorationId).forks.find((fork) => fork.id === 'frk0000001'),
+    ).toMatchObject({
+      parentForkId: mainForkId,
+      baseMessageId: answer.id,
+      tipMessageId: null,
+      summary: 'How do we invalidate it?',
+    });
+    expect(submission.globalMessage).toBe(
+      `Regarding note [Cache \\[v2\\]](/e/${explorationId}/notes#n-${note.id}) (id \`${note.id}\`):\n\nHow do we invalidate it?`,
+    );
+    expect(
+      store.snapshot(explorationId).comments.find((each) => each.id === comment.id),
+    ).toMatchObject({ status: 'draft' });
+    expect(store.forkFromNote(note.id, 'Again', { id: 'sbm0000001' })).toEqual(submission);
+    expect(events.filter((event) => event.type === 'submission.queued')).toHaveLength(1);
+    expect(events.filter((event) => event.type === 'fork.created')).toHaveLength(1);
+
+    store.deliverQueued(explorationId);
+    const [pending] = store.pendingForks(explorationId);
+    expect(pending).toMatchObject({
+      forkId: 'frk0000001',
+      isNewFork: true,
+      baseMessageId: answer.id,
+      userMessages: [{ text: submission.globalMessage }],
+    });
+  });
+
+  it('names a note without a topic by its id, and needs a message', () => {
+    const { store, explorationId } = setup();
+    const group = store.createNoteGroup(explorationId, {});
+    const note = store.createNote(explorationId, { groupId: group.id, description: 'Only words' });
+    expect(noteForkMessage(note, 'Hi')).toContain(`[${note.id}](`);
+    expect(() => store.forkFromNote(note.id, '  ')).toThrow('Write a message for the new fork.');
+  });
+
+  it('is offered through REST', async () => {
+    const { request, store } = createTestApp();
+    const { explorationId } = seedConversation(store);
+    const group = store.createNoteGroup(explorationId, {});
+    const note = store.createNote(explorationId, { groupId: group.id, topic: 'Topic' });
+    const created = await request(`/api/notes/${note.id}/fork`, {
+      method: 'POST',
+      json: { id: 'sbm0000001', forkId: 'frk0000001', message: 'Tell me more' },
+    });
+    expect(created.status).toBe(201);
+    expect(await created.json()).toMatchObject({ id: 'sbm0000001', forkId: 'frk0000001' });
+    const empty = await request(`/api/notes/${note.id}/fork`, {
+      method: 'POST',
+      json: { message: '' },
+    });
+    expect(empty.status).toBe(400);
   });
 });
 

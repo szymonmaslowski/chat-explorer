@@ -387,3 +387,49 @@ test('reads an expanded note aloud, from the start or from a tapped block', asyn
   await page.getByRole('link', { name: 'Map' }).click();
   await expect(player).toHaveCount(0);
 });
+
+test('starts a fork about a note from the note', async ({ page, request }) => {
+  const explorationId = await answeredChat(request);
+  const group = await (
+    await request.post(`/api/explorations/${explorationId}/note-groups`, { data: {} })
+  ).json();
+  const note = await (
+    await request.post(`/api/explorations/${explorationId}/notes`, {
+      data: { groupId: group.id, topic: 'Cache headers' },
+    })
+  ).json();
+  await page.goto(`/e/${explorationId}/notes`);
+  const item = page.locator(`#n-${note.id}`);
+  await item.click();
+  await item.getByRole('button', { name: 'New fork' }).click();
+  const message = item.getByRole('textbox', { name: 'Message for the new fork' });
+  await expect(message).toBeFocused();
+  await expect(item.getByRole('button', { name: 'Create fork' })).toBeDisabled();
+  await message.fill('Which headers should we send?');
+  await expect(item.getByRole('button', { name: 'Listen' })).toBeVisible();
+  await expect(item).toHaveClass(/selected/);
+  await item.getByRole('button', { name: 'Create fork' }).click();
+  await expect(page).toHaveURL(new RegExp(`/e/${explorationId}/f/[a-z0-9]+$`));
+  const forkId = page.url().split('/').at(-1);
+  await expect(page.locator('.queued-submission')).toContainText('Queued');
+  await expect(page.locator('.queued-submission')).not.toContainText('as a new fork');
+
+  await expect
+    .poll(async () => {
+      const snapshot = await (await request.get(`/api/explorations/${explorationId}`)).json();
+      return snapshot.queuedSubmissions.map(
+        (submission: { forkId: string; globalMessage: string }) => [
+          submission.forkId,
+          submission.globalMessage,
+        ],
+      );
+    })
+    .toEqual([
+      [
+        forkId,
+        `Regarding note [Cache headers](/e/${explorationId}/notes#n-${note.id}) (id \`${note.id}\`):\n\nWhich headers should we send?`,
+      ],
+    ]);
+  await page.getByRole('link', { name: 'Map' }).click();
+  await expect(page.locator('.fork-box')).toHaveCount(2);
+});

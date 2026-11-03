@@ -15,7 +15,8 @@ defineProps<{
     | 'edit'
     | 'move'
     | 'trash'
-    | 'grip';
+    | 'grip'
+    | 'fork';
 }>();
 </script>
 
@@ -45,6 +46,10 @@ defineProps<{
     <path v-else-if="name === 'trash'" d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
     <path v-else-if="name === 'grip'" d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" />
     <path
+      v-else-if="name === 'fork'"
+      d="M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9"
+    />
+    <path
       v-else
       d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"
     />
@@ -67,7 +72,8 @@ defineProps<{
 .media-icon.edit,
 .media-icon.move,
 .media-icon.trash,
-.media-icon.grip {
+.media-icon.grip,
+.media-icon.fork {
   fill: none;
   stroke: currentColor;
   stroke-width: 2;

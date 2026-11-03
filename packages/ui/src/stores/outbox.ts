@@ -38,6 +38,17 @@ export type Change =
       forkId: string;
       commentId: string;
     }
+  | {
+      type: 'note.fork';
+      explorationId: string;
+      submissionId: string;
+      // The new fork, started at the end of its parent.
+      forkId: string;
+      parentForkId: string;
+      baseMessageId: string | null;
+      noteId: string;
+      message: string;
+    }
   | { type: 'submission.cancel'; explorationId: string; submissionId: string }
   | { type: 'note-group.create'; explorationId: string; group: NewNoteGroup & { id: string } }
   | {
@@ -124,6 +135,7 @@ export const subjectOf = (change: Change) => {
     case 'submit':
       return change.submission.id;
     case 'fork-now':
+    case 'note.fork':
     case 'submission.cancel':
       return change.submissionId;
     case 'note-group.create':
@@ -172,7 +184,7 @@ function withdraw(stored: StoredOutbox, change: Change) {
       : change.type === 'note.delete'
         ? ['note.create']
         : change.type === 'submission.cancel'
-          ? ['submit', 'fork-now']
+          ? ['submit', 'fork-now', 'note.fork']
           : [];
   const subject = subjectOf(change);
   const creation = stored.queue.find(
@@ -220,6 +232,13 @@ function send(change: Change) {
     }
     case 'fork-now':
       return api.forkNow(change.commentId, change.submissionId, keepalive);
+    case 'note.fork':
+      return api.forkFromNote(
+        change.noteId,
+        { submissionId: change.submissionId, forkId: change.forkId },
+        change.message,
+        keepalive,
+      );
     case 'submission.cancel':
       return api.cancelSubmission(change.submissionId, keepalive);
     case 'note-group.create':
@@ -260,7 +279,7 @@ function failureMessage(change: Change, error: unknown) {
   if (change.type === 'submission.cancel' && error instanceof ApiError) {
     if (error.code === 'already_sent') return 'Could not cancel: already sent to Claude.';
   }
-  return change.type === 'submit' || change.type === 'fork-now'
+  return change.type === 'submit' || change.type === 'fork-now' || change.type === 'note.fork'
     ? `Could not send: ${reason}`
     : `Could not save: ${reason}`;
 }

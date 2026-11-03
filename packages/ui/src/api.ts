@@ -107,6 +107,16 @@ export const api = {
       json: { id: submissionId },
       keepalive,
     }),
+  forkFromNote: (
+    noteId: string,
+    ids: { submissionId: string; forkId: string },
+    message: string,
+    keepalive = false,
+  ) =>
+    call<QueuedSubmission>(`/api/notes/${noteId}/fork`, {
+      json: { id: ids.submissionId, forkId: ids.forkId, message },
+      keepalive,
+    }),
   cancelSubmission: (submissionId: string, keepalive = false) =>
     call<{ globalMessage: string; newFork: boolean; files: MessageFile[] }>(
       `/api/submissions/${submissionId}`,

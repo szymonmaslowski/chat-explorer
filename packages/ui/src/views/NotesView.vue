@@ -12,6 +12,7 @@ import NoteDeletionNotice from '../components/NoteDeletionNotice.vue';
 import NoteItem from '../components/NoteItem.vue';
 import SpeechPlayer from '../components/SpeechPlayer.vue';
 import { useDragSort } from '../composables/useDragSort';
+import { mainFork } from '../lib/conversation';
 import {
   dropAnchor,
   dropRange,
@@ -190,6 +191,23 @@ function changeNoteGroup(noteId: string, groupId: string | null) {
   selectedNoteId.value = null;
 }
 
+function forkFromNote(noteId: string, message: string) {
+  const parent = mainFork(state.value.forks);
+  if (!parent) return;
+  const forkId = newId();
+  outbox.add({
+    type: 'note.fork',
+    explorationId: props.explorationId,
+    submissionId: newId(),
+    forkId,
+    parentForkId: parent.id,
+    baseMessageId: parent.tipMessageId,
+    noteId,
+    message,
+  });
+  void router.push(`/e/${props.explorationId}/f/${forkId}`);
+}
+
 function toggleSelected(noteId: string) {
   selectedNoteId.value = selectedNoteId.value === noteId ? null : noteId;
 }
@@ -323,6 +341,7 @@ watch(
             @delete="deleteNote(note.id)"
             @keep="keepNote(note.id)"
             @change-group="changeNoteGroup(note.id, $event)"
+            @fork="forkFromNote(note.id, $event)"
           />
         </template>
         <div v-if="indicatorTop !== null" class="drop-line" :style="{ top: `${indicatorTop}px` }" />

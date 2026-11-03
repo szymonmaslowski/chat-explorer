@@ -41,7 +41,7 @@ import type {
   Snapshot,
 } from '../shared/types.js';
 import { defaultClaudeModel, type ClaudeModel } from '../shared/models.js';
-import { defaultGroupName, reorderedIds } from '../shared/notes.js';
+import { defaultGroupName, noteForkMessage, reorderedIds } from '../shared/notes.js';
 import { StoreError } from './errors.js';
 import type { EventBus } from './event-bus.js';
 import { newId } from './ids.js';
@@ -657,6 +657,51 @@ export class ChatStore {
       );
     });
     return this.publishSubmission(explorationId, id, [draft]);
+  }
+
+  // Starts a fork of the main fork at once, holding one queued message about the note, so the
+  // reader can open it before Claude answers. The main fork's drafts stay as they are.
+  forkFromNote(noteId: string, message: string, options: { id?: string; forkId?: string } = {}) {
+    const note = toNote(this.requireNoteRow(noteId));
+    const { explorationId } = note;
+    const existing = options.id
+      ? this.existingRow<SubmissionRow>('submissions', options.id, explorationId)
+      : null;
+    if (existing) return toQueuedSubmission(existing);
+    if (!message.trim()) throw new StoreError('invalid', 'Write a message for the new fork.');
+    const mainFork = this.db.get<ForkRow>(
+      'SELECT * FROM forks WHERE exploration_id = ? AND parent_fork_id IS NULL',
+      explorationId,
+    )!;
+    this.requireWritableFork(mainFork.id, explorationId);
+    if (mainFork.tip_message_id === null) {
+      throw new StoreError('invalid', 'This chat has no messages to fork from.');
+    }
+    const id = options.id ?? newId();
+    const fork = this.db.transaction(() => {
+      const fork = this.insertFork({
+        id: options.forkId,
+        explorationId,
+        parentForkId: mainFork.id,
+        baseMessageId: mainFork.tip_message_id,
+        originCommentId: null,
+        summary: summaryFrom(message.trim()),
+      });
+      this.insertSubmission(
+        {
+          id,
+          explorationId,
+          forkId: fork.id,
+          message: noteForkMessage(note, message),
+          newFork: false,
+          delivered: false,
+        },
+        [],
+      );
+      return fork;
+    });
+    this.publish([[explorationId, { type: 'fork.created', fork: toFork(fork) }]]);
+    return this.publishSubmission(explorationId, id, []);
   }
 
   cancelSubmission(submissionId: string) {
@@ -1490,13 +1535,14 @@ export class ChatStore {
   }
 
   private insertFork(input: {
+    id?: string;
     explorationId: string;
     parentForkId: string;
     baseMessageId: string | null;
     originCommentId: string | null;
     summary: string;
   }) {
-    const forkId = newId();
+    const forkId = input.id ?? newId();
     const createdAt = this.now();
     this.db.run(
       `INSERT INTO forks (id, exploration_id, parent_fork_id, base_message_id, origin_comment_id,

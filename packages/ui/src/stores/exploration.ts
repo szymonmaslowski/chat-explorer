@@ -12,7 +12,7 @@ import type {
   SessionStatus,
   Snapshot,
 } from '@shared/types';
-import { defaultGroupName, reorderedIds } from '@shared/notes';
+import { defaultGroupName, noteForkMessage, reorderedIds } from '@shared/notes';
 import { nextTick, reactive, watch } from 'vue';
 import { api, ApiError } from '../api';
 import { applyNoteOrder, notesInGroup, renumberGroup } from '../lib/notes';
@@ -263,6 +263,34 @@ export function applyChange(state: ExplorationState, change: Change) {
       const comment = state.comments.get(commentId);
       if (comment)
         state.comments.set(commentId, { ...comment, status: 'queued', submissionId: id });
+      break;
+    }
+    case 'note.fork': {
+      const { submissionId: id, forkId, parentForkId, baseMessageId, noteId, message } = change;
+      if (!state.forks.has(forkId)) {
+        state.forks.set(forkId, {
+          id: forkId,
+          explorationId: state.explorationId,
+          parentForkId,
+          baseMessageId,
+          originCommentId: null,
+          tipMessageId: null,
+          kind: 'soft',
+          summary: message.trim(),
+          createdAt: now,
+          updatedAt: now,
+          archivedAt: null,
+        });
+      }
+      const note = state.notes.get(noteId);
+      state.queuedSubmissions.set(id, {
+        id,
+        explorationId: state.explorationId,
+        forkId,
+        globalMessage: note ? noteForkMessage(note, message) : message.trim(),
+        newFork: false,
+        createdAt: now,
+      });
       break;
     }
     case 'submission.cancel':
