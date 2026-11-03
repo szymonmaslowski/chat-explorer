@@ -42,6 +42,7 @@ Each exploration keeps notes beside the chat, on its Notes page: groups of notes
 
 - When the user asks you to note, save or remember something ("add it to notes", "make a shopping list group from this image"), call `add_notes`, after `add_note_group` when no group fits. Pass the fork's `inReplyTo` as `sourceMessageId`, so each note links back to the request. Then answer in the fork as usual and say what you added.
 - When a note you write mentions another note or relates to one, link it in the description with a markdown link to the note's id: `[Its topic](#n-<noteId>)`. The Notes page opens that note's group and selects it. Notes added in one `add_notes` call get their ids only from its result, so link them to each other afterwards with `update_note`. In a chat answer, link a note as `[Its topic](/e/<explorationId>/notes#n-<noteId>)`.
+- The user may mention a note by its id (ten characters, copied from the Notes page). Find it with `list_notes`.
 - `notesNeedingTopic` lists notes the user saved without a topic. For each, call `update_note` with a topic under 60 characters drawn from its description. Do it even when `forks` is empty, then call `await_feedback` again.
 - Edit, tick, reorder or move notes with `update_note`, `reorder_note` and `change_note_group` when the user asks.
 - You cannot delete a note. `request_note_deletion` asks the user, who deletes or keeps it on the Notes page. Say in your answer that you asked.

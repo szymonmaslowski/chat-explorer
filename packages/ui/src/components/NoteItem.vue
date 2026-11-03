@@ -2,6 +2,7 @@
 import { renderMarkdown } from '@shared/markdown';
 import type { Note, NoteGroup } from '@shared/types';
 import { computed, ref, watch } from 'vue';
+import { useCopied } from '../composables/useCopied';
 import { outbox } from '../stores/outbox';
 import ConfirmButton from './ConfirmButton.vue';
 import MediaIcon from './MediaIcon.vue';
@@ -26,6 +27,7 @@ const emit = defineEmits<{
 
 const expanded = ref(false);
 const choosingGroup = ref(false);
+const { copied, copy } = useCopied();
 const html = computed(() => (props.note.description ? renderMarkdown(props.note.description) : ''));
 
 watch(
@@ -118,6 +120,18 @@ function changeGroup(groupId: string | null) {
         @click="emit('toggleChecked')"
       >
         <MediaIcon name="check" />
+      </button>
+    </div>
+    <div v-if="selected" class="note-id" @click.stop>
+      <span class="muted">ID</span>
+      <code>{{ note.id }}</code>
+      <button
+        type="button"
+        :aria-label="copied ? 'Copied' : 'Copy ID'"
+        :title="copied ? 'Copied' : 'Copy ID'"
+        @click="copy({ plain: note.id })"
+      >
+        <MediaIcon :name="copied ? 'check' : 'copy'" />
       </button>
     </div>
     <div v-if="selected && choosingGroup" class="group-choices" role="menu" @click.stop>
@@ -241,7 +255,8 @@ function changeGroup(groupId: string | null) {
 }
 
 .actions,
-.group-choices {
+.group-choices,
+.note-id {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -249,7 +264,8 @@ function changeGroup(groupId: string | null) {
   margin-top: 0.4rem;
 }
 
-.actions button {
+.actions button,
+.note-id button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -278,12 +294,17 @@ function changeGroup(groupId: string | null) {
   cursor: grab;
 }
 
+.note-id {
+  font-size: 0.8rem;
+}
+
 .group-choices .muted {
   font-size: 0.8rem;
 }
 
 @media (pointer: coarse) {
-  .actions button {
+  .actions button,
+  .note-id button {
     min-width: 2.75rem;
     min-height: 2.25rem;
   }

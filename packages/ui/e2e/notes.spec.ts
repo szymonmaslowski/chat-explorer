@@ -171,6 +171,27 @@ test('opens a related note from a link in another note', async ({ page, request 
   await expect(page.locator(`#n-${linked.id}`)).toHaveClass(/selected/);
 });
 
+test('copies the id of a selected note', async ({ page, context, request }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const explorationId = await newChat(request);
+  const group = await (
+    await request.post(`/api/explorations/${explorationId}/note-groups`, { data: {} })
+  ).json();
+  const note = await (
+    await request.post(`/api/explorations/${explorationId}/notes`, {
+      data: { groupId: group.id, topic: 'Discuss me' },
+    })
+  ).json();
+  await page.goto(`/e/${explorationId}/notes`);
+  await expect(page.locator('.note-id')).toHaveCount(0);
+  await page.getByText('Discuss me').click();
+  await expect(page.locator('.note-id code')).toHaveText(note.id);
+  await page.getByRole('button', { name: 'Copy ID' }).click();
+  await expect(page.getByRole('button', { name: 'Copied' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(note.id);
+  await expect(page.locator(`#n-${note.id}`)).toHaveClass(/selected/);
+});
+
 test('ticks checklist notes, sorts them and drags them into place', async ({
   page,
   context,
