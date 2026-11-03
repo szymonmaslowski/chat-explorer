@@ -10,17 +10,9 @@ test('starts a new exploration and reports a Claude that cannot start', async ({
   await expect(page).toHaveURL(/\/e\/[a-z0-9]+$/);
   await expect(page.locator('.queued-submission')).toContainText('Why is the sky blue?');
   await expect(page.getByRole('alert')).toContainText('Claude could not be started');
-  await expect(page.locator('.status select')).toHaveValue('opus');
-});
-
-test('changes the model of an exploration', async ({ page }) => {
-  await openSeededExploration(page);
-  const picker = page.locator('.status select');
-  await expect(picker).toHaveValue('sonnet');
-  await picker.selectOption('opus');
-  await page.reload();
-  await expect(page.locator('.status select')).toHaveValue('opus');
-  await page.locator('.status select').selectOption('sonnet');
+  const explorationId = page.url().split('/').at(-1);
+  const snapshot = await (await page.request.get(`/api/explorations/${explorationId}`)).json();
+  expect(snapshot.exploration.model).toBe('opus');
 });
 
 test.describe('on a phone', () => {

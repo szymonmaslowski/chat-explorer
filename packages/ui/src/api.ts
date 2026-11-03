@@ -86,8 +86,6 @@ export const api = {
     return call<MessageFile>('/api/files', { form });
   },
   deleteFile: (fileId: string) => call<{ ok: true }>(`/api/files/${fileId}`, { method: 'DELETE' }),
-  setModel: (explorationId: string, model: ClaudeModel) =>
-    call<Exploration>(`/api/explorations/${explorationId}`, { method: 'PATCH', json: { model } }),
   startSession: (explorationId: string) =>
     call<{ ok: true }>(`/api/explorations/${explorationId}/session`, { method: 'POST' }),
   submit: (
