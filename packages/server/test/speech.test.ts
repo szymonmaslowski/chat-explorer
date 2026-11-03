@@ -209,6 +209,16 @@ describe('speech API', () => {
     expect(spoken).toEqual([{ text: 'Table, 2 columns, 4 rows.', voice: daniel.identifier }]);
   });
 
+  it('reads text that is not a message yet', async () => {
+    const { request, spoken } = createTestApp();
+    const response = await request('/api/speech', {
+      method: 'POST',
+      json: { draft: 'A comment still being written.', block: { kind: 'diagram' } },
+    });
+    expect(response.status).toBe(200);
+    expect(spoken).toEqual([{ text: 'Diagram.', voice: daniel.identifier }]);
+  });
+
   it('refuses an unknown message and empty text', async () => {
     const { request, store } = createTestApp();
     const { answer } = seedConversation(store);

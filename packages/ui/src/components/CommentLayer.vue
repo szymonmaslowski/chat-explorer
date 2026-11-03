@@ -64,7 +64,7 @@ const playable = computed(() => picked.value?.speakable === true);
 const pickedPlaying = computed(
   () =>
     speech.playing &&
-    speech.playback?.messageId === picked.value?.messageId &&
+    speech.playback?.id === picked.value?.messageId &&
     speech.playback?.index === picked.value?.blockIndex,
 );
 const editor = ref<{
@@ -325,7 +325,7 @@ function playPicked() {
   const root = container()?.querySelector<HTMLElement>(`[data-anchor-root="${messageId}"]`);
   if (!root) return;
   playBlock(
-    messageId,
+    { messageId },
     speechBlocks(root).map(({ block }) => block),
     blockIndex,
   );

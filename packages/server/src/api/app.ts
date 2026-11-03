@@ -122,24 +122,26 @@ const transcriptionBody = z.object({
 });
 // A paragraph is far shorter; this only keeps one request from tying up `say` for minutes.
 const maxSpeechTextLength = 10_000;
-const speechBody = z.object({
-  messageId: z.string(),
-  block: z.discriminatedUnion('kind', [
-    z.object({ kind: z.literal('text'), text: z.string().trim().min(1).max(maxSpeechTextLength) }),
-    z.object({
-      kind: z.literal('code'),
-      language: z.string().max(40),
-      lines: z.number().int().min(0),
-    }),
-    z.object({ kind: z.literal('diagram') }),
-    z.object({
-      kind: z.literal('table'),
-      columns: z.number().int().min(0),
-      rows: z.number().int().min(0),
-    }),
-    z.object({ kind: z.literal('image'), description: z.string().max(maxSpeechTextLength) }),
-  ]),
-});
+const speechBlock = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('text'), text: z.string().trim().min(1).max(maxSpeechTextLength) }),
+  z.object({
+    kind: z.literal('code'),
+    language: z.string().max(40),
+    lines: z.number().int().min(0),
+  }),
+  z.object({ kind: z.literal('diagram') }),
+  z.object({
+    kind: z.literal('table'),
+    columns: z.number().int().min(0),
+    rows: z.number().int().min(0),
+  }),
+  z.object({ kind: z.literal('image'), description: z.string().max(maxSpeechTextLength) }),
+]);
+// A block of a message, or of text still being written, whose whole text picks the voice.
+const speechBody = z.union([
+  z.object({ messageId: z.string(), block: speechBlock }),
+  z.object({ draft: z.string().max(maxSpeechTextLength), block: speechBlock }),
+]);
 const claudeNoteGroupBody = shimBody.extend({
   name: z.string().optional(),
   checklist: z.boolean().optional(),
@@ -198,11 +200,12 @@ export function createApp(options: AppOptions) {
   );
 
   app.post('/api/speech', async (context) => {
-    const { messageId, block } = speechBody.parse(await context.req.json());
+    const body = speechBody.parse(await context.req.json());
     const { audio, contentType } = await speaker.speak({
-      messageId,
-      content: store.messageContent(messageId),
-      block,
+      ...('messageId' in body
+        ? { messageId: body.messageId, content: store.messageContent(body.messageId) }
+        : { messageId: null, content: body.draft }),
+      block: body.block,
       signal: context.req.raw.signal,
     });
     return context.body(audio, 200, { 'content-type': contentType });

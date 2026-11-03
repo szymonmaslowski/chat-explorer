@@ -11,6 +11,7 @@ import { openExploration } from '../stores/exploration';
 import { newId, outbox } from '../stores/outbox';
 import DictationButton from './DictationButton.vue';
 import ExpandButton from './ExpandButton.vue';
+import ListenButton from './ListenButton.vue';
 
 const props = defineProps<{
   explorationId: string;
@@ -183,6 +184,7 @@ function onKeydown(event: KeyboardEvent) {
         <option :value="newGroupChoice">{{ newGroupName }} (new)</option>
       </select>
       <DictationButton :hint="anchor.quote" @text="insertDictation" />
+      <ListenButton :text="body" />
       <ExpandButton v-model="expanded" />
       <span class="spacer" />
       <button type="button" @click="cancel">Cancel</button>

@@ -58,11 +58,14 @@ async function call<Result>(path: string, init: RequestOptions = {}) {
   return (await (await send(path, init)).json()) as Result;
 }
 
+// Text being written is read before it is a message.
+export type SpeechSource = { messageId: string } | { draft: string };
+
 export const api = {
   settings: () =>
     call<{ defaultModel: ClaudeModel; dictation: boolean; speech: boolean }>('/api/settings'),
-  speech: async (messageId: string, block: SpeechBlock) =>
-    (await send('/api/speech', { json: { messageId, block } })).blob(),
+  speech: async (source: SpeechSource, block: SpeechBlock) =>
+    (await send('/api/speech', { json: { ...source, block } })).blob(),
   transcribe: (wav: Blob, hint: string, signal: AbortSignal) => {
     const form = new FormData();
     form.append('audio', wav, 'recording.wav');

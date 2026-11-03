@@ -13,6 +13,7 @@ import AttachButton from './AttachButton.vue';
 import DictationButton from './DictationButton.vue';
 import ExpandButton from './ExpandButton.vue';
 import FileDraftList from './FileDraftList.vue';
+import ListenButton from './ListenButton.vue';
 
 const props = defineProps<{
   explorationId: string;
@@ -227,6 +228,7 @@ function onKeydown(event: KeyboardEvent) {
       </label>
       <AttachButton @files="files.add" />
       <DictationButton :hint="hint" @text="insertDictation" />
+      <ListenButton :text="text" />
       <ExpandButton v-model="expanded" />
       <span class="spacer" />
       <span v-if="editingCount || summary" class="summary muted">

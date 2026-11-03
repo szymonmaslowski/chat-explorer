@@ -25,7 +25,7 @@ const speakable = computed(
   () => speech.available && props.message.role === 'assistant' && blocks.value.length > 0,
 );
 const currentIndex = computed(() =>
-  speech.playback?.messageId === props.message.id ? speech.playback.index : -1,
+  speech.playback?.id === props.message.id ? speech.playback.index : -1,
 );
 
 void checkSpeechAvailable();
@@ -44,7 +44,7 @@ function playMessage() {
     return;
   }
   playFrom(
-    props.message.id,
+    { messageId: props.message.id },
     blocks.value.map(({ block }) => block),
     0,
   );

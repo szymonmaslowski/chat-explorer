@@ -1,10 +1,12 @@
 import type { SpeechBlock } from '@shared/types';
 import { reactive } from 'vue';
-import { api } from '../api';
+import { api, type SpeechSource } from '../api';
 import { encodeWav } from '../lib/wav';
 
 interface Playback {
-  messageId: string;
+  // The message id, or the draft text itself.
+  id: string;
+  source: SpeechSource;
   blocks: SpeechBlock[];
   index: number;
 }
@@ -91,7 +93,7 @@ function evictAudio() {
 }
 
 function audioFor(playback: Playback, index: number) {
-  const key = `${playback.messageId}:${index}`;
+  const key = `${playback.id}:${index}`;
   const cached = cachedAudio.get(key);
   if (cached) {
     cachedAudio.delete(key);
@@ -100,7 +102,7 @@ function audioFor(playback: Playback, index: number) {
   }
   const entry: CachedAudio = {
     bytes: 0,
-    url: api.speech(playback.messageId, playback.blocks[index]!).then((audio) => {
+    url: api.speech(playback.source, playback.blocks[index]!).then((audio) => {
       entry.bytes = audio.size;
       evictAudio();
       return URL.createObjectURL(audio);
@@ -140,17 +142,21 @@ async function load(index: number, position = 0) {
   }
 }
 
-export function playFrom(messageId: string, blocks: SpeechBlock[], index: number) {
+export const speechSourceId = (source: SpeechSource) =>
+  'messageId' in source ? source.messageId : `draft:${source.draft}`;
+
+export function playFrom(source: SpeechSource, blocks: SpeechBlock[], index: number) {
+  const id = speechSourceId(source);
   unlockAudio();
-  if (speech.playback?.messageId !== messageId) setMediaMetadata();
-  speech.playback = { messageId, blocks, index };
+  if (speech.playback?.id !== id) setMediaMetadata();
+  speech.playback = { id, source, blocks, index };
   void load(index);
 }
 
-export function playBlock(messageId: string, blocks: SpeechBlock[], index: number) {
+export function playBlock(source: SpeechSource, blocks: SpeechBlock[], index: number) {
   const playback = speech.playback;
-  if (playback?.messageId === messageId && playback.index === index) togglePause();
-  else playFrom(messageId, blocks, index);
+  if (playback?.id === speechSourceId(source) && playback.index === index) togglePause();
+  else playFrom(source, blocks, index);
 }
 
 export function togglePause() {

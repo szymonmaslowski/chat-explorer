@@ -123,3 +123,25 @@ test('announces code instead of reading it', async ({ page }) => {
   expect(speech.headers()['content-type']).toBe('audio/mp4');
   expect((await speech.body()).subarray(4, 8).toString('ascii')).toBe('ftyp');
 });
+
+test('reads aloud what is typed in the reply and in a comment', async ({ page }) => {
+  await openSeededExploration(page);
+  const player = page.getByRole('region', { name: 'Reading aloud' });
+  const reply = page.getByPlaceholder('Reply to Claude');
+  const replyBar = page.locator('form', { has: reply });
+  await expect(replyBar.getByRole('button', { name: 'Listen' })).toHaveCount(0);
+
+  await reply.fill('First paragraph.\n\nSecond paragraph.');
+  await replyBar.getByRole('button', { name: 'Listen' }).click();
+  await expect(player.locator('.block-count')).toHaveText('1/2');
+  await expect(replyBar.getByRole('button', { name: 'Pause' })).toBeVisible();
+  await expect(reply).toBeFocused();
+  await player.getByRole('button', { name: 'Stop reading' }).click();
+
+  const paragraph = page.locator('.message.assistant .content p').first();
+  await paragraph.click();
+  await page.getByRole('button', { name: 'Comment', exact: true }).click();
+  await page.getByPlaceholder('Your comment').fill('Which one is fastest?');
+  await page.locator('.comment-editor').getByRole('button', { name: 'Listen' }).click();
+  await expect(player.locator('.block-count')).toHaveText('1/1');
+});

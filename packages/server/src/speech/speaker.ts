@@ -15,7 +15,8 @@ export interface SpeakerOptions {
 }
 
 interface SpeechRequest {
-  messageId: string;
+  // Null for text that is not a message yet.
+  messageId: string | null;
   content: string;
   block: SpeechBlock;
   signal: AbortSignal;
@@ -29,7 +30,7 @@ interface Voice {
 
 interface QueuedRender {
   key: string;
-  messageId: string;
+  messageId: string | null;
   // Asked for by a reader waiting to hear it, not rendered ahead.
   awaited: boolean;
   start: () => Promise<unknown>;
@@ -98,7 +99,13 @@ export class Speaker {
 
   // One render at a time: blocks someone waits for first, then the rest of the answer they
   // listen to, then the other answers in the order they arrived.
-  private enqueue(voice: Voice, text: string, key: string, messageId: string, awaited: boolean) {
+  private enqueue(
+    voice: Voice,
+    text: string,
+    key: string,
+    messageId: string | null,
+    awaited: boolean,
+  ) {
     if (awaited) this.listenedMessageId = messageId;
     const queued = this.queue.find((render) => render.key === key);
     if (queued) queued.awaited ||= awaited;
