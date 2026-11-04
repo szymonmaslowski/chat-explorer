@@ -8,10 +8,11 @@ import { openExploration } from '../stores/exploration';
 
 const props = defineProps<{ explorationId: string; currentForkId?: string }>();
 
-const boxWidth = 200;
+// Narrow enough that the main fork and its children fit side by side on a phone.
+const boxWidth = 160;
 const boxHeight = 86;
-const horizontalGap = 28;
-const verticalGap = 56;
+const depthGap = 32;
+const siblingGap = 14;
 const padding = 16;
 
 const state = computed(() => openExploration(props.explorationId));
@@ -43,10 +44,13 @@ const layout = computed(() => {
   const root = stratify<Fork>()
     .id((fork) => fork.id)
     .parentId((fork) => fork.parentForkId)(forks);
-  tree<Fork>().nodeSize([boxWidth + horizontalGap, boxHeight + verticalGap])(root);
+  tree<Fork>().nodeSize([boxHeight + siblingGap, boxWidth + depthGap])(root);
   const nodes = root.descendants();
-  const minX = Math.min(...nodes.map((node) => node.x ?? 0));
-  const position = (x = 0, y = 0) => ({ left: x - minX + padding, top: y + padding });
+  const minBreadth = Math.min(...nodes.map((node) => node.x ?? 0));
+  const position = (breadth = 0, depth = 0) => ({
+    left: depth + padding,
+    top: breadth - minBreadth + padding,
+  });
   const messageCounts = new Map<string, number>();
   for (const message of state.value.messages.values()) {
     messageCounts.set(message.forkId, (messageCounts.get(message.forkId) ?? 0) + 1);
@@ -65,14 +69,14 @@ const layout = computed(() => {
   const edges = root.links().map(({ source, target }) => {
     const from = position(source.x, source.y);
     const to = position(target.x, target.y);
-    const startX = from.left + boxWidth / 2;
-    const startY = from.top + boxHeight;
-    const endX = to.left + boxWidth / 2;
-    const endY = to.top;
-    const middleY = (startY + endY) / 2;
+    const startX = from.left + boxWidth;
+    const startY = from.top + boxHeight / 2;
+    const endX = to.left;
+    const endY = to.top + boxHeight / 2;
+    const middleX = (startX + endX) / 2;
     return {
       id: target.data.id,
-      path: `M ${startX} ${startY} C ${startX} ${middleY}, ${endX} ${middleY}, ${endX} ${endY}`,
+      path: `M ${startX} ${startY} C ${middleX} ${startY}, ${middleX} ${endY}, ${endX} ${endY}`,
     };
   });
   return {
