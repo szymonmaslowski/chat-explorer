@@ -44,6 +44,21 @@ test.describe('on a phone', () => {
     await expect(page.getByRole('button', { name: 'Comment', exact: true })).toBeVisible();
   });
 
+  test('wraps a long unbroken word instead of scrolling the page sideways', async ({ page }) => {
+    await openSeededExploration(page);
+    await page.evaluate(() => {
+      const paragraph = document.createElement('p');
+      paragraph.innerHTML =
+        '<code>speechTranscriberWithAVeryLongNameAndNoPlaceToBreakTheLine.ts</code>';
+      document.querySelector('.content')!.append(paragraph);
+    });
+    const pageWidths = await page.evaluate(() => ({
+      scroll: document.documentElement.scrollWidth,
+      client: document.documentElement.clientWidth,
+    }));
+    expect(pageWidths.scroll).toBe(pageWidths.client);
+  });
+
   test('scrolls from a listed comment to the text it quotes', async ({ page }) => {
     await openSeededExploration(page);
     const card = page.locator('.message-comments .comment-card.listed').first();

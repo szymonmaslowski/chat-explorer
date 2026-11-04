@@ -38,6 +38,7 @@ body {
   margin: 0;
   background: var(--background);
   color: var(--text);
+  overflow-wrap: break-word;
   font:
     16px/1.6 system-ui,
     -apple-system,
