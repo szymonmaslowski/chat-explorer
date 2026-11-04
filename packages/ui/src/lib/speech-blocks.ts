@@ -14,6 +14,12 @@ export function blockIndexAt(blocks: SpokenElement[], target: Node) {
   return blocks.findLastIndex(({ element }) => element.contains(target));
 }
 
+// A table is read as one block, but a tap picks the cell under it, so a comment can quote that cell.
+export function pickableElementAt(blockElement: HTMLElement, target: Element) {
+  if (blockElement.tagName !== 'TABLE') return blockElement;
+  return target.closest<HTMLElement>('td, th') ?? blockElement;
+}
+
 // A list item's own text, without the nested lists, code and tables read after it.
 export function blockTextRange(element: HTMLElement) {
   const range = document.createRange();

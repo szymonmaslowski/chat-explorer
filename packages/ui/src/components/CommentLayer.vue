@@ -7,7 +7,12 @@ import { layoutCards } from '../lib/card-layout';
 import { pointer } from '../lib/pointer';
 import { useCopied } from '../composables/useCopied';
 import { blockClipboardText } from '../lib/clipboard';
-import { blockIndexAt, blockTextRange, speechBlocks } from '../lib/speech-blocks';
+import {
+  blockIndexAt,
+  blockTextRange,
+  pickableElementAt,
+  speechBlocks,
+} from '../lib/speech-blocks';
 import { playBlock, speech } from '../stores/speech';
 import { useMediaQuery } from '../composables/useMediaQuery';
 import CommentCard from './CommentCard.vue';
@@ -314,9 +319,10 @@ function onClick(event: MouseEvent) {
   const root = target.closest<HTMLElement>('[data-anchor-root]');
   const blocks = root && container()?.contains(root) ? speechBlocks(root) : [];
   const block = blocks[blockIndexAt(blocks, target)];
-  const alreadyPicked = block?.element === pickedElement;
+  const element = block && pickableElementAt(block.element, target);
+  const alreadyPicked = element === pickedElement;
   unpick();
-  if (root && block && !alreadyPicked) pick(root, block.element, blocks.indexOf(block));
+  if (root && block && element && !alreadyPicked) pick(root, element, blocks.indexOf(block));
 }
 
 function playPicked() {
