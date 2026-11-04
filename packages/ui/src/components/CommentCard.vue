@@ -8,6 +8,7 @@ import { insertAtCursor } from '../lib/insert-text';
 import { newId, outbox } from '../stores/outbox';
 import DictationButton from './DictationButton.vue';
 import ExpandButton from './ExpandButton.vue';
+import ListenButton from './ListenButton.vue';
 
 // Without a placement the card is listed in the page flow, on narrow and touch screens.
 const props = defineProps<{
@@ -136,6 +137,7 @@ function onEditorKeydown(event: KeyboardEvent) {
       <textarea ref="editor" v-model="draftBody" rows="3" @keydown="onEditorKeydown" />
       <div class="actions">
         <DictationButton :hint="comment.quote" @text="insertDictation" />
+        <ListenButton :text="draftBody" />
         <ExpandButton v-model="expanded" />
         <span class="spacer" />
         <button type="button" @click="cancelEditing">Cancel</button>
@@ -167,6 +169,7 @@ function onEditorKeydown(event: KeyboardEvent) {
       </button>
       <p class="body">{{ comment.body }}</p>
       <div v-if="isDraft" class="actions">
+        <ListenButton :text="comment.body" />
         <button
           v-if="comment.type !== 'note'"
           type="button"
@@ -303,6 +306,7 @@ function onEditorKeydown(event: KeyboardEvent) {
 
 .actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
   gap: 0.3rem;

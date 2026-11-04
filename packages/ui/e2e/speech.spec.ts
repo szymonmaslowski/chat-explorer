@@ -145,3 +145,21 @@ test('reads aloud what is typed in the reply and in a comment', async ({ page })
   await page.locator('.comment-editor').getByRole('button', { name: 'Listen' }).click();
   await expect(player.locator('.block-count')).toHaveText('1/1');
 });
+
+test.describe('on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
+
+  test('reads aloud a saved comment and the comment being edited', async ({ page }) => {
+    await openSeededExploration(page);
+    const player = page.getByRole('region', { name: 'Reading aloud' });
+    const card = page.locator('.comment-card.draft').first();
+    await card.getByRole('button', { name: 'Listen' }).click();
+    await expect(player.locator('.block-count')).toHaveText('1/1');
+    await player.getByRole('button', { name: 'Stop reading' }).click();
+
+    await card.getByRole('button', { name: 'Edit' }).click();
+    await card.locator('textarea').fill('First question.\n\nSecond question.');
+    await card.getByRole('button', { name: 'Listen' }).click();
+    await expect(player.locator('.block-count')).toHaveText('1/2');
+  });
+});
