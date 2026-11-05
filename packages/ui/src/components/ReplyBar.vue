@@ -196,6 +196,14 @@ function onKeydown(event: KeyboardEvent) {
     @dragover.prevent
     @drop.prevent="files.add(transferredFiles($event.dataTransfer))"
   >
+    <p v-if="editingCount || summary" class="summary muted">
+      <RouterLink
+        v-if="editingCount"
+        :to="{ hash: `#c-${beingEdited[0]!.id}` }"
+        title="Save or cancel it to submit"
+        >{{ plural(editingCount, 'comment') }} being edited</RouterLink
+      ><template v-if="editingCount && summary">, </template>{{ summary }}
+    </p>
     <textarea
       ref="textarea"
       v-model="text"
@@ -216,16 +224,7 @@ function onKeydown(event: KeyboardEvent) {
       <DictationButton :hint="hint" @text="insertDictation" />
       <ListenButton :text="text" />
       <ExpandButton v-model="expanded" />
-      <span class="spacer" />
-      <span v-if="editingCount || summary" class="summary muted">
-        <RouterLink
-          v-if="editingCount"
-          :to="{ hash: `#c-${beingEdited[0]!.id}` }"
-          title="Save or cancel it to submit"
-          >{{ plural(editingCount, 'comment') }} being edited</RouterLink
-        ><template v-if="editingCount && summary">, </template>{{ summary }}
-      </span>
-      <button type="submit" class="primary" :disabled="!canSubmit">Submit</button>
+      <button type="submit" class="primary submit" :disabled="!canSubmit">Submit</button>
     </div>
   </form>
 </template>
@@ -254,11 +253,11 @@ function onKeydown(event: KeyboardEvent) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 
-.spacer {
-  flex: 1;
+.submit {
+  margin-left: auto;
 }
 
 .new-fork-toggle {
@@ -274,6 +273,8 @@ function onKeydown(event: KeyboardEvent) {
 }
 
 .summary {
+  margin: 0;
   font-size: 0.85rem;
+  text-align: right;
 }
 </style>
