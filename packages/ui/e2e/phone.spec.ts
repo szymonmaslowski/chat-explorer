@@ -59,6 +59,22 @@ test.describe('on a phone', () => {
     expect(pageWidths.scroll).toBe(pageWidths.client);
   });
 
+  test('shrinks a large image in an answer to fit the screen', async ({ page }) => {
+    await openSeededExploration(page);
+    await page.evaluate(() => {
+      const image = document.createElement('img');
+      image.src =
+        'data:image/svg+xml,' +
+        encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="700"/>');
+      document.querySelector('.message.assistant .content')!.append(image);
+    });
+    const pageWidths = await page.evaluate(() => ({
+      scroll: document.documentElement.scrollWidth,
+      client: document.documentElement.clientWidth,
+    }));
+    expect(pageWidths.scroll).toBe(pageWidths.client);
+  });
+
   test('scrolls from a listed comment to the text it quotes', async ({ page }) => {
     await openSeededExploration(page);
     const card = page.locator('.message-comments .comment-card.listed').first();

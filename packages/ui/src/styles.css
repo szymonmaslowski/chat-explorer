@@ -105,6 +105,12 @@ pre {
   font-size: 0.85rem;
 }
 
+/* A large image shrinks to fit instead of widening the page. */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
 /* A wide table scrolls on its own instead of widening the page. */
 table {
   display: block;
