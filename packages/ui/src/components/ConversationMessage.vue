@@ -34,6 +34,9 @@ const speakable = computed(
 const currentIndex = computed(() =>
   speech.playback?.id === props.message.id ? speech.playback.index : -1,
 );
+const listenLabel = computed(() =>
+  currentIndex.value === -1 ? 'Read aloud' : speech.playing ? 'Pause' : 'Resume',
+);
 
 void checkSpeechAvailable();
 
@@ -91,11 +94,11 @@ onMounted(findBlocks);
         v-if="speakable"
         type="button"
         class="listen"
-        :aria-label="currentIndex === -1 ? 'Read aloud' : speech.playing ? 'Pause' : 'Resume'"
+        :aria-label="listenLabel"
+        :title="listenLabel"
         @click="playMessage"
       >
         <MediaIcon :name="currentIndex !== -1 && speech.playing ? 'pause' : 'play'" />
-        Listen
       </button>
       <button
         v-if="message.role === 'assistant' && message.content"
@@ -106,7 +109,6 @@ onMounted(findBlocks);
         @click="copyMessage"
       >
         <MediaIcon :name="copied ? 'check' : 'copy'" />
-        {{ copied ? 'Copied' : 'Copy' }}
       </button>
       <button
         v-if="jumpable"
