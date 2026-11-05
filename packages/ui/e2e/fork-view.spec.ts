@@ -34,6 +34,8 @@ test('creates, reveals and deletes a draft comment', async ({ page }) => {
   await expect(summary(page)).toHaveText('2 comments');
 
   await card.getByRole('button', { name: 'Delete' }).click();
+  await expect(card).toBeVisible();
+  await card.getByRole('button', { name: 'Confirm' }).click();
   await expect(card).toHaveCount(0);
   await expect(summary(page)).toHaveText('1 comment');
 });

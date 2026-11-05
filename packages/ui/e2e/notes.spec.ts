@@ -337,10 +337,9 @@ test('shows the topic Claude writes and its requests to delete', async ({ page, 
   const keeper = page.locator('.note', { hasText: 'Keeper' });
   await keeper.getByRole('button', { name: 'Keep' }).click();
   await expect(keeper).not.toHaveClass(/deletion-requested/);
-  await page
-    .locator('.note', { hasText: 'Old idea' })
-    .getByRole('button', { name: 'Delete' })
-    .click();
+  const oldIdea = page.locator('.note', { hasText: 'Old idea' });
+  await oldIdea.getByRole('button', { name: 'Delete' }).click();
+  await oldIdea.getByRole('button', { name: 'Confirm' }).click();
   await expect(topics(page)).toHaveText(['Keeper', 'Bread']);
   await expect(page.locator('.deletion-notice')).toHaveCount(0);
 });

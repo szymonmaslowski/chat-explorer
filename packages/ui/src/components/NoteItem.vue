@@ -186,7 +186,7 @@ function changeGroup(groupId: string | null) {
     </button>
     <div v-if="note.deletionRequestedAt !== null && !readOnly" class="deletion-request" @click.stop>
       <span>Claude asks to delete this note.</span>
-      <button type="button" class="danger" @click="emit('delete')">Delete</button>
+      <ConfirmButton label="Delete" danger @confirm="emit('delete')" />
       <button type="button" @click="emit('keep')">Keep</button>
     </div>
     <div v-if="selected" class="actions" @click.stop>

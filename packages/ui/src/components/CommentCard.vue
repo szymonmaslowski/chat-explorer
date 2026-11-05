@@ -5,6 +5,7 @@ import { useAutosave } from '../composables/useAutosave';
 import { useExpandedArea } from '../composables/useExpandedArea';
 import { insertAtCursor } from '../lib/insert-text';
 import { newId, outbox } from '../stores/outbox';
+import ConfirmButton from './ConfirmButton.vue';
 import DictationButton from './DictationButton.vue';
 import ExpandButton from './ExpandButton.vue';
 import ListenButton from './ListenButton.vue';
@@ -201,9 +202,9 @@ function onEditorKeydown(event: KeyboardEvent) {
           <button type="button" aria-label="Edit" title="Edit" @click="startEditing">
             <MediaIcon name="edit" />
           </button>
-          <button type="button" aria-label="Delete" title="Delete" @click="remove">
-            <MediaIcon name="trash" />
-          </button>
+          <ConfirmButton label="Delete" danger title="Delete" @confirm="remove">
+            <MediaIcon name="trash" /><span class="visually-hidden">Delete</span>
+          </ConfirmButton>
         </template>
       </div>
     </template>
