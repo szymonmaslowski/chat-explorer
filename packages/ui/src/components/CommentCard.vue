@@ -3,7 +3,6 @@ import type { Comment, CommentChanges, CommentType } from '@shared/types';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useAutosave } from '../composables/useAutosave';
 import { useExpandedArea } from '../composables/useExpandedArea';
-import { useProximityFade } from '../composables/useProximityFade';
 import { insertAtCursor } from '../lib/insert-text';
 import { newId, outbox } from '../stores/outbox';
 import DictationButton from './DictationButton.vue';
@@ -34,10 +33,6 @@ watch(editing, (isEditing) => {
 });
 const isDraft = computed(() => props.comment.status === 'draft');
 const typeLabels: Record<CommentType, string> = { inline: 'Comment', fork: 'Fork', note: 'Note' };
-const { opacity, interactive } = useProximityFade(
-  card,
-  computed(() => editing.value || !props.placement),
-);
 
 let resizeObserver: ResizeObserver | null = null;
 onMounted(() => {
@@ -127,8 +122,6 @@ function onEditorKeydown(event: KeyboardEvent) {
         top: `${placement.top}px`,
         left: `${placement.left}px`,
         width: `${placement.width}px`,
-        opacity,
-        pointerEvents: interactive ? 'auto' : 'none',
       })
     "
     @click="comment.status === 'submitted' && emit('open', comment)"

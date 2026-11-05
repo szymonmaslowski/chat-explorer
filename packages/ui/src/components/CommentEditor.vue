@@ -21,6 +21,7 @@ const props = defineProps<{
   top: number;
   left: number;
   width: number;
+  inRail: boolean;
 }>();
 const emit = defineEmits<{ created: [commentId: string]; close: [] }>();
 
@@ -162,7 +163,7 @@ function onKeydown(event: KeyboardEvent) {
 <template>
   <div
     class="comment-editor"
-    :class="[type, { expanded }]"
+    :class="[type, { expanded, 'in-rail': inRail }]"
     :style="expandedStyle ?? { top: `${top}px`, left: `${left}px`, width: `${width}px` }"
   >
     <p class="quote">{{ anchor.quote }}</p>
@@ -209,6 +210,11 @@ function onKeydown(event: KeyboardEvent) {
   box-shadow: var(--shadow);
   padding: 0.5rem;
   font-size: 0.85rem;
+}
+
+.comment-editor.in-rail {
+  transform: none;
+  margin-top: 0;
 }
 
 .comment-editor.expanded {

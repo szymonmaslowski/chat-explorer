@@ -11,6 +11,7 @@ import ReplyBar from '../components/ReplyBar.vue';
 import SessionError from '../components/SessionError.vue';
 import SpeechPlayer from '../components/SpeechPlayer.vue';
 import { useMediaQuery } from '../composables/useMediaQuery';
+import { commentRailWidth } from '../lib/card-layout';
 import {
   archivingFork,
   forkPath,
@@ -27,7 +28,9 @@ const nearBottomPx = 200;
 const flashMs = 1_400;
 
 const route = useRoute();
-const compact = useMediaQuery('(max-width: 700px), (hover: none)');
+// Narrower than the text and the comment rail together, comments list under their messages.
+const compact = useMediaQuery('(max-width: 1080px), (hover: none)');
+const commentRail = `${commentRailWidth}px`;
 const state = computed(() => openExploration(props.explorationId));
 const chatArchived = computed(() => Boolean(state.value.exploration?.archivedAt));
 const fork = computed(() =>
@@ -127,7 +130,7 @@ watch(
 </script>
 
 <template>
-  <div class="page fork-view">
+  <div class="page fork-view" :class="{ 'with-rail': !compact }">
     <ExplorationHeader :state="state" class="top" data-sticky-header>
       <template v-if="fork" #links>
         · <RouterLink :to="`/e/${explorationId}/map?from=${fork.id}`">Map</RouterLink> ·
@@ -229,6 +232,11 @@ watch(
 </template>
 
 <style scoped>
+.fork-view.with-rail {
+  max-width: calc(var(--column) + v-bind(commentRail));
+  padding-right: calc(1rem + v-bind(commentRail));
+}
+
 .top {
   position: sticky;
   top: 0;

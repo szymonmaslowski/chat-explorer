@@ -32,9 +32,6 @@ test('creates, reveals and deletes a draft comment', async ({ page }) => {
   await expect(card).toBeVisible();
   await expect(summary(page)).toHaveText('2 comments');
 
-  await card.hover();
-  await expect(card).toHaveCSS('opacity', '0.2');
-  await expect(card).toHaveCSS('opacity', '1', { timeout: 3_000 });
   await card.getByRole('button', { name: 'Delete' }).click();
   await expect(card).toHaveCount(0);
   await expect(summary(page)).toHaveText('1 comment');
@@ -123,8 +120,6 @@ test('opens a fork from the map at its end', async ({ page }) => {
 test('opens the fork created by a submitted fork comment', async ({ page }) => {
   await openSeededExploration(page);
   const card = page.locator('.comment-card.submitted.fork');
-  await card.hover();
-  await expect(card).toHaveCSS('opacity', '1', { timeout: 3_000 });
   await card.click();
   await expect(page.locator('.fork-title')).toHaveText('Purging cached responses on a CDN');
 });

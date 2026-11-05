@@ -3,7 +3,7 @@ import type { Comment } from '@shared/types';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { anchorOfRange, clampToRoot, locateAnchor, type TextAnchor } from '../lib/anchoring';
-import { layoutCards } from '../lib/card-layout';
+import { draftCardWidth, layoutCards, railLeftOf, submittedCardWidth } from '../lib/card-layout';
 import { pointer } from '../lib/pointer';
 import { useCopied } from '../composables/useCopied';
 import { blockClipboardText } from '../lib/clipboard';
@@ -29,8 +29,6 @@ const props = defineProps<{
   readOnly: boolean;
 }>();
 
-const draftWidth = 280;
-const submittedWidth = 220;
 const estimatedHeight = { draft: 78, queued: 60, submitted: 28 } as const;
 const flashMs = 1_400;
 const selectionSettleMs = 300;
@@ -45,6 +43,7 @@ const coarsePointer = useMediaQuery('(pointer: coarse)');
 const router = useRouter();
 const layer = ref<HTMLElement | null>(null);
 const layerWidth = ref(0);
+const railLeft = computed(() => railLeftOf(layerWidth.value));
 const anchors = shallowRef(new Map<string, Range>());
 const anchorBoxes = shallowRef(new Map<string, { top: number; left: number }>());
 const heights = reactive(new Map<string, number>());
@@ -196,13 +195,13 @@ const floatingCards = computed(() => {
         id: comment.id,
         anchorTop: box.top,
         anchorLeft: box.left,
-        width: comment.status === 'submitted' ? submittedWidth : draftWidth,
+        width: comment.status === 'submitted' ? submittedCardWidth : draftCardWidth,
         height: heights.get(comment.id) ?? estimatedHeight[comment.status],
       },
     ];
   });
   const byId = new Map(props.comments.map((comment) => [comment.id, comment]));
-  return layoutCards(requests, layerWidth.value).map((placement) => ({
+  return layoutCards(requests, railLeft.value).map((placement) => ({
     ...placement,
     comment: byId.get(placement.id)!,
   }));
@@ -355,7 +354,9 @@ function openEditor() {
     messageId,
     anchor,
     top: lineTop,
-    left: Math.max(0, Math.min(lineLeft, layerWidth.value - draftWidth)),
+    left: props.compact
+      ? Math.max(0, Math.min(lineLeft, layerWidth.value - draftCardWidth))
+      : railLeft.value,
     commentId: null,
   };
   selection.value = null;
@@ -503,7 +504,8 @@ watch(
       :anchor="editor.anchor"
       :top="editor.top"
       :left="editor.left"
-      :width="draftWidth"
+      :width="draftCardWidth"
+      :in-rail="!compact"
       @created="(commentId) => editor && (editor.commentId = commentId)"
       @close="closeEditor"
     />

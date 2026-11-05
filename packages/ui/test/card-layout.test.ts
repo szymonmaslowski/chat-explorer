@@ -10,24 +10,25 @@ const request = (id: string, anchorTop: number, anchorLeft: number, height = 50)
 });
 
 describe('layoutCards', () => {
-  it('places a card just above its anchor', () => {
-    expect(layoutCards([request('a', 300, 40)], 700)).toEqual([
-      { id: 'a', top: 244, left: 40, width: 200 },
+  it('places a card in the rail, level with its anchor', () => {
+    expect(layoutCards([request('a', 300, 40)], 740)).toEqual([
+      { id: 'a', top: 300, left: 740, width: 200 },
     ]);
   });
 
-  it('keeps cards inside the layer', () => {
-    expect(layoutCards([request('a', 300, 650)], 700)[0]!.left).toBe(500);
+  it('moves an overlapping card down below the one above', () => {
+    const [first, second] = layoutCards([request('a', 300, 40), request('b', 320, 120)], 740);
+    expect(first!.top).toBe(300);
+    expect(second!.top).toBe(300 + 50 + 6);
   });
 
-  it('stacks overlapping cards upwards', () => {
-    const [first, second] = layoutCards([request('a', 300, 40), request('b', 300, 120)], 700);
-    expect(first!.top).toBe(244);
-    expect(second!.top).toBe(first!.top - 6 - 50);
+  it('orders cards on the same line from left to right', () => {
+    const placements = layoutCards([request('b', 300, 400), request('a', 300, 0)], 740);
+    expect(placements.map((placement) => placement.id)).toEqual(['a', 'b']);
   });
 
-  it('leaves cards that do not overlap alone', () => {
-    const [first, second] = layoutCards([request('a', 300, 0), request('b', 300, 400)], 700);
-    expect(first!.top).toBe(second!.top);
+  it('leaves cards that do not overlap at their anchors', () => {
+    const [, second] = layoutCards([request('a', 300, 0), request('b', 600, 0)], 740);
+    expect(second!.top).toBe(600);
   });
 });
