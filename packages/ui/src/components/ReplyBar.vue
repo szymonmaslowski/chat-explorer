@@ -47,8 +47,6 @@ const countOf = (type: CommentType) =>
 const forkCount = computed(() => countOf('fork'));
 const inlineCount = computed(() => countOf('inline'));
 const noteCount = computed(() => countOf('note'));
-const forkableCount = computed(() => props.drafts.filter((draft) => draft.type !== 'note').length);
-const allForks = computed(() => forkableCount.value > 0 && forkCount.value === forkableCount.value);
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
 const summary = computed(() => {
   const reply = [
@@ -174,10 +172,6 @@ function submit() {
   emit('submitted');
 }
 
-async function toggleForkAll() {
-  await api.toggleForkAll(props.explorationId, props.forkId);
-}
-
 function onPaste(event: ClipboardEvent) {
   const pasted = transferredFiles(event.clipboardData);
   if (pasted.length === 0) return;
@@ -212,14 +206,6 @@ function onKeydown(event: KeyboardEvent) {
     />
     <FileDraftList :drafts="files.drafts.value" @remove="files.remove" />
     <div class="actions">
-      <button
-        type="button"
-        :disabled="forkableCount === 0"
-        :title="allForks ? 'Answer all comments in this fork' : 'Start a fork for every comment'"
-        @click="toggleForkAll"
-      >
-        {{ allForks ? 'Unfork all' : 'Fork all' }}
-      </button>
       <label
         class="new-fork-toggle"
         title="Send the message and inline comments to a new fork, leaving this one as it is"

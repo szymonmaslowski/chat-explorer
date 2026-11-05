@@ -142,8 +142,6 @@ export const api = {
     }),
   deleteComment: (commentId: string, keepalive = false) =>
     call<{ ok: true }>(`/api/comments/${commentId}`, { method: 'DELETE', keepalive }),
-  toggleForkAll: (explorationId: string, forkId: string) =>
-    call<Comment[]>(`/api/explorations/${explorationId}/comments/fork-all`, { json: { forkId } }),
   createNoteGroup: (explorationId: string, group: NewNoteGroup, keepalive = false) =>
     call<NoteGroup>(`/api/explorations/${explorationId}/note-groups`, { json: group, keepalive }),
   updateNoteGroup: (groupId: string, changes: NoteGroupChanges, keepalive = false) =>

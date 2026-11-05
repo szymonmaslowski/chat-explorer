@@ -69,7 +69,6 @@ const commentChangesBody = z.object({
   noteGroupId: z.string().min(1).nullable().optional(),
 });
 const replyDraftBody = z.object({ text: z.string(), newFork: z.boolean(), fileIds });
-const forkBody = z.object({ forkId: z.string() });
 const submitBody = z.object({
   id: clientId,
   forkId: z.string(),
@@ -353,11 +352,6 @@ export function createApp(options: AppOptions) {
   app.post('/api/comments/:id/fork-now', async (context) => {
     const { id } = forkNowBody.parse(await context.req.json());
     return context.json(store.forkNow(context.req.param('id'), { id }), 201);
-  });
-
-  app.post('/api/explorations/:id/comments/fork-all', async (context) => {
-    const { forkId } = forkBody.parse(await context.req.json());
-    return context.json(store.toggleForkAll(context.req.param('id'), forkId));
   });
 
   app.post('/api/explorations/:id/submit', async (context) => {

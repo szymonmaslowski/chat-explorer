@@ -70,25 +70,6 @@ describe('comments', () => {
     ).toThrow(expect.objectContaining({ code: 'invalid' }));
   });
 
-  it('toggles fork-all between all fork and all inline', () => {
-    const { store, explorationId, mainForkId, answer } = setup();
-    draft(store, explorationId, { messageId: answer.id, viewForkId: mainForkId, body: 'a' });
-    draft(store, explorationId, {
-      messageId: answer.id,
-      viewForkId: mainForkId,
-      body: 'b',
-      type: 'fork',
-    });
-    expect(store.toggleForkAll(explorationId, mainForkId).map((comment) => comment.type)).toEqual([
-      'fork',
-      'fork',
-    ]);
-    expect(store.toggleForkAll(explorationId, mainForkId).map((comment) => comment.type)).toEqual([
-      'inline',
-      'inline',
-    ]);
-  });
-
   it('refuses to edit or delete a queued comment', () => {
     const { store, explorationId, mainForkId, answer } = setup();
     const comment = draft(store, explorationId, {

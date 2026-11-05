@@ -21,7 +21,6 @@ import {
 import type {
   Comment,
   CommentChanges,
-  CommentType,
   Exploration,
   ExplorationEvent,
   ExplorationListItem,
@@ -544,28 +543,6 @@ export class ChatStore {
     this.requireWritable(row.exploration_id);
     this.db.run('DELETE FROM comments WHERE id = ?', commentId);
     this.publish([[row.exploration_id, { type: 'comment.deleted', commentId }]]);
-  }
-
-  toggleForkAll(explorationId: string, forkId: string) {
-    this.requireWritableFork(forkId, explorationId);
-    const drafts = this.draftsIn(forkId).filter((draft) => draft.type !== 'note');
-    if (drafts.length === 0) return [];
-    const type: CommentType = drafts.every((draft) => draft.type === 'fork') ? 'inline' : 'fork';
-    const updatedAt = this.now();
-    this.db.transaction(() => {
-      for (const draft of drafts) {
-        this.db.run(
-          'UPDATE comments SET type = ?, updated_at = ? WHERE id = ?',
-          type,
-          updatedAt,
-          draft.id,
-        );
-      }
-    });
-    return this.publishCommentUpdates(
-      explorationId,
-      drafts.map((draft) => draft.id),
-    );
   }
 
   submit(

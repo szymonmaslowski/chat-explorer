@@ -453,17 +453,13 @@ describe('note comments', () => {
     expect(store.snapshot(explorationId).notes).toHaveLength(1);
   });
 
-  it('needs more than notes to start a new fork, and Fork all leaves notes alone', () => {
+  it('needs more than notes to start a new fork', () => {
     const context = setup();
-    const { store, explorationId, mainForkId, answer } = context;
+    const { store, explorationId, mainForkId } = context;
     noteComment(context, { body: 'A note' });
     expect(() => store.submit(explorationId, mainForkId, '', { newFork: true })).toThrow(
       expect.objectContaining({ code: 'invalid' }),
     );
-    draft(store, explorationId, { messageId: answer.id, viewForkId: mainForkId, body: 'Ask' });
-    expect(store.toggleForkAll(explorationId, mainForkId).map((comment) => comment.type)).toEqual([
-      'fork',
-    ]);
   });
 
   it('rejects a group from another chat', () => {
