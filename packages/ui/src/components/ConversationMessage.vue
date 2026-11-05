@@ -4,7 +4,7 @@ import { computed, onMounted, ref, shallowRef, watch } from 'vue';
 import { renderMarkdown } from '@shared/markdown';
 import { useCopied } from '../composables/useCopied';
 import { formatDateTime } from '../lib/date-time';
-import { bringToReadingLine } from '../lib/reading-line';
+import { bringToReadingLine, scrollToEdge } from '../lib/reading-line';
 import { speechBlocks, type SpokenElement } from '../lib/speech-blocks';
 import { checkSpeechAvailable, playFrom, speech, togglePause } from '../stores/speech';
 import FileIcon from './FileIcon.vue';
@@ -24,6 +24,9 @@ const listedFiles = computed(() =>
 );
 
 const content = ref<HTMLElement | null>(null);
+const article = ref<HTMLElement | null>(null);
+const jumpable = computed(() => props.message.role === 'assistant' && props.message.content !== '');
+const jumpTo = (edge: 'start' | 'end') => article.value && scrollToEdge(article.value, edge);
 const blocks = shallowRef<SpokenElement[]>([]);
 const speakable = computed(
   () => speech.available && props.message.role === 'assistant' && blocks.value.length > 0,
@@ -73,6 +76,7 @@ onMounted(findBlocks);
 
 <template>
   <article
+    ref="article"
     :id="`m-${message.id}`"
     class="message"
     :class="[message.role, { shared }]"
@@ -103,6 +107,16 @@ onMounted(findBlocks);
       >
         <MediaIcon :name="copied ? 'check' : 'copy'" />
         {{ copied ? 'Copied' : 'Copy' }}
+      </button>
+      <button
+        v-if="jumpable"
+        type="button"
+        class="listen"
+        aria-label="Go to the end of the answer"
+        title="Go to the end of the answer"
+        @click="jumpTo('end')"
+      >
+        <MediaIcon name="to-end" />
       </button>
     </header>
     <div v-for="comment in quotedComments" :key="comment.id" class="quoted-comment">
@@ -141,6 +155,17 @@ onMounted(findBlocks);
       :data-speakable="speakable || undefined"
       v-html="html"
     />
+    <footer v-if="jumpable" class="message-end">
+      <button
+        type="button"
+        class="listen"
+        aria-label="Go to the start of the answer"
+        title="Go to the start of the answer"
+        @click="jumpTo('start')"
+      >
+        <MediaIcon name="to-start" />
+      </button>
+    </footer>
   </article>
 </template>
 
@@ -188,6 +213,11 @@ onMounted(findBlocks);
   text-transform: none;
   letter-spacing: normal;
   color: var(--text-muted);
+}
+
+.message-end {
+  display: flex;
+  margin-top: 0.5rem;
 }
 
 .files {

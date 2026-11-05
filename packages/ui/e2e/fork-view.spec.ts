@@ -1,5 +1,12 @@
 import { expect, type Page } from '@playwright/test';
-import { clearReply, openSeededExploration, test } from './helpers';
+import {
+  attachFakeSession,
+  clearReply,
+  deliverAndAnswer,
+  detachFakeSession,
+  openSeededExploration,
+  test,
+} from './helpers';
 
 const paragraphBox = async (page: Page, paragraph: string) => {
   const locator = page.locator('.content p', { hasText: paragraph }).first();
@@ -139,4 +146,25 @@ test('shows the date and time of every message', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: `${process.env.TIME_SHOTS}/message-times-phone.png` });
   }
+});
+
+test('jumps to the end of a long answer and back to its start', async ({ page, request }) => {
+  const paragraphs = Array.from({ length: 40 }, (_, index) => `Paragraph ${index + 1}.`);
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'Explain it at length' } })
+  ).json();
+  await attachFakeSession(request, explorationId);
+  await deliverAndAnswer(request, explorationId, paragraphs.join('\n\n'));
+  await detachFakeSession(request);
+  await page.goto(`/e/${explorationId}`);
+  const answer = page.locator('.message.assistant');
+  await answer.locator('.role').scrollIntoViewIfNeeded();
+
+  await answer.getByRole('button', { name: 'Go to the end of the answer' }).click();
+  await expect(answer.getByText('Paragraph 40.')).toBeInViewport();
+  await expect(answer.getByText('Paragraph 1.', { exact: true })).not.toBeInViewport();
+
+  await answer.getByRole('button', { name: 'Go to the start of the answer' }).click();
+  await expect(answer.getByText('Paragraph 1.', { exact: true })).toBeInViewport();
+  await expect(answer.getByText('Paragraph 40.')).not.toBeInViewport();
 });
