@@ -159,7 +159,8 @@ function paintHighlights() {
   };
   for (const comment of props.comments) {
     const range = anchors.value.get(comment.id);
-    if (!range) continue;
+    // A general comment marks no text. Safari paints its empty range across the whole line.
+    if (!range || range.collapsed) continue;
     const group = comment.status === 'submitted' ? 'comment-submitted' : `comment-${comment.type}`;
     groups[group]!.push(range);
   }
@@ -181,7 +182,7 @@ function scrollToComment(commentId: string) {
   const headerHeight = header ? header.getBoundingClientRect().height : 0;
   const top = firstLineRect(range).top + window.scrollY - headerHeight - 140;
   window.scrollTo({ top, behavior: 'smooth' });
-  flash(range);
+  if (!range.collapsed) flash(range);
   return true;
 }
 
