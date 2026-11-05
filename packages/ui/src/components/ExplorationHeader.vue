@@ -1,12 +1,21 @@
 <script setup lang="ts">
+import type { Fork } from '@shared/types';
+import { computed } from 'vue';
 import { api } from '../api';
+import { forkLineage, forkTitle } from '../lib/conversation';
 import type { ExplorationState } from '../stores/exploration';
 import ConfirmButton from './ConfirmButton.vue';
 import OutboxFailures from './OutboxFailures.vue';
 import SessionStatusBar from './SessionStatusBar.vue';
 import ThemeSwitch from './ThemeSwitch.vue';
 
-defineProps<{ state: ExplorationState }>();
+// With a fork, the title is the fork's, under the path to it: the chat, then the forks above it.
+const props = defineProps<{ state: ExplorationState; fork?: Fork }>();
+
+const chatTitle = computed(() => props.state.exploration?.title || 'Untitled chat');
+const forksBetween = computed(() =>
+  props.fork ? forkLineage(props.fork, props.state.forks).slice(1, -1) : [],
+);
 </script>
 
 <template>
@@ -27,9 +36,24 @@ defineProps<{ state: ExplorationState }>();
         <ThemeSwitch />
       </div>
     </div>
-    <p v-if="state.exploration" class="title">
-      {{ state.exploration.title || 'Untitled chat' }}
-    </p>
+    <template v-if="state.exploration">
+      <p v-if="fork" class="fork-path">
+        <RouterLink v-if="fork.parentForkId" :to="`/e/${state.explorationId}`">
+          {{ chatTitle }}
+        </RouterLink>
+        <span v-else>{{ chatTitle }}</span>
+        /
+        <template v-for="ancestor in forksBetween" :key="ancestor.id">
+          <RouterLink :to="`/e/${state.explorationId}/f/${ancestor.id}`">
+            {{ forkTitle(ancestor) }}
+          </RouterLink>
+          /
+        </template>
+      </p>
+      <h1 class="title" :class="{ 'fork-title': fork }">
+        {{ fork ? forkTitle(fork) : chatTitle }}
+      </h1>
+    </template>
     <p v-if="state.exploration?.archivedAt" class="archived">
       Archived, read only.
       <ConfirmButton label="Restore" @confirm="api.unarchive(state.explorationId)" />
@@ -93,8 +117,19 @@ defineProps<{ state: ExplorationState }>();
   color: var(--warning);
 }
 
+.fork-path {
+  margin: 0.2rem 0 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.fork-path a {
+  color: inherit;
+}
+
 .title {
   margin: 0.2rem 0 0;
+  font-size: inherit;
   font-weight: 600;
   display: -webkit-box;
   -webkit-line-clamp: 2;

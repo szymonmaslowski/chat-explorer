@@ -3,7 +3,8 @@ import { clearReply, openSeededExploration, test } from './helpers';
 
 const paragraphBox = async (page: Page, paragraph: string) => {
   const locator = page.locator('.content p', { hasText: paragraph }).first();
-  await locator.scrollIntoViewIfNeeded();
+  // Centred, so the sticky header does not cover it.
+  await locator.evaluate((element) => element.scrollIntoView({ block: 'center' }));
   return (await locator.boundingBox())!;
 };
 

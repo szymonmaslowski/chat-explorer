@@ -131,7 +131,7 @@ watch(
 
 <template>
   <div class="page fork-view" :class="{ 'with-rail': !compact }">
-    <ExplorationHeader :state="state" class="top" data-sticky-header>
+    <ExplorationHeader :state="state" :fork="fork ?? undefined" class="top" data-sticky-header>
       <template v-if="fork" #links>
         · <RouterLink :to="`/e/${explorationId}/map?from=${fork.id}`">Map</RouterLink> ·
         <RouterLink :to="`/e/${explorationId}/notes`">Notes</RouterLink>
@@ -153,7 +153,6 @@ watch(
     <p v-else-if="!fork" class="muted">This fork does not exist.</p>
 
     <template v-else>
-      <h1 class="fork-title">{{ forkTitle(fork) }}</h1>
       <ForkArchiveControl
         v-if="fork.parentForkId && !chatArchived"
         :exploration-id="explorationId"
@@ -242,11 +241,6 @@ watch(
   top: 0;
   z-index: 6;
   background: var(--background);
-}
-
-.fork-title {
-  font-size: 1.35rem;
-  margin: 1.25rem 0 0.5rem;
 }
 
 .conversation {

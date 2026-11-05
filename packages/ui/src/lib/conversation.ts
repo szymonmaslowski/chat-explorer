@@ -18,15 +18,21 @@ export function mainFork(forks: Map<string, Fork>) {
   return [...forks.values()].find((fork) => fork.parentForkId === null) ?? null;
 }
 
+// The forks from Main down to the given fork, both included.
+export function forkLineage(fork: Fork, forks: Map<string, Fork>) {
+  const lineage: Fork[] = [];
+  let current: Fork | undefined = fork;
+  while (current) {
+    lineage.unshift(current);
+    current = current.parentForkId ? forks.get(current.parentForkId) : undefined;
+  }
+  return lineage;
+}
+
 // Archiving a fork covers the forks below it, so this finds the fork itself or the nearest
 // archived one above it.
 export function archivingFork(fork: Fork, forks: Map<string, Fork>) {
-  let current: Fork | undefined = fork;
-  while (current) {
-    if (current.archivedAt !== null) return current;
-    current = current.parentForkId ? forks.get(current.parentForkId) : undefined;
-  }
-  return null;
+  return forkLineage(fork, forks).findLast((each) => each.archivedAt !== null) ?? null;
 }
 
 export function quotedCommentsOf(messageId: string, comments: Map<string, Comment>) {
