@@ -237,6 +237,15 @@ onMounted(findBlocks);
   white-space: pre-wrap;
 }
 
+/* An image in an answer stands apart from the text, with room on both sides. */
+.content :deep(img) {
+  display: block;
+  max-width: calc(100% - 2rem);
+  margin: 0.75rem 1rem;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
 .content :deep(p:first-child) {
   margin-top: 0.25rem;
 }
