@@ -64,6 +64,8 @@ const summary = computed(() => {
     .filter(Boolean)
     .join(', ');
 });
+const hasSummary = computed(() => editingCount.value > 0 || summary.value !== '');
+const hasAttachments = computed(() => files.drafts.value.length > 0);
 const replyEmpty = computed(
   () => inlineCount.value === 0 && !text.value.trim() && fileCount.value === 0,
 );
@@ -196,14 +198,17 @@ function onKeydown(event: KeyboardEvent) {
     @dragover.prevent
     @drop.prevent="files.add(transferredFiles($event.dataTransfer))"
   >
-    <p v-if="editingCount || summary" class="summary muted">
-      <RouterLink
-        v-if="editingCount"
-        :to="{ hash: `#c-${beingEdited[0]!.id}` }"
-        title="Save or cancel it to submit"
-        >{{ plural(editingCount, 'comment') }} being edited</RouterLink
-      ><template v-if="editingCount && summary">, </template>{{ summary }}
-    </p>
+    <div v-if="hasAttachments || hasSummary" class="above-reply">
+      <FileDraftList class="attachments" :drafts="files.drafts.value" @remove="files.remove" />
+      <p v-if="hasSummary" class="summary muted" :class="{ beside: hasAttachments }">
+        <RouterLink
+          v-if="editingCount"
+          :to="{ hash: `#c-${beingEdited[0]!.id}` }"
+          title="Save or cancel it to submit"
+          >{{ plural(editingCount, 'comment') }} being edited</RouterLink
+        ><template v-if="editingCount && summary">, </template>{{ summary }}
+      </p>
+    </div>
     <textarea
       ref="textarea"
       v-model="text"
@@ -212,7 +217,6 @@ function onKeydown(event: KeyboardEvent) {
       @keydown="onKeydown"
       @paste="onPaste"
     />
-    <FileDraftList :drafts="files.drafts.value" @remove="files.remove" />
     <div class="actions">
       <label
         class="new-fork-toggle"
@@ -272,9 +276,27 @@ function onKeydown(event: KeyboardEvent) {
   border-left: 3px solid var(--fork);
 }
 
+/* Attachments on the left, the summary on the right. Either takes the whole row when alone. */
+.above-reply {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.attachments {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .summary {
-  margin: 0;
+  flex: 0 1 auto;
+  margin: 0 0 0 auto;
   font-size: 0.85rem;
   text-align: right;
+}
+
+.summary.beside {
+  flex-shrink: 0;
+  max-width: 50%;
 }
 </style>
