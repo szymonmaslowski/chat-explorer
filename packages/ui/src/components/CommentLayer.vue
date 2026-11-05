@@ -171,7 +171,9 @@ function paintHighlights() {
     const range = anchors.value.get(comment.id);
     // A general comment marks no text. Safari paints its empty range across the whole line.
     if (!range || range.collapsed) continue;
-    const group = comment.status === 'submitted' ? 'comment-submitted' : `comment-${comment.type}`;
+    // A comment in a fork group goes to the group's fork, so it is marked as a fork.
+    const type = comment.forkGroupId ? 'fork' : comment.type;
+    const group = comment.status === 'submitted' ? 'comment-submitted' : `comment-${type}`;
     groups[group]!.push(range);
   }
   for (const [name, ranges] of Object.entries(groups)) {

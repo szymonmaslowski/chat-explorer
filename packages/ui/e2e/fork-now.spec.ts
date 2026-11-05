@@ -63,7 +63,10 @@ test('starts a fork from a saved fork comment at once', async ({ page, request }
   await expect(page.locator('.queued-submission')).toContainText('1 comment');
 });
 
-test('joins fork comments into one fork and lets one leave', async ({ page, request }) => {
+test('joins comments into one fork, unlinks one and ungroups the rest', async ({
+  page,
+  request,
+}) => {
   const { explorationId } = await (
     await request.post('/api/explorations', { data: { message: 'Explain caching' } })
   ).json();
@@ -76,10 +79,10 @@ test('joins fork comments into one fork and lets one leave', async ({ page, requ
   await detachFakeSession(request);
   const snapshot = await (await request.get(`/api/explorations/${explorationId}`)).json();
   const answer = snapshot.messages.at(-1);
-  for (const [quote, startOffset] of [
-    ['Bravo', 22],
-    ['Alpha', 0],
-    ['Charlie', 44],
+  for (const [quote, startOffset, type] of [
+    ['Bravo', 22, 'fork'],
+    ['Alpha', 0, 'inline'],
+    ['Charlie', 44, 'fork'],
   ] as const) {
     await request.post(`/api/explorations/${explorationId}/comments`, {
       data: {
@@ -89,13 +92,14 @@ test('joins fork comments into one fork and lets one leave', async ({ page, requ
         startOffset,
         endOffset: startOffset + quote.length,
         body: `About ${quote}`,
-        type: 'fork',
+        type,
       },
     });
   }
   await page.goto(`/e/${explorationId}`);
   const card = (name: string) => page.locator('.comment-card', { hasText: `About ${name}` });
-  await expect(page.locator('.reply-bar .summary')).toHaveText('3 forks');
+  const summary = page.locator('.reply-bar .summary');
+  await expect(summary).toHaveText('2 forks, 1 comment');
 
   await card('Bravo').getByRole('button', { name: 'Join', exact: true }).click();
   await card('Alpha').getByLabel('Join into one fork').check();
@@ -108,15 +112,22 @@ test('joins fork comments into one fork and lets one leave', async ({ page, requ
     'About Bravo',
     'About Charlie',
   ]);
-  await expect(page.locator('.reply-bar .summary')).toHaveText('1 fork');
+  await expect(group.locator('.comment-card .label').first()).toContainText('Comment');
+  await expect(
+    group.locator('.comment-card').getByRole('button', { name: 'Fork now' }),
+  ).toHaveCount(0);
+  await expect(summary).toHaveText('1 fork');
 
-  await card('Charlie').getByRole('button', { name: 'Leave group' }).click();
-  await expect(group.locator('.comment-card .body')).toHaveText(['About Alpha', 'About Bravo']);
-  await expect(card('Charlie')).toBeVisible();
-  await expect(page.locator('.reply-bar .summary')).toHaveText('2 forks');
+  await card('Alpha').getByRole('button', { name: 'Unlink' }).click();
+  await expect(group.locator('.comment-card .body')).toHaveText(['About Bravo', 'About Charlie']);
+  await expect(summary).toHaveText('1 fork, 1 comment');
 
-  await card('Charlie').getByRole('button', { name: 'Join', exact: true }).click();
+  await group.getByRole('button', { name: 'Add comments' }).click();
   await card('Alpha').getByLabel('Join into one fork').check();
-  await card('Charlie').getByRole('button', { name: 'Cancel' }).click();
-  await expect(group.locator('.comment-card .body')).toHaveText(['About Alpha', 'About Bravo']);
+  await group.getByRole('button', { name: 'Cancel' }).click();
+  await expect(group.locator('.comment-card .body')).toHaveText(['About Bravo', 'About Charlie']);
+
+  await group.getByRole('button', { name: 'Ungroup' }).click();
+  await expect(group).toHaveCount(0);
+  await expect(summary).toHaveText('2 forks, 1 comment');
 });

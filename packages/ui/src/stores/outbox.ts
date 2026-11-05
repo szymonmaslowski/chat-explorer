@@ -38,6 +38,7 @@ export type Change =
       groupId: string;
     }
   | { type: 'comment.leave-fork-group'; explorationId: string; commentId: string }
+  | { type: 'fork-group.ungroup'; explorationId: string; groupId: string }
   | { type: 'reply-draft.save'; explorationId: string; forkId: string; draft: ReplyDraftChange }
   | { type: 'submit'; explorationId: string; submission: SubmissionChange }
   | {
@@ -153,6 +154,7 @@ export const subjectOf = (change: Change) => {
       return change.group.id;
     case 'note-group.update':
     case 'note-group.delete':
+    case 'fork-group.ungroup':
       return change.groupId;
     case 'note.create':
       return change.note.id;
@@ -236,6 +238,8 @@ function send(change: Change) {
       );
     case 'comment.leave-fork-group':
       return api.leaveForkGroup(change.commentId, keepalive);
+    case 'fork-group.ungroup':
+      return api.ungroupForkGroup(change.groupId, keepalive);
     case 'reply-draft.save':
       return api.saveReplyDraft(change.forkId, change.draft, keepalive);
     case 'submit': {

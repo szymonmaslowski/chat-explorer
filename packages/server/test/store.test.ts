@@ -217,28 +217,69 @@ describe('submission queue', () => {
       );
     });
 
-    it('leaves a group, and drops a comment from it when deleted or unforked', () => {
+    it('leaves a group, and drops a comment from it when deleted or made a note', () => {
       const { store, explorationId, later, earlier, alone } = forkComments();
       store.joinForkGroup(later.id, { memberIds: [earlier.id, alone.id], groupId: 'grp0000001' });
       store.leaveForkGroup(alone.id);
       expect(groupOf(store, explorationId).get('alone')).toBeNull();
       expect(groupOf(store, explorationId).get('later')).toBe('grp0000001');
 
-      store.updateComment(earlier.id, { type: 'inline' });
+      store.updateComment(earlier.id, { type: 'note' });
       expect(groupOf(store, explorationId).get('later')).toBeNull();
       store.joinForkGroup(later.id, { memberIds: [alone.id], groupId: 'grp0000003' });
       store.deleteComment(alone.id);
       expect(groupOf(store, explorationId).get('later')).toBeNull();
     });
 
-    it('refuses to join an inline comment', () => {
+    it('takes a plain comment into the group fork, and gives it back to the reply when it leaves', () => {
       const { store, explorationId, mainForkId, answer, later } = forkComments();
-      const inline = draft(store, explorationId, {
+      const plain = draft(store, explorationId, {
         messageId: answer.id,
         viewForkId: mainForkId,
-        body: 'inline',
+        body: 'plain',
       });
-      expect(() => store.joinForkGroup(later.id, { memberIds: [inline.id] })).toThrow(
+      store.joinForkGroup(later.id, { memberIds: [plain.id], groupId: 'grp0000001' });
+      store.submit(explorationId, mainForkId, 'Next');
+      store.deliverQueued(explorationId);
+
+      const forks = store.pendingForks(explorationId);
+      const main = forks.find((fork) => fork.forkId === mainForkId)!;
+      expect(main.userMessages[0]!.text).toBe('Next');
+      const joined = forks.find((fork) => fork.userMessages[0]!.text.includes('plain'))!;
+      expect(joined.userMessages[0]!.text).toBe('> some text\nlater\n\n> some text\nplain');
+    });
+
+    it('lets a plain comment that left go back into the reply', () => {
+      const { store, explorationId, mainForkId, answer, later } = forkComments();
+      const plain = draft(store, explorationId, {
+        messageId: answer.id,
+        viewForkId: mainForkId,
+        body: 'plain',
+      });
+      store.joinForkGroup(later.id, { memberIds: [plain.id], groupId: 'grp0000001' });
+      store.leaveForkGroup(plain.id);
+      store.submit(explorationId, mainForkId, '');
+      store.deliverQueued(explorationId);
+      const main = store.pendingForks(explorationId).find((fork) => fork.forkId === mainForkId)!;
+      expect(main.userMessages[0]!.text).toBe('> some text\nplain');
+    });
+
+    it('ungroups a whole group, and refuses to join a note', () => {
+      const { store, explorationId, mainForkId, answer, later, earlier, alone } = forkComments();
+      store.joinForkGroup(later.id, { memberIds: [earlier.id, alone.id], groupId: 'grp0000001' });
+      store.ungroupForkGroup('grp0000001');
+      expect([...groupOf(store, explorationId).values()]).toEqual([null, null, null]);
+
+      const note = store.createComment(explorationId, {
+        messageId: answer.id,
+        viewForkId: mainForkId,
+        quote: 'some text',
+        startOffset: 16,
+        endOffset: 25,
+        body: 'note',
+        type: 'note',
+      });
+      expect(() => store.joinForkGroup(later.id, { memberIds: [note.id] })).toThrow(
         expect.objectContaining({ code: 'invalid' }),
       );
     });

@@ -176,10 +176,11 @@ export function applyServerEvent(state: ExplorationState, event: ExplorationEven
 const firstRetryMs = 1_000;
 const maxRetryMs = 30_000;
 
-const draftForkComments = (state: ExplorationState, viewForkId: string) =>
+// Notes do not go to Claude, so they stay out of fork groups.
+const draftJoinableComments = (state: ExplorationState, viewForkId: string) =>
   [...state.comments.values()].filter(
     (comment) =>
-      comment.viewForkId === viewForkId && comment.status === 'draft' && comment.type === 'fork',
+      comment.viewForkId === viewForkId && comment.status === 'draft' && comment.type !== 'note',
   );
 
 function setGroups(state: ExplorationState, changes: Map<string, string | null>) {
@@ -191,7 +192,7 @@ function setGroups(state: ExplorationState, changes: Map<string, string | null>)
 
 function leaveGroup(state: ExplorationState, comment: Comment) {
   if (!comment.forkGroupId) return;
-  setGroups(state, leaveForkGroup(draftForkComments(state, comment.viewForkId), comment.id));
+  setGroups(state, leaveForkGroup(draftJoinableComments(state, comment.viewForkId), comment.id));
 }
 
 // Shows a change before the daemon has it, as the daemon will once it does.
@@ -224,7 +225,7 @@ export function applyChange(state: ExplorationState, change: Change) {
       const comment = state.comments.get(change.commentId);
       const { body, editBody, type, noteGroupId } = change.changes;
       if (!comment) break;
-      if (type !== undefined && type !== 'fork') leaveGroup(state, comment);
+      if (type === 'note') leaveGroup(state, comment);
       state.comments.set(comment.id, {
         ...comment,
         body: body ?? comment.body,
@@ -244,7 +245,7 @@ export function applyChange(state: ExplorationState, change: Change) {
     case 'comment.join-fork-group': {
       const start = state.comments.get(change.commentId);
       if (!start) break;
-      const forkComments = draftForkComments(state, start.viewForkId);
+      const forkComments = draftJoinableComments(state, start.viewForkId);
       setGroups(
         state,
         joinForkGroup(forkComments, change.commentId, change.memberIds, change.groupId),
@@ -256,6 +257,13 @@ export function applyChange(state: ExplorationState, change: Change) {
       if (comment) leaveGroup(state, comment);
       break;
     }
+    case 'fork-group.ungroup':
+      for (const comment of state.comments.values()) {
+        if (comment.forkGroupId === change.groupId) {
+          state.comments.set(comment.id, { ...comment, forkGroupId: null });
+        }
+      }
+      break;
     case 'reply-draft.save':
       break;
     case 'submit': {
@@ -303,7 +311,7 @@ export function applyChange(state: ExplorationState, change: Change) {
       if (!comment) break;
       // A comment in a group sends the whole group.
       const sent = comment.forkGroupId
-        ? draftForkComments(state, comment.viewForkId).filter(
+        ? draftJoinableComments(state, comment.viewForkId).filter(
             (each) => each.forkGroupId === comment.forkGroupId,
           )
         : [comment];

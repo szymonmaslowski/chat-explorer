@@ -45,14 +45,14 @@ const fileCount = computed(() => files.readyIds.value.length);
 const beingEdited = computed(() => props.drafts.filter((draft) => draft.editBody !== null));
 const editingCount = computed(() => beingEdited.value.length);
 const readyDrafts = computed(() => props.drafts.filter((draft) => draft.editBody === null));
+// A comment in a fork group belongs to the group's fork, which counts once.
 const countOf = (type: CommentType) =>
-  readyDrafts.value.filter((draft) => draft.type === type).length;
-// Joined fork comments start one fork, so a group counts once.
+  readyDrafts.value.filter((draft) => draft.type === type && draft.forkGroupId === null).length;
 const forkCount = computed(
   () =>
     new Set(
       readyDrafts.value
-        .filter((draft) => draft.type === 'fork')
+        .filter((draft) => draft.forkGroupId !== null || draft.type === 'fork')
         .map((draft) => draft.forkGroupId ?? draft.id),
     ).size,
 );

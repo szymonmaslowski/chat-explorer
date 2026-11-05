@@ -359,6 +359,10 @@ export function createApp(options: AppOptions) {
     context.json(store.leaveForkGroup(context.req.param('id'))),
   );
 
+  app.delete('/api/fork-groups/:id', (context) =>
+    context.json(store.ungroupForkGroup(context.req.param('id'))),
+  );
+
   app.post('/api/comments/:id/fork-now', async (context) => {
     const { id } = forkNowBody.parse(await context.req.json());
     return context.json(store.forkNow(context.req.param('id'), { id }), 201);

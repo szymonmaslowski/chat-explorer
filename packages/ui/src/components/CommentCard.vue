@@ -20,12 +20,10 @@ import ExpandButton from './ExpandButton.vue';
 import ListenButton from './ListenButton.vue';
 import MediaIcon from './MediaIcon.vue';
 
-// Without a placement the card is listed in the page flow, on narrow and touch screens. A
-// comment in a fork group is its head (first in the text) or a member.
+// Without a placement the card is listed in the page flow, on narrow and touch screens.
 const props = defineProps<{
   comment: Comment;
   placement?: { top: number; left: number; width: number };
-  groupRole?: 'head' | 'member';
 }>();
 const emit = defineEmits<{
   measure: [height: number];
@@ -128,25 +126,21 @@ function toggleType(target: 'fork' | 'note') {
   if (props.comment.type === target) return update({ type: 'inline' });
   update(target === 'note' ? { type: 'note', noteGroupId: firstNoteGroupId() } : { type: 'fork' });
 }
-const isForkDraft = computed(() => isDraft.value && props.comment.type === 'fork');
+// A comment in a fork group is a plain comment of the group's fork: the group carries the fork.
 const grouped = computed(() => props.comment.forkGroupId !== null);
-// In joining mode the starting comment confirms or cancels, the other fork comments can be
-// picked, and the rest wait dimmed.
+const shownType = computed(() => (grouped.value ? 'inline' : props.comment.type));
+const joinable = computed(() => isDraft.value && props.comment.type !== 'note');
+// In joining mode the starting comment confirms or cancels (its group does, when it is in one),
+// the other comments can be picked, and notes wait dimmed.
 const joinRole = computed(() => {
   if (forkJoining.startId === null) return null;
-  if (forkJoining.startId === props.comment.id) return 'start';
-  return isForkDraft.value ? 'pickable' : 'dimmed';
+  if (forkJoining.startId === props.comment.id) return grouped.value ? 'fixed' : 'start';
+  return joinable.value ? 'pickable' : 'dimmed';
 });
 const pickedToJoin = computed(
   () => joinRole.value === 'pickable' && forkJoining.picked.has(props.comment.id),
 );
-function join() {
-  const groupMateIds = [...openExploration(props.comment.explorationId).comments.values()]
-    .filter((each) => grouped.value && each.forkGroupId === props.comment.forkGroupId)
-    .filter((each) => each.id !== props.comment.id)
-    .map((each) => each.id);
-  startJoining(props.comment, groupMateIds);
-}
+const join = () => startJoining(props.comment, []);
 const leaveGroup = () =>
   outbox.add({
     type: 'comment.leave-fork-group',
@@ -173,7 +167,7 @@ function onEditorKeydown(event: KeyboardEvent) {
     ref="card"
     class="comment-card"
     :class="[
-      comment.type,
+      shownType,
       comment.status,
       joinRole,
       { listed: !placement, expanded, 'picked-to-join': pickedToJoin },
@@ -203,7 +197,7 @@ function onEditorKeydown(event: KeyboardEvent) {
     </template>
     <template v-else>
       <div class="label">
-        {{ typeLabels[comment.type] }}
+        {{ typeLabels[shownType] }}
         <span v-if="comment.status === 'queued'">· queued</span>
         <span v-if="comment.status === 'submitted'">
           · {{ comment.type === 'note' ? 'saved' : 'sent' }}
@@ -224,7 +218,7 @@ function onEditorKeydown(event: KeyboardEvent) {
       </button>
       <p ref="bodyElement" class="body">{{ comment.body }}</p>
       <div v-if="joinRole === 'start'" class="actions">
-        <span class="join-hint">Pick the fork comments to join</span>
+        <span class="join-hint">Pick the comments to join</span>
         <button type="button" @click="stopJoining">Cancel</button>
         <button type="button" class="primary" @click="confirmJoining(comment)">Confirm</button>
       </div>
@@ -261,10 +255,10 @@ function onEditorKeydown(event: KeyboardEvent) {
             <MediaIcon name="note" />
           </button>
           <button
-            v-if="comment.type === 'fork' && groupRole !== 'member'"
+            v-if="joinable && !grouped"
             type="button"
             aria-label="Join"
-            title="Join with other fork comments into one fork"
+            title="Join with other comments into one fork"
             @click="join"
           >
             <MediaIcon name="chain" />
@@ -272,21 +266,17 @@ function onEditorKeydown(event: KeyboardEvent) {
           <button
             v-if="grouped"
             type="button"
-            aria-label="Leave group"
-            title="Leave the group and start a fork of its own"
+            aria-label="Unlink"
+            title="Take it out of the group's fork"
             @click="leaveGroup"
           >
             <MediaIcon name="unchain" />
           </button>
           <button
-            v-if="comment.type === 'fork' && groupRole !== 'member'"
+            v-if="comment.type === 'fork' && !grouped"
             type="button"
             aria-label="Fork now"
-            :title="
-              grouped
-                ? 'Start this group\'s fork without waiting for Submit'
-                : 'Start this fork without waiting for Submit'
-            "
+            title="Start this fork without waiting for Submit"
             @click="forkNow"
           >
             <MediaIcon name="send" />

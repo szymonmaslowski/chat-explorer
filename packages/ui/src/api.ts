@@ -154,6 +154,8 @@ export const api = {
     }),
   leaveForkGroup: (commentId: string, keepalive = false) =>
     call<Comment[]>(`/api/comments/${commentId}/fork-group`, { method: 'DELETE', keepalive }),
+  ungroupForkGroup: (groupId: string, keepalive = false) =>
+    call<Comment[]>(`/api/fork-groups/${groupId}`, { method: 'DELETE', keepalive }),
   createNoteGroup: (explorationId: string, group: NewNoteGroup, keepalive = false) =>
     call<NoteGroup>(`/api/explorations/${explorationId}/note-groups`, { json: group, keepalive }),
   updateNoteGroup: (groupId: string, changes: NoteGroupChanges, keepalive = false) =>

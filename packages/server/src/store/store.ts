@@ -146,6 +146,12 @@ const shortened = (text: string, length: number) => {
 const summaryFrom = (text: string) => shortened(text, forkSummaryLength);
 const excerptOf = (text: string) => shortened(text, repliesToExcerptLength);
 
+// A comment in a fork group goes to the group's fork, whatever its own type.
+const startsAFork = (comment: CommentRow) =>
+  comment.fork_group_id !== null || comment.type === 'fork';
+const goesIntoReply = (comment: CommentRow) =>
+  comment.fork_group_id === null && comment.type === 'inline';
+
 const quoteBlock = (quote: string) =>
   quote
     .split('\n')
@@ -540,7 +546,7 @@ export class ChatStore {
       throw new StoreError('invalid', 'A comment body cannot be empty.');
     }
     if (changes.noteGroupId) this.requireNoteGroupRow(changes.noteGroupId, row.exploration_id);
-    const leavesGroup = changes.type !== undefined && changes.type !== 'fork';
+    const leavesGroup = changes.type === 'note';
     const groupChanges = leavesGroup ? this.forkGroupChangesWithout(row) : new Map();
     this.db.transaction(() => {
       this.db.run(
@@ -575,24 +581,38 @@ export class ChatStore {
     this.publishCommentUpdates(row.exploration_id, [...groupChanges.keys()]);
   }
 
-  // The starting comment's group becomes it and the picked fork comments, which leave the groups
-  // they were in.
+  // The starting comment's group becomes it and the picked comments, which leave the groups they
+  // were in. A group is one fork: its comments go there on Submit, whatever their own type.
   joinForkGroup(commentId: string, input: { memberIds: string[]; groupId?: string }) {
     const start = this.requireDraft(commentId);
     this.requireWritable(start.exploration_id);
-    const forkComments = this.draftForkComments(start.view_fork_id);
-    const joinable = new Set(forkComments.map((comment) => comment.id));
+    const joinableComments = this.draftJoinableComments(start.view_fork_id);
+    const joinable = new Set(joinableComments.map((comment) => comment.id));
     if (![commentId, ...input.memberIds].every((id) => joinable.has(id))) {
-      throw new StoreError('invalid', 'Only draft fork comments of the same fork can be joined.');
+      throw new StoreError('invalid', 'Only draft comments of the same fork, not notes, can join.');
     }
     const changes = joinForkGroup(
-      forkComments,
+      joinableComments,
       commentId,
       input.memberIds,
       input.groupId ?? newId(),
     );
     this.db.transaction(() => this.saveForkGroups(changes));
     return this.publishCommentUpdates(start.exploration_id, [...changes.keys()]);
+  }
+
+  // Every comment of the group goes back to doing what its own type says.
+  ungroupForkGroup(groupId: string) {
+    const rows = this.db.all<CommentRow>(
+      "SELECT * FROM comments WHERE fork_group_id = ? AND status = 'draft'",
+      groupId,
+    );
+    const first = rows[0];
+    if (!first) throw new StoreError('not_found', `Fork group ${groupId} not found.`);
+    this.requireWritable(first.exploration_id);
+    const changes = new Map(rows.map((row) => [row.id, null]));
+    this.db.transaction(() => this.saveForkGroups(changes));
+    return this.publishCommentUpdates(first.exploration_id, [...changes.keys()]);
   }
 
   leaveForkGroup(commentId: string) {
@@ -621,12 +641,7 @@ export class ChatStore {
     if (drafts.length === 0 && !message && files.length === 0) {
       throw new StoreError('invalid', 'Nothing to submit: no draft comments and no message.');
     }
-    if (
-      newFork &&
-      !message &&
-      files.length === 0 &&
-      !drafts.some((draft) => draft.type === 'inline')
-    ) {
+    if (newFork && !message && files.length === 0 && !drafts.some(goesIntoReply)) {
       throw new StoreError('invalid', 'A new fork needs a message, a file or an inline comment.');
     }
     if (newFork && fork.tip_message_id === null) {
@@ -677,8 +692,11 @@ export class ChatStore {
     if (existing) return toQueuedSubmission(existing);
     const draft = this.requireDraft(commentId);
     this.requireWritableFork(draft.view_fork_id, explorationId);
-    if (draft.type !== 'fork') {
-      throw new StoreError('invalid', 'Only a fork comment can start a fork on its own.');
+    if (draft.type !== 'fork' && !draft.fork_group_id) {
+      throw new StoreError(
+        'invalid',
+        'Only a fork comment or a group can start a fork on its own.',
+      );
     }
     // A comment in a group starts the group's fork, with all of its comments.
     const comments = draft.fork_group_id
@@ -819,9 +837,9 @@ export class ChatStore {
         );
         const { fork, message } = this.createForkFromReply(
           submission,
-          comments.filter((comment) => comment.type === 'inline'),
+          comments.filter(goesIntoReply),
         );
-        forkComments.push(...comments.filter((comment) => comment.type === 'fork'));
+        forkComments.push(...comments.filter(startsAFork));
         this.db.run(
           'UPDATE files SET message_id = ? WHERE submission_id = ?',
           message.id,
@@ -845,8 +863,8 @@ export class ChatStore {
           'SELECT * FROM comments WHERE submission_id = ? ORDER BY created_at, rowid',
           submission.id,
         );
-        reply.inline.push(...comments.filter((comment) => comment.type === 'inline'));
-        forkComments.push(...comments.filter((comment) => comment.type === 'fork'));
+        reply.inline.push(...comments.filter(goesIntoReply));
+        forkComments.push(...comments.filter(startsAFork));
         if (submission.global_message) reply.globalMessages.push(submission.global_message);
       }
 
@@ -1677,15 +1695,15 @@ export class ChatStore {
     return inTextOrder(orderable, messageOrder).map(({ row }) => row);
   }
 
-  private draftForkComments(forkId: string): (CommentRow & GroupableComment)[] {
+  private draftJoinableComments(forkId: string): (CommentRow & GroupableComment)[] {
     return this.draftsIn(forkId)
-      .filter((comment) => comment.type === 'fork')
+      .filter((comment) => comment.type !== 'note')
       .map((comment) => ({ ...comment, forkGroupId: comment.fork_group_id }));
   }
 
   private forkGroupChangesWithout(row: CommentRow) {
     if (!row.fork_group_id) return new Map<string, string | null>();
-    return leaveForkGroup(this.draftForkComments(row.view_fork_id), row.id);
+    return leaveForkGroup(this.draftJoinableComments(row.view_fork_id), row.id);
   }
 
   private saveForkGroups(changes: Map<string, string | null>) {
