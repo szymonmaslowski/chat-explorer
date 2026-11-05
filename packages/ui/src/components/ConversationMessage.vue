@@ -18,6 +18,10 @@ const props = defineProps<{
 }>();
 
 const html = computed(() => (props.message.content ? renderMarkdown(props.message.content) : ''));
+// A file the text already shows, such as a screenshot in an answer, is not listed again below.
+const listedFiles = computed(() =>
+  props.files.filter((file) => !props.message.content.includes(`/api/files/${file.id}`)),
+);
 
 const content = ref<HTMLElement | null>(null);
 const blocks = shallowRef<SpokenElement[]>([]);
@@ -111,9 +115,9 @@ onMounted(findBlocks);
       </RouterLink>
       <p>{{ comment.body }}</p>
     </div>
-    <div v-if="files.length" class="files">
+    <div v-if="listedFiles.length" class="files">
       <a
-        v-for="file in files"
+        v-for="file in listedFiles"
         :key="file.id"
         :href="`/api/files/${file.id}`"
         target="_blank"

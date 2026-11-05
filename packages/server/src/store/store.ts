@@ -42,12 +42,14 @@ import type {
 import { defaultClaudeModel, type ClaudeModel } from '../shared/models.js';
 import { defaultGroupName, noteForkMessage, reorderedIds } from '../shared/notes.js';
 import { StoreError } from './errors.js';
+import { idAlphabet, idLength } from '../shared/ids.js';
 import type { EventBus } from './event-bus.js';
 import { newId } from './ids.js';
 
 export const attachmentLivenessMs = 45_000;
 const forkSummaryLength = 80;
 const repliesToExcerptLength = 300;
+const fileReference = new RegExp(`/api/files/([${idAlphabet}]{${idLength}})`, 'g');
 const clearAttachment =
   'attached_shim_id = NULL, attached_session_id = NULL, attached_seen_at = NULL';
 
@@ -459,9 +461,11 @@ export class ChatStore {
     if (tip.role !== 'user') {
       throw new StoreError('invalid', `Fork ${fork.id} is not awaiting an answer.`);
     }
-    const { message, fork: updatedFork } = this.db.transaction(() =>
-      this.appendMessage(fork, 'assistant', input.content, 'live'),
-    );
+    const { message, fork: updatedFork } = this.db.transaction(() => {
+      const appended = this.appendMessage(fork, 'assistant', input.content, 'live');
+      this.keepFilesShownIn(appended.message);
+      return appended;
+    });
     this.publish([
       [
         fork.exploration_id,
@@ -1587,6 +1591,19 @@ export class ChatStore {
       comment.id,
     );
     return { message, fork };
+  }
+
+  // An answer can show an uploaded file, such as a screenshot. The file then belongs to the answer,
+  // so it is not cleaned up as an upload nobody sent.
+  private keepFilesShownIn(message: MessageRow) {
+    for (const [, fileId] of message.content.matchAll(fileReference)) {
+      this.db.run(
+        'UPDATE files SET exploration_id = ?, message_id = ? WHERE id = ? AND exploration_id IS NULL',
+        message.exploration_id,
+        message.id,
+        fileId!,
+      );
+    }
   }
 
   private appendMessage(

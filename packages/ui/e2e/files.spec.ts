@@ -73,3 +73,32 @@ test('starts a new chat with only a pasted image', async ({ page }) => {
   await page.getByRole('button', { name: 'Start' }).click();
   await expect(page.locator('.queued-submission')).toContainText('1 file');
 });
+
+test('shows an upload in an answer once, in the text', async ({ page, request }) => {
+  const png = Buffer.from(pngBase64, 'base64');
+  const uploaded = await (
+    await request.post('/api/files', {
+      multipart: { file: { name: 'shot.png', mimeType: 'image/png', buffer: png } },
+    })
+  ).json();
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'Show me' } })
+  ).json();
+  await attachFakeSession(request, explorationId);
+  await deliverAndAnswer(
+    request,
+    explorationId,
+    `Here:\n\n![Screenshot](/api/files/${uploaded.id})`,
+  );
+  await detachFakeSession(request);
+  await page.goto(`/e/${explorationId}`);
+
+  const answer = page.locator('.message.assistant');
+  await expect(answer.locator('.content img')).toHaveAttribute('src', `/api/files/${uploaded.id}`);
+  await expect
+    .poll(() =>
+      answer.locator('.content img').evaluate((image: HTMLImageElement) => image.naturalWidth),
+    )
+    .toBe(1);
+  await expect(answer.locator('.files')).toHaveCount(0);
+});

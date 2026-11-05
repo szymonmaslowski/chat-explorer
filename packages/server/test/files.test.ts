@@ -150,6 +150,33 @@ describe('files API', () => {
     expect(existsSync(leftPath)).toBe(false);
   });
 
+  it('keeps an upload shown in an answer with that answer', async () => {
+    const { request, store, clock, fileStorage } = createTestApp();
+    const { explorationId, mainForkId } = seedConversation(store);
+    const shown: MessageFile = await (
+      await upload(request, new File([png], 'shot.png', { type: 'image/png' }))
+    ).json();
+    const shownPath = store.fileRow(shown.id).path;
+    store.attach({ explorationId, shimId: 'shim-a', sessionId: 'session-a', takeover: false });
+    store.submit(explorationId, mainForkId, 'Show me');
+    store.deliverQueued(explorationId);
+    const [pending] = store.pendingForks(explorationId);
+    const answer = store.addAssistantMessage({
+      shimId: 'shim-a',
+      forkId: mainForkId,
+      inReplyTo: pending!.inReplyTo,
+      content: `Here it is:\n\n![Screenshot](/api/files/${shown.id})`,
+    });
+
+    expect(store.fileRow(shown.id)).toMatchObject({
+      exploration_id: explorationId,
+      message_id: answer.id,
+    });
+    clock.now += 25 * 60 * 60 * 1000;
+    await fileStorage.removeStaleDrafts();
+    expect(existsSync(shownPath)).toBe(true);
+  });
+
   it('starts a chat with only a file', async () => {
     const { request, store } = createTestApp();
     const file: MessageFile = await (await upload(request, new File(['a'], 'a.txt'))).json();

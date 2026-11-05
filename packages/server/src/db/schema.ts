@@ -155,4 +155,20 @@ export const migrations = [
     REFERENCES note_groups (id) ON DELETE SET NULL;
   ALTER TABLE comments ADD COLUMN created_note_id TEXT REFERENCES notes (id) ON DELETE SET NULL;
   `,
+  `
+  -- Uploads shown in answers before answers kept them.
+  UPDATE files SET
+    message_id = (
+      SELECT id FROM messages
+      WHERE role = 'assistant' AND instr(content, '/api/files/' || files.id) > 0
+    ),
+    exploration_id = (
+      SELECT exploration_id FROM messages
+      WHERE role = 'assistant' AND instr(content, '/api/files/' || files.id) > 0
+    )
+  WHERE exploration_id IS NULL AND EXISTS (
+    SELECT 1 FROM messages
+    WHERE role = 'assistant' AND instr(content, '/api/files/' || files.id) > 0
+  );
+  `,
 ];
