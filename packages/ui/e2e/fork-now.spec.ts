@@ -17,7 +17,7 @@ test('starts a fork from a new comment at once, leaving the other drafts and the
   await selectAnswer(page);
   await page.getByRole('button', { name: 'Comment', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Fork now' })).toHaveCount(0);
-  await page.getByLabel('Fork', { exact: true }).check();
+  await page.locator('.comment-editor').getByLabel('Fork', { exact: true }).check();
   await page.getByPlaceholder('Your comment').fill('Try it this way');
   await page.getByRole('button', { name: 'Fork now' }).click();
 
@@ -41,7 +41,7 @@ test('starts a fork from a saved fork comment at once', async ({ page, request }
   await selectAnswer(page);
   await page.getByRole('button', { name: 'Comment', exact: true }).click();
   await page.getByPlaceholder('Your comment').fill('Later fork');
-  await page.getByLabel('Fork', { exact: true }).check();
+  await page.locator('.comment-editor').getByLabel('Fork', { exact: true }).check();
   await page.getByRole('button', { name: 'Save' }).click();
   const card = page.locator('.comment-card.draft');
 

@@ -8,6 +8,7 @@ import { newId, outbox } from '../stores/outbox';
 import DictationButton from './DictationButton.vue';
 import ExpandButton from './ExpandButton.vue';
 import ListenButton from './ListenButton.vue';
+import MediaIcon from './MediaIcon.vue';
 
 // Without a placement the card is listed in the page flow, on narrow and touch screens.
 const props = defineProps<{
@@ -180,21 +181,29 @@ function onEditorKeydown(event: KeyboardEvent) {
           <button
             v-if="comment.type !== 'note'"
             type="button"
+            class="fork-toggle"
+            :aria-pressed="comment.type === 'fork'"
+            :aria-label="comment.type === 'fork' ? 'Unfork' : 'Fork'"
             :title="comment.type === 'fork' ? 'Answer in this fork instead' : 'Start a new fork'"
             @click="toggleType"
           >
-            {{ comment.type === 'fork' ? 'Unfork' : 'Fork' }}
+            <MediaIcon name="fork" />
           </button>
           <button
             v-if="comment.type === 'fork'"
             type="button"
+            aria-label="Fork now"
             title="Start this fork without waiting for Submit"
             @click="forkNow"
           >
-            Fork now
+            <MediaIcon name="send" />
           </button>
-          <button type="button" @click="startEditing">Edit</button>
-          <button type="button" @click="remove">Delete</button>
+          <button type="button" aria-label="Edit" title="Edit" @click="startEditing">
+            <MediaIcon name="edit" />
+          </button>
+          <button type="button" aria-label="Delete" title="Delete" @click="remove">
+            <MediaIcon name="trash" />
+          </button>
         </template>
       </div>
     </template>
@@ -333,8 +342,17 @@ function onEditorKeydown(event: KeyboardEvent) {
 }
 
 .actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 0.1rem 0.5rem;
   font-size: 0.75rem;
+}
+
+.fork-toggle[aria-pressed='true'] {
+  border-color: var(--fork);
+  background: var(--fork-soft);
+  color: var(--fork);
 }
 
 @media (pointer: coarse) {
