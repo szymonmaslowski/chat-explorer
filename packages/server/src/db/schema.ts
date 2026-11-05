@@ -156,8 +156,6 @@ export const migrations = [
   ALTER TABLE comments ADD COLUMN created_note_id TEXT REFERENCES notes (id) ON DELETE SET NULL;
   `,
   `
-  ALTER TABLE comments ADD COLUMN fork_group_id TEXT;
-
   -- Uploads shown in answers before answers kept them.
   UPDATE files SET
     message_id = (
@@ -172,5 +170,8 @@ export const migrations = [
     SELECT 1 FROM messages
     WHERE role = 'assistant' AND instr(content, '/api/files/' || files.id) > 0
   );
+  `,
+  `
+  ALTER TABLE comments ADD COLUMN fork_group_id TEXT;
   `,
 ];
