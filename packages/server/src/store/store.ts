@@ -40,6 +40,12 @@ import type {
   Snapshot,
 } from '../shared/types.js';
 import { defaultClaudeModel, type ClaudeModel } from '../shared/models.js';
+import {
+  inTextOrder,
+  joinForkGroup,
+  leaveForkGroup,
+  type GroupableComment,
+} from '../shared/fork-groups.js';
 import { defaultGroupName, noteForkMessage, reorderedIds } from '../shared/notes.js';
 import { StoreError } from './errors.js';
 import { idAlphabet, idLength } from '../shared/ids.js';
@@ -534,26 +540,67 @@ export class ChatStore {
       throw new StoreError('invalid', 'A comment body cannot be empty.');
     }
     if (changes.noteGroupId) this.requireNoteGroupRow(changes.noteGroupId, row.exploration_id);
-    this.db.run(
-      `UPDATE comments SET body = ?, edit_body = ?, type = ?, note_group_id = ?, updated_at = ?
-       WHERE id = ?`,
-      changes.body?.trim() ?? row.body,
-      changes.editBody === undefined ? row.edit_body : changes.editBody,
-      changes.type ?? row.type,
-      changes.noteGroupId === undefined ? row.note_group_id : changes.noteGroupId,
-      this.now(),
-      commentId,
-    );
+    const leavesGroup = changes.type !== undefined && changes.type !== 'fork';
+    const groupChanges = leavesGroup ? this.forkGroupChangesWithout(row) : new Map();
+    this.db.transaction(() => {
+      this.db.run(
+        `UPDATE comments SET body = ?, edit_body = ?, type = ?, note_group_id = ?, updated_at = ?
+         WHERE id = ?`,
+        changes.body?.trim() ?? row.body,
+        changes.editBody === undefined ? row.edit_body : changes.editBody,
+        changes.type ?? row.type,
+        changes.noteGroupId === undefined ? row.note_group_id : changes.noteGroupId,
+        this.now(),
+        commentId,
+      );
+      this.saveForkGroups(groupChanges);
+    });
+    groupChanges.delete(commentId);
     const comment = toComment(this.requireCommentRow(commentId));
     this.publish([[row.exploration_id, { type: 'comment.updated', comment }]]);
+    this.publishCommentUpdates(row.exploration_id, [...groupChanges.keys()]);
     return comment;
   }
 
   deleteComment(commentId: string) {
     const row = this.requireDraft(commentId);
     this.requireWritable(row.exploration_id);
-    this.db.run('DELETE FROM comments WHERE id = ?', commentId);
+    const groupChanges = this.forkGroupChangesWithout(row);
+    groupChanges.delete(commentId);
+    this.db.transaction(() => {
+      this.db.run('DELETE FROM comments WHERE id = ?', commentId);
+      this.saveForkGroups(groupChanges);
+    });
     this.publish([[row.exploration_id, { type: 'comment.deleted', commentId }]]);
+    this.publishCommentUpdates(row.exploration_id, [...groupChanges.keys()]);
+  }
+
+  // The starting comment's group becomes it and the picked fork comments, which leave the groups
+  // they were in.
+  joinForkGroup(commentId: string, input: { memberIds: string[]; groupId?: string }) {
+    const start = this.requireDraft(commentId);
+    this.requireWritable(start.exploration_id);
+    const forkComments = this.draftForkComments(start.view_fork_id);
+    const joinable = new Set(forkComments.map((comment) => comment.id));
+    if (![commentId, ...input.memberIds].every((id) => joinable.has(id))) {
+      throw new StoreError('invalid', 'Only draft fork comments of the same fork can be joined.');
+    }
+    const changes = joinForkGroup(
+      forkComments,
+      commentId,
+      input.memberIds,
+      input.groupId ?? newId(),
+    );
+    this.db.transaction(() => this.saveForkGroups(changes));
+    return this.publishCommentUpdates(start.exploration_id, [...changes.keys()]);
+  }
+
+  leaveForkGroup(commentId: string) {
+    const row = this.requireDraft(commentId);
+    this.requireWritable(row.exploration_id);
+    const changes = this.forkGroupChangesWithout(row);
+    this.db.transaction(() => this.saveForkGroups(changes));
+    return this.publishCommentUpdates(row.exploration_id, [...changes.keys()]);
   }
 
   submit(
@@ -633,7 +680,13 @@ export class ChatStore {
     if (draft.type !== 'fork') {
       throw new StoreError('invalid', 'Only a fork comment can start a fork on its own.');
     }
-    if (draft.edit_body !== null) {
+    // A comment in a group starts the group's fork, with all of its comments.
+    const comments = draft.fork_group_id
+      ? this.draftsIn(draft.view_fork_id).filter(
+          (comment) => comment.fork_group_id === draft.fork_group_id,
+        )
+      : [draft];
+    if (comments.some((comment) => comment.edit_body !== null)) {
       throw new StoreError('invalid', 'Save or cancel the comment being edited first.');
     }
     const id = options.id ?? newId();
@@ -641,10 +694,10 @@ export class ChatStore {
     this.db.transaction(() => {
       this.insertSubmission(
         { id, explorationId, forkId, message: '', newFork: false, delivered: false },
-        [draft],
+        comments,
       );
     });
-    return this.publishSubmission(explorationId, id, [draft]);
+    return this.publishSubmission(explorationId, id, comments);
   }
 
   // Starts a fork of the main fork at once, holding one queued message about the note, so the
@@ -824,8 +877,13 @@ export class ChatStore {
         addEvent({ type: 'message.added', message: toMessage(message), fork: toFork(fork) });
       }
 
+      const forkGroups = new Map<string, CommentRow[]>();
       for (const comment of forkComments) {
-        const { fork, message } = this.createForkFromComment(comment);
+        const key = comment.fork_group_id ?? comment.id;
+        forkGroups.set(key, [...(forkGroups.get(key) ?? []), comment]);
+      }
+      for (const comments of forkGroups.values()) {
+        const { fork, message } = this.createForkFromComments(comments);
         addEvent({ type: 'fork.created', fork: toFork(fork) });
         addEvent({ type: 'message.added', message: toMessage(message), fork: toFork(fork) });
       }
@@ -995,12 +1053,13 @@ export class ChatStore {
 
   messageText(row: MessageRow) {
     if (row.role === 'assistant') return row.content;
-    const quotedComments = this.db
-      .all<CommentRow>(
-        'SELECT * FROM comments WHERE reply_message_id = ? ORDER BY created_at, rowid',
-        row.id,
-      )
-      .map((comment) => quotedText(comment.quote, comment.body, '\n'));
+    const comments = this.db.all<CommentRow>(
+      'SELECT * FROM comments WHERE reply_message_id = ? ORDER BY created_at, rowid',
+      row.id,
+    );
+    const quotedComments = (comments.length > 1 ? this.inTextOrder(comments) : comments).map(
+      (comment) => quotedText(comment.quote, comment.body, '\n'),
+    );
     const paths = this.db
       .all<FileRow>('SELECT * FROM files WHERE message_id = ? ORDER BY created_at, rowid', row.id)
       .map((file) => `- ${file.path}`);
@@ -1580,24 +1639,65 @@ export class ChatStore {
     return { message, fork };
   }
 
-  private createForkFromComment(comment: CommentRow) {
-    const base = this.requireMessageRow(comment.message_id);
+  // Joined fork comments start one fork. It branches after the latest message they quote, so all
+  // the quoted text is in its history, and is named after the first comment in text order.
+  private createForkFromComments(comments: CommentRow[]) {
+    const ordered = this.inTextOrder(comments);
+    const first = ordered[0]!;
+    const base = this.requireMessageRow(ordered.at(-1)!.message_id);
     const forkRow = this.insertFork({
-      explorationId: comment.exploration_id,
+      explorationId: first.exploration_id,
       parentForkId: base.fork_id,
       baseMessageId: base.id,
-      originCommentId: comment.id,
-      summary: summaryFrom(comment.body),
+      originCommentId: first.id,
+      summary: summaryFrom(first.body),
     });
     const { message, fork } = this.appendMessage(forkRow, 'user', '', 'live');
-    this.db.run(
-      `UPDATE comments SET status = 'submitted', reply_message_id = ?, created_fork_id = ?
-       WHERE id = ?`,
-      message.id,
-      fork.id,
-      comment.id,
-    );
+    for (const comment of comments) {
+      this.db.run(
+        `UPDATE comments SET status = 'submitted', reply_message_id = ?, created_fork_id = ?
+         WHERE id = ?`,
+        message.id,
+        fork.id,
+        comment.id,
+      );
+    }
     return { message, fork };
+  }
+
+  private inTextOrder(comments: CommentRow[]) {
+    const viewFork = this.requireForkRow(comments[0]!.view_fork_id);
+    const messageOrder = this.pathTo(viewFork.tip_message_id).map((row) => row.id);
+    const orderable = comments.map((row) => ({
+      row,
+      messageId: row.message_id,
+      quote: row.quote,
+      startOffset: row.start_offset,
+    }));
+    return inTextOrder(orderable, messageOrder).map(({ row }) => row);
+  }
+
+  private draftForkComments(forkId: string): (CommentRow & GroupableComment)[] {
+    return this.draftsIn(forkId)
+      .filter((comment) => comment.type === 'fork')
+      .map((comment) => ({ ...comment, forkGroupId: comment.fork_group_id }));
+  }
+
+  private forkGroupChangesWithout(row: CommentRow) {
+    if (!row.fork_group_id) return new Map<string, string | null>();
+    return leaveForkGroup(this.draftForkComments(row.view_fork_id), row.id);
+  }
+
+  private saveForkGroups(changes: Map<string, string | null>) {
+    const updatedAt = this.now();
+    for (const [commentId, groupId] of changes) {
+      this.db.run(
+        'UPDATE comments SET fork_group_id = ?, updated_at = ? WHERE id = ?',
+        groupId,
+        updatedAt,
+        commentId,
+      );
+    }
   }
 
   // An answer can show an uploaded file, such as a screenshot. The file then belongs to the answer,

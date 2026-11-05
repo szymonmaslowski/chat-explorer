@@ -29,6 +29,15 @@ export type Change =
   | { type: 'comment.create'; explorationId: string; comment: NewComment & { id: string } }
   | { type: 'comment.update'; explorationId: string; commentId: string; changes: CommentChanges }
   | { type: 'comment.delete'; explorationId: string; commentId: string }
+  | {
+      type: 'comment.join-fork-group';
+      explorationId: string;
+      commentId: string;
+      memberIds: string[];
+      // Used when the comment is in no group yet, so a repeated request makes the same group.
+      groupId: string;
+    }
+  | { type: 'comment.leave-fork-group'; explorationId: string; commentId: string }
   | { type: 'reply-draft.save'; explorationId: string; forkId: string; draft: ReplyDraftChange }
   | { type: 'submit'; explorationId: string; submission: SubmissionChange }
   | {
@@ -129,6 +138,8 @@ export const subjectOf = (change: Change) => {
       return change.comment.id;
     case 'comment.update':
     case 'comment.delete':
+    case 'comment.join-fork-group':
+    case 'comment.leave-fork-group':
       return change.commentId;
     case 'reply-draft.save':
       return change.forkId;
@@ -217,6 +228,14 @@ function send(change: Change) {
       return api.updateComment(change.commentId, change.changes, keepalive);
     case 'comment.delete':
       return api.deleteComment(change.commentId, keepalive);
+    case 'comment.join-fork-group':
+      return api.joinForkGroup(
+        change.commentId,
+        { memberIds: change.memberIds, groupId: change.groupId },
+        keepalive,
+      );
+    case 'comment.leave-fork-group':
+      return api.leaveForkGroup(change.commentId, keepalive);
     case 'reply-draft.save':
       return api.saveReplyDraft(change.forkId, change.draft, keepalive);
     case 'submit': {

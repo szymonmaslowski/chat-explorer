@@ -71,6 +71,8 @@ export interface Comment {
   // A note comment becomes a note in this group on Submit; null makes a new group then.
   noteGroupId: string | null;
   createdNoteId: string | null;
+  // Fork comments in the same group start one fork together; null for a comment on its own.
+  forkGroupId: string | null;
   createdAt: number;
   updatedAt: number;
 }

@@ -12,6 +12,7 @@ import type {
   SessionStatus,
   Snapshot,
 } from '@shared/types';
+import { joinForkGroup, leaveForkGroup } from '@shared/fork-groups';
 import { defaultGroupName, noteForkMessage, reorderedIds } from '@shared/notes';
 import { nextTick, reactive, watch } from 'vue';
 import { api, ApiError } from '../api';
@@ -175,6 +176,24 @@ export function applyServerEvent(state: ExplorationState, event: ExplorationEven
 const firstRetryMs = 1_000;
 const maxRetryMs = 30_000;
 
+const draftForkComments = (state: ExplorationState, viewForkId: string) =>
+  [...state.comments.values()].filter(
+    (comment) =>
+      comment.viewForkId === viewForkId && comment.status === 'draft' && comment.type === 'fork',
+  );
+
+function setGroups(state: ExplorationState, changes: Map<string, string | null>) {
+  for (const [commentId, forkGroupId] of changes) {
+    const comment = state.comments.get(commentId);
+    if (comment) state.comments.set(commentId, { ...comment, forkGroupId });
+  }
+}
+
+function leaveGroup(state: ExplorationState, comment: Comment) {
+  if (!comment.forkGroupId) return;
+  setGroups(state, leaveForkGroup(draftForkComments(state, comment.viewForkId), comment.id));
+}
+
 // Shows a change before the daemon has it, as the daemon will once it does.
 export function applyChange(state: ExplorationState, change: Change) {
   if (change.explorationId !== state.explorationId) return;
@@ -195,6 +214,7 @@ export function applyChange(state: ExplorationState, change: Change) {
         createdForkId: null,
         noteGroupId: change.comment.noteGroupId ?? existing?.noteGroupId ?? null,
         createdNoteId: null,
+        forkGroupId: existing?.forkGroupId ?? null,
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
       });
@@ -204,6 +224,7 @@ export function applyChange(state: ExplorationState, change: Change) {
       const comment = state.comments.get(change.commentId);
       const { body, editBody, type, noteGroupId } = change.changes;
       if (!comment) break;
+      if (type !== undefined && type !== 'fork') leaveGroup(state, comment);
       state.comments.set(comment.id, {
         ...comment,
         body: body ?? comment.body,
@@ -214,9 +235,27 @@ export function applyChange(state: ExplorationState, change: Change) {
       });
       break;
     }
-    case 'comment.delete':
+    case 'comment.delete': {
+      const comment = state.comments.get(change.commentId);
+      if (comment) leaveGroup(state, comment);
       state.comments.delete(change.commentId);
       break;
+    }
+    case 'comment.join-fork-group': {
+      const start = state.comments.get(change.commentId);
+      if (!start) break;
+      const forkComments = draftForkComments(state, start.viewForkId);
+      setGroups(
+        state,
+        joinForkGroup(forkComments, change.commentId, change.memberIds, change.groupId),
+      );
+      break;
+    }
+    case 'comment.leave-fork-group': {
+      const comment = state.comments.get(change.commentId);
+      if (comment) leaveGroup(state, comment);
+      break;
+    }
     case 'reply-draft.save':
       break;
     case 'submit': {
@@ -261,8 +300,16 @@ export function applyChange(state: ExplorationState, change: Change) {
         createdAt: now,
       });
       const comment = state.comments.get(commentId);
-      if (comment)
-        state.comments.set(commentId, { ...comment, status: 'queued', submissionId: id });
+      if (!comment) break;
+      // A comment in a group sends the whole group.
+      const sent = comment.forkGroupId
+        ? draftForkComments(state, comment.viewForkId).filter(
+            (each) => each.forkGroupId === comment.forkGroupId,
+          )
+        : [comment];
+      for (const each of sent) {
+        state.comments.set(each.id, { ...each, status: 'queued', submissionId: id });
+      }
       break;
     }
     case 'note.fork': {

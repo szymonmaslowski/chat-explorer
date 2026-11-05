@@ -20,7 +20,8 @@ defineProps<{
     | 'send'
     | 'note'
     | 'to-end'
-    | 'to-start';
+    | 'to-start'
+    | 'unchain';
 }>();
 </script>
 
@@ -52,6 +53,10 @@ defineProps<{
     <path
       v-else-if="name === 'fork'"
       d="M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9"
+    />
+    <path
+      v-else-if="name === 'unchain'"
+      d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1M4 4l16 16"
     />
     <path v-else-if="name === 'to-end'" d="M12 4v14M6 12l6 6 6-6M5 21h14" />
     <path v-else-if="name === 'to-start'" d="M12 20V6M6 12l6-6 6 6M5 3h14" />
@@ -85,7 +90,8 @@ defineProps<{
 .media-icon.send,
 .media-icon.note,
 .media-icon.to-end,
-.media-icon.to-start {
+.media-icon.to-start,
+.media-icon.unchain {
   fill: none;
   stroke: currentColor;
   stroke-width: 2;

@@ -142,6 +142,18 @@ export const api = {
     }),
   deleteComment: (commentId: string, keepalive = false) =>
     call<{ ok: true }>(`/api/comments/${commentId}`, { method: 'DELETE', keepalive }),
+  joinForkGroup: (
+    commentId: string,
+    group: { memberIds: string[]; groupId: string },
+    keepalive = false,
+  ) =>
+    call<Comment[]>(`/api/comments/${commentId}/fork-group`, {
+      method: 'PUT',
+      json: group,
+      keepalive,
+    }),
+  leaveForkGroup: (commentId: string, keepalive = false) =>
+    call<Comment[]>(`/api/comments/${commentId}/fork-group`, { method: 'DELETE', keepalive }),
   createNoteGroup: (explorationId: string, group: NewNoteGroup, keepalive = false) =>
     call<NoteGroup>(`/api/explorations/${explorationId}/note-groups`, { json: group, keepalive }),
   updateNoteGroup: (groupId: string, changes: NoteGroupChanges, keepalive = false) =>

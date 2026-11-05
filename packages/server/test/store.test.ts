@@ -163,6 +163,103 @@ describe('submission queue', () => {
     expect(store.deliverQueued(explorationId)).toBe(false);
   });
 
+  describe('fork groups', () => {
+    function forkComments() {
+      const context = setup();
+      const { store, explorationId, mainForkId, question, answer } = context;
+      const fork = (messageId: string, quote: string, startOffset: number, body: string) =>
+        store.createComment(explorationId, {
+          messageId,
+          viewForkId: mainForkId,
+          quote,
+          startOffset,
+          endOffset: startOffset + quote.length,
+          body,
+          type: 'fork',
+        });
+      const later = fork(answer.id, 'some text', 16, 'later');
+      const earlier = fork(question.id, 'Question', 0, 'earlier');
+      const alone = fork(answer.id, 'Answer', 0, 'alone');
+      return { ...context, later, earlier, alone };
+    }
+    const groupOf = (store: ReturnType<typeof setup>['store'], explorationId: string) =>
+      new Map(
+        store
+          .snapshot(explorationId)
+          .comments.map((comment) => [comment.body, comment.forkGroupId]),
+      );
+
+    it('starts one fork for joined comments, after the latest quoted message, in text order', () => {
+      const { store, explorationId, mainForkId, answer, later, earlier } = forkComments();
+      store.joinForkGroup(later.id, { memberIds: [earlier.id], groupId: 'grp0000001' });
+      store.submit(explorationId, mainForkId, '');
+      store.deliverQueued(explorationId);
+
+      const forks = store.pendingForks(explorationId);
+      expect(forks).toHaveLength(2);
+      const joined = forks.find((fork) => fork.userMessages[0]!.text.includes('later'))!;
+      expect(joined.baseMessageId).toBe(answer.id);
+      expect(joined.userMessages[0]!.text).toBe('> Question\nearlier\n\n> some text\nlater');
+      const snapshot = store.snapshot(explorationId);
+      expect(snapshot.forks.find((fork) => fork.id === joined.forkId)!.summary).toBe('earlier');
+    });
+
+    it('moves a picked comment out of its group, which falls apart when one is left', () => {
+      const { store, explorationId, later, earlier, alone } = forkComments();
+      store.joinForkGroup(later.id, { memberIds: [earlier.id], groupId: 'grp0000001' });
+      store.joinForkGroup(alone.id, { memberIds: [earlier.id], groupId: 'grp0000002' });
+      expect(groupOf(store, explorationId)).toEqual(
+        new Map([
+          ['later', null],
+          ['earlier', 'grp0000002'],
+          ['alone', 'grp0000002'],
+        ]),
+      );
+    });
+
+    it('leaves a group, and drops a comment from it when deleted or unforked', () => {
+      const { store, explorationId, later, earlier, alone } = forkComments();
+      store.joinForkGroup(later.id, { memberIds: [earlier.id, alone.id], groupId: 'grp0000001' });
+      store.leaveForkGroup(alone.id);
+      expect(groupOf(store, explorationId).get('alone')).toBeNull();
+      expect(groupOf(store, explorationId).get('later')).toBe('grp0000001');
+
+      store.updateComment(earlier.id, { type: 'inline' });
+      expect(groupOf(store, explorationId).get('later')).toBeNull();
+      store.joinForkGroup(later.id, { memberIds: [alone.id], groupId: 'grp0000003' });
+      store.deleteComment(alone.id);
+      expect(groupOf(store, explorationId).get('later')).toBeNull();
+    });
+
+    it('refuses to join an inline comment', () => {
+      const { store, explorationId, mainForkId, answer, later } = forkComments();
+      const inline = draft(store, explorationId, {
+        messageId: answer.id,
+        viewForkId: mainForkId,
+        body: 'inline',
+      });
+      expect(() => store.joinForkGroup(later.id, { memberIds: [inline.id] })).toThrow(
+        expect.objectContaining({ code: 'invalid' }),
+      );
+    });
+
+    it('sends the whole group with Fork now on any of its comments', () => {
+      const { store, explorationId, later, earlier } = forkComments();
+      store.joinForkGroup(later.id, { memberIds: [earlier.id], groupId: 'grp0000001' });
+      store.forkNow(earlier.id);
+      const statuses = new Map(
+        store.snapshot(explorationId).comments.map((comment) => [comment.body, comment.status]),
+      );
+      expect(statuses).toEqual(
+        new Map([
+          ['later', 'queued'],
+          ['earlier', 'queued'],
+          ['alone', 'draft'],
+        ]),
+      );
+    });
+  });
+
   it('sends a general comment as its text alone, inline or as a new fork', () => {
     const { store, explorationId, mainForkId, answer } = setup();
     const general = (body: string, type: 'inline' | 'fork') =>

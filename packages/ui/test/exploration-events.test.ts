@@ -43,6 +43,7 @@ it('keeps a Save made here when the older "created" notice arrives after it', ()
     createdForkId: null,
     noteGroupId: null,
     createdNoteId: null,
+    forkGroupId: null,
     createdAt: 0,
     updatedAt: 0,
   };

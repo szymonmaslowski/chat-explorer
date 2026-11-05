@@ -62,6 +62,7 @@ const newCommentBody = z.object({
   type: commentType.optional(),
   noteGroupId: z.string().min(1).nullable().optional(),
 });
+const forkGroupBody = z.object({ memberIds: z.array(z.string()), groupId: clientId });
 const commentChangesBody = z.object({
   body: z.string().optional(),
   editBody: z.string().nullable().optional(),
@@ -348,6 +349,15 @@ export function createApp(options: AppOptions) {
     store.deleteComment(context.req.param('id'));
     return context.json({ ok: true });
   });
+
+  app.put('/api/comments/:id/fork-group', async (context) => {
+    const body = forkGroupBody.parse(await context.req.json());
+    return context.json(store.joinForkGroup(context.req.param('id'), body));
+  });
+
+  app.delete('/api/comments/:id/fork-group', (context) =>
+    context.json(store.leaveForkGroup(context.req.param('id'))),
+  );
 
   app.post('/api/comments/:id/fork-now', async (context) => {
     const { id } = forkNowBody.parse(await context.req.json());

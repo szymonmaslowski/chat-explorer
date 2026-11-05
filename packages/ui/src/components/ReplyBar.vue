@@ -47,7 +47,15 @@ const editingCount = computed(() => beingEdited.value.length);
 const readyDrafts = computed(() => props.drafts.filter((draft) => draft.editBody === null));
 const countOf = (type: CommentType) =>
   readyDrafts.value.filter((draft) => draft.type === type).length;
-const forkCount = computed(() => countOf('fork'));
+// Joined fork comments start one fork, so a group counts once.
+const forkCount = computed(
+  () =>
+    new Set(
+      readyDrafts.value
+        .filter((draft) => draft.type === 'fork')
+        .map((draft) => draft.forkGroupId ?? draft.id),
+    ).size,
+);
 const inlineCount = computed(() => countOf('inline'));
 const noteCount = computed(() => countOf('note'));
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;

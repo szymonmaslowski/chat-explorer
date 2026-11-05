@@ -6,6 +6,13 @@ import { useExpandedArea } from '../composables/useExpandedArea';
 import { insertAtCursor } from '../lib/insert-text';
 import { sortedGroups } from '../lib/notes';
 import { openExploration } from '../stores/exploration';
+import {
+  confirmJoining,
+  forkJoining,
+  startJoining,
+  stopJoining,
+  togglePicked,
+} from '../stores/fork-joining';
 import { newId, outbox } from '../stores/outbox';
 import ConfirmButton from './ConfirmButton.vue';
 import DictationButton from './DictationButton.vue';
@@ -13,10 +20,12 @@ import ExpandButton from './ExpandButton.vue';
 import ListenButton from './ListenButton.vue';
 import MediaIcon from './MediaIcon.vue';
 
-// Without a placement the card is listed in the page flow, on narrow and touch screens.
+// Without a placement the card is listed in the page flow, on narrow and touch screens. A
+// comment in a fork group is its head (first in the text) or a member.
 const props = defineProps<{
   comment: Comment;
   placement?: { top: number; left: number; width: number };
+  groupRole?: 'head' | 'member';
 }>();
 const emit = defineEmits<{
   measure: [height: number];
@@ -119,6 +128,31 @@ function toggleType(target: 'fork' | 'note') {
   if (props.comment.type === target) return update({ type: 'inline' });
   update(target === 'note' ? { type: 'note', noteGroupId: firstNoteGroupId() } : { type: 'fork' });
 }
+const isForkDraft = computed(() => isDraft.value && props.comment.type === 'fork');
+const grouped = computed(() => props.comment.forkGroupId !== null);
+// In joining mode the starting comment confirms or cancels, the other fork comments can be
+// picked, and the rest wait dimmed.
+const joinRole = computed(() => {
+  if (forkJoining.startId === null) return null;
+  if (forkJoining.startId === props.comment.id) return 'start';
+  return isForkDraft.value ? 'pickable' : 'dimmed';
+});
+const pickedToJoin = computed(
+  () => joinRole.value === 'pickable' && forkJoining.picked.has(props.comment.id),
+);
+function join() {
+  const groupMateIds = [...openExploration(props.comment.explorationId).comments.values()]
+    .filter((each) => grouped.value && each.forkGroupId === props.comment.forkGroupId)
+    .filter((each) => each.id !== props.comment.id)
+    .map((each) => each.id);
+  startJoining(props.comment, groupMateIds);
+}
+const leaveGroup = () =>
+  outbox.add({
+    type: 'comment.leave-fork-group',
+    explorationId: props.comment.explorationId,
+    commentId: props.comment.id,
+  });
 const forkNow = () =>
   outbox.add({
     type: 'fork-now',
@@ -138,7 +172,12 @@ function onEditorKeydown(event: KeyboardEvent) {
   <div
     ref="card"
     class="comment-card"
-    :class="[comment.type, comment.status, { listed: !placement, expanded }]"
+    :class="[
+      comment.type,
+      comment.status,
+      joinRole,
+      { listed: !placement, expanded, 'picked-to-join': pickedToJoin },
+    ]"
     :style="
       expandedStyle ??
       (placement && {
@@ -184,12 +223,21 @@ function onEditorKeydown(event: KeyboardEvent) {
         <span class="quoted">{{ comment.quote }}</span>
       </button>
       <p ref="bodyElement" class="body">{{ comment.body }}</p>
-      <div v-if="isDraft || bodyClipped" class="actions">
+      <div v-if="joinRole === 'start'" class="actions">
+        <span class="join-hint">Pick the fork comments to join</span>
+        <button type="button" @click="stopJoining">Cancel</button>
+        <button type="button" class="primary" @click="confirmJoining(comment)">Confirm</button>
+      </div>
+      <label v-else-if="joinRole === 'pickable'" class="actions pick">
+        <input type="checkbox" :checked="pickedToJoin" @change="togglePicked(comment.id)" />
+        Join into one fork
+      </label>
+      <div v-else-if="(isDraft || bodyClipped) && joinRole === null" class="actions">
         <ExpandButton v-if="bodyClipped" v-model="expanded" @click.stop />
         <template v-if="isDraft">
           <ListenButton :text="comment.body" />
           <button
-            v-if="comment.type !== 'note' || isGeneral"
+            v-if="(comment.type !== 'note' || isGeneral) && !grouped"
             type="button"
             class="type-toggle fork"
             :aria-pressed="comment.type === 'fork'"
@@ -200,7 +248,7 @@ function onEditorKeydown(event: KeyboardEvent) {
             <MediaIcon name="fork" />
           </button>
           <button
-            v-if="isGeneral"
+            v-if="isGeneral && !grouped"
             type="button"
             class="type-toggle note"
             :aria-pressed="comment.type === 'note'"
@@ -213,10 +261,32 @@ function onEditorKeydown(event: KeyboardEvent) {
             <MediaIcon name="note" />
           </button>
           <button
-            v-if="comment.type === 'fork'"
+            v-if="comment.type === 'fork' && groupRole !== 'member'"
+            type="button"
+            aria-label="Join"
+            title="Join with other fork comments into one fork"
+            @click="join"
+          >
+            <MediaIcon name="chain" />
+          </button>
+          <button
+            v-if="grouped"
+            type="button"
+            aria-label="Leave group"
+            title="Leave the group and start a fork of its own"
+            @click="leaveGroup"
+          >
+            <MediaIcon name="unchain" />
+          </button>
+          <button
+            v-if="comment.type === 'fork' && groupRole !== 'member'"
             type="button"
             aria-label="Fork now"
-            title="Start this fork without waiting for Submit"
+            :title="
+              grouped
+                ? 'Start this group\'s fork without waiting for Submit'
+                : 'Start this fork without waiting for Submit'
+            "
             @click="forkNow"
           >
             <MediaIcon name="send" />
@@ -251,6 +321,28 @@ function onEditorKeydown(event: KeyboardEvent) {
   position: static;
   box-shadow: none;
   margin-top: 0.4rem;
+}
+
+.comment-card.dimmed {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.comment-card.picked-to-join {
+  outline: 2px solid var(--fork);
+}
+
+.pick {
+  justify-content: flex-start;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.join-hint {
+  margin-right: auto;
+  font-size: 0.75rem;
+  color: var(--text-muted);
 }
 
 .comment-card.expanded {

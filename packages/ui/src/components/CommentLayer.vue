@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { inTextOrder } from '@shared/fork-groups';
 import type { Comment } from '@shared/types';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -13,11 +14,13 @@ import {
   pickableElementAt,
   speechBlocks,
 } from '../lib/speech-blocks';
+import { stopJoining } from '../stores/fork-joining';
 import { playBlock, speech } from '../stores/speech';
 import { useMediaQuery } from '../composables/useMediaQuery';
 import CommentCard from './CommentCard.vue';
 import CommentEditor from './CommentEditor.vue';
 import CommentTray from './CommentTray.vue';
+import ForkGroupCard from './ForkGroupCard.vue';
 import MediaIcon from './MediaIcon.vue';
 
 const props = defineProps<{
@@ -46,6 +49,8 @@ const layerWidth = ref(0);
 const railLeft = computed(() => railLeftOf(layerWidth.value));
 const anchors = shallowRef(new Map<string, Range>());
 const anchorBoxes = shallowRef(new Map<string, { top: number; left: number }>());
+// The messages on the page, top to bottom, for putting comments in the order of their text.
+const messageOrder = shallowRef<string[]>([]);
 const heights = reactive(new Map<string, number>());
 const trayIds = shallowRef(new Set<string>());
 interface ActionsPlacement {
@@ -110,6 +115,9 @@ function reanchor() {
     if (range) next.set(comment.id, range);
   }
   anchors.value = next;
+  messageOrder.value = [...root.querySelectorAll<HTMLElement>('[data-anchor-root]')].flatMap(
+    (element) => element.dataset.anchorRoot ?? [],
+  );
   paintHighlights();
   measure();
 }
@@ -131,13 +139,15 @@ function updateTray() {
   const header = document.querySelector('[data-sticky-header]');
   const limit = header ? header.getBoundingClientRect().bottom : 0;
   const inTray = new Set<string>();
-  // A chip has no editor, so a comment being edited keeps its card.
+  // A chip has no editor, so a comment being edited keeps its card. A fork group keeps its card
+  // too, so it stays whole.
   for (const comment of props.comments) {
     const range = anchors.value.get(comment.id);
     const beingEdited = comment.editBody !== null;
     if (
       comment.status === 'draft' &&
       !beingEdited &&
+      !comment.forkGroupId &&
       range &&
       firstLineRect(range).bottom < limit
     ) {
@@ -186,25 +196,36 @@ function scrollToComment(commentId: string) {
   return true;
 }
 
+// A comment on its own, or the comments of a fork group in text order. A group shows as one card
+// at the place of its first comment.
+const cardEntries = computed(() => {
+  const entries = new Map<string, Comment[]>();
+  for (const comment of inTextOrder(shownComments.value, messageOrder.value)) {
+    const key = comment.forkGroupId ?? comment.id;
+    entries.set(key, [...(entries.get(key) ?? []), comment]);
+  }
+  return [...entries.values()].map((comments) => ({ first: comments[0]!, comments }));
+});
+
 const floatingCards = computed(() => {
   if (props.compact) return [];
-  const requests = shownComments.value.flatMap((comment) => {
-    const box = anchorBoxes.value.get(comment.id);
-    if (!box || trayIds.value.has(comment.id)) return [];
+  const requests = cardEntries.value.flatMap(({ first, comments }) => {
+    const box = anchorBoxes.value.get(first.id);
+    if (!box || trayIds.value.has(first.id)) return [];
     return [
       {
-        id: comment.id,
+        id: first.id,
         anchorTop: box.top,
         anchorLeft: box.left,
-        width: comment.status === 'submitted' ? submittedCardWidth : draftCardWidth,
-        height: heights.get(comment.id) ?? estimatedHeight[comment.status],
+        width: first.status === 'submitted' ? submittedCardWidth : draftCardWidth,
+        height: heights.get(first.id) ?? estimatedHeight[first.status] * comments.length,
       },
     ];
   });
-  const byId = new Map(props.comments.map((comment) => [comment.id, comment]));
+  const byFirstId = new Map(cardEntries.value.map((entry) => [entry.first.id, entry]));
   return layoutCards(requests, railLeft.value).map((placement) => ({
     ...placement,
-    comment: byId.get(placement.id)!,
+    ...byFirstId.get(placement.id)!,
   }));
 });
 
@@ -214,15 +235,12 @@ const trayComments = computed(() =>
 
 const listedComments = computed(() => {
   if (!props.compact) return [];
-  const byMessage = new Map<string, Comment[]>();
-  // A general comment quotes nothing and follows the ones on the message's text.
-  const position = (comment: Comment) => (comment.quote ? comment.startOffset : Infinity);
-  for (const comment of shownComments.value.toSorted(
-    (left, right) => position(left) - position(right),
-  )) {
-    byMessage.set(comment.messageId, [...(byMessage.get(comment.messageId) ?? []), comment]);
+  const byMessage = new Map<string, (typeof cardEntries.value)[number][]>();
+  for (const entry of cardEntries.value) {
+    const { messageId } = entry.first;
+    byMessage.set(messageId, [...(byMessage.get(messageId) ?? []), entry]);
   }
-  return [...byMessage].map(([messageId, comments]) => ({ messageId, comments }));
+  return [...byMessage].map(([messageId, entries]) => ({ messageId, entries }));
 });
 
 let mouseButtonDown = false;
@@ -397,6 +415,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  stopJoining();
   clearTimeout(selectionTimer);
   document.removeEventListener('pointerdown', onPointerDown);
   document.removeEventListener('mouseup', onMouseUp);
@@ -430,14 +449,23 @@ watch(
       <CommentTray :comments="trayComments" @jump="scrollToComment" />
     </Teleport>
 
-    <CommentCard
-      v-for="card in floatingCards"
-      :key="card.id"
-      :comment="card.comment"
-      :placement="card"
-      @measure="(height) => heights.set(card.id, height)"
-      @open="openSubmitted"
-    />
+    <template v-for="card in floatingCards" :key="card.id">
+      <ForkGroupCard
+        v-if="card.first.forkGroupId"
+        :comments="card.comments"
+        :placement="card"
+        @measure="(height) => heights.set(card.id, height)"
+        @open="openSubmitted"
+        @jump="(comment) => scrollToComment(comment.id)"
+      />
+      <CommentCard
+        v-else
+        :comment="card.first"
+        :placement="card"
+        @measure="(height) => heights.set(card.id, height)"
+        @open="openSubmitted"
+      />
+    </template>
 
     <Teleport
       v-for="group in listedComments"
@@ -445,13 +473,20 @@ watch(
       :to="`#comments-${group.messageId}`"
       defer
     >
-      <CommentCard
-        v-for="comment in group.comments"
-        :key="comment.id"
-        :comment="comment"
-        @open="openSubmitted"
-        @jump="scrollToComment(comment.id)"
-      />
+      <template v-for="entry in group.entries" :key="entry.first.id">
+        <ForkGroupCard
+          v-if="entry.first.forkGroupId"
+          :comments="entry.comments"
+          @open="openSubmitted"
+          @jump="(comment) => scrollToComment(comment.id)"
+        />
+        <CommentCard
+          v-else
+          :comment="entry.first"
+          @open="openSubmitted"
+          @jump="scrollToComment(entry.first.id)"
+        />
+      </template>
     </Teleport>
 
     <div
