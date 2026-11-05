@@ -57,9 +57,19 @@ export function rangeFromOffsets(root: Node, startOffset: number, endOffset: num
   return null;
 }
 
+// A general comment quotes nothing, so it sits at the end of the message's last line of text.
+function endOfText(root: Node) {
+  const range = document.createRange();
+  const lastText = textNodes(root).findLast((node) => node.data.trim() !== '');
+  if (lastText) range.setStart(lastText, lastText.data.length);
+  else range.setStart(root, root.childNodes.length);
+  return range;
+}
+
 // The rendered text can differ from when the comment was made, so the stored offsets
 // are only trusted when they still select the quote. Otherwise the quote is searched for.
 export function locateAnchor(root: Node, anchor: TextAnchor) {
+  if (!anchor.quote) return endOfText(root);
   const text = root.textContent ?? '';
   if (text.slice(anchor.startOffset, anchor.endOffset) === anchor.quote) {
     return rangeFromOffsets(root, anchor.startOffset, anchor.endOffset);

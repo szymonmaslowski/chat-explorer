@@ -163,6 +163,45 @@ describe('submission queue', () => {
     expect(store.deliverQueued(explorationId)).toBe(false);
   });
 
+  it('sends a general comment as its text alone, inline or as a new fork', () => {
+    const { store, explorationId, mainForkId, answer } = setup();
+    const general = (body: string, type: 'inline' | 'fork') =>
+      store.createComment(explorationId, {
+        messageId: answer.id,
+        viewForkId: mainForkId,
+        quote: '',
+        startOffset: 0,
+        endOffset: 0,
+        body,
+        type,
+      });
+    general('Overall, keep it short', 'inline');
+    general('Try another approach', 'fork');
+    store.submit(explorationId, mainForkId, 'Next question');
+    store.deliverQueued(explorationId);
+
+    const [main, fork] = store.pendingForks(explorationId);
+    expect(main!.userMessages[0]!.text).toBe('Overall, keep it short\n\nNext question');
+    expect(fork!.isNewFork).toBe(true);
+    expect(fork!.baseMessageId).toBe(answer.id);
+    expect(fork!.userMessages[0]!.text).toBe('Try another approach');
+  });
+
+  it('refuses a general comment with offsets, or a quoted one with them out of order', () => {
+    const { store, explorationId, mainForkId, answer } = setup();
+    const comment = (quote: string, startOffset: number, endOffset: number) => () =>
+      store.createComment(explorationId, {
+        messageId: answer.id,
+        viewForkId: mainForkId,
+        quote,
+        startOffset,
+        endOffset,
+        body: 'x',
+      });
+    expect(comment('', 0, 4)).toThrow(expect.objectContaining({ code: 'invalid' }));
+    expect(comment('some', 4, 4)).toThrow(expect.objectContaining({ code: 'invalid' }));
+  });
+
   it('starts a new fork from a reply, leaving the current fork as it was', () => {
     const { store, explorationId, mainForkId, answer } = setup();
     draft(store, explorationId, { messageId: answer.id, viewForkId: mainForkId, body: 'inline' });

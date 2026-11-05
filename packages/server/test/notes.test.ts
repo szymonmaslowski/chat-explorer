@@ -376,7 +376,13 @@ describe('migration 8', () => {
 describe('note comments', () => {
   function noteComment(
     context: ReturnType<typeof setup>,
-    input: { body: string; noteGroupId?: string | null },
+    input: {
+      body: string;
+      noteGroupId?: string | null;
+      quote?: string;
+      startOffset?: number;
+      endOffset?: number;
+    },
   ) {
     return context.store.createComment(context.explorationId, {
       messageId: context.answer.id,
@@ -388,6 +394,16 @@ describe('note comments', () => {
       ...input,
     });
   }
+
+  it('turns a general comment into a note with only its text', () => {
+    const context = setup();
+    const { store, explorationId, mainForkId } = context;
+    noteComment(context, { body: 'Remember this', quote: '', startOffset: 0, endOffset: 0 });
+    store.submit(explorationId, mainForkId, '');
+    expect(store.snapshot(explorationId).notes[0]).toMatchObject({
+      description: 'Remember this',
+    });
+  });
 
   it('turns into a note on Submit without asking Claude anything', () => {
     const context = setup();

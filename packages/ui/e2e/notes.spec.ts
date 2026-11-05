@@ -14,7 +14,7 @@ async function addNote(page: Page, topic: string, description = '') {
   await page.getByLabel('Topic').press('Enter');
   await expect(page.getByLabel('Description')).toBeFocused();
   if (description) await page.getByLabel('Description').fill(description);
-  await page.getByRole('button', { name: 'Save' }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
 }
 
 const topics = (page: Page) => page.locator('.note .topic');
@@ -27,7 +27,7 @@ test('adds, edits and deletes notes, starting the General group', async ({ page,
   await expect(page.getByText('No notes yet.')).toBeVisible();
 
   await page.getByRole('button', { name: '+ New note' }).click();
-  await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Cancel' }).click();
 
   await addNote(page, 'Milk', 'Two litres, **1.5%**');
@@ -43,7 +43,7 @@ test('adds, edits and deletes notes, starting the General group', async ({ page,
   await page.locator('.note', { hasText: 'Milk' }).click();
   await page.getByRole('button', { name: 'Edit' }).click();
   await page.getByLabel('Topic').fill('Oat milk');
-  await page.getByRole('button', { name: 'Save' }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(topics(page)).toHaveText(['Preparing topic…', 'Oat milk']);
 
   const oatMilk = page.locator('.note', { hasText: 'Oat milk' });
@@ -97,7 +97,7 @@ test('creates groups, moves notes between them and deletes a group', async ({ pa
   await page.getByRole('tab', { name: /Shopping/ }).click();
   await page.getByRole('button', { name: 'Edit group' }).click();
   await page.getByLabel('Name').fill('Groceries');
-  await page.getByRole('button', { name: 'Save' }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('tab', { name: /Groceries/ })).toBeVisible();
 
   await page.getByRole('tab', { name: /Groceries/ }).click();

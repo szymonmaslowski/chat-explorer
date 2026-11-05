@@ -4,6 +4,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useAutosave } from '../composables/useAutosave';
 import { useExpandedArea } from '../composables/useExpandedArea';
 import { insertAtCursor } from '../lib/insert-text';
+import { sortedGroups } from '../lib/notes';
+import { openExploration } from '../stores/exploration';
 import { newId, outbox } from '../stores/outbox';
 import ConfirmButton from './ConfirmButton.vue';
 import DictationButton from './DictationButton.vue';
@@ -109,7 +111,14 @@ function cancelEditing() {
   editing.value = false;
 }
 
-const toggleType = () => update({ type: props.comment.type === 'fork' ? 'inline' : 'fork' });
+// A general comment quotes nothing: it is about the whole conversation, and can become a note.
+const isGeneral = computed(() => props.comment.quote === '');
+const firstNoteGroupId = () =>
+  sortedGroups(openExploration(props.comment.explorationId).noteGroups)[0]?.id ?? null;
+function toggleType(target: 'fork' | 'note') {
+  if (props.comment.type === target) return update({ type: 'inline' });
+  update(target === 'note' ? { type: 'note', noteGroupId: firstNoteGroupId() } : { type: 'fork' });
+}
 const forkNow = () =>
   outbox.add({
     type: 'fork-now',
@@ -165,7 +174,7 @@ function onEditorKeydown(event: KeyboardEvent) {
         </span>
       </div>
       <button
-        v-if="!placement"
+        v-if="!placement && !isGeneral"
         type="button"
         class="quote"
         title="Show in the text"
@@ -180,15 +189,28 @@ function onEditorKeydown(event: KeyboardEvent) {
         <template v-if="isDraft">
           <ListenButton :text="comment.body" />
           <button
-            v-if="comment.type !== 'note'"
+            v-if="comment.type !== 'note' || isGeneral"
             type="button"
-            class="fork-toggle"
+            class="type-toggle fork"
             :aria-pressed="comment.type === 'fork'"
             :aria-label="comment.type === 'fork' ? 'Unfork' : 'Fork'"
             :title="comment.type === 'fork' ? 'Answer in this fork instead' : 'Start a new fork'"
-            @click="toggleType"
+            @click="toggleType('fork')"
           >
             <MediaIcon name="fork" />
+          </button>
+          <button
+            v-if="isGeneral"
+            type="button"
+            class="type-toggle note"
+            :aria-pressed="comment.type === 'note'"
+            aria-label="Save as note"
+            :title="
+              comment.type === 'note' ? 'Send it to Claude instead' : 'Save it as a note on Submit'
+            "
+            @click="toggleType('note')"
+          >
+            <MediaIcon name="note" />
           </button>
           <button
             v-if="comment.type === 'fork'"
@@ -350,10 +372,16 @@ function onEditorKeydown(event: KeyboardEvent) {
   font-size: 0.75rem;
 }
 
-.fork-toggle[aria-pressed='true'] {
+.type-toggle.fork[aria-pressed='true'] {
   border-color: var(--fork);
   background: var(--fork-soft);
   color: var(--fork);
+}
+
+.type-toggle.note[aria-pressed='true'] {
+  border-color: var(--note);
+  background: var(--note-soft);
+  color: var(--note);
 }
 
 @media (pointer: coarse) {

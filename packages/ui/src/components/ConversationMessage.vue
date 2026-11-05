@@ -107,6 +107,7 @@ onMounted(findBlocks);
     </header>
     <div v-for="comment in quotedComments" :key="comment.id" class="quoted-comment">
       <RouterLink
+        v-if="comment.quote"
         :to="`/e/${message.explorationId}/f/${comment.viewForkId}#c-${comment.id}`"
         class="quote-link"
         title="Show where this was commented"

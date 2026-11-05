@@ -223,6 +223,7 @@ watch(
           :drafts="drafts"
           :saved-draft="state.replyDrafts.get(fork.id) ?? null"
           :hint="state.exploration?.title ?? ''"
+          :last-message-id="path.at(-1)?.id ?? null"
           @submitted="onSubmitted"
         />
       </div>

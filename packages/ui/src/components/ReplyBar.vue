@@ -14,6 +14,7 @@ import DictationButton from './DictationButton.vue';
 import ExpandButton from './ExpandButton.vue';
 import FileDraftList from './FileDraftList.vue';
 import ListenButton from './ListenButton.vue';
+import MediaIcon from './MediaIcon.vue';
 
 const props = defineProps<{
   explorationId: string;
@@ -21,6 +22,8 @@ const props = defineProps<{
   drafts: Comment[];
   savedDraft: ReplyDraft | null;
   hint: string;
+  // The message a general comment is written after; null while the fork has none.
+  lastMessageId: string | null;
 }>();
 const emit = defineEmits<{ submitted: [] }>();
 
@@ -181,11 +184,32 @@ function onPaste(event: ClipboardEvent) {
   files.add(pasted);
 }
 
+// The text becomes a comment on the whole conversation, waiting for Submit with the others.
+const canSaveAsComment = computed(() => text.value.trim() !== '' && props.lastMessageId !== null);
+function saveAsComment() {
+  const messageId = props.lastMessageId;
+  if (!text.value.trim() || messageId === null) return;
+  outbox.add({
+    type: 'comment.create',
+    explorationId: props.explorationId,
+    comment: {
+      id: newId(),
+      messageId,
+      viewForkId: props.forkId,
+      quote: '',
+      startOffset: 0,
+      endOffset: 0,
+      body: text.value.trim(),
+    },
+  });
+  text.value = '';
+}
+
 function onKeydown(event: KeyboardEvent) {
-  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-    event.preventDefault();
-    void submit();
-  }
+  if (event.key !== 'Enter' || !(event.metaKey || event.ctrlKey)) return;
+  event.preventDefault();
+  if (event.shiftKey) saveAsComment();
+  else void submit();
 }
 </script>
 
@@ -222,13 +246,26 @@ function onKeydown(event: KeyboardEvent) {
         class="new-fork-toggle"
         title="Send the message and inline comments to a new fork, leaving this one as it is"
       >
-        <input v-model="newFork" type="checkbox" /> New fork
+        <input v-model="newFork" type="checkbox" />
+        <MediaIcon name="fork" /><span class="visually-hidden">New fork</span>
       </label>
       <AttachButton @files="files.add" />
       <DictationButton :hint="hint" @text="insertDictation" />
       <ListenButton :text="text" />
       <ExpandButton v-model="expanded" />
-      <button type="submit" class="primary submit" :disabled="!canSubmit">Submit</button>
+      <button
+        type="button"
+        class="save-as-comment"
+        aria-label="Save as comment"
+        title="Save as a comment on the whole conversation (⌘⇧↵)"
+        :disabled="!canSaveAsComment"
+        @pointerdown.prevent
+        @mousedown.prevent
+        @click="saveAsComment"
+      >
+        <MediaIcon name="comment" />
+      </button>
+      <button type="submit" class="primary" :disabled="!canSubmit">Submit</button>
     </div>
   </form>
 </template>
@@ -257,19 +294,55 @@ function onKeydown(event: KeyboardEvent) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
-.submit {
+.save-as-comment {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   margin-left: auto;
 }
 
+/* A checkbox drawn as an icon button, so the whole row fits on a phone. The real checkbox lies
+   invisible over it and takes the taps. */
 .new-fork-toggle {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  font-size: 0.85rem;
-  white-space: nowrap;
+  justify-content: center;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.new-fork-toggle input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.new-fork-toggle:has(input:checked) {
+  border-color: var(--fork);
+  background: var(--fork-soft);
+  color: var(--fork);
+}
+
+.new-fork-toggle:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+}
+
+@media (pointer: coarse) {
+  .new-fork-toggle {
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+  }
 }
 
 .new-fork textarea {

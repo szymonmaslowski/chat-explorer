@@ -145,6 +145,9 @@ const quoteBlock = (quote: string) =>
     .split('\n')
     .map((line) => `> ${line}`)
     .join('\n');
+// A general comment quotes nothing, so it is only its text.
+const quotedText = (quote: string, text: string, separator: string) =>
+  quote ? `${quoteBlock(quote)}${separator}${text}` : text;
 
 export class ChatStore {
   constructor(
@@ -488,10 +491,14 @@ export class ChatStore {
         `Message ${input.messageId} is not shown in fork ${viewFork.id}.`,
       );
     }
-    if ((!input.body.trim() && input.editBody === undefined) || !input.quote) {
-      throw new StoreError('invalid', 'A comment needs a quote and a body.');
+    if (!input.body.trim() && input.editBody === undefined) {
+      throw new StoreError('invalid', 'A comment needs a body.');
     }
-    if (input.startOffset < 0 || input.endOffset <= input.startOffset) {
+    // Without a quote it is a general comment, on the conversation up to its message.
+    const offsetsValid = input.quote
+      ? input.startOffset >= 0 && input.endOffset > input.startOffset
+      : input.startOffset === 0 && input.endOffset === 0;
+    if (!offsetsValid) {
       throw new StoreError('invalid', 'The comment anchor offsets are out of order.');
     }
     if (input.noteGroupId) this.requireNoteGroupRow(input.noteGroupId, explorationId);
@@ -993,7 +1000,7 @@ export class ChatStore {
         'SELECT * FROM comments WHERE reply_message_id = ? ORDER BY created_at, rowid',
         row.id,
       )
-      .map((comment) => `${quoteBlock(comment.quote)}\n${comment.body}`);
+      .map((comment) => quotedText(comment.quote, comment.body, '\n'));
     const paths = this.db
       .all<FileRow>('SELECT * FROM files WHERE message_id = ? ORDER BY created_at, rowid', row.id)
       .map((file) => `- ${file.path}`);
@@ -1437,7 +1444,7 @@ export class ChatStore {
           id: noteId,
           groupId: group.id,
           topic: null,
-          description: `${quoteBlock(comment.quote)}\n\n${comment.body}`,
+          description: quotedText(comment.quote, comment.body, '\n\n'),
           createdBy: 'user',
           source: {
             forkId: comment.view_fork_id,

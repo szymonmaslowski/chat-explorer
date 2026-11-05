@@ -214,8 +214,10 @@ const trayComments = computed(() =>
 const listedComments = computed(() => {
   if (!props.compact) return [];
   const byMessage = new Map<string, Comment[]>();
+  // A general comment quotes nothing and follows the ones on the message's text.
+  const position = (comment: Comment) => (comment.quote ? comment.startOffset : Infinity);
   for (const comment of shownComments.value.toSorted(
-    (left, right) => left.startOffset - right.startOffset,
+    (left, right) => position(left) - position(right),
   )) {
     byMessage.set(comment.messageId, [...(byMessage.get(comment.messageId) ?? []), comment]);
   }

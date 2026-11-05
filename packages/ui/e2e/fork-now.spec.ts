@@ -42,7 +42,7 @@ test('starts a fork from a saved fork comment at once', async ({ page, request }
   await page.getByRole('button', { name: 'Comment', exact: true }).click();
   await page.getByPlaceholder('Your comment').fill('Later fork');
   await page.locator('.comment-editor').getByLabel('Fork', { exact: true }).check();
-  await page.getByRole('button', { name: 'Save' }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
   const card = page.locator('.comment-card.draft');
 
   await page.mouse.move(0, 0);

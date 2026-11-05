@@ -98,7 +98,7 @@ test('keeps an edit of a saved comment apart from its saved text until Save', as
   await card.hover();
   await card.getByRole('button', { name: 'Edit' }).click();
   await card.locator('textarea').fill('Third version');
-  await card.getByRole('button', { name: 'Save' }).click();
+  await card.getByRole('button', { name: 'Save', exact: true }).click();
   await page.reload();
   await expect(card).toContainText('Third version');
   await expect(card.locator('textarea')).toHaveCount(0);
@@ -173,7 +173,40 @@ test('expands a long comment to read it whole, and offers nothing to expand on a
 
   await card.getByRole('button', { name: 'Edit' }).click();
   await card.locator('textarea').fill('Short');
-  await card.getByRole('button', { name: 'Save' }).click();
+  await card.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(body).toHaveText('Short');
   await expect(card.getByRole('button', { name: 'Expand' })).toHaveCount(0);
+});
+
+test('saves the reply box text as a general comment, sent with the next Submit', async ({
+  page,
+  request,
+}) => {
+  const explorationId = await answeredChat(request);
+  await page.goto(`/e/${explorationId}`);
+  const reply = page.getByPlaceholder('Reply to Claude');
+  const saveAsComment = page.getByRole('button', { name: 'Save as comment' });
+  await expect(saveAsComment).toBeDisabled();
+
+  await reply.fill('Keep the answers short');
+  await saveAsComment.click();
+  await expect(reply).toHaveValue('');
+  const card = page.locator('.comment-card.draft', { hasText: 'Keep the answers short' });
+  await expect(card).toBeVisible();
+  await expect(card.locator('.quote')).toHaveCount(0);
+  const lastLine = (await page.locator('.message.assistant .content p').last().boundingBox())!;
+  const cardBox = (await card.boundingBox())!;
+  expect(Math.abs(cardBox.y - lastLine.y)).toBeLessThan(lastLine.height);
+
+  await reply.fill('Save this for later');
+  await reply.press('ControlOrMeta+Shift+Enter');
+  const noteCard = page.locator('.comment-card.draft', { hasText: 'Save this for later' });
+  await noteCard.getByRole('button', { name: 'Save as note' }).click();
+  await expect(noteCard).toHaveClass(/note/);
+  await expect(page.locator('.reply-bar .summary')).toHaveText('1 note, 1 comment');
+
+  await page.getByRole('button', { name: 'Submit' }).click();
+  await expect(page.locator('.queued-submission')).toBeVisible();
+  await page.goto(`/e/${explorationId}/notes`);
+  await expect(page.locator('.note .description')).toContainText('Save this for later');
 });
