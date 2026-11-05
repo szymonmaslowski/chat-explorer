@@ -349,10 +349,11 @@ function onKeydown(event: KeyboardEvent) {
   border-left: 3px solid var(--fork);
 }
 
-/* Attachments on the left, the summary on the right. Either takes the whole row when alone. */
+/* Attachments on the left, the summary on the right, next to the reply box below. Either takes
+   the whole row when alone. */
 .above-reply {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   gap: 0.75rem;
 }
 
