@@ -137,6 +137,7 @@ watch(
         <RouterLink :to="`/e/${explorationId}/notes`">Notes</RouterLink>
       </template>
       <div id="comment-tray" />
+      <SpeechPlayer />
     </ExplorationHeader>
 
     <NoteDeletionNotice :exploration-id="explorationId" :notes="state.notes" />
@@ -215,7 +216,6 @@ watch(
       />
 
       <div class="dock" data-dock>
-        <SpeechPlayer />
         <ReplyBar
           v-if="!archived"
           :exploration-id="explorationId"

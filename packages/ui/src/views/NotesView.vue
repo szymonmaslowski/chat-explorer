@@ -249,6 +249,7 @@ watch(
       <template #links>
         · <RouterLink :to="`/e/${explorationId}/map`">Map</RouterLink> · <span>Notes</span>
       </template>
+      <SpeechPlayer />
     </ExplorationHeader>
 
     <p v-if="state.status === 'loading'" class="muted">Loading…</p>
@@ -346,9 +347,6 @@ watch(
         </template>
         <div v-if="indicatorTop !== null" class="drop-line" :style="{ top: `${indicatorTop}px` }" />
       </section>
-      <div class="dock" data-dock>
-        <SpeechPlayer />
-      </div>
     </template>
 
     <dialog ref="deleteDialog" class="delete-dialog" @cancel="deleteDialog?.close()">
@@ -365,13 +363,6 @@ watch(
 </template>
 
 <style scoped>
-.dock {
-  position: sticky;
-  bottom: 0;
-  z-index: 5;
-  background: var(--background);
-}
-
 .top {
   position: sticky;
   top: 0;
