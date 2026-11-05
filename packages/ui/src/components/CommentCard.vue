@@ -32,6 +32,17 @@ watch(editing, (isEditing) => {
   if (!isEditing) expanded.value = false;
 });
 const isDraft = computed(() => props.comment.status === 'draft');
+const bodyElement = ref<HTMLElement | null>(null);
+// A body cut short by its line limit offers to expand, so a long comment can be read whole.
+const bodyClipped = ref(false);
+function checkBodyClipped() {
+  if (expanded.value || !bodyElement.value) return;
+  bodyClipped.value = bodyElement.value.scrollHeight > bodyElement.value.clientHeight + 1;
+}
+watch(
+  () => props.comment.body,
+  () => nextTick(checkBodyClipped),
+);
 const typeLabels: Record<CommentType, string> = { inline: 'Comment', fork: 'Fork', note: 'Note' };
 
 let resizeObserver: ResizeObserver | null = null;
@@ -40,6 +51,7 @@ onMounted(() => {
     // Expanded, the card floats over the page, so the cards below keep their places.
     if (entry && !expanded.value)
       emit('measure', entry.borderBoxSize[0]?.blockSize ?? entry.contentRect.height);
+    checkBodyClipped();
   });
   if (card.value) resizeObserver.observe(card.value);
 });
@@ -160,27 +172,30 @@ function onEditorKeydown(event: KeyboardEvent) {
         <span class="arrow" aria-hidden="true">↑</span>
         <span class="quoted">{{ comment.quote }}</span>
       </button>
-      <p class="body">{{ comment.body }}</p>
-      <div v-if="isDraft" class="actions">
-        <ListenButton :text="comment.body" />
-        <button
-          v-if="comment.type !== 'note'"
-          type="button"
-          :title="comment.type === 'fork' ? 'Answer in this fork instead' : 'Start a new fork'"
-          @click="toggleType"
-        >
-          {{ comment.type === 'fork' ? 'Unfork' : 'Fork' }}
-        </button>
-        <button
-          v-if="comment.type === 'fork'"
-          type="button"
-          title="Start this fork without waiting for Submit"
-          @click="forkNow"
-        >
-          Fork now
-        </button>
-        <button type="button" @click="startEditing">Edit</button>
-        <button type="button" @click="remove">Delete</button>
+      <p ref="bodyElement" class="body">{{ comment.body }}</p>
+      <div v-if="isDraft || bodyClipped" class="actions">
+        <ExpandButton v-if="bodyClipped" v-model="expanded" @click.stop />
+        <template v-if="isDraft">
+          <ListenButton :text="comment.body" />
+          <button
+            v-if="comment.type !== 'note'"
+            type="button"
+            :title="comment.type === 'fork' ? 'Answer in this fork instead' : 'Start a new fork'"
+            @click="toggleType"
+          >
+            {{ comment.type === 'fork' ? 'Unfork' : 'Fork' }}
+          </button>
+          <button
+            v-if="comment.type === 'fork'"
+            type="button"
+            title="Start this fork without waiting for Submit"
+            @click="forkNow"
+          >
+            Fork now
+          </button>
+          <button type="button" @click="startEditing">Edit</button>
+          <button type="button" @click="remove">Delete</button>
+        </template>
       </div>
     </template>
   </div>
@@ -216,6 +231,13 @@ function onEditorKeydown(event: KeyboardEvent) {
 .expanded textarea {
   flex: 1;
   resize: none;
+}
+
+.expanded .body {
+  display: block;
+  -webkit-line-clamp: unset;
+  flex: 1;
+  overflow-y: auto;
 }
 
 .comment-card.fork {

@@ -142,3 +142,38 @@ test('keeps a comment being edited out of the header tray and links to it from t
   await expect(card).toBeInViewport();
   await card.getByRole('button', { name: 'Cancel' }).click();
 });
+
+test('expands a long comment to read it whole, and offers nothing to expand on a short one', async ({
+  page,
+  request,
+}) => {
+  const explorationId = await answeredChat(request);
+  await page.goto(`/e/${explorationId}`);
+  const longComment = Array.from({ length: 12 }, (_, index) => `Line ${index + 1}`).join('\n');
+  await selectAnswer(page);
+  await page.getByRole('button', { name: 'Comment', exact: true }).click();
+  await page.getByPlaceholder('Your comment').fill(longComment);
+  await page.keyboard.press('ControlOrMeta+Enter');
+
+  const card = page.locator('.comment-card.draft');
+  const body = card.locator('.body');
+  const bodyHeight = () => body.evaluate((element) => element.clientHeight);
+  const fullHeight = await body.evaluate((element) => element.scrollHeight);
+  await expect(card.getByRole('button', { name: 'Expand' })).toBeVisible();
+  const clippedHeight = await bodyHeight();
+  expect(clippedHeight).toBeLessThan(fullHeight);
+
+  // Expanded, the card takes the free space and its body scrolls when it is still too long.
+  await card.getByRole('button', { name: 'Expand' }).click();
+  await expect(card).toHaveClass(/expanded/);
+  expect(await bodyHeight()).toBeGreaterThan(clippedHeight);
+  expect(await body.evaluate((element) => getComputedStyle(element).overflowY)).toBe('auto');
+  await card.getByRole('button', { name: 'Shrink' }).click();
+  await expect(card).not.toHaveClass(/expanded/);
+
+  await card.getByRole('button', { name: 'Edit' }).click();
+  await card.locator('textarea').fill('Short');
+  await card.getByRole('button', { name: 'Save' }).click();
+  await expect(body).toHaveText('Short');
+  await expect(card.getByRole('button', { name: 'Expand' })).toHaveCount(0);
+});
