@@ -104,34 +104,32 @@ const layout = computed(() => {
     <p v-if="state.status === 'loading'" class="muted">Loading…</p>
     <p v-else-if="state.status !== 'ready'" class="muted">This chat is not available.</p>
 
-    <div
-      v-else-if="layout"
-      class="canvas"
-      :style="{ width: `${layout.width}px`, height: `${layout.height}px` }"
-    >
-      <svg :width="layout.width" :height="layout.height" class="edges">
-        <path v-for="edge in layout.edges" :key="edge.id" :d="edge.path" />
-      </svg>
-      <RouterLink
-        v-for="box in layout.boxes"
-        :key="box.fork.id"
-        :to="forkUrl(box.fork)"
-        class="fork-box"
-        :class="{ current: box.fork.id === currentForkId, archived: box.archived }"
-        :style="{
-          left: `${box.left}px`,
-          top: `${box.top}px`,
-          width: `${boxWidth}px`,
-          height: `${boxHeight}px`,
-        }"
-      >
-        <span class="summary">{{ forkTitle(box.fork) }}</span>
-        <span class="meta">
-          {{ box.messageCount }} message{{ box.messageCount === 1 ? '' : 's' }}
-          <span v-if="box.awaitingAnswer" class="awaiting">· awaiting answer</span>
-          <span v-if="box.archived">· archived</span>
-        </span>
-      </RouterLink>
+    <div v-else-if="layout" class="canvas-scroll">
+      <div class="canvas" :style="{ width: `${layout.width}px`, height: `${layout.height}px` }">
+        <svg :width="layout.width" :height="layout.height" class="edges">
+          <path v-for="edge in layout.edges" :key="edge.id" :d="edge.path" />
+        </svg>
+        <RouterLink
+          v-for="box in layout.boxes"
+          :key="box.fork.id"
+          :to="forkUrl(box.fork)"
+          class="fork-box"
+          :class="{ current: box.fork.id === currentForkId, archived: box.archived }"
+          :style="{
+            left: `${box.left}px`,
+            top: `${box.top}px`,
+            width: `${boxWidth}px`,
+            height: `${boxHeight}px`,
+          }"
+        >
+          <span class="summary">{{ forkTitle(box.fork) }}</span>
+          <span class="meta">
+            {{ box.messageCount }} message{{ box.messageCount === 1 ? '' : 's' }}
+            <span v-if="box.awaitingAnswer" class="awaiting">· awaiting answer</span>
+            <span v-if="box.archived">· archived</span>
+          </span>
+        </RouterLink>
+      </div>
     </div>
   </div>
 </template>
@@ -151,6 +149,10 @@ const layout = computed(() => {
   gap: 0.4rem;
   margin-bottom: 1rem;
   font-size: 0.875rem;
+}
+
+.canvas-scroll {
+  overflow-x: auto;
 }
 
 .canvas {
