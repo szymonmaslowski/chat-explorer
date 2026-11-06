@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import ArchiveForkButton from '../components/ArchiveForkButton.vue';
 import CommentLayer from '../components/CommentLayer.vue';
 import ExplorationHeader from '../components/ExplorationHeader.vue';
 import ForkArchiveControl from '../components/ForkArchiveControl.vue';
@@ -137,8 +136,12 @@ watch(
         · <RouterLink :to="`/e/${explorationId}/map?from=${fork.id}`">Map</RouterLink> ·
         <RouterLink :to="`/e/${explorationId}/notes`">Notes</RouterLink>
       </template>
-      <template v-if="fork?.parentForkId && !archived" #title-actions>
-        <ArchiveForkButton :fork-id="fork.id" />
+      <template v-if="fork?.parentForkId && !chatArchived" #title-actions>
+        <ForkArchiveControl
+          :exploration-id="explorationId"
+          :fork="fork"
+          :archived-by="archivedBy"
+        />
       </template>
       <div id="comment-tray" />
       <SpeechPlayer />
@@ -158,12 +161,6 @@ watch(
     <p v-else-if="!fork" class="muted">This fork does not exist.</p>
 
     <template v-else>
-      <ForkArchiveControl
-        v-if="archivedBy && !chatArchived"
-        :exploration-id="explorationId"
-        :fork="fork"
-        :archived-by="archivedBy"
-      />
       <p v-if="path.length === 0" class="muted">
         No messages yet.<template v-if="!archived"> Write the first one below.</template>
       </p>

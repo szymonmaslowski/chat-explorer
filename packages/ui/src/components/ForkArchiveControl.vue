@@ -3,15 +3,17 @@ import type { Fork } from '@shared/types';
 import { ref } from 'vue';
 import { api, ApiError } from '../api';
 import { forkTitle } from '../lib/conversation';
+import ConfirmButton from './ConfirmButton.vue';
+import MediaIcon from './MediaIcon.vue';
 
-const props = defineProps<{ explorationId: string; fork: Fork; archivedBy: Fork }>();
+const props = defineProps<{ explorationId: string; fork: Fork; archivedBy: Fork | null }>();
 
 const error = ref('');
 
-async function restore() {
+async function setArchived(archive: boolean) {
   error.value = '';
   try {
-    await api.unarchiveFork(props.archivedBy.id);
+    await (archive ? api.archiveFork(props.fork.id) : api.unarchiveFork(props.archivedBy!.id));
   } catch (failure) {
     error.value = failure instanceof ApiError ? failure.message : 'Something went wrong.';
   }
@@ -20,38 +22,70 @@ async function restore() {
 
 <template>
   <div class="fork-archive">
-    <p class="archived">
-      <template v-if="archivedBy.id === fork.id">Fork archived, read only.</template>
-      <template v-else>
-        Archived with
-        <RouterLink :to="`/e/${explorationId}/f/${archivedBy.id}`">{{
-          forkTitle(archivedBy)
-        }}</RouterLink
-        >, read only.
-      </template>
-      <button type="button" @click="restore">Restore</button>
-    </p>
     <span v-if="error" class="error" role="alert">{{ error }}</span>
+    <ConfirmButton
+      v-if="!archivedBy"
+      label="Archive fork"
+      title="Archive fork"
+      @confirm="setArchived(true)"
+    >
+      <MediaIcon name="archive" /><span class="visually-hidden">Archive fork</span>
+    </ConfirmButton>
+    <template v-else>
+      <span class="archived">
+        <template v-if="archivedBy.id === fork.id">Archived</template>
+        <template v-else>
+          Archived with
+          <RouterLink :to="`/e/${explorationId}/f/${archivedBy.id}`">{{
+            forkTitle(archivedBy)
+          }}</RouterLink>
+        </template>
+      </span>
+      <button
+        type="button"
+        aria-label="Restore"
+        :title="
+          archivedBy.id === fork.id ? 'Restore this fork' : `Restore ${forkTitle(archivedBy)}`
+        "
+        @click="setArchived(false)"
+      >
+        <MediaIcon name="unarchive" />
+      </button>
+    </template>
   </div>
 </template>
 
 <style scoped>
 .fork-archive {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  margin: 0 0 1rem;
-  font-size: 0.875rem;
+  min-width: 0;
+  flex-shrink: 0;
+  max-width: 50%;
+}
+
+.fork-archive button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 1.9rem;
+  padding: 0.15rem 0.4rem;
+  line-height: 1.2;
 }
 
 .archived {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
   color: var(--warning);
+}
+
+.archived a {
+  color: inherit;
 }
 
 .error {
