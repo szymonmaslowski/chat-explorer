@@ -3,6 +3,7 @@ import type { Comment, Message, MessageFile } from '@shared/types';
 import { computed, onMounted, ref, shallowRef, watch } from 'vue';
 import { renderMarkdown } from '@shared/markdown';
 import { useCopied } from '../composables/useCopied';
+import { fileIdOfImage, useImageViewer } from '../composables/useImageViewer';
 import { formatDateTime } from '../lib/date-time';
 import { bringToReadingLine, scrollToEdge } from '../lib/reading-line';
 import { speechBlocks, type SpokenElement } from '../lib/speech-blocks';
@@ -42,6 +43,20 @@ void checkSpeechAvailable();
 
 const { copied, copy } = useCopied();
 const copyMessage = () => copy({ plain: props.message.content, html: html.value });
+
+const imageViewer = useImageViewer();
+
+function openImage(event: MouseEvent, file: MessageFile) {
+  if (file.kind !== 'image') return;
+  event.preventDefault();
+  imageViewer.open(file.id);
+}
+
+function openContentImage(event: MouseEvent) {
+  if (!(event.target instanceof HTMLImageElement)) return;
+  const fileId = fileIdOfImage(event.target.src);
+  if (fileId) imageViewer.open(fileId);
+}
 
 function findBlocks() {
   blocks.value =
@@ -141,6 +156,7 @@ onMounted(findBlocks);
         rel="noopener"
         :class="file.kind"
         :title="file.name"
+        @click="openImage($event, file)"
       >
         <img v-if="file.kind === 'image'" :src="`/api/files/${file.id}`" :alt="file.name" />
         <template v-else>
@@ -155,6 +171,7 @@ onMounted(findBlocks);
       class="content"
       :data-anchor-root="message.id"
       :data-speakable="speakable || undefined"
+      @click="openContentImage"
       v-html="html"
     />
     <footer v-if="jumpable" class="message-end">
@@ -281,6 +298,10 @@ onMounted(findBlocks);
   margin: 0.75rem 1rem;
   border-radius: var(--radius);
   box-shadow: var(--shadow);
+}
+
+.content :deep(img[src^='/api/files/']) {
+  cursor: zoom-in;
 }
 
 .content :deep(p:first-child) {

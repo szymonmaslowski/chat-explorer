@@ -62,6 +62,13 @@ test('sends pasted and picked files with a reply, and Claude gets their paths', 
     .toBe(1);
   await expect(message.locator('.files a.text')).toHaveText('notes.md');
 
+  await thumbnail.click();
+  const viewer = page.getByRole('dialog', { name: 'Image' });
+  await expect(viewer.locator('img')).toHaveAttribute('src', /\/api\/files\/\w+/);
+  await page.goBack();
+  await expect(viewer).toHaveCount(0);
+  await expect(page).toHaveURL(new RegExp(`/e/${explorationId}$`));
+
   await detachFakeSession(request);
 });
 
@@ -101,4 +108,21 @@ test('shows an upload in an answer once, in the text', async ({ page, request })
     )
     .toBe(1);
   await expect(answer.locator('.files')).toHaveCount(0);
+
+  await answer.locator('.content img').click();
+  const viewer = page.getByRole('dialog', { name: 'Image' });
+  await expect(viewer.locator('img')).toHaveAttribute('src', `/api/files/${uploaded.id}`);
+  await expect(page).toHaveURL(new RegExp(`\\?image=${uploaded.id}$`));
+  await viewer.getByRole('button', { name: 'Zoom in' }).click();
+  await expect(viewer.locator('img')).toHaveAttribute('style', /scale\(1\.5\)/);
+  await viewer.locator('.stage').dblclick();
+  await expect(viewer.locator('img')).toHaveAttribute('style', /scale\(1\)/);
+  await viewer.getByRole('button', { name: 'Back' }).click();
+  await expect(viewer).toHaveCount(0);
+  await expect(page).toHaveURL(new RegExp(`/e/${explorationId}$`));
+
+  await page.goto(`/e/${explorationId}?image=${uploaded.id}`);
+  await viewer.getByRole('button', { name: 'Back' }).click();
+  await expect(viewer).toHaveCount(0);
+  await expect(page).toHaveURL(new RegExp(`/e/${explorationId}$`));
 });

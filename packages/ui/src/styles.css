@@ -153,6 +153,10 @@ blockquote {
   color: var(--text-muted);
 }
 
+html.image-viewer-open {
+  overflow: hidden;
+}
+
 /* Named for screen readers and tests, not shown. */
 .visually-hidden {
   position: absolute;
