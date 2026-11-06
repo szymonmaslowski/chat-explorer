@@ -4,6 +4,7 @@ import { computed } from 'vue';
 import { replyFilesOwner, restoreFileDrafts } from '../stores/file-drafts';
 import { outbox } from '../stores/outbox';
 import { replyDrafts } from '../stores/reply-drafts';
+import MediaIcon from './MediaIcon.vue';
 
 const props = defineProps<{
   submission: QueuedSubmission;
@@ -42,7 +43,15 @@ function cancel() {
       </span>
       <p v-if="submission.globalMessage" class="message">{{ submission.globalMessage }}</p>
     </div>
-    <button @click="cancel">Cancel</button>
+    <button
+      type="button"
+      class="cancel"
+      aria-label="Cancel"
+      title="Cancel and put the message back in the reply box"
+      @click="cancel"
+    >
+      <MediaIcon name="close" />
+    </button>
   </div>
 </template>
 
@@ -57,6 +66,16 @@ function cancel() {
   padding: 0.6rem 1rem;
   margin: 1rem 0;
   font-size: 0.9rem;
+}
+
+.cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 1.9rem;
+  padding: 0.15rem 0.4rem;
+  line-height: 1.2;
 }
 
 .message {

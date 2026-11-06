@@ -22,7 +22,8 @@ defineProps<{
     | 'to-end'
     | 'to-start'
     | 'unchain'
-    | 'archive';
+    | 'archive'
+    | 'close';
 }>();
 </script>
 
@@ -62,6 +63,7 @@ defineProps<{
     <path v-else-if="name === 'to-end'" d="M12 4v14M6 12l6 6 6-6M5 21h14" />
     <path v-else-if="name === 'to-start'" d="M12 20V6M6 12l6-6 6 6M5 3h14" />
     <path v-else-if="name === 'archive'" d="M4 5h16v4H4zM5 9v10h14V9M10 13h4" />
+    <path v-else-if="name === 'close'" d="M6 6l12 12M18 6L6 18" />
     <path v-else-if="name === 'note'" d="M5 4h14v10l-6 6H5zM13 20v-6h6M9 9h6M9 13h3" />
     <path v-else-if="name === 'send'" d="M3 11l18-8-8 18-2-8zM11 13l10-10" />
     <path
@@ -94,7 +96,8 @@ defineProps<{
 .media-icon.to-end,
 .media-icon.to-start,
 .media-icon.unchain,
-.media-icon.archive {
+.media-icon.archive,
+.media-icon.close {
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
