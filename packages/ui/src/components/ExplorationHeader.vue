@@ -50,9 +50,12 @@ const forksBetween = computed(() =>
           /
         </template>
       </p>
-      <h1 class="title" :class="{ 'fork-title': fork }">
-        {{ fork ? forkTitle(fork) : chatTitle }}
-      </h1>
+      <div class="title-row">
+        <h1 class="title" :class="{ 'fork-title': fork }">
+          {{ fork ? forkTitle(fork) : chatTitle }}
+        </h1>
+        <slot name="title-actions" />
+      </div>
     </template>
     <p v-if="state.exploration?.archivedAt" class="archived">
       Archived, read only.
@@ -127,8 +130,16 @@ const forksBetween = computed(() =>
   color: inherit;
 }
 
-.title {
+.title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
   margin: 0.2rem 0 0;
+}
+
+.title {
+  margin: 0;
   font-size: inherit;
   font-weight: 600;
   display: -webkit-box;

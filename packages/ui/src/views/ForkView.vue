@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
+import ArchiveForkButton from '../components/ArchiveForkButton.vue';
 import CommentLayer from '../components/CommentLayer.vue';
 import ExplorationHeader from '../components/ExplorationHeader.vue';
 import ForkArchiveControl from '../components/ForkArchiveControl.vue';
@@ -136,6 +137,9 @@ watch(
         · <RouterLink :to="`/e/${explorationId}/map?from=${fork.id}`">Map</RouterLink> ·
         <RouterLink :to="`/e/${explorationId}/notes`">Notes</RouterLink>
       </template>
+      <template v-if="fork?.parentForkId && !archived" #title-actions>
+        <ArchiveForkButton :fork-id="fork.id" />
+      </template>
       <div id="comment-tray" />
       <SpeechPlayer />
     </ExplorationHeader>
@@ -155,7 +159,7 @@ watch(
 
     <template v-else>
       <ForkArchiveControl
-        v-if="fork.parentForkId && !chatArchived"
+        v-if="archivedBy && !chatArchived"
         :exploration-id="explorationId"
         :fork="fork"
         :archived-by="archivedBy"

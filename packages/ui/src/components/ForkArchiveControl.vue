@@ -3,16 +3,15 @@ import type { Fork } from '@shared/types';
 import { ref } from 'vue';
 import { api, ApiError } from '../api';
 import { forkTitle } from '../lib/conversation';
-import ConfirmButton from './ConfirmButton.vue';
 
-const props = defineProps<{ explorationId: string; fork: Fork; archivedBy: Fork | null }>();
+const props = defineProps<{ explorationId: string; fork: Fork; archivedBy: Fork }>();
 
 const error = ref('');
 
-async function setArchived(archive: boolean) {
+async function restore() {
   error.value = '';
   try {
-    await (archive ? api.archiveFork(props.fork.id) : api.unarchiveFork(props.archivedBy!.id));
+    await api.unarchiveFork(props.archivedBy.id);
   } catch (failure) {
     error.value = failure instanceof ApiError ? failure.message : 'Something went wrong.';
   }
@@ -21,8 +20,7 @@ async function setArchived(archive: boolean) {
 
 <template>
   <div class="fork-archive">
-    <ConfirmButton v-if="!archivedBy" label="Archive fork" @confirm="setArchived(true)" />
-    <p v-else class="archived">
+    <p class="archived">
       <template v-if="archivedBy.id === fork.id">Fork archived, read only.</template>
       <template v-else>
         Archived with
@@ -31,7 +29,7 @@ async function setArchived(archive: boolean) {
         }}</RouterLink
         >, read only.
       </template>
-      <button type="button" @click="setArchived(false)">Restore</button>
+      <button type="button" @click="restore">Restore</button>
     </p>
     <span v-if="error" class="error" role="alert">{{ error }}</span>
   </div>
