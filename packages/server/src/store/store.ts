@@ -52,6 +52,7 @@ import { StoreError } from './errors.js';
 import { idAlphabet, idLength } from '../shared/ids.js';
 import type { EventBus } from './event-bus.js';
 import { newId } from './ids.js';
+import { repairMarkdown } from './repair-markdown.js';
 
 export const attachmentLivenessMs = 45_000;
 const forkSummaryLength = 80;
@@ -538,7 +539,7 @@ export class ChatStore {
       throw new StoreError('invalid', `Fork ${fork.id} is not awaiting an answer.`);
     }
     const { message, fork: updatedFork } = this.db.transaction(() => {
-      const appended = this.appendMessage(fork, 'assistant', input.content, 'live');
+      const appended = this.appendMessage(fork, 'assistant', repairMarkdown(input.content), 'live');
       this.keepFilesShownIn(appended.message);
       return appended;
     });
