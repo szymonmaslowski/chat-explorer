@@ -55,6 +55,7 @@ export interface MessageRow {
   content: string;
   source: MessageSource;
   created_at: number;
+  read_at: number | null;
 }
 
 export interface CommentRow {
@@ -176,6 +177,7 @@ export const toMessage = (row: MessageRow): Message => ({
   content: row.content,
   source: row.source,
   createdAt: row.created_at,
+  readAt: row.read_at,
 });
 
 export const toComment = (row: CommentRow): Comment => ({

@@ -174,4 +174,9 @@ export const migrations = [
   `
   ALTER TABLE comments ADD COLUMN fork_group_id TEXT;
   `,
+  `
+  -- Claude's answers are unread until the reader has seen them; earlier ones count as seen.
+  ALTER TABLE messages ADD COLUMN read_at INTEGER;
+  UPDATE messages SET read_at = created_at;
+  `,
 ];

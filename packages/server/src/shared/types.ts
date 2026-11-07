@@ -23,6 +23,8 @@ export type ExplorationView = 'active' | 'archived' | 'deleted';
 export interface ExplorationListItem extends Exploration {
   forkCount: number;
   sessionStatus: SessionStatus;
+  hasUnread: boolean;
+  sessionError: string | null;
 }
 
 export interface Fork {
@@ -49,6 +51,8 @@ export interface Message {
   content: string;
   source: MessageSource;
   createdAt: number;
+  // Null on an answer of Claude's the reader has not seen yet.
+  readAt: number | null;
 }
 
 export interface Comment {
@@ -154,6 +158,7 @@ export interface Snapshot {
 
 export type ExplorationEvent =
   | { type: 'message.added'; message: Message; fork: Fork }
+  | { type: 'messages.read'; messageIds: string[]; readAt: number | null }
   | { type: 'fork.created'; fork: Fork }
   | { type: 'fork.updated'; fork: Fork }
   | { type: 'comment.created'; comment: Comment }

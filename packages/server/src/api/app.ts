@@ -1,6 +1,6 @@
 import { createReadStream, existsSync } from 'node:fs';
 import { Readable } from 'node:stream';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
@@ -78,6 +78,8 @@ const submitBody = z.object({
   fileIds,
 });
 const forkNowBody = z.object({ id: clientId });
+const readMessagesBody = z.object({ messageIds: z.array(z.string()).min(1) });
+const unreadFromBody = z.object({ viewForkId: z.string() });
 const noteForkBody = z.object({ id: clientId, forkId: clientId, message: z.string() });
 const newNoteGroupBody = z.object({
   id: clientId,
@@ -161,6 +163,23 @@ const feedbackBody = shimBody.extend({
   waitMs: z.number().int().positive().max(maxFeedbackWaitMs),
 });
 
+type SendEvent = (event: string, data: object) => void;
+
+function eventStream(context: Context, subscribe: (send: SendEvent) => () => void) {
+  return streamSSE(context, async (stream) => {
+    const unsubscribe = subscribe((event, data) => {
+      void stream.writeSSE({ event, data: JSON.stringify(data) });
+    });
+    stream.onAbort(unsubscribe);
+    await stream.writeSSE({ event: 'ready', data: '{}' });
+    while (!stream.aborted && !stream.closed) {
+      await stream.sleep(sseKeepAliveMs);
+      await stream.writeSSE({ event: 'ping', data: '' });
+    }
+    unsubscribe();
+  });
+}
+
 export function createApp(options: AppOptions) {
   const { store, hub, bus, sessions, transcriber, speaker, fileStorage, port } = options;
   const localUrl = `http://127.0.0.1:${port}`;
@@ -240,6 +259,7 @@ export function createApp(options: AppOptions) {
     const explorations: ExplorationListItem[] = store.listExplorations(view).map((exploration) => ({
       ...exploration,
       sessionStatus: view === 'deleted' ? 'detached' : hub.status(exploration.id),
+      sessionError: view === 'deleted' ? null : sessions.error(exploration.id),
     }));
     return context.json(explorations);
   });
@@ -333,6 +353,16 @@ export function createApp(options: AppOptions) {
       store.deleteExploration(explorationId);
     }
     return context.json({ ok: true });
+  });
+
+  app.post('/api/explorations/:id/read', async (context) => {
+    const body = readMessagesBody.parse(await context.req.json());
+    return context.json(store.markRead(context.req.param('id'), body.messageIds));
+  });
+
+  app.post('/api/messages/:id/unread', async (context) => {
+    const body = unreadFromBody.parse(await context.req.json());
+    return context.json(store.markUnreadFrom(context.req.param('id'), body.viewForkId));
   });
 
   app.post('/api/explorations/:id/comments', async (context) => {
@@ -448,23 +478,23 @@ export function createApp(options: AppOptions) {
     context.json(store.cancelSubmission(context.req.param('id'))),
   );
 
+  // Which chat changed, for the chats list to reload while it is open.
+  app.get('/api/events', (context) =>
+    eventStream(context, (send) =>
+      bus.subscribe((explorationId, event) =>
+        send('exploration.changed', { explorationId, type: event.type }),
+      ),
+    ),
+  );
+
   app.get('/api/explorations/:id/events', (context) => {
     const explorationId = context.req.param('id');
     if (!store.hasExploration(explorationId)) {
       throw new StoreError('not_found', `Exploration ${explorationId} does not exist.`);
     }
-    return streamSSE(context, async (stream) => {
-      const unsubscribe = bus.subscribeTo(explorationId, (event) => {
-        void stream.writeSSE({ event: event.type, data: JSON.stringify(event) });
-      });
-      stream.onAbort(unsubscribe);
-      await stream.writeSSE({ event: 'ready', data: '{}' });
-      while (!stream.aborted && !stream.closed) {
-        await stream.sleep(sseKeepAliveMs);
-        await stream.writeSSE({ event: 'ping', data: '' });
-      }
-      unsubscribe();
-    });
+    return eventStream(context, (send) =>
+      bus.subscribeTo(explorationId, (event) => send(event.type, event)),
+    );
   });
 
   const internal = new Hono();

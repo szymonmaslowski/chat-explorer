@@ -207,14 +207,16 @@ export class ChatStore {
     };
   }
 
-  listExplorations(view: ExplorationView = 'active'): Omit<ExplorationListItem, 'sessionStatus'>[] {
+  listExplorations(
+    view: ExplorationView = 'active',
+  ): Omit<ExplorationListItem, 'sessionStatus' | 'sessionError'>[] {
     const filters: Record<ExplorationView, string> = {
       active: 'deleted_at IS NULL AND archived_at IS NULL ORDER BY updated_at DESC',
       archived: 'deleted_at IS NULL AND archived_at IS NOT NULL ORDER BY archived_at DESC',
       deleted: 'deleted_at IS NOT NULL ORDER BY deleted_at DESC',
     };
     return this.db
-      .all<ExplorationRow & { fork_count: number }>(
+      .all<ExplorationRow & { fork_count: number; has_unread: number }>(
         `SELECT explorations.*,
            (WITH RECURSIVE shown(id) AS (
               SELECT id FROM forks
@@ -222,10 +224,18 @@ export class ChatStore {
               UNION ALL
               SELECT forks.id FROM forks JOIN shown ON forks.parent_fork_id = shown.id
                WHERE forks.archived_at IS NULL
-            ) SELECT count(*) FROM shown) AS fork_count
+            ) SELECT count(*) FROM shown) AS fork_count,
+           EXISTS (
+             SELECT 1 FROM messages
+              WHERE messages.exploration_id = explorations.id AND messages.read_at IS NULL
+           ) AS has_unread
          FROM explorations WHERE ${filters[view]}`,
       )
-      .map((row) => ({ ...toExploration(row), forkCount: row.fork_count }));
+      .map((row) => ({
+        ...toExploration(row),
+        forkCount: row.fork_count,
+        hasUnread: row.has_unread === 1,
+      }));
   }
 
   snapshot(explorationId: string): Omit<Snapshot, 'sessionStatus' | 'sessionError'> {
@@ -432,6 +442,51 @@ export class ChatStore {
         messageCount: row.message_count,
         awaitingAnswer: row.tip_role === 'user',
       }));
+  }
+
+  // Reading is allowed in archived chats and forks too, so their unread marks can be cleared.
+  markRead(explorationId: string, messageIds: string[]) {
+    this.requireExplorationRow(explorationId);
+    const readAt = this.now();
+    const changedIds = messageIds.filter(
+      (messageId) =>
+        this.db.run(
+          'UPDATE messages SET read_at = ? WHERE id = ? AND exploration_id = ? AND read_at IS NULL',
+          readAt,
+          messageId,
+          explorationId,
+        ).changes > 0,
+    );
+    this.publishReadChange(explorationId, changedIds, readAt);
+    return { messageIds: changedIds, readAt };
+  }
+
+  // The answer and every later answer of Claude's on the path of the fork being read.
+  markUnreadFrom(messageId: string, viewForkId: string) {
+    const message = this.requireMessageRow(messageId);
+    const viewFork = this.requireForkRow(viewForkId, message.exploration_id);
+    if (message.role !== 'assistant') {
+      throw new StoreError('invalid', "Only an answer of Claude's can be marked unread.");
+    }
+    const path = this.pathTo(viewFork.tip_message_id ?? viewFork.base_message_id);
+    const start = path.findIndex((row) => row.id === messageId);
+    if (start === -1) {
+      throw new StoreError('invalid', `Message ${messageId} is not in fork ${viewForkId}.`);
+    }
+    const changedIds = path
+      .slice(start)
+      .filter((row) => row.role === 'assistant' && row.read_at !== null)
+      .map((row) => row.id);
+    for (const changedId of changedIds) {
+      this.db.run('UPDATE messages SET read_at = NULL WHERE id = ?', changedId);
+    }
+    this.publishReadChange(message.exploration_id, changedIds, null);
+    return { messageIds: changedIds, readAt: null };
+  }
+
+  private publishReadChange(explorationId: string, messageIds: string[], readAt: number | null) {
+    if (messageIds.length === 0) return;
+    this.publish([[explorationId, { type: 'messages.read', messageIds, readAt }]]);
   }
 
   readFork(forkId: string, limit?: number): ForkRead {
@@ -1741,8 +1796,9 @@ export class ChatStore {
     const id = newId();
     const updatedAt = this.now();
     this.db.run(
-      `INSERT INTO messages (id, exploration_id, fork_id, parent_id, role, content, source, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO messages (id, exploration_id, fork_id, parent_id, role, content, source,
+         created_at, read_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id,
       fork.exploration_id,
       fork.id,
@@ -1751,6 +1807,7 @@ export class ChatStore {
       content,
       source,
       createdAt,
+      role === 'assistant' && source === 'live' ? null : createdAt,
     );
     this.db.run(
       'UPDATE forks SET tip_message_id = ?, updated_at = ? WHERE id = ?',
