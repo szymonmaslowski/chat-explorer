@@ -9,7 +9,7 @@ test('asks to wake Claude in its terminal when it stopped listening with message
   await attachFakeSession(request, explorationId);
   await page.goto(`/e/${explorationId}`);
   const status = page.locator('.status .label');
-  await expect(status).toHaveText('Session attached, not listening');
+  await expect(status).toHaveText('paused');
 
   await page.getByPlaceholder('Reply to Claude').fill('Are you there?');
   await page.getByRole('button', { name: 'Submit' }).click();

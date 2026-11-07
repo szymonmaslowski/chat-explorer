@@ -11,11 +11,19 @@ const props = defineProps<{
 }>();
 
 const labels: Record<SessionStatus, string> = {
-  starting: 'Starting Claude…',
+  starting: 'starting',
+  listening: 'listening',
+  answering: 'working',
+  attached: 'paused',
+  detached: 'detached',
+};
+
+const explanations: Record<SessionStatus, string> = {
+  starting: 'Claude is starting',
   listening: 'Claude is listening',
   answering: 'Claude is answering',
-  attached: 'Session attached, not listening',
-  detached: 'No session attached',
+  attached: 'A session is attached, but Claude is not listening',
+  detached: 'No session attached; one starts when you submit',
 };
 
 const waiting = computed(
@@ -23,28 +31,25 @@ const waiting = computed(
     outbox.changes.value.filter((change) => change.explorationId === props.explorationId).length,
 );
 const label = computed(() => {
-  const state = props.connected ? labels[props.status] : 'Reconnecting…';
+  const state = props.connected ? labels[props.status] : 'reconnecting…';
   if (!waiting.value || (props.connected && !outbox.stalled.value)) return state;
-  return `${state} · ${waiting.value} change${waiting.value === 1 ? '' : 's'} waiting`;
+  return `${state} · ${waiting.value} waiting`;
+});
+const title = computed(() => {
+  const explanation = props.connected ? explanations[props.status] : 'Reconnecting to the daemon';
+  const command = `run /explore-chat ${props.explorationId} in Claude Code`;
+  return props.status === 'listening' || props.status === 'answering'
+    ? explanation
+    : `${explanation}. Or ${command}.`;
 });
 </script>
 
 <template>
-  <div class="status" :class="connected ? status : 'offline'">
+  <div class="status" :class="connected ? status : 'offline'" :title="title">
     <span class="dot" />
     <span class="label">
       {{ label }}
-      <span
-        v-if="connected && status === 'detached'"
-        :title="`Or run /explore-chat ${explorationId} in Claude Code`"
-      >
-        · starts when you submit
-      </span>
-      <span
-        v-if="connected && status === 'attached' && hasQueued"
-        class="stopped"
-        :title="`Or run /explore-chat ${explorationId} in Claude Code`"
-      >
+      <span v-if="connected && status === 'attached' && hasQueued" class="stopped">
         · messages wait: tell Claude in its terminal to continue
       </span>
     </span>

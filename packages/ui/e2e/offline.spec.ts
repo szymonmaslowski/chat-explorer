@@ -25,7 +25,7 @@ test('keeps comments and a submit made offline and sends them when the connectio
   await page.getByPlaceholder('Reply to Claude').fill('And this too');
   await page.getByRole('button', { name: 'Submit' }).click();
   await expect(page.locator('.queued-submission')).toContainText('waits for the connection');
-  await expect(page.locator('.status')).toContainText(/\d changes waiting/);
+  await expect(page.locator('.status')).toContainText(/\d waiting/);
   expect((await snapshotOf(request, explorationId)).comments).toEqual([]);
 
   await context.setOffline(false);
@@ -92,7 +92,7 @@ test('keeps an edit started offline open when the connection is back', async ({
   await page.waitForTimeout(1_500);
 
   await context.setOffline(false);
-  await expect(page.locator('.status')).not.toContainText(/Reconnecting|waiting/, {
+  await expect(page.locator('.status')).not.toContainText(/reconnecting|waiting/i, {
     timeout: 10_000,
   });
   await expect(card.locator('textarea')).toHaveValue('Second version, typed offline');

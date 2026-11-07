@@ -134,10 +134,9 @@ const forksBetween = computed(() =>
 
 .title-actions {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 0.4rem;
-  min-width: 0;
-  max-width: 60%;
 }
 
 .title-row {
@@ -149,6 +148,8 @@ const forksBetween = computed(() =>
 }
 
 .title {
+  flex: 1;
+  min-width: 0;
   margin: 0;
   font-size: inherit;
   font-weight: 600;

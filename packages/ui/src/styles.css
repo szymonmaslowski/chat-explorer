@@ -248,7 +248,8 @@ html.image-viewer-open {
     min-height: 2.5rem;
   }
 
-  button {
+  button,
+  .icon-button {
     min-width: 2.5rem;
   }
 }
