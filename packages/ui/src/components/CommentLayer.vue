@@ -100,9 +100,15 @@ const editor = ref<{
   left: number;
   commentId: string | null;
 } | null>(null);
-// The comment open in the editor shows there, not also as a card.
+// The comment open in the editor shows there, not also as a card. A sent comment shows in the
+// reply it went with, and its fork as a link under the message, so it needs no card; a saved note
+// keeps its card, which is the way to the note.
 const shownComments = computed(() =>
-  props.comments.filter((comment) => comment.id !== editor.value?.commentId),
+  props.comments.filter(
+    (comment) =>
+      comment.id !== editor.value?.commentId &&
+      (comment.status !== 'submitted' || comment.type === 'note'),
+  ),
 );
 
 const container = () => layer.value?.parentElement ?? null;

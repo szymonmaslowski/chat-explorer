@@ -85,13 +85,10 @@ const queuedSubmissions = computed(() =>
     (submission) => submission.forkId === fork.value?.id,
   ),
 );
-// Forks started from a reply, unless archived; forks from comments are reached through their
-// comment.
 const replyForksAt = (messageId: string) =>
   [...state.value.forks.values()].filter(
     (child) =>
       child.baseMessageId === messageId &&
-      child.originCommentId === null &&
       child.parentForkId !== null &&
       child.archivedAt === null &&
       child.id !== fork.value?.id,

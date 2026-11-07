@@ -127,10 +127,10 @@ test('opens a fork from the map at its end', async ({ page }) => {
   expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
 });
 
-test('opens the fork created by a submitted fork comment', async ({ page }) => {
+test('links the fork of a sent fork comment under its message, with no card', async ({ page }) => {
   await openSeededExploration(page);
-  const card = page.locator('.comment-card.submitted.fork');
-  await card.click();
+  await expect(page.locator('.comment-card.submitted')).toHaveCount(0);
+  await page.getByRole('link', { name: '↳ Fork: Purging cached responses on a CDN' }).click();
   await expect(page.locator('.fork-title')).toHaveText('Purging cached responses on a CDN');
 });
 

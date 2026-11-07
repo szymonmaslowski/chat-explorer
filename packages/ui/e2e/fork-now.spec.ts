@@ -39,7 +39,8 @@ test('starts a fork from a new comment at once, leaving the other drafts and the
   await detachFakeSession(request);
 
   await expect(page.locator('.queued-submission')).toHaveCount(0);
-  await expect(page.locator('.comment-card.submitted')).toContainText('Try it this way');
+  await expect(page.locator('.comment-card.submitted')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '↳ Fork: Try it this way' })).toBeVisible();
   await expect(page.locator('.reply-bar .summary')).toHaveText('1 comment, message');
 });
 
