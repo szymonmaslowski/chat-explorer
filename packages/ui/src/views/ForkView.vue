@@ -16,6 +16,7 @@ import { useMediaQuery } from '../composables/useMediaQuery';
 import { useReadTracking } from '../composables/useReadTracking';
 import { commentRailWidth } from '../lib/card-layout';
 import {
+  answeredPartLookup,
   archivingFork,
   forkPath,
   forkTitle,
@@ -56,6 +57,7 @@ const awaitingAnswer = computed(() => path.value.at(-1)?.role === 'user');
 const lastAnswer = computed(() => path.value.findLast((message) => message.role === 'assistant'));
 const attention = computed(() => forkAttention(state.value));
 const { newIds, markUnread } = useReadTracking({ state, fork, path });
+const answeredPart = computed(() => answeredPartLookup(state.value.comments, state.value.messages));
 const viewComments = computed(() =>
   [...state.value.comments.values()].filter(
     (comment) => comment.viewForkId === fork.value?.id && pathIds.value.has(comment.messageId),
@@ -203,6 +205,7 @@ watch(
             :files="filesOfMessage(message.id)"
             :shared="ownStart !== -1 && index < ownStart"
             :is-new="newIds.has(message.id)"
+            :answered-part="answeredPart"
             @mark-unread="markUnread(message.id)"
           />
           <div :id="`comments-${message.id}`" class="message-comments" />

@@ -39,6 +39,7 @@ import type {
   Role,
   Snapshot,
 } from '../shared/types.js';
+import { commentTag, messageTag } from '../shared/answer-tags.js';
 import { defaultClaudeModel, type ClaudeModel } from '../shared/models.js';
 import {
   inTextOrder,
@@ -1135,16 +1136,18 @@ export class ChatStore {
       'SELECT * FROM comments WHERE reply_message_id = ? ORDER BY created_at, rowid',
       row.id,
     );
-    const quotedComments = (comments.length > 1 ? this.inTextOrder(comments) : comments).map(
-      (comment) => quotedText(comment.quote, comment.body, '\n'),
+    const taggedComments = (comments.length > 1 ? this.inTextOrder(comments) : comments).map(
+      (comment) => `${commentTag(comment.id)}\n${quotedText(comment.quote, comment.body, '\n')}`,
     );
+    const content =
+      row.content && comments.length > 0 ? `${messageTag(row.id)}\n${row.content}` : row.content;
     const paths = this.db
       .all<FileRow>('SELECT * FROM files WHERE message_id = ? ORDER BY created_at, rowid', row.id)
       .map((file) => `- ${file.path}`);
     const files = paths.length
       ? `Attached files (open them with the Read tool):\n${paths.join('\n')}`
       : '';
-    return [...quotedComments, row.content, files].filter(Boolean).join('\n\n');
+    return [...taggedComments, content, files].filter(Boolean).join('\n\n');
   }
 
   createFile(input: {

@@ -1,9 +1,13 @@
 <script setup lang="ts">
+import type { AnsweredPartLookup } from '@shared/answer-tags';
 import type { Comment, Message, MessageFile } from '@shared/types';
 import { computed, onMounted, ref, shallowRef, watch } from 'vue';
+import { useRouter } from 'vue-router';
+import { withoutTagLines } from '@shared/answer-tags';
 import { renderMarkdown } from '@shared/markdown';
 import { useCopied } from '../composables/useCopied';
 import { fileIdOfImage, useImageViewer } from '../composables/useImageViewer';
+import { commentLink } from '../lib/conversation';
 import { formatDateTime } from '../lib/date-time';
 import { isUnread } from '../lib/read-state';
 import { bringToReadingLine, scrollToEdge } from '../lib/reading-line';
@@ -18,10 +22,13 @@ const props = defineProps<{
   files: MessageFile[];
   shared: boolean;
   isNew: boolean;
+  answeredPart: AnsweredPartLookup;
 }>();
 const emit = defineEmits<{ markUnread: [] }>();
 
-const html = computed(() => (props.message.content ? renderMarkdown(props.message.content) : ''));
+const html = computed(() =>
+  props.message.content ? renderMarkdown(props.message.content, props.answeredPart) : '',
+);
 // A file the text already shows, such as a screenshot in an answer, is not listed again below.
 const listedFiles = computed(() =>
   props.files.filter((file) => !props.message.content.includes(`/api/files/${file.id}`)),
@@ -45,9 +52,14 @@ const listenLabel = computed(() =>
 void checkSpeechAvailable();
 
 const { copied, copy } = useCopied();
-const copyMessage = () => copy({ plain: props.message.content, html: html.value });
+// The cards of what an answer part answers are left out: they only make sense beside the chat.
+const copyMessage = () => {
+  const content = withoutTagLines(props.message.content);
+  return copy({ plain: content, html: renderMarkdown(content) });
+};
 
 const imageViewer = useImageViewer();
+const router = useRouter();
 
 function openImage(event: MouseEvent, file: MessageFile) {
   if (file.kind !== 'image') return;
@@ -59,6 +71,17 @@ function openContentImage(event: MouseEvent) {
   if (!(event.target instanceof HTMLImageElement)) return;
   const fileId = fileIdOfImage(event.target.src);
   if (fileId) imageViewer.open(fileId);
+}
+
+function openAnsweredComment(event: MouseEvent) {
+  if (!(event.target instanceof HTMLAnchorElement) || !event.target.matches('.answer-card')) return;
+  event.preventDefault();
+  void router.push(event.target.getAttribute('href')!);
+}
+
+function onContentClick(event: MouseEvent) {
+  openContentImage(event);
+  openAnsweredComment(event);
 }
 
 function findBlocks() {
@@ -154,7 +177,7 @@ onMounted(findBlocks);
     <div v-for="comment in quotedComments" :key="comment.id" class="quoted-comment">
       <RouterLink
         v-if="comment.quote"
-        :to="`/e/${message.explorationId}/f/${comment.viewForkId}#c-${comment.id}`"
+        :to="commentLink(comment)"
         class="quote-link"
         title="Show where this was commented"
       >
@@ -186,7 +209,7 @@ onMounted(findBlocks);
       class="content"
       :data-anchor-root="message.id"
       :data-speakable="speakable || undefined"
-      @click="openContentImage"
+      @click="onContentClick"
       v-html="html"
     />
     <footer v-if="jumpable" class="message-end">
@@ -315,6 +338,58 @@ onMounted(findBlocks);
 .quoted-comment p {
   margin: 0.25rem 0 0.75rem;
   white-space: pre-wrap;
+}
+
+/* A card's text comes from its attributes, so it is not part of the answer's text: comments
+   anchor at the same offsets, and selecting and reading aloud pass it by. */
+.content :deep(.answer-tags) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 1.5rem 0 0.6rem;
+}
+
+.content :deep(.answer-tags:first-child) {
+  margin-top: 0;
+}
+
+.content :deep(.answer-card) {
+  display: block;
+  padding: 0.4rem 0.75rem;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 0.875rem;
+  text-decoration: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.content :deep(.answer-card[data-quote]::before) {
+  content: attr(data-quote);
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.content :deep(.answer-card::after) {
+  content: attr(data-text);
+  display: block;
+  white-space: pre-wrap;
+}
+
+.content :deep(.answer-card.unknown) {
+  background: none;
+  border-left-color: var(--border);
+}
+
+.content :deep(.answer-card.unknown::after) {
+  content: attr(data-tag);
+  color: var(--text-muted);
 }
 
 /* An image in an answer stands apart from the text, with room on both sides. */

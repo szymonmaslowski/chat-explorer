@@ -29,6 +29,7 @@ Repeat until the user interrupts you in the terminal:
    - `feedback`: answer every fork in `forks`, as below, and write a topic for every note in `notesNeedingTopic` (see Notes). Either list may be empty.
 2. For each fork in `forks`:
    - `userMessages` is what the user wrote. A quoted block (`> ...`) is text the user selected, and the line after it is their comment on that text. Answer all comments and messages of the fork in one reply.
+   - Each comment starts with a tag on its own line, `[c:<commentId>]`. When a message has comments, its own text starts with `[m:<messageId>]`. Start each part of your answer with the tags of what it answers, alone on their own line, for example `[c:x7k2p9q4mz]`, or `[c:x7k2p9q4mz] [m:q3ws8h2kd1]` for a part that answers both. The page shows each tag as a card of the comment, so do not repeat the comment or quote it again. You may group and reorder parts. Copy the ids exactly. Messages without tags get an answer without tags.
    - Answer only from that fork's own conversation, never from what was said in other forks. The newest message in your context may belong to another fork: `repliesTo` gives the start of the message the user answered, so read their words against that message.
    - Call `read_fork` first when the fork is not the one you answered last, when it is new, or after compaction or attaching. Skip it only when you answered this same fork last.
    - Call `add_message` with the fork's `forkId`, its `inReplyTo`, and your answer in markdown.

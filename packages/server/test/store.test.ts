@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { withoutTagLines } from '../src/shared/answer-tags.js';
 import { attachmentLivenessMs } from '../src/store/store.js';
 import { createTestStore, draft, seedConversation } from './helpers.js';
 
@@ -48,7 +49,7 @@ describe('paths', () => {
       store.readFork(mainForkId).messages[0]!.id,
       answer.id,
     ]);
-    expect(read.messages.at(-1)!.text).toBe('> some text\nGo deeper here');
+    expect(withoutTagLines(read.messages.at(-1)!.text)).toBe('> some text\nGo deeper here');
   });
 });
 
@@ -147,14 +148,14 @@ describe('submission queue', () => {
     expect(main!.forkId).toBe(mainForkId);
     expect(main!.isNewFork).toBe(false);
     expect(main!.userMessages).toHaveLength(1);
-    expect(main!.userMessages[0]!.text).toBe(
+    expect(withoutTagLines(main!.userMessages[0]!.text)).toBe(
       '> some text\nfirst inline\n\n> some text\nsecond inline\n\nfirst message\n\nsecond message',
     );
     expect(forkA!.isNewFork).toBe(true);
     expect(forkA!.baseMessageId).toBe(answer.id);
     expect(forkA!.parentForkId).toBe(mainForkId);
-    expect(forkA!.userMessages[0]!.text).toBe('> some text\nfork A');
-    expect(forkB!.userMessages[0]!.text).toBe('> some text\nfork B');
+    expect(withoutTagLines(forkA!.userMessages[0]!.text)).toBe('> some text\nfork A');
+    expect(withoutTagLines(forkB!.userMessages[0]!.text)).toBe('> some text\nfork B');
 
     const snapshot = store.snapshot(explorationId);
     expect(snapshot.queuedSubmissions).toHaveLength(0);
@@ -199,7 +200,9 @@ describe('submission queue', () => {
       expect(forks).toHaveLength(2);
       const joined = forks.find((fork) => fork.userMessages[0]!.text.includes('later'))!;
       expect(joined.baseMessageId).toBe(answer.id);
-      expect(joined.userMessages[0]!.text).toBe('> Question\nearlier\n\n> some text\nlater');
+      expect(withoutTagLines(joined.userMessages[0]!.text)).toBe(
+        '> Question\nearlier\n\n> some text\nlater',
+      );
       const snapshot = store.snapshot(explorationId);
       expect(snapshot.forks.find((fork) => fork.id === joined.forkId)!.summary).toBe('earlier');
     });
@@ -244,9 +247,11 @@ describe('submission queue', () => {
 
       const forks = store.pendingForks(explorationId);
       const main = forks.find((fork) => fork.forkId === mainForkId)!;
-      expect(main.userMessages[0]!.text).toBe('Next');
+      expect(withoutTagLines(main.userMessages[0]!.text)).toBe('Next');
       const joined = forks.find((fork) => fork.userMessages[0]!.text.includes('plain'))!;
-      expect(joined.userMessages[0]!.text).toBe('> some text\nlater\n\n> some text\nplain');
+      expect(withoutTagLines(joined.userMessages[0]!.text)).toBe(
+        '> some text\nlater\n\n> some text\nplain',
+      );
     });
 
     it('lets a plain comment that left go back into the reply', () => {
@@ -261,7 +266,7 @@ describe('submission queue', () => {
       store.submit(explorationId, mainForkId, '');
       store.deliverQueued(explorationId);
       const main = store.pendingForks(explorationId).find((fork) => fork.forkId === mainForkId)!;
-      expect(main.userMessages[0]!.text).toBe('> some text\nplain');
+      expect(withoutTagLines(main.userMessages[0]!.text)).toBe('> some text\nplain');
     });
 
     it('ungroups a whole group, and refuses to join a note', () => {
@@ -319,10 +324,12 @@ describe('submission queue', () => {
     store.deliverQueued(explorationId);
 
     const [main, fork] = store.pendingForks(explorationId);
-    expect(main!.userMessages[0]!.text).toBe('Overall, keep it short\n\nNext question');
+    expect(withoutTagLines(main!.userMessages[0]!.text)).toBe(
+      'Overall, keep it short\n\nNext question',
+    );
     expect(fork!.isNewFork).toBe(true);
     expect(fork!.baseMessageId).toBe(answer.id);
-    expect(fork!.userMessages[0]!.text).toBe('Try another approach');
+    expect(withoutTagLines(fork!.userMessages[0]!.text)).toBe('Try another approach');
   });
 
   it('refuses a general comment with offsets, or a quoted one with them out of order', () => {
@@ -357,7 +364,9 @@ describe('submission queue', () => {
     expect(newFork!.isNewFork).toBe(true);
     expect(newFork!.parentForkId).toBe(mainForkId);
     expect(newFork!.baseMessageId).toBe(answer.id);
-    expect(newFork!.userMessages[0]!.text).toBe('> some text\ninline\n\nWhat about Redis?');
+    expect(withoutTagLines(newFork!.userMessages[0]!.text)).toBe(
+      '> some text\ninline\n\nWhat about Redis?',
+    );
     const snapshot = store.snapshot(explorationId);
     const created = snapshot.forks.find((fork) => fork.id === newFork!.forkId)!;
     expect(created.summary).toBe('What about Redis?');
@@ -408,7 +417,7 @@ describe('submission queue', () => {
     const pending = store.pendingForks(explorationId);
     expect(pending).toHaveLength(1);
     expect(pending[0]!.isNewFork).toBe(true);
-    expect(pending[0]!.userMessages[0]!.text).toBe('> some text\nfork now');
+    expect(withoutTagLines(pending[0]!.userMessages[0]!.text)).toBe('> some text\nfork now');
     snapshot = store.snapshot(explorationId);
     expect(statusOf(fork.id)).toBe('submitted');
     expect(statusOf(inline.id)).toBe('draft');

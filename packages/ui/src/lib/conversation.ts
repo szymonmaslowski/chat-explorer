@@ -1,3 +1,4 @@
+import type { AnsweredPartLookup } from '@shared/answer-tags';
 import type { Comment, Fork, Message } from '@shared/types';
 
 export function pathTo(messageId: string | null, messages: Map<string, Message>) {
@@ -39,6 +40,30 @@ export function quotedCommentsOf(messageId: string, comments: Map<string, Commen
   return [...comments.values()]
     .filter((comment) => comment.replyMessageId === messageId)
     .sort((left, right) => left.createdAt - right.createdAt);
+}
+
+export const commentLink = (comment: Comment) =>
+  `/e/${comment.explorationId}/f/${comment.viewForkId}#c-${comment.id}`;
+
+// What the tags in an answer point at: a comment, linking to the text it quotes, or the text of
+// a message.
+export function answeredPartLookup(
+  comments: Map<string, Comment>,
+  messages: Map<string, Message>,
+): AnsweredPartLookup {
+  return (kind, id) => {
+    if (kind === 'message') {
+      const message = messages.get(id);
+      return message ? { quote: '', text: message.content, href: null } : null;
+    }
+    const comment = comments.get(id);
+    if (!comment) return null;
+    return {
+      quote: comment.quote,
+      text: comment.body,
+      href: comment.quote ? commentLink(comment) : null,
+    };
+  };
 }
 
 export function forkTitle(fork: Fork) {

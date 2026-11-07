@@ -32,7 +32,7 @@ export async function openSeededExploration(page: Page) {
   return seeded.id;
 }
 
-const shimId = 'e2e-shim';
+export const shimId = 'e2e-shim';
 
 // Stands in for Claude: attaches like the MCP shim does, takes the queued feedback and answers.
 export async function attachFakeSession(request: APIRequestContext, explorationId: string) {
