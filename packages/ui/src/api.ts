@@ -1,11 +1,13 @@
 import type { ClaudeModel } from '@shared/models';
 import type {
+  Bookmark,
   Comment,
   CommentChanges,
   Exploration,
   ExplorationListItem,
   Fork,
   MessageFile,
+  NewBookmark,
   NewComment,
   NewNote,
   NewNoteGroup,
@@ -161,6 +163,10 @@ export const api = {
     call<Comment[]>(`/api/comments/${commentId}/fork-group`, { method: 'DELETE', keepalive }),
   ungroupForkGroup: (groupId: string, keepalive = false) =>
     call<Comment[]>(`/api/fork-groups/${groupId}`, { method: 'DELETE', keepalive }),
+  createBookmark: (explorationId: string, bookmark: NewBookmark, keepalive = false) =>
+    call<Bookmark>(`/api/explorations/${explorationId}/bookmarks`, { json: bookmark, keepalive }),
+  deleteBookmark: (bookmarkId: string, keepalive = false) =>
+    call<{ ok: true }>(`/api/bookmarks/${bookmarkId}`, { method: 'DELETE', keepalive }),
   createNoteGroup: (explorationId: string, group: NewNoteGroup, keepalive = false) =>
     call<NoteGroup>(`/api/explorations/${explorationId}/note-groups`, { json: group, keepalive }),
   updateNoteGroup: (groupId: string, changes: NoteGroupChanges, keepalive = false) =>

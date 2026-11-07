@@ -11,6 +11,8 @@
   --fork-soft: light-dark(rgb(234 88 12 / 0.16), rgb(251 146 60 / 0.2));
   --note: light-dark(#0f766e, #2dd4bf);
   --note-soft: light-dark(rgb(13 148 136 / 0.14), rgb(45 212 191 / 0.18));
+  --bookmark: light-dark(#a16207, #facc15);
+  --bookmark-soft: light-dark(rgb(234 179 8 / 0.28), rgb(250 204 21 / 0.22));
   --success: light-dark(#15803d, #4ade80);
   --warning: light-dark(#b45309, #fbbf24);
   --caution: light-dark(#f59e0b, #fbbf24);
@@ -217,6 +219,10 @@ html.image-viewer-open {
 
 ::highlight(comment-note) {
   background-color: var(--note-soft);
+}
+
+::highlight(bookmark) {
+  background-color: var(--bookmark-soft);
 }
 
 ::highlight(comment-submitted) {

@@ -179,4 +179,18 @@ export const migrations = [
   ALTER TABLE messages ADD COLUMN read_at INTEGER;
   UPDATE messages SET read_at = created_at;
   `,
+  `
+  CREATE TABLE bookmarks (
+    id TEXT PRIMARY KEY,
+    exploration_id TEXT NOT NULL REFERENCES explorations (id) ON DELETE CASCADE,
+    fork_id TEXT NOT NULL REFERENCES forks (id) ON DELETE CASCADE,
+    message_id TEXT NOT NULL,
+    quote TEXT NOT NULL,
+    start_offset INTEGER NOT NULL,
+    end_offset INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    UNIQUE (fork_id, message_id, start_offset, end_offset)
+  );
+  CREATE INDEX bookmarks_by_exploration ON bookmarks (exploration_id);
+  `,
 ];

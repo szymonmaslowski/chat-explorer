@@ -1,5 +1,6 @@
 import type { Database } from '../db/database.js';
 import {
+  toBookmark,
   toComment,
   toExploration,
   toFork,
@@ -8,6 +9,7 @@ import {
   toNote,
   toNoteGroup,
   toQueuedSubmission,
+  type BookmarkRow,
   type CommentRow,
   type ExplorationRow,
   type FileRow,
@@ -28,6 +30,7 @@ import type {
   FileKind,
   ForkKind,
   MessageSource,
+  NewBookmark,
   NewComment,
   NewNote,
   NewNoteGroup,
@@ -289,6 +292,12 @@ export class ChatStore {
           explorationId,
         )
         .map(toNote),
+      bookmarks: this.db
+        .all<BookmarkRow>(
+          'SELECT * FROM bookmarks WHERE exploration_id = ? ORDER BY created_at, rowid',
+          explorationId,
+        )
+        .map(toBookmark),
     };
   }
 
@@ -558,13 +567,7 @@ export class ChatStore {
       : null;
     if (existing) return toComment(existing);
     const viewFork = this.requireWritableFork(input.viewForkId, explorationId);
-    const isOnPath = this.pathTo(viewFork.tip_message_id).some((row) => row.id === input.messageId);
-    if (!isOnPath) {
-      throw new StoreError(
-        'invalid',
-        `Message ${input.messageId} is not shown in fork ${viewFork.id}.`,
-      );
-    }
+    this.requireShownIn(viewFork, input.messageId);
     if (!input.body.trim() && input.editBody === undefined) {
       throw new StoreError('invalid', 'A comment needs a body.');
     }
@@ -641,6 +644,56 @@ export class ChatStore {
     });
     this.publish([[row.exploration_id, { type: 'comment.deleted', commentId }]]);
     this.publishCommentUpdates(row.exploration_id, [...groupChanges.keys()]);
+  }
+
+  // Bookmarking the same passage again finds the bookmark it already has.
+  createBookmark(explorationId: string, input: NewBookmark) {
+    const existing = input.id
+      ? this.existingRow<BookmarkRow>('bookmarks', input.id, explorationId)
+      : null;
+    if (existing) return toBookmark(existing);
+    const fork = this.requireWritableFork(input.forkId, explorationId);
+    this.requireShownIn(fork, input.messageId);
+    if (!input.quote || input.startOffset < 0 || input.endOffset <= input.startOffset) {
+      throw new StoreError('invalid', 'A bookmark needs a quote and offsets in order.');
+    }
+    const id = input.id ?? newId();
+    const inserted = this.db.run(
+      `INSERT INTO bookmarks (id, exploration_id, fork_id, message_id, quote, start_offset,
+         end_offset, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (fork_id, message_id, start_offset, end_offset) DO NOTHING`,
+      id,
+      explorationId,
+      input.forkId,
+      input.messageId,
+      input.quote,
+      input.startOffset,
+      input.endOffset,
+      this.now(),
+    );
+    const bookmark = toBookmark(
+      this.db.get<BookmarkRow>(
+        `SELECT * FROM bookmarks
+         WHERE fork_id = ? AND message_id = ? AND start_offset = ? AND end_offset = ?`,
+        input.forkId,
+        input.messageId,
+        input.startOffset,
+        input.endOffset,
+      )!,
+    );
+    if (inserted.changes > 0) {
+      this.publish([[explorationId, { type: 'bookmark.created', bookmark }]]);
+    }
+    return bookmark;
+  }
+
+  deleteBookmark(bookmarkId: string) {
+    const row = this.db.get<BookmarkRow>('SELECT * FROM bookmarks WHERE id = ?', bookmarkId);
+    if (!row) throw new StoreError('not_found', `Bookmark ${bookmarkId} does not exist.`);
+    this.requireWritableFork(row.fork_id, row.exploration_id);
+    this.db.run('DELETE FROM bookmarks WHERE id = ?', bookmarkId);
+    this.publish([[row.exploration_id, { type: 'bookmark.deleted', bookmarkId }]]);
   }
 
   // The starting comment's group becomes it and the picked comments, which leave the groups they
@@ -1832,6 +1885,12 @@ export class ChatStore {
     return { message: this.requireMessageRow(id), fork: this.requireForkRow(fork.id) };
   }
 
+  private requireShownIn(fork: ForkRow, messageId: string) {
+    if (!this.pathTo(fork.tip_message_id).some((row) => row.id === messageId)) {
+      throw new StoreError('invalid', `Message ${messageId} is not shown in fork ${fork.id}.`);
+    }
+  }
+
   private pathTo(messageId: string | null) {
     if (messageId === null) return [];
     return this.db.all<MessageRow>(
@@ -2001,7 +2060,7 @@ export class ChatStore {
 
   // A repeated request with an id the page made finds what the first one created.
   private existingRow<Row extends { exploration_id: string | null }>(
-    table: 'comments' | 'submissions' | 'note_groups' | 'notes',
+    table: 'comments' | 'submissions' | 'note_groups' | 'notes' | 'bookmarks',
     id: string,
     explorationId: string,
   ) {

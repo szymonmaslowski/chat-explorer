@@ -81,6 +81,14 @@ const forkNowBody = z.object({ id: clientId });
 const readMessagesBody = z.object({ messageIds: z.array(z.string()).min(1) });
 const unreadFromBody = z.object({ viewForkId: z.string() });
 const noteForkBody = z.object({ id: clientId, forkId: clientId, message: z.string() });
+const newBookmarkBody = z.object({
+  id: clientId,
+  forkId: z.string(),
+  messageId: z.string(),
+  quote: z.string().min(1),
+  startOffset: z.number().int(),
+  endOffset: z.number().int(),
+});
 const newNoteGroupBody = z.object({
   id: clientId,
   name: z.string().optional(),
@@ -423,6 +431,16 @@ export function createApp(options: AppOptions) {
   app.put('/api/forks/:id/reply-draft', async (context) => {
     const draft = replyDraftBody.parse(await context.req.json());
     return context.json(store.saveReplyDraft(context.req.param('id'), draft));
+  });
+
+  app.post('/api/explorations/:id/bookmarks', async (context) => {
+    const body = newBookmarkBody.parse(await context.req.json());
+    return context.json(store.createBookmark(context.req.param('id'), body), 201);
+  });
+
+  app.delete('/api/bookmarks/:id', (context) => {
+    store.deleteBookmark(context.req.param('id'));
+    return context.json({ ok: true });
   });
 
   app.post('/api/explorations/:id/note-groups', async (context) => {

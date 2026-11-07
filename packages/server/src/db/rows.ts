@@ -1,5 +1,6 @@
 import type { ClaudeModel } from '../shared/models.js';
 import type {
+  Bookmark,
   Comment,
   CommentStatus,
   CommentType,
@@ -132,6 +133,17 @@ export interface NoteRow {
   updated_at: number;
 }
 
+export interface BookmarkRow {
+  id: string;
+  exploration_id: string;
+  fork_id: string;
+  message_id: string;
+  quote: string;
+  start_offset: number;
+  end_offset: number;
+  created_at: number;
+}
+
 export interface SubmissionRow {
   id: string;
   exploration_id: string;
@@ -248,4 +260,15 @@ export const toNote = (row: NoteRow): Note => ({
   deletionRequestedAt: row.deletion_requested_at,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
+});
+
+export const toBookmark = (row: BookmarkRow): Bookmark => ({
+  id: row.id,
+  explorationId: row.exploration_id,
+  forkId: row.fork_id,
+  messageId: row.message_id,
+  quote: row.quote,
+  startOffset: row.start_offset,
+  endOffset: row.end_offset,
+  createdAt: row.created_at,
 });

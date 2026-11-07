@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
+import BookmarkList from '../components/BookmarkList.vue';
 import CommentLayer from '../components/CommentLayer.vue';
 import ExplorationHeader from '../components/ExplorationHeader.vue';
 import ForkArchiveControl from '../components/ForkArchiveControl.vue';
@@ -62,6 +63,21 @@ const viewComments = computed(() =>
   [...state.value.comments.values()].filter(
     (comment) => comment.viewForkId === fork.value?.id && pathIds.value.has(comment.messageId),
   ),
+);
+const viewBookmarks = computed(() => {
+  const order = new Map(path.value.map((message, index) => [message.id, index]));
+  return [...state.value.bookmarks.values()]
+    .filter((bookmark) => bookmark.forkId === fork.value?.id && order.has(bookmark.messageId))
+    .sort(
+      (first, second) =>
+        order.get(first.messageId)! - order.get(second.messageId)! ||
+        first.startOffset - second.startOffset,
+    );
+});
+const bookmarksOpen = ref(false);
+watch(
+  () => [fork.value?.id, viewBookmarks.value.length === 0],
+  () => (bookmarksOpen.value = false),
 );
 const drafts = computed(() => viewComments.value.filter((comment) => comment.status === 'draft'));
 const queuedSubmissions = computed(() =>
@@ -147,6 +163,18 @@ watch(
       </template>
       <template v-if="fork" #title-actions>
         <button
+          v-if="viewBookmarks.length > 0"
+          type="button"
+          class="icon-button bookmarks-button"
+          :aria-expanded="bookmarksOpen"
+          :aria-label="`Bookmarks (${viewBookmarks.length})`"
+          title="Bookmarks of this fork"
+          @click="bookmarksOpen = !bookmarksOpen"
+        >
+          <MediaIcon name="bookmark" />
+          {{ viewBookmarks.length }}
+        </button>
+        <button
           v-if="lastAnswer && !isUnread(lastAnswer)"
           type="button"
           class="icon-button"
@@ -163,6 +191,11 @@ watch(
           :archived-by="archivedBy"
         />
       </template>
+      <BookmarkList
+        v-if="bookmarksOpen"
+        :bookmarks="viewBookmarks"
+        @jump="compact && (bookmarksOpen = false)"
+      />
       <div id="comment-tray" />
       <SpeechPlayer />
     </ExplorationHeader>
@@ -224,6 +257,7 @@ watch(
           :exploration-id="explorationId"
           :fork-id="fork.id"
           :comments="viewComments"
+          :bookmarks="viewBookmarks"
           :layout-key="[...pathIds].join()"
           :compact="compact"
           :read-only="archived"
@@ -292,6 +326,10 @@ watch(
   content: '';
   flex: 1;
   border-top: 1px solid var(--border);
+}
+
+.bookmarks-button {
+  gap: 0.25rem;
 }
 
 .answering {

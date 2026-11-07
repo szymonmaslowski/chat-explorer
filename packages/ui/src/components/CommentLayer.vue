@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { inTextOrder } from '@shared/fork-groups';
-import type { Comment } from '@shared/types';
+import type { Bookmark, Comment } from '@shared/types';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { anchorOfRange, clampToRoot, locateAnchor, type TextAnchor } from '../lib/anchoring';
@@ -15,6 +15,7 @@ import {
   speechBlocks,
 } from '../lib/speech-blocks';
 import { stopJoining } from '../stores/fork-joining';
+import { newId, outbox } from '../stores/outbox';
 import { playBlock, speech } from '../stores/speech';
 import { useMediaQuery } from '../composables/useMediaQuery';
 import CommentCard from './CommentCard.vue';
@@ -27,6 +28,7 @@ const props = defineProps<{
   explorationId: string;
   forkId: string;
   comments: Comment[];
+  bookmarks: Bookmark[];
   layoutKey: string;
   compact: boolean;
   readOnly: boolean;
@@ -48,6 +50,7 @@ const layer = ref<HTMLElement | null>(null);
 const layerWidth = ref(0);
 const railLeft = computed(() => railLeftOf(layerWidth.value));
 const anchors = shallowRef(new Map<string, Range>());
+const bookmarkRanges = shallowRef(new Map<string, Range>());
 const anchorBoxes = shallowRef(new Map<string, { top: number; left: number }>());
 // The messages on the page, top to bottom, for putting comments in the order of their text.
 const messageOrder = shallowRef<string[]>([]);
@@ -69,6 +72,20 @@ let pickedElement: HTMLElement | null = null;
 const { copied, copy } = useCopied();
 const actions = computed(() => picked.value ?? selection.value);
 const commentable = computed(() => actions.value !== null && !props.readOnly);
+// A selection or block that overlaps a bookmark offers to remove it instead of adding another.
+const overlappedBookmark = computed(() => {
+  const current = actions.value;
+  if (!current) return null;
+  const { startOffset, endOffset } = current.anchor;
+  return (
+    props.bookmarks.find(
+      (bookmark) =>
+        bookmark.messageId === current.messageId &&
+        bookmark.startOffset < endOffset &&
+        startOffset < bookmark.endOffset,
+    ) ?? null
+  );
+});
 const playable = computed(() => picked.value?.speakable === true);
 const pickedPlaying = computed(
   () =>
@@ -105,16 +122,21 @@ const relative = (rect: DOMRect) => {
   };
 };
 
+function locateAll(root: HTMLElement, items: (TextAnchor & { id: string; messageId: string })[]) {
+  const ranges = new Map<string, Range>();
+  for (const item of items) {
+    const anchorRoot = root.querySelector<HTMLElement>(`[data-anchor-root="${item.messageId}"]`);
+    const range = anchorRoot && locateAnchor(anchorRoot, item);
+    if (range) ranges.set(item.id, range);
+  }
+  return ranges;
+}
+
 function reanchor() {
   const root = container();
   if (!root) return;
-  const next = new Map<string, Range>();
-  for (const comment of props.comments) {
-    const anchorRoot = root.querySelector<HTMLElement>(`[data-anchor-root="${comment.messageId}"]`);
-    const range = anchorRoot && locateAnchor(anchorRoot, comment);
-    if (range) next.set(comment.id, range);
-  }
-  anchors.value = next;
+  anchors.value = locateAll(root, props.comments);
+  bookmarkRanges.value = locateAll(root, props.bookmarks);
   messageOrder.value = [...root.querySelectorAll<HTMLElement>('[data-anchor-root]')].flatMap(
     (element) => element.dataset.anchorRoot ?? [],
   );
@@ -162,6 +184,7 @@ function updateTray() {
 function paintHighlights() {
   if (!('highlights' in CSS)) return;
   const groups: Record<string, Range[]> = {
+    bookmark: [...bookmarkRanges.value.values()],
     'comment-inline': [],
     'comment-fork': [],
     'comment-note': [],
@@ -189,7 +212,10 @@ function flash(range: Range) {
 
 function scrollToComment(commentId: string) {
   const range = anchors.value.get(commentId);
-  if (!range) return false;
+  return range ? scrollToRange(range) : false;
+}
+
+function scrollToRange(range: Range) {
   const header = document.querySelector('[data-sticky-header]');
   const headerHeight = header ? header.getBoundingClientRect().height : 0;
   const top = firstLineRect(range).top + window.scrollY - headerHeight - 140;
@@ -300,7 +326,9 @@ function showCommentButton() {
     selection.value = null;
     return;
   }
-  const width = coarsePointer.value ? actionButtonWidth.touch : actionButtonWidth.mouse;
+  const buttonCount = props.readOnly ? 1 : 2;
+  const width =
+    buttonCount * (coarsePointer.value ? actionButtonWidth.touch : actionButtonWidth.mouse);
   selection.value = placeActions(root, clampToRoot(root, selected), width, true);
   if (selection.value) unpick();
 }
@@ -318,7 +346,7 @@ function unpick() {
 
 function pick(root: HTMLElement, element: HTMLElement, blockIndex: number) {
   const speakable = root.dataset.speakable !== undefined;
-  const buttonCount = 1 + (props.readOnly ? 0 : 1) + (speakable ? 1 : 0);
+  const buttonCount = 1 + (props.readOnly ? 0 : 2) + (speakable ? 1 : 0);
   const width =
     buttonCount * (coarsePointer.value ? actionButtonWidth.touch : actionButtonWidth.mouse);
   const placement = placeActions(root, blockTextRange(element), width, false);
@@ -386,6 +414,33 @@ function openEditor() {
   picked.value = null;
 }
 
+function toggleBookmark() {
+  const current = actions.value;
+  if (!current) return;
+  const bookmark = overlappedBookmark.value;
+  if (bookmark) {
+    outbox.add({
+      type: 'bookmark.delete',
+      explorationId: props.explorationId,
+      bookmarkId: bookmark.id,
+    });
+  } else {
+    outbox.add({
+      type: 'bookmark.create',
+      explorationId: props.explorationId,
+      bookmark: {
+        id: newId(),
+        forkId: props.forkId,
+        messageId: current.messageId,
+        ...current.anchor,
+      },
+    });
+  }
+  selection.value = null;
+  unpick();
+  window.getSelection()?.removeAllRanges();
+}
+
 function closeEditor() {
   editor.value = null;
   highlightPicked(null);
@@ -428,15 +483,24 @@ onBeforeUnmount(() => {
   if ('highlights' in CSS) CSS.highlights.clear();
 });
 
-watch(() => [props.comments, props.layoutKey, props.compact], reanchor, { flush: 'post' });
+watch(() => [props.comments, props.bookmarks, props.layoutKey, props.compact], reanchor, {
+  flush: 'post',
+});
 watch(() => pointer.frame, updateTray);
 
 let handledHash = '';
 watch(
-  [() => route.hash, anchors],
+  [() => route.hash, anchors, bookmarkRanges],
   ([hash]) => {
-    if (!hash.startsWith('#c-') || hash === handledHash) return;
-    if (!scrollToComment(hash.slice(3))) return;
+    if (hash === handledHash) return;
+    const ranges = hash.startsWith('#c-')
+      ? anchors.value
+      : hash.startsWith('#b-')
+        ? bookmarkRanges.value
+        : null;
+    const range = ranges?.get(hash.slice(3));
+    if (!range) return;
+    scrollToRange(range);
     handledHash = hash;
     // So the same link scrolls there again the next time.
     void router.replace({ hash: '' }).then(() => (handledHash = ''));
@@ -509,6 +573,20 @@ watch(
         @click="openEditor"
       >
         <MediaIcon name="comment" />
+      </button>
+      <button
+        v-if="commentable"
+        type="button"
+        class="comment-button"
+        :aria-label="overlappedBookmark ? 'Remove bookmark' : 'Bookmark'"
+        :title="overlappedBookmark ? 'Remove bookmark' : 'Bookmark this'"
+        @pointerdown.prevent
+        @mousedown.prevent
+        @touchstart.prevent
+        @pointerup="toggleBookmark"
+        @click="toggleBookmark"
+      >
+        <MediaIcon :name="overlappedBookmark ? 'bookmarked' : 'bookmark'" />
       </button>
       <button
         v-if="playable"

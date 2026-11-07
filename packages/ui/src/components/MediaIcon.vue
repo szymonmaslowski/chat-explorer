@@ -26,7 +26,9 @@ defineProps<{
     | 'close'
     | 'unarchive'
     | 'back'
-    | 'unread';
+    | 'unread'
+    | 'bookmark'
+    | 'bookmarked';
 }>();
 </script>
 
@@ -74,6 +76,10 @@ defineProps<{
     <path v-else-if="name === 'back'" d="M15 5l-7 7 7 7" />
     <circle v-else-if="name === 'unread'" cx="12" cy="12" r="4.5" />
     <path v-else-if="name === 'note'" d="M5 4h14v10l-6 6H5zM13 20v-6h6M9 9h6M9 13h3" />
+    <path
+      v-else-if="name === 'bookmark' || name === 'bookmarked'"
+      d="M6 4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v17l-6-4-6 4z"
+    />
     <path v-else-if="name === 'send'" d="M3 11l18-8-8 18-2-8zM11 13l10-10" />
     <path
       v-else
@@ -108,7 +114,8 @@ defineProps<{
 .media-icon.archive,
 .media-icon.close,
 .media-icon.unarchive,
-.media-icon.back {
+.media-icon.back,
+.media-icon.bookmark {
   fill: none;
   stroke: currentColor;
   stroke-width: 2;

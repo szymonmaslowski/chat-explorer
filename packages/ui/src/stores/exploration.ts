@@ -1,4 +1,5 @@
 import type {
+  Bookmark,
   Comment,
   Exploration,
   ExplorationEvent,
@@ -33,6 +34,7 @@ export interface ExplorationState {
   replyDrafts: Map<string, ReplyDraft>;
   noteGroups: Map<string, NoteGroup>;
   notes: Map<string, Note>;
+  bookmarks: Map<string, Bookmark>;
   sessionStatus: SessionStatus;
   sessionError: string | null;
   connected: boolean;
@@ -59,6 +61,8 @@ const eventTypes: ExplorationEvent['type'][] = [
   'note.deleted',
   'notes.reordered',
   'note.group-changed',
+  'bookmark.created',
+  'bookmark.deleted',
   'exploration.updated',
   'exploration.deleted',
   'session.status',
@@ -132,6 +136,12 @@ export function applyEvent(state: ExplorationState, event: ExplorationEvent) {
     case 'note.group-changed':
       state.notes.set(event.note.id, event.note);
       applyNoteOrder(state.notes, event.noteIds);
+      break;
+    case 'bookmark.created':
+      state.bookmarks.set(event.bookmark.id, event.bookmark);
+      break;
+    case 'bookmark.deleted':
+      state.bookmarks.delete(event.bookmarkId);
       break;
     case 'exploration.updated':
       state.exploration = event.exploration;
@@ -372,6 +382,18 @@ export function applyChange(state: ExplorationState, change: Change) {
         if (file.submissionId === change.submissionId) state.files.delete(file.id);
       }
       break;
+    case 'bookmark.create': {
+      const existing = state.bookmarks.get(change.bookmark.id);
+      state.bookmarks.set(change.bookmark.id, {
+        ...change.bookmark,
+        explorationId: state.explorationId,
+        createdAt: existing?.createdAt ?? now,
+      });
+      break;
+    }
+    case 'bookmark.delete':
+      state.bookmarks.delete(change.bookmarkId);
+      break;
     case 'note-group.create': {
       const { id, name, checklist } = change.group;
       const existing = state.noteGroups.get(id);
@@ -477,6 +499,7 @@ function applySnapshot(state: ExplorationState, snapshot: Snapshot) {
   state.replyDrafts = new Map(snapshot.replyDrafts.map((draft) => [draft.forkId, draft]));
   state.noteGroups = byId(snapshot.noteGroups);
   state.notes = byId(snapshot.notes);
+  state.bookmarks = byId(snapshot.bookmarks);
   state.sessionStatus = snapshot.sessionStatus;
   state.sessionError = snapshot.sessionError;
   state.status = 'ready';
@@ -496,6 +519,7 @@ function createExplorationStore(explorationId: string) {
     replyDrafts: new Map(),
     noteGroups: new Map(),
     notes: new Map(),
+    bookmarks: new Map(),
     sessionStatus: 'detached',
     sessionError: null,
     connected: false,

@@ -87,6 +87,18 @@ export interface Comment {
   updatedAt: number;
 }
 
+// A marked passage of one fork's conversation, shown only in that fork.
+export interface Bookmark {
+  id: string;
+  explorationId: string;
+  forkId: string;
+  messageId: string;
+  quote: string;
+  startOffset: number;
+  endOffset: number;
+  createdAt: number;
+}
+
 export type NoteAuthor = 'user' | 'claude';
 
 export interface NoteGroup {
@@ -158,6 +170,7 @@ export interface Snapshot {
   replyDrafts: ReplyDraft[];
   noteGroups: NoteGroup[];
   notes: Note[];
+  bookmarks: Bookmark[];
   sessionStatus: SessionStatus;
   sessionError: string | null;
 }
@@ -181,6 +194,8 @@ export type ExplorationEvent =
   | { type: 'note.deleted'; noteId: string }
   | { type: 'notes.reordered'; groupId: string; noteIds: string[] }
   | { type: 'note.group-changed'; note: Note; noteIds: string[] }
+  | { type: 'bookmark.created'; bookmark: Bookmark }
+  | { type: 'bookmark.deleted'; bookmarkId: string }
   | { type: 'files.updated'; files: MessageFile[] }
   | { type: 'files.released'; fileIds: string[] }
   | { type: 'exploration.updated'; exploration: Exploration }
@@ -208,6 +223,16 @@ export interface CommentChanges {
   editBody?: string | null;
   type?: CommentType;
   noteGroupId?: string | null;
+}
+
+export interface NewBookmark {
+  // Made by the page, so a repeated request creates it only once.
+  id?: string;
+  forkId: string;
+  messageId: string;
+  quote: string;
+  startOffset: number;
+  endOffset: number;
 }
 
 export interface NewNoteGroup {

@@ -2,6 +2,7 @@ import { idAlphabet, idLength } from '@shared/ids';
 import type {
   CommentChanges,
   MessageFile,
+  NewBookmark,
   NewComment,
   NewNote,
   NewNoteGroup,
@@ -60,6 +61,8 @@ export type Change =
       message: string;
     }
   | { type: 'submission.cancel'; explorationId: string; submissionId: string }
+  | { type: 'bookmark.create'; explorationId: string; bookmark: NewBookmark & { id: string } }
+  | { type: 'bookmark.delete'; explorationId: string; bookmarkId: string }
   | { type: 'note-group.create'; explorationId: string; group: NewNoteGroup & { id: string } }
   | {
       type: 'note-group.update';
@@ -150,6 +153,10 @@ export const subjectOf = (change: Change) => {
     case 'note.fork':
     case 'submission.cancel':
       return change.submissionId;
+    case 'bookmark.create':
+      return change.bookmark.id;
+    case 'bookmark.delete':
+      return change.bookmarkId;
     case 'note-group.create':
       return change.group.id;
     case 'note-group.update':
@@ -188,7 +195,7 @@ function merge(waiting: Change, next: Change): Change | null {
   return null;
 }
 
-// Deleting a comment or a note, or cancelling a submission, the daemon never got needs no request
+// Deleting a comment, a note or a bookmark, or cancelling a submission, the daemon never got needs no request
 // at all.
 function withdraw(stored: StoredOutbox, change: Change) {
   const created: Change['type'][] =
@@ -196,9 +203,11 @@ function withdraw(stored: StoredOutbox, change: Change) {
       ? ['comment.create']
       : change.type === 'note.delete'
         ? ['note.create']
-        : change.type === 'submission.cancel'
-          ? ['submit', 'fork-now', 'note.fork']
-          : [];
+        : change.type === 'bookmark.delete'
+          ? ['bookmark.create']
+          : change.type === 'submission.cancel'
+            ? ['submit', 'fork-now', 'note.fork']
+            : [];
   const subject = subjectOf(change);
   const creation = stored.queue.find(
     (queued) => created.includes(queued.change.type) && subjectOf(queued.change) === subject,
@@ -264,6 +273,10 @@ function send(change: Change) {
       );
     case 'submission.cancel':
       return api.cancelSubmission(change.submissionId, keepalive);
+    case 'bookmark.create':
+      return api.createBookmark(change.explorationId, change.bookmark, keepalive);
+    case 'bookmark.delete':
+      return api.deleteBookmark(change.bookmarkId, keepalive);
     case 'note-group.create':
       return api.createNoteGroup(change.explorationId, change.group, keepalive);
     case 'note-group.update':
@@ -293,6 +306,7 @@ const alreadyDone = (change: Change, error: unknown) =>
   (change.type === 'comment.delete' ||
     change.type === 'note.delete' ||
     change.type === 'note-group.delete' ||
+    change.type === 'bookmark.delete' ||
     change.type === 'submission.cancel') &&
   error instanceof ApiError &&
   error.code === 'not_found';
