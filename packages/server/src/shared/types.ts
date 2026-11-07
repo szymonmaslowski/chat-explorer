@@ -24,6 +24,7 @@ export interface ExplorationListItem extends Exploration {
   forkCount: number;
   sessionStatus: SessionStatus;
   hasUnread: boolean;
+  awaitingAnswer: boolean;
   sessionError: string | null;
 }
 
@@ -52,6 +53,11 @@ export interface Message {
   source: MessageSource;
   createdAt: number;
   // Null on an answer of Claude's the reader has not seen yet.
+  readAt: number | null;
+}
+
+export interface ReadChange {
+  messageIds: string[];
   readAt: number | null;
 }
 
@@ -158,7 +164,7 @@ export interface Snapshot {
 
 export type ExplorationEvent =
   | { type: 'message.added'; message: Message; fork: Fork }
-  | { type: 'messages.read'; messageIds: string[]; readAt: number | null }
+  | ({ type: 'messages.read' } & ReadChange)
   | { type: 'fork.created'; fork: Fork }
   | { type: 'fork.updated'; fork: Fork }
   | { type: 'comment.created'; comment: Comment }

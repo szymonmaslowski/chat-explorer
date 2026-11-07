@@ -6,7 +6,7 @@ const tallBlockShare = 0.6;
 const topMarginPx = 16;
 
 // The part of the window between the sticky header and the dock.
-function visibleArea() {
+export function visibleArea() {
   const header = document.querySelector('[data-sticky-header]');
   const dock = document.querySelector('[data-dock]');
   const top = header ? header.getBoundingClientRect().bottom : 0;
@@ -25,11 +25,17 @@ export function bringToReadingLine(element: HTMLElement) {
   window.scrollBy({ top: box.top - targetTop, behavior: 'smooth' });
 }
 
-// Brings the start of the element just under the header, or its end just above the dock.
-export function scrollToEdge(element: HTMLElement, edge: 'start' | 'end') {
+function distanceToEdge(element: HTMLElement, edge: 'start' | 'end') {
   const { top, bottom } = visibleArea();
   const box = element.getBoundingClientRect();
-  const distance =
-    edge === 'start' ? box.top - top - topMarginPx : box.bottom - bottom + topMarginPx;
-  window.scrollBy({ top: distance, behavior: 'smooth' });
+  return edge === 'start' ? box.top - top - topMarginPx : box.bottom - bottom + topMarginPx;
 }
+
+// Brings the start of the element just under the header, or its end just above the dock.
+export function scrollToEdge(element: HTMLElement, edge: 'start' | 'end') {
+  window.scrollBy({ top: distanceToEdge(element, edge), behavior: 'smooth' });
+}
+
+// The page scroll position that brings the start of the element just under the header.
+export const scrollTopAtStartOf = (element: HTMLElement) =>
+  window.scrollY + distanceToEdge(element, 'start');

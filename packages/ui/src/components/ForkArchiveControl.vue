@@ -27,6 +27,7 @@ async function setArchived(archive: boolean) {
       v-if="!archivedBy"
       label="Archive fork"
       title="Archive fork"
+      class="icon-button"
       @confirm="setArchived(true)"
     >
       <MediaIcon name="archive" /><span class="visually-hidden">Archive fork</span>
@@ -43,6 +44,7 @@ async function setArchived(archive: boolean) {
       </span>
       <button
         type="button"
+        class="icon-button"
         aria-label="Restore"
         :title="
           archivedBy.id === fork.id ? 'Restore this fork' : `Restore ${forkTitle(archivedBy)}`
@@ -61,18 +63,6 @@ async function setArchived(archive: boolean) {
   align-items: center;
   gap: 0.5rem;
   min-width: 0;
-  flex-shrink: 0;
-  max-width: 50%;
-}
-
-.fork-archive button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  min-width: 1.9rem;
-  padding: 0.15rem 0.4rem;
-  line-height: 1.2;
 }
 
 .archived {

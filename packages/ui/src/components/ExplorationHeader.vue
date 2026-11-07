@@ -54,7 +54,9 @@ const forksBetween = computed(() =>
         <h1 class="title" :class="{ 'fork-title': fork }">
           {{ fork ? forkTitle(fork) : chatTitle }}
         </h1>
-        <slot name="title-actions" />
+        <div v-if="$slots['title-actions']" class="title-actions">
+          <slot name="title-actions" />
+        </div>
       </div>
     </template>
     <p v-if="state.exploration?.archivedAt" class="archived">
@@ -128,6 +130,14 @@ const forksBetween = computed(() =>
 
 .fork-path a {
   color: inherit;
+}
+
+.title-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  max-width: 60%;
 }
 
 .title-row {

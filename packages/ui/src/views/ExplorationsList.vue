@@ -1,30 +1,62 @@
 <script setup lang="ts">
 import type { ExplorationListItem } from '@shared/types';
-import { ref, watch } from 'vue';
+import { onBeforeUnmount, ref, watch } from 'vue';
 import { api } from '../api';
+import AttentionDot from '../components/AttentionDot.vue';
 import ConfirmButton from '../components/ConfirmButton.vue';
 import NewExploration from '../components/NewExploration.vue';
 import ThemeSwitch from '../components/ThemeSwitch.vue';
 import { relativeTime } from '@shared/time';
+import { openEventStream } from '../lib/event-stream';
 
 const props = defineProps<{ archived?: boolean }>();
+
+// Changes come in bursts, such as an answer and its fork, so they are reloaded once.
+const reloadDelayMs = 300;
 
 const explorations = ref<ExplorationListItem[] | null>(null);
 const failed = ref(false);
 
+async function load() {
+  try {
+    explorations.value = await api.listExplorations(props.archived);
+    failed.value = false;
+  } catch {
+    failed.value = explorations.value === null;
+  }
+}
+
 watch(
   () => props.archived,
-  async (archived) => {
+  () => {
     explorations.value = null;
-    failed.value = false;
-    try {
-      explorations.value = await api.listExplorations(archived);
-    } catch {
-      failed.value = true;
-    }
+    void load();
   },
   { immediate: true },
 );
+
+let reloadTimer: ReturnType<typeof setTimeout> | undefined;
+const reloadSoon = () => {
+  clearTimeout(reloadTimer);
+  reloadTimer = setTimeout(load, reloadDelayMs);
+};
+const stream = openEventStream({
+  url: '/api/events',
+  onReady: reloadSoon,
+  onError: () => undefined,
+  events: { 'exploration.changed': reloadSoon },
+});
+onBeforeUnmount(() => {
+  clearTimeout(reloadTimer);
+  stream.close();
+});
+
+const attentionOf = (exploration: ExplorationListItem) =>
+  exploration.sessionError && exploration.awaitingAnswer
+    ? 'failed'
+    : exploration.hasUnread
+      ? 'unread'
+      : null;
 
 async function removeFromList(explorationId: string, change: (id: string) => Promise<object>) {
   await change(explorationId);
@@ -52,6 +84,11 @@ async function removeFromList(explorationId: string, change: (id: string) => Pro
     </p>
     <ul v-else-if="explorations" class="explorations">
       <li v-for="exploration in explorations" :key="exploration.id" class="exploration">
+        <AttentionDot
+          v-if="attentionOf(exploration)"
+          :attention="attentionOf(exploration)!"
+          class="dot"
+        />
         <RouterLink
           :to="exploration.forkCount > 1 ? `/e/${exploration.id}/map` : `/e/${exploration.id}`"
           class="open"
@@ -119,6 +156,7 @@ async function removeFromList(explorationId: string, change: (id: string) => Pro
 }
 
 .exploration {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -131,6 +169,12 @@ async function removeFromList(explorationId: string, change: (id: string) => Pro
 
 .exploration:hover {
   border-color: var(--accent);
+}
+
+.dot {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
 }
 
 .open {

@@ -35,6 +35,8 @@ describe('read state', () => {
     expect(store.listExplorations()[0]!.hasUnread).toBe(false);
 
     store.submit(explorationId, mainForkId, 'Another question');
+    store.deliverQueued(explorationId);
+    expect(store.listExplorations()[0]!.awaitingAnswer).toBe(true);
     const reply = answer(mainForkId, 'Another answer');
     const messages = messagesOf(store, explorationId);
     expect(messages.find((message) => message.content === 'Another question')!.readAt).not.toBe(

@@ -16,6 +16,7 @@ import { joinForkGroup, leaveForkGroup } from '@shared/fork-groups';
 import { defaultGroupName, noteForkMessage, reorderedIds } from '@shared/notes';
 import { nextTick, reactive, watch } from 'vue';
 import { api, ApiError } from '../api';
+import { openEventStream } from '../lib/event-stream';
 import { applyNoteOrder, notesInGroup, renumberGroup } from '../lib/notes';
 import { outbox, subjectOf, type Change } from './outbox';
 
@@ -39,6 +40,7 @@ export interface ExplorationState {
 
 const eventTypes: ExplorationEvent['type'][] = [
   'message.added',
+  'messages.read',
   'fork.created',
   'fork.updated',
   'comment.created',
@@ -66,11 +68,25 @@ const eventTypes: ExplorationEvent['type'][] = [
 const byId = <Item extends { id: string }>(items: Item[]) =>
   new Map(items.map((item) => [item.id, item]));
 
+export function applyReadChange(
+  state: ExplorationState,
+  messageIds: string[],
+  readAt: number | null,
+) {
+  for (const messageId of messageIds) {
+    const message = state.messages.get(messageId);
+    if (message) message.readAt = readAt;
+  }
+}
+
 export function applyEvent(state: ExplorationState, event: ExplorationEvent) {
   switch (event.type) {
     case 'message.added':
       state.messages.set(event.message.id, event.message);
       state.forks.set(event.fork.id, event.fork);
+      break;
+    case 'messages.read':
+      applyReadChange(state, event.messageIds, event.readAt);
       break;
     case 'fork.created':
     case 'fork.updated':
@@ -172,9 +188,6 @@ export function applyServerEvent(state: ExplorationState, event: ExplorationEven
     if (subjects.has(subjectOf(change))) applyChange(state, change);
   }
 }
-
-const firstRetryMs = 1_000;
-const maxRetryMs = 30_000;
 
 // Notes do not go to Claude, so they stay out of fork groups.
 const draftJoinableComments = (state: ExplorationState, viewForkId: string) =>
@@ -496,62 +509,27 @@ function createExplorationStore(explorationId: string) {
     }
   };
 
-  // Every (re)connect reloads the snapshot, so events missed while disconnected are never replayed.
-  let source: EventSource;
-  let retryMs = firstRetryMs;
-  let retryTimer: ReturnType<typeof setTimeout> | undefined;
-  let closed = false;
-
-  // EventSource retries a dropped connection by itself, but gives up for good when an answer is
-  // not an event stream, such as the proxy's 502 while the daemon restarts. Then a new one is opened.
-  const reconnect = () => {
-    clearTimeout(retryTimer);
-    if (closed || source.readyState !== EventSource.CLOSED) return;
-    source = connect();
-  };
-  const onVisible = () => {
-    if (document.visibilityState === 'visible') reconnect();
-  };
-  document.addEventListener('visibilitychange', onVisible);
-
-  function connect() {
-    const next = new EventSource(`/api/explorations/${explorationId}/events`);
+  const stream = openEventStream({
+    url: `/api/explorations/${explorationId}/events`,
     // Changes made while offline go first, so the reloaded chat already has them.
-    next.addEventListener('ready', async () => {
-      retryMs = firstRetryMs;
+    onReady: async () => {
       state.connected = true;
       await outbox.flush();
       await load();
-    });
+    },
     // EventSource reports the 404 of a missing exploration only as an error.
-    next.addEventListener('error', () => {
+    onError: () => {
       state.connected = false;
-      if (state.status === 'loading') {
-        void load().then(() => {
-          if (state.status === 'missing') close();
-        });
-      }
-      if (next.readyState !== EventSource.CLOSED) return;
-      retryTimer = setTimeout(reconnect, retryMs);
-      retryMs = Math.min(retryMs * 2, maxRetryMs);
-    });
-    for (const type of eventTypes) {
-      next.addEventListener(type, (message) => {
-        applyServerEvent(state, JSON.parse((message as MessageEvent<string>).data));
+      if (state.status !== 'loading') return;
+      void load().then(() => {
+        if (state.status === 'missing') stream.close();
       });
-    }
-    return next;
-  }
-
-  function close() {
-    closed = true;
-    clearTimeout(retryTimer);
-    document.removeEventListener('visibilitychange', onVisible);
-    source.close();
-  }
-
-  source = connect();
-  return { state, close };
+    },
+    events: Object.fromEntries(
+      eventTypes.map((type) => [type, (data: string) => applyServerEvent(state, JSON.parse(data))]),
+    ),
+  });
+  return { state, close: stream.close };
 }
 
 let active: ReturnType<typeof createExplorationStore> | null = null;

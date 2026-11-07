@@ -157,6 +157,17 @@ html.image-viewer-open {
   overflow: hidden;
 }
 
+/* A small button with only an icon, sized like the theme switch. */
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 1.9rem;
+  padding: 0.15rem 0.4rem;
+  line-height: 1.2;
+}
+
 /* Named for screen readers and tests, not shown. */
 .visually-hidden {
   position: absolute;

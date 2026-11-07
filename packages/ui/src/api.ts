@@ -14,6 +14,7 @@ import type {
   NoteGroup,
   NoteGroupChanges,
   QueuedSubmission,
+  ReadChange,
   ReplyDraft,
   Snapshot,
   SpeechBlock,
@@ -126,6 +127,10 @@ export const api = {
     call<Comment>(`/api/explorations/${explorationId}/comments`, { json: comment, keepalive }),
   updateComment: (commentId: string, changes: CommentChanges, keepalive = false) =>
     call<Comment>(`/api/comments/${commentId}`, { method: 'PATCH', json: changes, keepalive }),
+  markRead: (explorationId: string, messageIds: string[]) =>
+    call<ReadChange>(`/api/explorations/${explorationId}/read`, { json: { messageIds } }),
+  markUnreadFrom: (messageId: string, viewForkId: string) =>
+    call<ReadChange>(`/api/messages/${messageId}/unread`, { json: { viewForkId } }),
   archiveFork: (forkId: string) => call<Fork>(`/api/forks/${forkId}/archive`, { method: 'POST' }),
   unarchiveFork: (forkId: string) =>
     call<Fork>(`/api/forks/${forkId}/unarchive`, { method: 'POST' }),

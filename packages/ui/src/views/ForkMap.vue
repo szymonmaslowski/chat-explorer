@@ -2,8 +2,10 @@
 import type { Fork } from '@shared/types';
 import { stratify, tree } from 'd3-hierarchy';
 import { computed, ref } from 'vue';
+import AttentionDot from '../components/AttentionDot.vue';
 import ExplorationHeader from '../components/ExplorationHeader.vue';
-import { archivingFork, forkPath, forkTitle } from '../lib/conversation';
+import { archivingFork, forkTitle } from '../lib/conversation';
+import { awaitsAnswer, forkAttention } from '../lib/read-state';
 import { openExploration } from '../stores/exploration';
 
 const props = defineProps<{ explorationId: string; currentForkId?: string }>();
@@ -55,14 +57,15 @@ const layout = computed(() => {
   for (const message of state.value.messages.values()) {
     messageCounts.set(message.forkId, (messageCounts.get(message.forkId) ?? 0) + 1);
   }
+  const attention = forkAttention(state.value);
   const boxes = nodes.map((node) => {
     const fork = node.data;
-    const last = forkPath(fork, state.value.messages).at(-1);
     return {
       fork,
       ...position(node.x, node.y),
       messageCount: messageCounts.get(fork.id) ?? 0,
-      awaitingAnswer: last?.role === 'user',
+      awaitingAnswer: awaitsAnswer(fork, state.value.messages),
+      attention: attention.get(fork.id),
       archived: archivedForks.value.has(fork.id),
     };
   });
@@ -122,6 +125,7 @@ const layout = computed(() => {
             height: `${boxHeight}px`,
           }"
         >
+          <AttentionDot v-if="box.attention" :attention="box.attention" class="dot" />
           <span class="summary">{{ forkTitle(box.fork) }}</span>
           <span class="meta">
             {{ box.messageCount }} message{{ box.messageCount === 1 ? '' : 's' }}
@@ -198,7 +202,14 @@ const layout = computed(() => {
   border: 2px solid var(--accent);
 }
 
+.dot {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+}
+
 .summary {
+  padding-right: 0.5rem;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;

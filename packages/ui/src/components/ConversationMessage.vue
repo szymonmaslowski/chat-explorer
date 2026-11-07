@@ -5,6 +5,7 @@ import { renderMarkdown } from '@shared/markdown';
 import { useCopied } from '../composables/useCopied';
 import { fileIdOfImage, useImageViewer } from '../composables/useImageViewer';
 import { formatDateTime } from '../lib/date-time';
+import { isUnread } from '../lib/read-state';
 import { bringToReadingLine, scrollToEdge } from '../lib/reading-line';
 import { speechBlocks, type SpokenElement } from '../lib/speech-blocks';
 import { checkSpeechAvailable, playFrom, speech, togglePause } from '../stores/speech';
@@ -16,7 +17,9 @@ const props = defineProps<{
   quotedComments: Comment[];
   files: MessageFile[];
   shared: boolean;
+  isNew: boolean;
 }>();
+const emit = defineEmits<{ markUnread: [] }>();
 
 const html = computed(() => (props.message.content ? renderMarkdown(props.message.content) : ''));
 // A file the text already shows, such as a screenshot in an answer, is not listed again below.
@@ -97,14 +100,16 @@ onMounted(findBlocks);
     ref="article"
     :id="`m-${message.id}`"
     class="message"
-    :class="[message.role, { shared }]"
+    :class="[message.role, { shared, new: isNew }]"
     :data-message-id="message.id"
+    :data-unread="isUnread(message) || undefined"
   >
     <header class="role">
       {{ message.role === 'user' ? 'You' : 'Claude' }}
       <time class="time" :datetime="new Date(message.createdAt).toISOString()">
         {{ formatDateTime(message.createdAt) }}
       </time>
+      <span v-if="isNew" class="new-label">New</span>
       <button
         v-if="speakable"
         type="button"
@@ -134,6 +139,16 @@ onMounted(findBlocks);
         @click="jumpTo('end')"
       >
         <MediaIcon name="to-end" />
+      </button>
+      <button
+        v-if="message.role === 'assistant' && !isUnread(message)"
+        type="button"
+        class="listen"
+        aria-label="Mark unread from here"
+        title="Mark this answer and the later ones unread"
+        @click="emit('markUnread')"
+      >
+        <MediaIcon name="unread" />
       </button>
     </header>
     <div v-for="comment in quotedComments" :key="comment.id" class="quoted-comment">
@@ -202,6 +217,17 @@ onMounted(findBlocks);
 
 .message.shared {
   opacity: 0.6;
+}
+
+/* Pulled into the gutter so the text does not move when the mark goes. */
+.message.new {
+  margin-left: -0.75rem;
+  padding-left: calc(0.75rem - 3px);
+  border-left: 3px solid var(--accent);
+}
+
+.new-label {
+  color: var(--accent);
 }
 
 .role {

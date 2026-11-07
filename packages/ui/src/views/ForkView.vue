@@ -10,7 +10,10 @@ import QueuedSubmissionCard from '../components/QueuedSubmissionCard.vue';
 import ReplyBar from '../components/ReplyBar.vue';
 import SessionError from '../components/SessionError.vue';
 import SpeechPlayer from '../components/SpeechPlayer.vue';
+import AttentionDot from '../components/AttentionDot.vue';
+import MediaIcon from '../components/MediaIcon.vue';
 import { useMediaQuery } from '../composables/useMediaQuery';
+import { useReadTracking } from '../composables/useReadTracking';
 import { commentRailWidth } from '../lib/card-layout';
 import {
   archivingFork,
@@ -19,6 +22,7 @@ import {
   mainFork,
   quotedCommentsOf,
 } from '../lib/conversation';
+import { forkAttention, isUnread } from '../lib/read-state';
 import { openExploration } from '../stores/exploration';
 import { stopSpeech } from '../stores/speech';
 
@@ -49,6 +53,9 @@ const ownStart = computed(() =>
   path.value.findIndex((message) => message.forkId === fork.value?.id),
 );
 const awaitingAnswer = computed(() => path.value.at(-1)?.role === 'user');
+const lastAnswer = computed(() => path.value.findLast((message) => message.role === 'assistant'));
+const attention = computed(() => forkAttention(state.value));
+const { newIds, markUnread } = useReadTracking({ state, fork, path });
 const viewComments = computed(() =>
   [...state.value.comments.values()].filter(
     (comment) => comment.viewForkId === fork.value?.id && pathIds.value.has(comment.messageId),
@@ -136,8 +143,19 @@ watch(
         · <RouterLink :to="`/e/${explorationId}/map?from=${fork.id}`">Map</RouterLink> ·
         <RouterLink :to="`/e/${explorationId}/notes`">Notes</RouterLink>
       </template>
-      <template v-if="fork?.parentForkId && !chatArchived" #title-actions>
+      <template v-if="fork" #title-actions>
+        <button
+          v-if="lastAnswer && !isUnread(lastAnswer)"
+          type="button"
+          class="icon-button"
+          aria-label="Mark unread"
+          title="Mark this fork unread"
+          @click="markUnread(lastAnswer.id)"
+        >
+          <MediaIcon name="unread" />
+        </button>
         <ForkArchiveControl
+          v-if="fork.parentForkId && !chatArchived"
           :exploration-id="explorationId"
           :fork="fork"
           :archived-by="archivedBy"
@@ -184,6 +202,8 @@ watch(
             :quoted-comments="quotedCommentsOf(message.id, state.comments)"
             :files="filesOfMessage(message.id)"
             :shared="ownStart !== -1 && index < ownStart"
+            :is-new="newIds.has(message.id)"
+            @mark-unread="markUnread(message.id)"
           />
           <div :id="`comments-${message.id}`" class="message-comments" />
           <RouterLink
@@ -193,6 +213,7 @@ watch(
             class="reply-fork"
           >
             ↳ Fork: {{ forkTitle(child) }}
+            <AttentionDot v-if="attention.get(child.id)" :attention="attention.get(child.id)!" />
           </RouterLink>
         </template>
         <CommentLayer

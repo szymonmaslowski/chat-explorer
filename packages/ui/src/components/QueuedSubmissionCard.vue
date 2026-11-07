@@ -45,7 +45,7 @@ function cancel() {
     </div>
     <button
       type="button"
-      class="cancel"
+      class="icon-button"
       aria-label="Cancel"
       title="Cancel and put the message back in the reply box"
       @click="cancel"
@@ -66,16 +66,6 @@ function cancel() {
   padding: 0.6rem 1rem;
   margin: 1rem 0;
   font-size: 0.9rem;
-}
-
-.cancel {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  min-width: 1.9rem;
-  padding: 0.15rem 0.4rem;
-  line-height: 1.2;
 }
 
 .message {

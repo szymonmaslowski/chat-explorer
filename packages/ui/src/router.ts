@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import { scrollTopAtStartOf } from './lib/reading-line';
 import { whenActiveExplorationLoaded } from './stores/exploration';
 import ExplorationsList from './views/ExplorationsList.vue';
 import ForkMap from './views/ForkMap.vue';
@@ -36,6 +37,8 @@ export const router = createRouter({
     if (to.hash || to.path === from.path) return false;
     if (!to.meta.opensAtEnd) return { top: 0 };
     await whenActiveExplorationLoaded();
+    const firstUnread = document.querySelector<HTMLElement>('.message[data-unread]');
+    if (firstUnread) return { top: scrollTopAtStartOf(firstUnread) };
     return { top: document.documentElement.scrollHeight };
   },
 });

@@ -216,7 +216,7 @@ export class ChatStore {
       deleted: 'deleted_at IS NOT NULL ORDER BY deleted_at DESC',
     };
     return this.db
-      .all<ExplorationRow & { fork_count: number; has_unread: number }>(
+      .all<ExplorationRow & { fork_count: number; has_unread: number; awaiting_answer: number }>(
         `SELECT explorations.*,
            (WITH RECURSIVE shown(id) AS (
               SELECT id FROM forks
@@ -228,13 +228,18 @@ export class ChatStore {
            EXISTS (
              SELECT 1 FROM messages
               WHERE messages.exploration_id = explorations.id AND messages.read_at IS NULL
-           ) AS has_unread
+           ) AS has_unread,
+           EXISTS (
+             SELECT 1 FROM forks JOIN messages ON messages.id = forks.tip_message_id
+              WHERE forks.exploration_id = explorations.id AND messages.role = 'user'
+           ) AS awaiting_answer
          FROM explorations WHERE ${filters[view]}`,
       )
       .map((row) => ({
         ...toExploration(row),
         forkCount: row.fork_count,
         hasUnread: row.has_unread === 1,
+        awaitingAnswer: row.awaiting_answer === 1,
       }));
   }
 
