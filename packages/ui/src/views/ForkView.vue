@@ -158,6 +158,17 @@ watch(
         · <RouterLink :to="`/e/${explorationId}/map?from=${fork.id}`">Map</RouterLink> ·
         <RouterLink :to="`/e/${explorationId}/notes`">Notes</RouterLink>
       </template>
+      <template v-if="fork && archivedBy && !chatArchived" #title-badge>
+        <span class="archived-label">
+          <template v-if="archivedBy.id === fork.id">Archived</template>
+          <template v-else>
+            Archived with
+            <RouterLink :to="`/e/${explorationId}/f/${archivedBy.id}`">{{
+              forkTitle(archivedBy)
+            }}</RouterLink>
+          </template>
+        </span>
+      </template>
       <template v-if="fork" #title-actions>
         <button
           v-if="viewBookmarks.length > 0"
@@ -323,6 +334,15 @@ watch(
   content: '';
   flex: 1;
   border-top: 1px solid var(--border);
+}
+
+.archived-label {
+  font-size: 0.75rem;
+  color: var(--warning);
+}
+
+.archived-label a {
+  color: inherit;
 }
 
 .bookmarks-button {

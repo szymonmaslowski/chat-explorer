@@ -51,9 +51,12 @@ const forksBetween = computed(() =>
         </template>
       </p>
       <div class="title-row">
-        <h1 class="title" :class="{ 'fork-title': fork }">
-          {{ fork ? forkTitle(fork) : chatTitle }}
-        </h1>
+        <div class="title-group">
+          <h1 class="title" :class="{ 'fork-title': fork }">
+            {{ fork ? forkTitle(fork) : chatTitle }}
+          </h1>
+          <slot name="title-badge" />
+        </div>
         <div v-if="$slots['title-actions']" class="title-actions">
           <slot name="title-actions" />
         </div>
@@ -147,8 +150,17 @@ const forksBetween = computed(() =>
   margin: 0.2rem 0 0;
 }
 
-.title {
+/* A badge sits right after a short title and wraps under a long one. */
+.title-group {
+  display: flex;
   flex: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.5rem;
+  min-width: 0;
+}
+
+.title {
   min-width: 0;
   margin: 0;
   font-size: inherit;

@@ -32,28 +32,16 @@ async function setArchived(archive: boolean) {
     >
       <MediaIcon name="archive" /><span class="visually-hidden">Archive fork</span>
     </ConfirmButton>
-    <template v-else>
-      <span class="archived">
-        <template v-if="archivedBy.id === fork.id">Archived</template>
-        <template v-else>
-          Archived with
-          <RouterLink :to="`/e/${explorationId}/f/${archivedBy.id}`">{{
-            forkTitle(archivedBy)
-          }}</RouterLink>
-        </template>
-      </span>
-      <button
-        type="button"
-        class="icon-button"
-        aria-label="Restore"
-        :title="
-          archivedBy.id === fork.id ? 'Restore this fork' : `Restore ${forkTitle(archivedBy)}`
-        "
-        @click="setArchived(false)"
-      >
-        <MediaIcon name="unarchive" />
-      </button>
-    </template>
+    <button
+      v-else
+      type="button"
+      class="icon-button"
+      aria-label="Restore"
+      :title="archivedBy.id === fork.id ? 'Restore this fork' : `Restore ${forkTitle(archivedBy)}`"
+      @click="setArchived(false)"
+    >
+      <MediaIcon name="unarchive" />
+    </button>
   </div>
 </template>
 
@@ -63,19 +51,6 @@ async function setArchived(archive: boolean) {
   align-items: center;
   gap: 0.5rem;
   min-width: 0;
-}
-
-.archived {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.75rem;
-  color: var(--warning);
-}
-
-.archived a {
-  color: inherit;
 }
 
 .error {
