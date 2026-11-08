@@ -9,7 +9,7 @@ import {
   test,
 } from './helpers';
 
-test('starts a fork from a new comment at once, leaving the other drafts and the reply', async ({
+test('starts a fork from a comment at once, leaving the other drafts and the reply', async ({
   page,
   request,
 }) => {
@@ -24,10 +24,15 @@ test('starts a fork from a new comment at once, leaving the other drafts and the
   await page.mouse.move(0, 0);
   await selectAnswer(page);
   await page.getByRole('button', { name: 'Comment', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Fork now' })).toHaveCount(0);
   await chooseCommentType(page.locator('.comment-editor'), 'Fork');
+  await expect(
+    page.locator('.comment-editor').getByRole('button', { name: 'Fork now' }),
+  ).toHaveCount(0);
   await page.getByPlaceholder('Your comment').fill('Try it this way');
-  await page.getByRole('button', { name: 'Fork now' }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  const card = page.locator('.comment-card.draft', { hasText: 'Try it this way' });
+  await card.hover();
+  await card.getByRole('button', { name: 'Fork now' }).click();
 
   await expect(page.locator('.queued-submission')).toContainText('1 comment');
   await expect(page.locator('.reply-bar .summary')).toHaveText('1 comment, message');

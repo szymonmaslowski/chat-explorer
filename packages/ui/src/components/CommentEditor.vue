@@ -131,21 +131,6 @@ function save() {
   close(addSaved, true);
 }
 
-function forkNow() {
-  if (!body.value.trim()) return;
-  const { explorationId, viewForkId } = props;
-  close(() => {
-    addSaved();
-    outbox.add({
-      type: 'fork-now',
-      explorationId,
-      submissionId: newId(),
-      forkId: viewForkId,
-      commentId,
-    });
-  }, true);
-}
-
 function cancel() {
   close(() => {
     if (created)
@@ -183,9 +168,6 @@ function onKeydown(event: KeyboardEvent) {
       <ExpandButton v-model="expanded" />
       <span class="spacer" />
       <button type="button" @click="cancel">Cancel</button>
-      <button v-if="type === 'fork'" type="button" :disabled="!body.trim()" @click="forkNow">
-        Fork now
-      </button>
       <button type="button" class="primary" :disabled="!body.trim()" @click="save">Save</button>
     </div>
     <div v-if="type === 'note'" class="note-group">
