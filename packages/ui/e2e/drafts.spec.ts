@@ -2,6 +2,7 @@ import { expect, type Page } from '@playwright/test';
 import {
   answeredChat,
   attachFakeSession,
+  clickQuotedText,
   deliverAndAnswer,
   detachFakeSession,
   selectAnswer,
@@ -100,14 +101,12 @@ test('keeps an edit of a saved comment apart from its saved text until Save', as
   await card.locator('textarea').fill('Third version');
   await card.getByRole('button', { name: 'Save', exact: true }).click();
   await page.reload();
+  await clickQuotedText(page, 'Caching');
   await expect(card).toContainText('Third version');
   await expect(card.locator('textarea')).toHaveCount(0);
 });
 
-test('keeps a comment being edited out of the header tray and links to it from the reply bar', async ({
-  page,
-  request,
-}) => {
+test('links to a comment being edited from the reply bar', async ({ page, request }) => {
   const paragraphs = Array.from(
     { length: 30 },
     (_, index) => `Paragraph ${index + 1} of the answer.`,
@@ -131,7 +130,6 @@ test('keeps a comment being edited out of the header tray and links to it from t
   await card.getByRole('button', { name: 'Edit' }).click();
 
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-  await expect(page.locator('#comment-tray .chip')).toHaveCount(0);
   await expect(card.locator('textarea')).toHaveValue('Still thinking');
   await expect(card).not.toBeInViewport();
 
@@ -197,7 +195,7 @@ test('saves the reply box text as a general comment, sent with the next Submit',
   await expect(page.locator('.comment-outlines path')).toHaveCount(0);
   const lastLine = (await page.locator('.message.assistant .content p').last().boundingBox())!;
   const cardBox = (await card.boundingBox())!;
-  expect(Math.abs(cardBox.y - lastLine.y)).toBeLessThan(lastLine.height);
+  expect(cardBox.y).toBeGreaterThan(lastLine.y + lastLine.height);
 
   await reply.fill('Save this for later');
   await reply.press('ControlOrMeta+Shift+Enter');

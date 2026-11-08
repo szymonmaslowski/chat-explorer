@@ -3,6 +3,7 @@ import {
   answeredChat,
   attachFakeSession,
   chooseCommentType,
+  clickQuotedText,
   deliverAndAnswer,
   detachFakeSession,
   selectAnswer,
@@ -45,7 +46,7 @@ test('starts a fork from a comment at once, leaving the other drafts and the rep
   await detachFakeSession(request);
 
   await expect(page.locator('.queued-submission')).toHaveCount(0);
-  await expect(page.locator('.comment-card.submitted')).toHaveCount(0);
+  await expect(page.locator('.comment-card.draft', { hasText: 'Try it this way' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: '↳ Fork: Try it this way' })).toBeVisible();
   await expect(page.locator('.reply-bar .summary')).toHaveText('1 comment, message');
 });
@@ -107,6 +108,7 @@ test('joins comments into one fork, unlinks one and ungroups the rest', async ({
   const card = (name: string) => page.locator('.comment-card', { hasText: `About ${name}` });
   const summary = page.locator('.reply-bar .summary');
   await expect(summary).toHaveText('2 forks, 1 comment');
+  for (const quote of ['Bravo', 'Alpha', 'Charlie']) await clickQuotedText(page, quote);
 
   await card('Bravo').getByRole('button', { name: 'Join', exact: true }).click();
   await card('Alpha').getByLabel('Join into one fork').check();

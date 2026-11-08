@@ -90,7 +90,9 @@ test('continues into the next block and stops at the end of the answer', async (
 
 test('a tapped block offers a comment on the whole block', async ({ page }) => {
   await openSeededExploration(page);
-  const block = page.locator('.message.assistant .content p', { hasText: 'HTTP caching.' });
+  const block = page.locator('.message.assistant [data-anchor-root] > p', {
+    hasText: 'HTTP caching.',
+  });
   const comment = page.getByRole('button', { name: 'Comment', exact: true });
 
   await block.click({ position: { x: 40, y: 8 } });
@@ -105,7 +107,6 @@ test('a tapped block offers a comment on the whole block', async ({ page }) => {
   await expect(page.locator('.comment-editor')).toContainText(
     "you can only purge it through the CDN's API.",
   );
-  await expect(block).toHaveClass('picked');
   await page.getByPlaceholder('Your comment').fill('Which CDNs?');
   await page.keyboard.press('ControlOrMeta+Enter');
   await expect(page.locator('.comment-card.draft', { hasText: 'Which CDNs?' })).toBeVisible();

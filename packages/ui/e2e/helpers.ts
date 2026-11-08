@@ -38,9 +38,20 @@ export async function openSeededExploration(page: Page) {
   return seeded.id;
 }
 
-// On a phone, quoted comments open with a tap on the text they quote.
+// Quoted comments open with a tap or a click on the text they quote.
 export async function tapQuotedText(page: Page, quote: string) {
-  const point = await page.evaluate((text) => {
+  const point = await quotedTextPoint(page, quote);
+  await page.touchscreen.tap(point.x, point.y);
+}
+
+export async function clickQuotedText(page: Page, quote: string) {
+  const point = await quotedTextPoint(page, quote);
+  await page.mouse.click(point.x, point.y);
+}
+
+async function quotedTextPoint(page: Page, quote: string) {
+  await page.waitForFunction((text) => document.body.innerText.includes(text), quote);
+  return page.evaluate((text) => {
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     while (walker.nextNode()) {
       const node = walker.currentNode as Text;
@@ -55,7 +66,6 @@ export async function tapQuotedText(page: Page, quote: string) {
     }
     throw new Error(`"${text}" not found`);
   }, quote);
-  await page.touchscreen.tap(point.x, point.y);
 }
 
 export const seededDraftQuote = 'store a version number per entity';

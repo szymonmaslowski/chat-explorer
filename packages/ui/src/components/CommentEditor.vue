@@ -19,10 +19,6 @@ const props = defineProps<{
   viewForkId: string;
   messageId: string;
   anchor: TextAnchor;
-  top: number;
-  left: number;
-  width: number;
-  inRail: boolean;
 }>();
 const emit = defineEmits<{
   created: [commentId: string];
@@ -145,14 +141,7 @@ function onKeydown(event: KeyboardEvent) {
 </script>
 
 <template>
-  <div
-    class="comment-editor"
-    :class="[type, { expanded, 'in-rail': inRail }]"
-    :style="
-      expandedStyle ??
-      (inRail ? { top: `${top}px`, left: `${left}px`, width: `${width}px` } : undefined)
-    "
-  >
+  <div class="comment-editor" :class="[type, { expanded }]" :style="expandedStyle ?? undefined">
     <p class="quote">{{ anchor.quote }}</p>
     <textarea
       ref="textarea"
@@ -188,11 +177,6 @@ function onKeydown(event: KeyboardEvent) {
   box-shadow: var(--shadow);
   padding: 0.5rem;
   font-size: 0.85rem;
-}
-
-.comment-editor.in-rail {
-  position: absolute;
-  z-index: 4;
 }
 
 .comment-editor.expanded {

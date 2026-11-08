@@ -17,7 +17,6 @@ import MediaIcon from '../components/MediaIcon.vue';
 import { useCommentTyping } from '../composables/useCommentTyping';
 import { useMediaQuery } from '../composables/useMediaQuery';
 import { useReadTracking } from '../composables/useReadTracking';
-import { commentRailWidth } from '../lib/card-layout';
 import {
   answeredPartLookup,
   archivingFork,
@@ -44,7 +43,6 @@ const commentTyping = useCommentTyping();
 // On a phone the reply box gives its room to the comment being typed. Without its marker, the
 // rest of the page counts on no dock.
 const dockHidden = computed(() => compact.value && commentTyping.value);
-const commentRail = `${commentRailWidth}px`;
 const state = computed(() => openExploration(props.explorationId));
 const chatArchived = computed(() => Boolean(state.value.exploration?.archivedAt));
 const fork = computed(() =>
@@ -171,7 +169,7 @@ watch(
 </script>
 
 <template>
-  <div class="page fork-view" :class="{ 'with-rail': !compact }">
+  <div class="page fork-view">
     <ExplorationHeader :state="state" :fork="fork ?? undefined" class="top" data-sticky-header>
       <template v-if="fork" #links>
         · <RouterLink :to="`/e/${explorationId}/map?from=${fork.id}`">Map</RouterLink> ·
@@ -223,7 +221,6 @@ watch(
         :bookmarks="viewBookmarks"
         @jump="compact && (bookmarksOpen = false)"
       />
-      <div id="comment-tray" />
       <SpeechPlayer />
     </ExplorationHeader>
 
@@ -288,7 +285,6 @@ watch(
           :comments="viewComments"
           :bookmarks="viewBookmarks"
           :layout-key="[...pathIds].join()"
-          :compact="compact"
           :read-only="archived"
         />
       </div>
@@ -320,11 +316,6 @@ watch(
 </template>
 
 <style scoped>
-.fork-view.with-rail {
-  max-width: calc(var(--column) + v-bind(commentRail));
-  padding-right: calc(1rem + v-bind(commentRail));
-}
-
 .top {
   position: sticky;
   top: 0;

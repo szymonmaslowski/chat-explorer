@@ -2,9 +2,11 @@ import { expect, type Page } from '@playwright/test';
 import {
   attachFakeSession,
   clearReply,
+  clickQuotedText,
   deliverAndAnswer,
   detachFakeSession,
   openSeededExploration,
+  seededDraftQuote,
   test,
 } from './helpers';
 
@@ -77,6 +79,7 @@ test('queues a submit, scrolls to it and cancels it back into drafts', async ({ 
   const queued = page.locator('.queued-submission');
   await expect(queued).toContainText('Can you compare costs?');
   await expect(queued).toBeInViewport();
+  await clickQuotedText(page, seededDraftQuote);
   await expect(page.locator('.comment-card.queued')).toHaveCount(1);
 
   await queued.getByRole('button', { name: 'Cancel' }).click();

@@ -2,21 +2,10 @@
 import { inTextOrder } from '@shared/fork-groups';
 import { insertedAttribute } from '@shared/speech-blocks';
 import type { Bookmark, Comment } from '@shared/types';
-import {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  reactive,
-  ref,
-  shallowRef,
-  watch,
-} from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { anchorOfRange, clampToRoot, locateAnchor, type TextAnchor } from '../lib/anchoring';
-import { draftCardWidth, layoutCards, railLeftOf, submittedCardWidth } from '../lib/card-layout';
 import { lineBoxes, nestingLevels, outlinePath } from '../lib/outlines';
-import { pointer } from '../lib/pointer';
 import { useCopied } from '../composables/useCopied';
 import { blockClipboardText } from '../lib/clipboard';
 import {
@@ -31,7 +20,6 @@ import { playBlock, speech } from '../stores/speech';
 import { useMediaQuery } from '../composables/useMediaQuery';
 import CommentCard from './CommentCard.vue';
 import CommentEditor from './CommentEditor.vue';
-import CommentTray from './CommentTray.vue';
 import ForkGroupCard from './ForkGroupCard.vue';
 import MediaIcon from './MediaIcon.vue';
 
@@ -41,11 +29,9 @@ const props = defineProps<{
   comments: Comment[];
   bookmarks: Bookmark[];
   layoutKey: string;
-  compact: boolean;
   readOnly: boolean;
 }>();
 
-const estimatedHeight = { draft: 78, queued: 60, submitted: 28 } as const;
 const flashMs = 1_400;
 // Each comment around another sits this much further out, up to the room between lines.
 const outlineOutset = { base: 1, step: 2, maxLevel: 3 };
@@ -61,19 +47,13 @@ const coarsePointer = useMediaQuery('(pointer: coarse)');
 const router = useRouter();
 const layer = ref<HTMLElement | null>(null);
 const layerWidth = ref(0);
-const railLeft = computed(() => railLeftOf(layerWidth.value));
 const anchors = shallowRef(new Map<string, Range>());
 const bookmarkRanges = shallowRef(new Map<string, Range>());
-const anchorBoxes = shallowRef(new Map<string, { top: number; left: number }>());
 // The messages on the page, top to bottom, for putting comments in the order of their text.
 const messageOrder = shallowRef<string[]>([]);
-const heights = reactive(new Map<string, number>());
-const trayIds = shallowRef(new Set<string>());
 const outlines = shallowRef<{ comment: Comment; path: string }[]>([]);
-// The comments of a card the mouse is over, outlined more strongly.
-const hoveredIds = ref(new Set<string>());
-// On a phone, comments open in the text right after what they quote, with a tap on it or when
-// written, and stay open until closed.
+// Comments open in the text right after what they quote, with a tap on it or when written, and
+// stay open until closed.
 interface OpenedPlace {
   key: string;
   messageId: string;
@@ -92,8 +72,6 @@ interface ActionsPlacement {
   anchor: TextAnchor;
   buttonTop: number;
   buttonLeft: number;
-  lineTop: number;
-  lineLeft: number;
 }
 
 const selection = ref<ActionsPlacement | null>(null);
@@ -129,26 +107,20 @@ const pickedPlaying = computed(
     speech.playback?.id === picked.value?.messageId &&
     speech.playback?.index === picked.value?.blockIndex,
 );
+// Each editor sits in the text after its quote, so several can be open.
 interface OpenEditor {
   key: string;
   messageId: string;
   anchor: TextAnchor;
-  top: number;
-  left: number;
   commentId: string | null;
-  placeKey: string | null;
+  placeKey: string;
 }
 const editors = ref<OpenEditor[]>([]);
-// On a phone each editor sits in the text, so several can be open. The rail has room for one, and
-// while it is open the text offers no more buttons.
-const editorBlocks = computed(() => editors.value.length > 0 && !props.compact);
 const editedIds = computed(
   () => new Set(editors.value.flatMap((editor) => (editor.commentId ? [editor.commentId] : []))),
 );
 const placeOfEditor = (editor: OpenEditor) =>
   openedPlaces.value.find((place) => place.key === editor.placeKey);
-// Sent comments a link from Claude's answer showed, until closed.
-const revealedIds = ref(new Set<string>());
 // A comment open in an editor shows there, not also as a card. A sent comment shows in the
 // reply it went with, and its fork as a link under the message, so it needs no card; a saved note
 // keeps its card, which is the way to the note.
@@ -156,9 +128,7 @@ const shownComments = computed(() =>
   props.comments.filter(
     (comment) =>
       !editedIds.value.has(comment.id) &&
-      (comment.status !== 'submitted' ||
-        comment.type === 'note' ||
-        revealedIds.value.has(comment.id)),
+      (comment.status !== 'submitted' || comment.type === 'note'),
   ),
 );
 
@@ -192,10 +162,11 @@ function locateAll(root: HTMLElement, items: (TextAnchor & { id: string; message
 function reanchor() {
   const root = container();
   if (!root) return;
-  if (props.compact) restorePlaces(root);
-  else closeAllPlaces();
+  restorePlaces(root);
   anchors.value = locateAll(root, props.comments);
   bookmarkRanges.value = locateAll(root, props.bookmarks);
+  dropGoneComments();
+  openBeingEdited();
   messageOrder.value = [...root.querySelectorAll<HTMLElement>('[data-anchor-root]')].flatMap(
     (element) => element.dataset.anchorRoot ?? [],
   );
@@ -207,11 +178,7 @@ function measure() {
   if (!layer.value) return;
   layerWidth.value = layer.value.clientWidth;
   for (const place of openedPlaces.value) fitToMessageWidth(place.mount);
-  const boxes = new Map<string, { top: number; left: number }>();
-  for (const [id, range] of anchors.value) boxes.set(id, relative(firstLineRect(range)));
-  anchorBoxes.value = boxes;
   measureOutlines();
-  updateTray();
 }
 
 function measureOutlines() {
@@ -237,37 +204,6 @@ function measureOutlines() {
 }
 
 const outlineKind = (comment: Comment) => (comment.forkGroupId ? 'fork' : comment.type);
-const hover = (comments: Comment[]) =>
-  (hoveredIds.value = new Set(comments.map((comment) => comment.id)));
-
-function updateTray() {
-  if (props.compact) {
-    if (trayIds.value.size > 0) trayIds.value = new Set();
-    return;
-  }
-  const header = document.querySelector('[data-sticky-header]');
-  const limit = header ? header.getBoundingClientRect().bottom : 0;
-  const inTray = new Set<string>();
-  // A chip has no editor, so a comment being edited keeps its card. A fork group keeps its card
-  // too, so it stays whole.
-  for (const comment of props.comments) {
-    const range = anchors.value.get(comment.id);
-    const beingEdited = comment.editBody !== null;
-    if (
-      comment.status === 'draft' &&
-      !beingEdited &&
-      !comment.forkGroupId &&
-      range &&
-      firstLineRect(range).bottom < limit
-    ) {
-      inTray.add(comment.id);
-    }
-  }
-  const changed =
-    inTray.size !== trayIds.value.size || [...inTray].some((id) => !trayIds.value.has(id));
-  if (changed) trayIds.value = inTray;
-}
-
 function paintHighlights() {
   if (!('highlights' in CSS)) return;
   CSS.highlights.set('bookmark', new Highlight(...bookmarkRanges.value.values()));
@@ -306,53 +242,33 @@ function cardEntriesOf(comments: Comment[]) {
 
 const cardEntries = computed(() => cardEntriesOf(shownComments.value));
 
-// Sent comments open too, as the way from the text to what was asked. A fork group opens whole.
+// Sent comments open too, as the way from the text to what was asked. A fork group opens whole,
+// once, in the first open place that holds one of its comments.
+const groupPlaces = computed(() => {
+  const places = new Map<string, string>();
+  for (const place of openedPlaces.value) {
+    for (const comment of props.comments) {
+      if (place.ids.has(comment.id) && comment.forkGroupId && !places.has(comment.forkGroupId)) {
+        places.set(comment.forkGroupId, place.key);
+      }
+    }
+  }
+  return places;
+});
+
 function placeEntries(place: OpenedPlace) {
-  const groups = new Set(
-    props.comments.flatMap((comment) =>
-      place.ids.has(comment.id) && comment.forkGroupId ? [comment.forkGroupId] : [],
-    ),
-  );
   return cardEntriesOf(
-    props.comments.filter(
-      (comment) =>
-        !editedIds.value.has(comment.id) &&
-        (place.ids.has(comment.id) ||
-          (comment.forkGroupId !== null && groups.has(comment.forkGroupId))),
-    ),
+    props.comments.filter((comment) => {
+      if (editedIds.value.has(comment.id)) return false;
+      if (comment.forkGroupId) return groupPlaces.value.get(comment.forkGroupId) === place.key;
+      return place.ids.has(comment.id);
+    }),
   );
 }
 
-const floatingCards = computed(() => {
-  if (props.compact) return [];
-  const requests = cardEntries.value.flatMap(({ first, comments }) => {
-    const box = anchorBoxes.value.get(first.id);
-    if (!box || trayIds.value.has(first.id)) return [];
-    return [
-      {
-        id: first.id,
-        anchorTop: box.top,
-        anchorLeft: box.left,
-        width: first.status === 'submitted' ? submittedCardWidth : draftCardWidth,
-        height: heights.get(first.id) ?? estimatedHeight[first.status] * comments.length,
-      },
-    ];
-  });
-  const byFirstId = new Map(cardEntries.value.map((entry) => [entry.first.id, entry]));
-  return layoutCards(requests, railLeft.value).map((placement) => ({
-    ...placement,
-    ...byFirstId.get(placement.id)!,
-  }));
-});
-
-const trayComments = computed(() =>
-  props.comments.filter((comment) => trayIds.value.has(comment.id)),
-);
-
-// On a phone only general comments are listed under their message; the others open with a tap on
-// the text they quote.
+// Only general comments are listed under their message; the others open with a tap on the text
+// they quote.
 const listedComments = computed(() => {
-  if (!props.compact) return [];
   const byMessage = new Map<string, (typeof cardEntries.value)[number][]>();
   for (const entry of cardEntries.value.filter(({ first }) => !first.quote)) {
     const { messageId } = entry.first;
@@ -398,13 +314,10 @@ function placeActions(
     anchor,
     buttonTop: underDock ? firstLine.top - 4 - height : below,
     buttonLeft: Math.max(0, Math.min(lastLine.right + 6, layerWidth.value - width)),
-    lineTop: firstLine.top,
-    lineLeft: firstLine.left,
   };
 }
 
 function showCommentButton() {
-  if (editorBlocks.value) return;
   const current = window.getSelection();
   if (!current || current.isCollapsed || current.rangeCount === 0) {
     selection.value = null;
@@ -431,7 +344,7 @@ function highlightPicked(element: HTMLElement | null) {
 
 function unpick() {
   picked.value = null;
-  if (!editorBlocks.value) highlightPicked(null);
+  highlightPicked(null);
 }
 
 function pick(root: HTMLElement, element: HTMLElement, blockIndex: number) {
@@ -448,10 +361,10 @@ function pick(root: HTMLElement, element: HTMLElement, blockIndex: number) {
 
 // A tap on a block picks it; a tap on the picked block or anywhere else lets it go. A tap that
 // only clears a text selection picks nothing.
-// On a phone the same tap also opens the comments on the tapped text.
+// The same tap also opens the comments on the tapped text.
 async function onClick(event: MouseEvent) {
   const target = event.target;
-  if (!(target instanceof Element) || editorBlocks.value) return;
+  if (!(target instanceof Element)) return;
   const ignored = `[${insertedAttribute}], .answer-tags, button, a, input, textarea, select, label`;
   if (target.closest(ignored)) return;
   if (selectionAtPointerDown || !window.getSelection()?.isCollapsed) {
@@ -465,10 +378,8 @@ async function onClick(event: MouseEvent) {
   const alreadyPicked = element === pickedElement;
   unpick();
   if (!root || !block || !element || alreadyPicked) return;
-  if (props.compact) {
-    actionsPlaceKey.value = openCommentsAt(event.clientX, event.clientY)?.key ?? null;
-    await nextTick();
-  }
+  actionsPlaceKey.value = openCommentsAt(event.clientX, event.clientY)?.key ?? null;
+  await nextTick();
   pick(root, element, blocks.indexOf(block));
 }
 
@@ -538,6 +449,27 @@ function restorePlaces(root: HTMLElement) {
   for (const place of lost) closePlace(place);
 }
 
+// A deleted comment leaves its place, and a place left empty closes.
+function dropGoneComments() {
+  const existing = new Set(props.comments.map((comment) => comment.id));
+  for (const place of openedPlaces.value) {
+    if ([...place.ids].some((id) => !existing.has(id))) {
+      setPlaceIds(place, new Set([...place.ids].filter((id) => existing.has(id))));
+    }
+  }
+}
+
+// A card left in its editor, on this device or another, opens again so the text isn't lost from
+// sight.
+function openBeingEdited() {
+  for (const comment of props.comments) {
+    const range = anchors.value.get(comment.id);
+    const shown = openedPlaces.value.some((place) => place.ids.has(comment.id));
+    if (comment.editBody === null || editedIds.value.has(comment.id) || shown) continue;
+    if (range && !range.collapsed) openPlace(comment.messageId, comment, range, [comment.id]);
+  }
+}
+
 // Cards inside a list item or a quote span the whole message, not only the indented text.
 function fitToMessageWidth(mount: HTMLElement) {
   const root = mount.closest<HTMLElement>('[data-anchor-root]');
@@ -578,7 +510,7 @@ function closePlace(place: OpenedPlace) {
     unpick();
     actionsPlaceKey.value = null;
   }
-  for (const editor of editors.value) if (editor.placeKey === place.key) editor.placeKey = null;
+  editors.value = editors.value.filter((editor) => editor.placeKey !== place.key);
   openedPlaces.value = openedPlaces.value.filter((opened) => opened !== place);
   place.mount.remove();
 }
@@ -597,24 +529,12 @@ function setPlaceIds(place: OpenedPlace, ids: Set<string>) {
   );
 }
 
-// A link to a comment shows it: on a phone opened in the text, elsewhere as its card even when
-// sent.
+// A link to a comment opens it in the text, even when sent.
 function reveal(commentId: string, range: Range) {
   const comment = props.comments.find(({ id }) => id === commentId);
   if (!comment || range.collapsed) return;
-  if (!props.compact) {
-    if (!shownComments.value.includes(comment)) {
-      revealedIds.value = new Set([...revealedIds.value, commentId]);
-    }
-    return;
-  }
   if (openedPlaces.value.some((place) => place.ids.has(commentId))) return;
   openPlace(comment.messageId, comment, range, [commentId]);
-}
-
-function hideRevealed(comments: Comment[]) {
-  const hidden = new Set(comments.map((comment) => comment.id));
-  revealedIds.value = new Set([...revealedIds.value].filter((id) => !hidden.has(id)));
 }
 
 function closeCards(place: OpenedPlace, comments: Comment[]) {
@@ -640,32 +560,23 @@ const copyPicked = () => pickedElement && copy(blockClipboardText(pickedElement)
 
 // Touch and keyboard selections have no mouseup, so the button follows a selection that settled.
 function onSelectionChange() {
-  if (!editorBlocks.value && window.getSelection()?.isCollapsed) selection.value = null;
+  if (window.getSelection()?.isCollapsed) selection.value = null;
   if (mouseButtonDown) return;
   clearTimeout(selectionTimer);
   selectionTimer = setTimeout(showCommentButton, selectionSettleMs);
 }
 
-// On a phone the editor opens in the text after the quote, where the saved comment then shows.
+// The editor opens in the text after the quote, where the saved comment then shows.
 function openEditor() {
   if (!actions.value) return;
-  const { messageId, anchor, lineTop } = actions.value;
+  const { messageId, anchor } = actions.value;
   const anchorRoot = container()?.querySelector<HTMLElement>(`[data-anchor-root="${messageId}"]`);
-  const range = props.compact && anchorRoot ? locateAnchor(anchorRoot, anchor) : null;
-  const place = range ? openPlace(messageId, anchor, range, []) : null;
-  editors.value.push({
-    key: newId(),
-    messageId,
-    anchor,
-    top: lineTop,
-    left: railLeft.value,
-    commentId: null,
-    placeKey: place?.key ?? null,
-  });
+  const range = anchorRoot && locateAnchor(anchorRoot, anchor);
+  if (!range) return;
+  const place = openPlace(messageId, anchor, range, []);
+  editors.value.push({ key: newId(), messageId, anchor, commentId: null, placeKey: place.key });
   selection.value = null;
-  picked.value = null;
-  // The rail editor keeps the block marked as what it comments on; in the text it is right there.
-  if (place) highlightPicked(null);
+  unpick();
 }
 
 function toggleBookmark() {
@@ -698,11 +609,8 @@ function toggleBookmark() {
 function closeEditor(editor: OpenEditor, savedCommentId: string | null) {
   const place = placeOfEditor(editor);
   editors.value = editors.value.filter(({ key }) => key !== editor.key);
-  if (!place) {
-    highlightPicked(null);
-    window.getSelection()?.removeAllRanges();
-    return;
-  }
+  window.getSelection()?.removeAllRanges();
+  if (!place) return;
   setPlaceIds(place, new Set([...place.ids, ...(savedCommentId ? [savedCommentId] : [])]));
 }
 
@@ -743,10 +651,7 @@ onBeforeUnmount(() => {
   if ('highlights' in CSS) CSS.highlights.clear();
 });
 
-watch(() => [props.comments, props.bookmarks, props.layoutKey, props.compact], reanchor, {
-  flush: 'post',
-});
-watch(() => pointer.frame, updateTray);
+watch(() => [props.comments, props.bookmarks, props.layoutKey], reanchor, { flush: 'post' });
 
 let handledHash = '';
 watch(
@@ -777,43 +682,9 @@ watch(
         v-for="outline in outlines"
         :key="outline.comment.id"
         :d="outline.path"
-        :class="[
-          outlineKind(outline.comment),
-          outline.comment.status,
-          { hovered: hoveredIds.has(outline.comment.id) },
-        ]"
+        :class="[outlineKind(outline.comment), outline.comment.status]"
       />
     </svg>
-
-    <Teleport to="#comment-tray" defer>
-      <CommentTray :comments="trayComments" @jump="scrollToComment" />
-    </Teleport>
-
-    <template v-for="card in floatingCards" :key="card.id">
-      <ForkGroupCard
-        v-if="card.first.forkGroupId"
-        :comments="card.comments"
-        :placement="card"
-        :closable="card.comments.some(({ id }) => revealedIds.has(id))"
-        @measure="(height) => heights.set(card.id, height)"
-        @open="openSubmitted"
-        @close="hideRevealed(card.comments)"
-        @jump="(comment) => scrollToComment(comment.id)"
-        @mouseenter="hover(card.comments)"
-        @mouseleave="hover([])"
-      />
-      <CommentCard
-        v-else
-        :comment="card.first"
-        :placement="card"
-        :closable="revealedIds.has(card.first.id)"
-        @measure="(height) => heights.set(card.id, height)"
-        @open="openSubmitted"
-        @close="hideRevealed(card.comments)"
-        @mouseenter="hover(card.comments)"
-        @mouseleave="hover([])"
-      />
-    </template>
 
     <Teleport v-for="place in openedPlaces" :key="place.key" :to="place.cardsMount">
       <template v-for="entry in placeEntries(place)" :key="entry.first.id">
@@ -822,6 +693,7 @@ watch(
           :comments="entry.comments"
           closable
           @open="openSubmitted"
+          @jump="(comment) => scrollToComment(comment.id)"
           @close="closeCards(place, entry.comments)"
         />
         <CommentCard
@@ -922,25 +794,18 @@ watch(
       </div>
     </Teleport>
 
-    <Teleport
-      v-for="editor in editors"
-      :key="editor.key"
-      :to="placeOfEditor(editor)?.editorMount"
-      :disabled="!placeOfEditor(editor)"
-    >
-      <CommentEditor
-        :exploration-id="explorationId"
-        :view-fork-id="forkId"
-        :message-id="editor.messageId"
-        :anchor="editor.anchor"
-        :top="editor.top"
-        :left="editor.left"
-        :width="draftCardWidth"
-        :in-rail="!placeOfEditor(editor)"
-        @created="(commentId) => (editor.commentId = commentId)"
-        @close="(savedCommentId) => closeEditor(editor, savedCommentId)"
-      />
-    </Teleport>
+    <template v-for="editor in editors" :key="editor.key">
+      <Teleport v-if="placeOfEditor(editor)" :to="placeOfEditor(editor)!.editorMount">
+        <CommentEditor
+          :exploration-id="explorationId"
+          :view-fork-id="forkId"
+          :message-id="editor.messageId"
+          :anchor="editor.anchor"
+          @created="(commentId) => (editor.commentId = commentId)"
+          @close="(savedCommentId) => closeEditor(editor, savedCommentId)"
+        />
+      </Teleport>
+    </template>
   </div>
 </template>
 
@@ -986,10 +851,6 @@ watch(
 .comment-outlines .submitted {
   stroke: var(--text-muted);
   stroke-width: 1;
-}
-
-.comment-outlines .hovered {
-  stroke-width: 2.5;
 }
 
 .selection-actions {

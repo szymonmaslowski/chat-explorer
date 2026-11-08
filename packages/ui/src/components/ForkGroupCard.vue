@@ -1,35 +1,22 @@
 <script setup lang="ts">
 import type { Comment } from '@shared/types';
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed } from 'vue';
 import { confirmJoining, forkJoining, startJoining, stopJoining } from '../stores/fork-joining';
 import { newId, outbox } from '../stores/outbox';
 import CommentCard from './CommentCard.vue';
 import MediaIcon from './MediaIcon.vue';
 
 // Comments joined into one fork, in the order of the text they quote. The group carries the fork
-// and its buttons; the comments inside are plain ones. Without a placement the group is listed in
-// the page flow, on narrow and touch screens.
+// and its buttons; the comments inside are plain ones.
 const props = defineProps<{
   comments: Comment[];
-  placement?: { top: number; left: number; width: number };
   closable?: boolean;
 }>();
 const emit = defineEmits<{
-  measure: [height: number];
   open: [comment: Comment];
   jump: [comment: Comment];
   close: [];
 }>();
-
-const group = ref<HTMLElement | null>(null);
-let resizeObserver: ResizeObserver | null = null;
-onMounted(() => {
-  resizeObserver = new ResizeObserver(([entry]) => {
-    if (entry) emit('measure', entry.borderBoxSize[0]?.blockSize ?? entry.contentRect.height);
-  });
-  if (group.value) resizeObserver.observe(group.value);
-});
-onBeforeUnmount(() => resizeObserver?.disconnect());
 
 const first = computed(() => props.comments[0]!);
 const editable = computed(() => props.comments.every((comment) => comment.status === 'draft'));
@@ -59,18 +46,7 @@ const ungroup = () => {
 </script>
 
 <template>
-  <div
-    ref="group"
-    class="fork-group"
-    :class="{ listed: !props.placement }"
-    :style="
-      props.placement && {
-        top: `${props.placement.top}px`,
-        left: `${props.placement.left}px`,
-        width: `${props.placement.width}px`,
-      }
-    "
-  >
+  <div class="fork-group">
     <div class="header">
       <span class="label">Fork · {{ comments.length }} comments</span>
       <template v-if="joiningHere">
@@ -115,19 +91,11 @@ const ungroup = () => {
 
 <style scoped>
 .fork-group {
-  position: absolute;
-  z-index: 3;
+  margin-top: 0.4rem;
   padding: 0.3rem 0.4rem 0.4rem;
   background: var(--fork-soft);
   border: 1px solid var(--fork);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
-}
-
-.fork-group.listed {
-  position: static;
-  box-shadow: none;
-  margin-top: 0.4rem;
 }
 
 .header {

@@ -23,14 +23,11 @@ import ExpandButton from './ExpandButton.vue';
 import ListenButton from './ListenButton.vue';
 import MediaIcon from './MediaIcon.vue';
 
-// Without a placement the card is listed in the page flow, on narrow and touch screens.
 const props = defineProps<{
   comment: Comment;
-  placement?: { top: number; left: number; width: number };
   closable?: boolean;
 }>();
 const emit = defineEmits<{
-  measure: [height: number];
   open: [comment: Comment];
   jump: [comment: Comment];
   close: [];
@@ -83,12 +80,7 @@ const typeLabels: Record<CommentType, string> = { inline: 'Comment', fork: 'Fork
 
 let resizeObserver: ResizeObserver | null = null;
 onMounted(() => {
-  resizeObserver = new ResizeObserver(([entry]) => {
-    // Expanded, the card floats over the page, so the cards below keep their places.
-    if (entry && !expanded.value)
-      emit('measure', entry.borderBoxSize[0]?.blockSize ?? entry.contentRect.height);
-    checkBodyClipped();
-  });
+  resizeObserver = new ResizeObserver(checkBodyClipped);
   if (card.value) resizeObserver.observe(card.value);
 });
 onBeforeUnmount(() => resizeObserver?.disconnect());
@@ -191,20 +183,8 @@ function onEditorKeydown(event: KeyboardEvent) {
   <div
     ref="card"
     class="comment-card"
-    :class="[
-      shownType,
-      comment.status,
-      joinRole,
-      { listed: !placement, expanded, 'picked-to-join': pickedToJoin },
-    ]"
-    :style="
-      expandedStyle ??
-      (placement && {
-        top: `${placement.top}px`,
-        left: `${placement.left}px`,
-        width: `${placement.width}px`,
-      })
-    "
+    :class="[shownType, comment.status, joinRole, { expanded, 'picked-to-join': pickedToJoin }]"
+    :style="expandedStyle ?? undefined"
     @click="comment.status === 'submitted' && emit('open', comment)"
   >
     <template v-if="editing">
@@ -244,7 +224,7 @@ function onEditorKeydown(event: KeyboardEvent) {
         </button>
       </div>
       <button
-        v-if="!placement && !isGeneral"
+        v-if="grouped"
         type="button"
         class="quote"
         title="Show in the text"
@@ -342,22 +322,14 @@ function onEditorKeydown(event: KeyboardEvent) {
 
 <style scoped>
 .comment-card {
-  position: absolute;
-  z-index: 3;
+  margin-top: 0.4rem;
   background: var(--surface);
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
   padding: 0.4rem 0.6rem;
   font-size: 0.85rem;
   transition: opacity 120ms linear;
-}
-
-.comment-card.listed {
-  position: static;
-  box-shadow: none;
-  margin-top: 0.4rem;
 }
 
 .comment-card.dimmed {

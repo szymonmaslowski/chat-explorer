@@ -1,6 +1,6 @@
 import { expect, type APIRequestContext } from '@playwright/test';
 import type { Snapshot } from '@shared/types';
-import { answeredChat, selectAnswer, test } from './helpers';
+import { answeredChat, clickQuotedText, selectAnswer, test } from './helpers';
 
 const snapshotOf = async (request: APIRequestContext, explorationId: string) =>
   (await (await request.get(`/api/explorations/${explorationId}`)).json()) as Snapshot;
@@ -62,6 +62,7 @@ test('sends changes made offline when the page opens again', async ({ page, cont
   await context.setOffline(false);
   const reopened = await context.newPage();
   await reopened.goto(`/e/${explorationId}`);
+  await clickQuotedText(reopened, 'Caching');
   await expect(reopened.locator('.comment-card')).toContainText('Saved before the page closed');
   await expect
     .poll(async () => (await snapshotOf(request, explorationId)).comments.map(({ body }) => body))
