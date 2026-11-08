@@ -73,7 +73,12 @@ const outlines = shallowRef<{ comment: Comment; path: string }[]>([]);
 // The comments of a card the mouse is over, outlined more strongly.
 const hoveredIds = ref(new Set<string>());
 // On a phone, the comments opened with a tap on their text, shown in the text after it.
-const opened = shallowRef<{ ids: Set<string>; mount: HTMLElement } | null>(null);
+const opened = shallowRef<{
+  ids: Set<string>;
+  mount: HTMLElement;
+  actionsMount: HTMLElement;
+  cardsMount: HTMLElement;
+} | null>(null);
 interface ActionsPlacement {
   messageId: string;
   anchor: TextAnchor;
@@ -105,6 +110,8 @@ const overlappedBookmark = computed(() => {
   );
 });
 const playable = computed(() => picked.value?.speakable === true);
+// On a phone, the buttons of a block whose comments are open sit between its text and the cards.
+const actionsInOpened = computed(() => opened.value !== null && picked.value !== null);
 const pickedPlaying = computed(
   () =>
     speech.playing &&
@@ -172,6 +179,7 @@ function reanchor() {
 function measure() {
   if (!layer.value) return;
   layerWidth.value = layer.value.clientWidth;
+  if (opened.value) fitToMessageWidth(opened.value.mount);
   const boxes = new Map<string, { top: number; left: number }>();
   for (const [id, range] of anchors.value) boxes.set(id, relative(firstLineRect(range)));
   anchorBoxes.value = boxes;
@@ -353,12 +361,8 @@ function placeActions(
   const rects = range.getClientRects();
   const lastLine = relative(rects[rects.length - 1] ?? range.getBoundingClientRect());
   const firstLine = relative(firstLineRect(range));
-  // Comments opened at the end of the block go above the buttons, which would cover their own.
-  const mount = opened.value?.mount;
-  const card = mount && range.intersectsNode(mount) ? relative(mount.getBoundingClientRect()) : null;
-  const end = card && card.bottom >= lastLine.bottom ? card : lastLine;
   const height = coarsePointer.value ? actionButtonHeight.touch : actionButtonHeight.mouse;
-  const below = end.bottom + 4 + (clearHandles && coarsePointer.value ? touchButtonOffset : 0);
+  const below = lastLine.bottom + 4 + (clearHandles && coarsePointer.value ? touchButtonOffset : 0);
   // The reply box covers what is below it, so at the end of the page the buttons go above the text.
   const dockTop = document.querySelector('[data-dock]')?.getBoundingClientRect().top ?? Infinity;
   const layerTop = layer.value!.getBoundingClientRect().top;
@@ -367,7 +371,7 @@ function placeActions(
     messageId: root.dataset.anchorRoot!,
     anchor,
     buttonTop: underDock ? firstLine.top - 4 - height : below,
-    buttonLeft: Math.max(0, Math.min(end.right + 6, layerWidth.value - width)),
+    buttonLeft: Math.max(0, Math.min(lastLine.right + 6, layerWidth.value - width)),
     lineTop: firstLine.top,
     lineLeft: firstLine.left,
   };
@@ -462,9 +466,29 @@ function openCommentsAt(x: number, y: number) {
   const mount = document.createElement('span');
   mount.setAttribute(insertedAttribute, '');
   mount.className = 'opened-comments';
+  const actionsMount = document.createElement('span');
+  const cardsMount = document.createElement('span');
+  mount.append(actionsMount, cardsMount);
   insertAfterRange(smallest.range, mount);
-  opened.value = { ids: new Set(hits.map(({ comment }) => comment.id)), mount };
+  fitToMessageWidth(mount);
+  opened.value = {
+    ids: new Set(hits.map(({ comment }) => comment.id)),
+    mount,
+    actionsMount,
+    cardsMount,
+  };
   return true;
+}
+
+// Cards inside a list item or a quote span the whole message, not only the indented text.
+function fitToMessageWidth(mount: HTMLElement) {
+  const root = mount.closest<HTMLElement>('[data-anchor-root]');
+  if (!root) return;
+  mount.style.marginLeft = '';
+  mount.style.width = '';
+  const indent = mount.getBoundingClientRect().left - root.getBoundingClientRect().left;
+  mount.style.marginLeft = `${-indent}px`;
+  mount.style.width = `${root.clientWidth}px`;
 }
 
 // After the quote, outside any link or bold text around its end; after a code block or table
@@ -674,7 +698,7 @@ watch(
       />
     </template>
 
-    <Teleport v-if="opened" :to="opened.mount">
+    <Teleport v-if="opened" :to="opened.cardsMount">
       <template v-for="entry in openedEntries" :key="entry.first.id">
         <ForkGroupCard
           v-if="entry.first.forkGroupId"
@@ -707,64 +731,71 @@ watch(
       </template>
     </Teleport>
 
-    <div
-      v-if="actions && (commentable || playable)"
-      class="selection-actions"
-      :style="{ top: `${actions.buttonTop}px`, left: `${actions.buttonLeft}px` }"
-    >
-      <button
-        v-if="commentable"
-        type="button"
-        class="comment-button"
-        :title="picked ? 'Comment on this block' : 'Comment on the selection'"
-        @pointerdown.prevent
-        @mousedown.prevent
-        @touchstart.prevent
-        aria-label="Comment"
-        @pointerup="openEditor"
-        @click="openEditor"
+    <Teleport :to="opened?.actionsMount" :disabled="!actionsInOpened">
+      <div
+        v-if="actions && (commentable || playable)"
+        class="selection-actions"
+        :class="{ 'in-opened': actionsInOpened }"
+        :style="
+          actionsInOpened
+            ? undefined
+            : { top: `${actions.buttonTop}px`, left: `${actions.buttonLeft}px` }
+        "
       >
-        <MediaIcon name="comment" />
-      </button>
-      <button
-        v-if="commentable"
-        type="button"
-        class="comment-button"
-        :aria-label="overlappedBookmark ? 'Remove bookmark' : 'Bookmark'"
-        :title="overlappedBookmark ? 'Remove bookmark' : 'Bookmark this'"
-        @pointerdown.prevent
-        @mousedown.prevent
-        @touchstart.prevent
-        @pointerup="toggleBookmark"
-        @click="toggleBookmark"
-      >
-        <MediaIcon :name="overlappedBookmark ? 'bookmarked' : 'bookmark'" />
-      </button>
-      <button
-        v-if="playable"
-        type="button"
-        class="comment-button play-button"
-        :aria-label="pickedPlaying ? 'Pause' : 'Read aloud from here'"
-        :title="pickedPlaying ? 'Pause' : 'Read aloud from here'"
-        @pointerdown.prevent
-        @mousedown.prevent
-        @click="playPicked"
-      >
-        <MediaIcon :name="pickedPlaying ? 'pause' : 'play'" />
-      </button>
-      <button
-        v-if="picked"
-        type="button"
-        class="comment-button"
-        :aria-label="copied ? 'Copied' : 'Copy this block'"
-        :title="copied ? 'Copied' : 'Copy this block'"
-        @pointerdown.prevent
-        @mousedown.prevent
-        @click="copyPicked"
-      >
-        <MediaIcon :name="copied ? 'check' : 'copy'" />
-      </button>
-    </div>
+        <button
+          v-if="commentable"
+          type="button"
+          class="comment-button"
+          :aria-label="overlappedBookmark ? 'Remove bookmark' : 'Bookmark'"
+          :title="overlappedBookmark ? 'Remove bookmark' : 'Bookmark this'"
+          @pointerdown.prevent
+          @mousedown.prevent
+          @touchstart.prevent
+          @pointerup="toggleBookmark"
+          @click="toggleBookmark"
+        >
+          <MediaIcon :name="overlappedBookmark ? 'bookmarked' : 'bookmark'" />
+        </button>
+        <button
+          v-if="picked"
+          type="button"
+          class="comment-button"
+          :aria-label="copied ? 'Copied' : 'Copy this block'"
+          :title="copied ? 'Copied' : 'Copy this block'"
+          @pointerdown.prevent
+          @mousedown.prevent
+          @click="copyPicked"
+        >
+          <MediaIcon :name="copied ? 'check' : 'copy'" />
+        </button>
+        <button
+          v-if="playable"
+          type="button"
+          class="comment-button play-button"
+          :aria-label="pickedPlaying ? 'Pause' : 'Read aloud from here'"
+          :title="pickedPlaying ? 'Pause' : 'Read aloud from here'"
+          @pointerdown.prevent
+          @mousedown.prevent
+          @click="playPicked"
+        >
+          <MediaIcon :name="pickedPlaying ? 'pause' : 'play'" />
+        </button>
+        <button
+          v-if="commentable"
+          type="button"
+          class="comment-button"
+          :title="picked ? 'Comment on this block' : 'Comment on the selection'"
+          @pointerdown.prevent
+          @mousedown.prevent
+          @touchstart.prevent
+          aria-label="Comment"
+          @pointerup="openEditor"
+          @click="openEditor"
+        >
+          <MediaIcon name="comment" />
+        </button>
+      </div>
+    </Teleport>
 
     <CommentEditor
       v-if="editor"
@@ -837,16 +868,21 @@ watch(
   gap: 0.4rem;
 }
 
+.selection-actions.in-opened {
+  position: static;
+  justify-content: flex-end;
+  margin-bottom: 0.5rem;
+}
+
 .comment-button {
   display: inline-grid;
   place-items: center;
   width: 2rem;
   height: 2rem;
   padding: 0;
-  border-radius: 999px;
-  border-color: var(--text);
-  background: var(--text);
-  color: var(--background);
+}
+
+.selection-actions:not(.in-opened) .comment-button {
   box-shadow: var(--shadow);
 }
 

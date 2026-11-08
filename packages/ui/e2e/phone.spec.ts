@@ -95,7 +95,7 @@ test.describe('on a phone', () => {
     await expect(page.locator('[data-inserted]')).toHaveCount(0);
   });
 
-  test('keeps the block buttons off comments opened at the end of the block', async ({
+  test('puts the block buttons between the text and full-width comments', async ({
     page,
     request,
   }) => {
@@ -105,8 +105,11 @@ test.describe('on a phone', () => {
     await attachFakeSession(request, explorationId);
     const answer = [
       'Use Redis.',
-      'Keep the cache keys short and expire them after an hour.',
-      ...Array.from({ length: 8 }, () => 'A later paragraph keeps the reply box away from the card.'),
+      '- Keep the cache keys short and expire them after an hour.',
+      ...Array.from(
+        { length: 8 },
+        () => 'A later paragraph keeps the reply box away from the card.',
+      ),
     ].join('\n\n');
     await deliverAndAnswer(request, explorationId, answer);
     const snapshot = await (await request.get(`/api/explorations/${explorationId}`)).json();
@@ -128,9 +131,16 @@ test.describe('on a phone', () => {
     await page.goto(`/e/${explorationId}`);
     await expect(page.locator('.comment-outlines path')).toHaveCount(1);
     await tapQuotedText(page, quote);
+    const messageBox = (await page.locator('[data-anchor-root]').last().boundingBox())!;
     const card = (await page.locator('.opened-comments .comment-card').boundingBox())!;
-    const actions = (await page.locator('.selection-actions').boundingBox())!;
-    expect(actions.y).toBeGreaterThanOrEqual(card.y + card.height);
-    expect(actions.y + actions.height).toBeLessThan(page.viewportSize()!.height);
+    const actions = page.locator('.opened-comments .selection-actions');
+    const actionsBox = (await actions.boundingBox())!;
+    expect(actionsBox.y + actionsBox.height).toBeLessThanOrEqual(card.y);
+    expect(card.x).toBeCloseTo(messageBox.x, 0);
+    expect(card.width).toBeCloseTo(messageBox.width, 0);
+    const labels = await actions
+      .getByRole('button')
+      .evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label')));
+    expect(labels).toEqual(['Bookmark', 'Copy this block', 'Read aloud from here', 'Comment']);
   });
 });
