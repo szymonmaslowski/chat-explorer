@@ -1,4 +1,4 @@
-import { expect } from '@playwright/test';
+import { expect, type APIRequestContext } from '@playwright/test';
 import {
   attachFakeSession,
   deliverAndAnswer,
@@ -80,9 +80,7 @@ test.describe('on a phone', () => {
     expect(pageWidths.scroll).toBe(pageWidths.client);
   });
 
-  test('opens the comments on tapped text inside it and closes them with a second tap', async ({
-    page,
-  }) => {
+  test('opens the comments on tapped text inside it until they are closed', async ({ page }) => {
     await openSeededExploration(page);
     const opened = page.locator('.opened-comments .comment-card');
 
@@ -91,7 +89,49 @@ test.describe('on a phone', () => {
     await expect(page.getByRole('button', { name: 'Comment', exact: true })).toBeVisible();
 
     await tapQuotedText(page, seededDraftQuote);
+    await expect(page.getByRole('button', { name: 'Comment', exact: true })).toHaveCount(0);
+    await expect(opened).toHaveCount(1);
+
+    await opened.getByRole('button', { name: 'Close' }).click();
     await expect(opened).toHaveCount(0);
+    await expect(page.locator('[data-inserted]')).toHaveCount(0);
+  });
+
+  test('writes a comment in the text after its quote and shows it there once saved', async ({
+    page,
+    request,
+  }) => {
+    const explorationId = await startAnsweredChat(
+      request,
+      'Use Redis.\n\nKeep the cache keys short.\n\nExpire them after an hour.',
+    );
+    await page.goto(`/e/${explorationId}`);
+    await page.getByText('Keep the cache keys short.').tap();
+    await page.getByRole('button', { name: 'Comment', exact: true }).click();
+
+    const opened = page.locator('.opened-comments');
+    const editor = opened.locator('.comment-editor');
+    await expect(editor).toBeVisible();
+    const order = await page.evaluate(() => {
+      const top = (element: Element | null) => element!.getBoundingClientRect().top;
+      const paragraph = (text: string) =>
+        [...document.querySelectorAll('[data-anchor-root] > p')].find(
+          (element) => element.firstChild?.textContent === text,
+        ) ?? null;
+      return [
+        top(paragraph('Keep the cache keys short.')),
+        top(document.querySelector('.opened-comments .comment-editor')),
+        top(paragraph('Expire them after an hour.')),
+      ];
+    });
+    expect(order).toEqual([...order].sort((first, second) => first - second));
+
+    await editor.locator('textarea').fill('Why short?');
+    await editor.getByRole('button', { name: 'Save' }).click();
+    await expect(editor).toHaveCount(0);
+    await expect(opened.locator('.comment-card')).toContainText('Why short?');
+
+    await opened.getByRole('button', { name: 'Close' }).click();
     await expect(page.locator('[data-inserted]')).toHaveCount(0);
   });
 
@@ -99,10 +139,6 @@ test.describe('on a phone', () => {
     page,
     request,
   }) => {
-    const { explorationId } = await (
-      await request.post('/api/explorations', { data: { message: 'How do I cache responses?' } })
-    ).json();
-    await attachFakeSession(request, explorationId);
     const answer = [
       'Use Redis.',
       '- Keep the cache keys short and expire them after an hour.',
@@ -111,7 +147,7 @@ test.describe('on a phone', () => {
         () => 'A later paragraph keeps the reply box away from the card.',
       ),
     ].join('\n\n');
-    await deliverAndAnswer(request, explorationId, answer);
+    const explorationId = await startAnsweredChat(request, answer);
     const snapshot = await (await request.get(`/api/explorations/${explorationId}`)).json();
     const message = snapshot.messages.at(-1);
     const quote = 'expire them after an hour.';
@@ -126,7 +162,6 @@ test.describe('on a phone', () => {
         body: 'Why an hour?',
       },
     });
-    await detachFakeSession(request);
 
     await page.goto(`/e/${explorationId}`);
     await expect(page.locator('.comment-outlines path')).toHaveCount(1);
@@ -144,3 +179,13 @@ test.describe('on a phone', () => {
     expect(labels).toEqual(['Bookmark', 'Copy this block', 'Read aloud from here', 'Comment']);
   });
 });
+
+async function startAnsweredChat(request: APIRequestContext, answer: string) {
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'How do I cache responses?' } })
+  ).json();
+  await attachFakeSession(request, explorationId);
+  await deliverAndAnswer(request, explorationId, answer);
+  await detachFakeSession(request);
+  return explorationId as string;
+}

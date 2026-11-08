@@ -24,11 +24,13 @@ import MediaIcon from './MediaIcon.vue';
 const props = defineProps<{
   comment: Comment;
   placement?: { top: number; left: number; width: number };
+  closable?: boolean;
 }>();
 const emit = defineEmits<{
   measure: [height: number];
   open: [comment: Comment];
   jump: [comment: Comment];
+  close: [];
 }>();
 
 const card = ref<HTMLElement | null>(null);
@@ -196,15 +198,27 @@ function onEditorKeydown(event: KeyboardEvent) {
       </div>
     </template>
     <template v-else>
-      <div class="label">
-        {{ typeLabels[shownType] }}
-        <span v-if="comment.status === 'queued'">· queued</span>
-        <span v-if="comment.status === 'submitted'">
-          · {{ comment.type === 'note' ? 'saved' : 'sent' }}
-        </span>
-        <span v-if="outbox.stalled.value && outbox.isPending(comment.id)" class="unsent">
-          · not sent yet
-        </span>
+      <div class="top">
+        <div class="label">
+          {{ typeLabels[shownType] }}
+          <span v-if="comment.status === 'queued'">· queued</span>
+          <span v-if="comment.status === 'submitted'">
+            · {{ comment.type === 'note' ? 'saved' : 'sent' }}
+          </span>
+          <span v-if="outbox.stalled.value && outbox.isPending(comment.id)" class="unsent">
+            · not sent yet
+          </span>
+        </div>
+        <button
+          v-if="closable"
+          type="button"
+          class="icon-button"
+          aria-label="Close"
+          title="Close"
+          @click.stop="emit('close')"
+        >
+          <MediaIcon name="close" />
+        </button>
       </div>
       <button
         v-if="!placement && !isGeneral"
@@ -366,7 +380,19 @@ function onEditorKeydown(event: KeyboardEvent) {
   padding: 0.2rem 0.5rem;
 }
 
+.top {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+
+/* Into the card's padding, so the label row stays about as tall as the label. */
+.top .icon-button {
+  margin: -0.3rem -0.5rem -0.3rem 0;
+}
+
 .label {
+  flex: 1;
   font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;

@@ -12,11 +12,13 @@ import MediaIcon from './MediaIcon.vue';
 const props = defineProps<{
   comments: Comment[];
   placement?: { top: number; left: number; width: number };
+  closable?: boolean;
 }>();
 const emit = defineEmits<{
   measure: [height: number];
   open: [comment: Comment];
   jump: [comment: Comment];
+  close: [];
 }>();
 
 const group = ref<HTMLElement | null>(null);
@@ -96,6 +98,9 @@ const ungroup = () => {
           <MediaIcon name="unchain" />
         </button>
       </template>
+      <button v-if="closable" type="button" aria-label="Close" title="Close" @click="emit('close')">
+        <MediaIcon name="close" />
+      </button>
     </div>
     <p v-if="joiningHere" class="hint">Pick the comments for this fork</p>
     <CommentCard

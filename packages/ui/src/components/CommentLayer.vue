@@ -72,13 +72,21 @@ const trayIds = shallowRef(new Set<string>());
 const outlines = shallowRef<{ comment: Comment; path: string }[]>([]);
 // The comments of a card the mouse is over, outlined more strongly.
 const hoveredIds = ref(new Set<string>());
-// On a phone, the comments opened with a tap on their text, shown in the text after it.
-const opened = shallowRef<{
+// On a phone, comments open in the text right after what they quote, with a tap on it or when
+// written, and stay open until closed.
+interface OpenedPlace {
+  key: string;
+  messageId: string;
+  anchor: TextAnchor;
   ids: Set<string>;
   mount: HTMLElement;
   actionsMount: HTMLElement;
+  editorMount: HTMLElement;
   cardsMount: HTMLElement;
-} | null>(null);
+}
+const openedPlaces = shallowRef<OpenedPlace[]>([]);
+// The opened place a picked block's buttons sit in, between its text and the cards.
+const actionsPlaceKey = ref<string | null>(null);
 interface ActionsPlacement {
   messageId: string;
   anchor: TextAnchor;
@@ -110,8 +118,11 @@ const overlappedBookmark = computed(() => {
   );
 });
 const playable = computed(() => picked.value?.speakable === true);
-// On a phone, the buttons of a block whose comments are open sit between its text and the cards.
-const actionsInOpened = computed(() => opened.value !== null && picked.value !== null);
+const actionsPlace = computed(() =>
+  picked.value
+    ? openedPlaces.value.find((place) => place.key === actionsPlaceKey.value)
+    : undefined,
+);
 const pickedPlaying = computed(
   () =>
     speech.playing &&
@@ -124,7 +135,11 @@ const editor = ref<{
   top: number;
   left: number;
   commentId: string | null;
+  placeKey: string | null;
 } | null>(null);
+const editorPlace = computed(() =>
+  openedPlaces.value.find((place) => place.key === editor.value?.placeKey),
+);
 // The comment open in the editor shows there, not also as a card. A sent comment shows in the
 // reply it went with, and its fork as a link under the message, so it needs no card; a saved note
 // keeps its card, which is the way to the note.
@@ -166,7 +181,8 @@ function locateAll(root: HTMLElement, items: (TextAnchor & { id: string; message
 function reanchor() {
   const root = container();
   if (!root) return;
-  if (opened.value && (!opened.value.mount.isConnected || !props.compact)) closeOpened();
+  if (props.compact) restorePlaces(root);
+  else closeAllPlaces();
   anchors.value = locateAll(root, props.comments);
   bookmarkRanges.value = locateAll(root, props.bookmarks);
   messageOrder.value = [...root.querySelectorAll<HTMLElement>('[data-anchor-root]')].flatMap(
@@ -179,7 +195,7 @@ function reanchor() {
 function measure() {
   if (!layer.value) return;
   layerWidth.value = layer.value.clientWidth;
-  if (opened.value) fitToMessageWidth(opened.value.mount);
+  for (const place of openedPlaces.value) fitToMessageWidth(place.mount);
   const boxes = new Map<string, { top: number; left: number }>();
   for (const [id, range] of anchors.value) boxes.set(id, relative(firstLineRect(range)));
   anchorBoxes.value = boxes;
@@ -193,9 +209,9 @@ function measureOutlines() {
     return range && !range.collapsed;
   });
   const levels = nestingLevels(quoted);
-  const openedBox = opened.value?.mount.getBoundingClientRect();
+  const openedBoxes = openedPlaces.value.map((place) => place.mount.getBoundingClientRect());
   const insideOpened = (rect: DOMRect) =>
-    openedBox !== undefined && rect.top >= openedBox.top && rect.bottom <= openedBox.bottom;
+    openedBoxes.some((box) => rect.top >= box.top && rect.bottom <= box.bottom);
   outlines.value = quoted.map((comment) => {
     const rects = [...anchors.value.get(comment.id)!.getClientRects()];
     const level = Math.min(levels.get(comment.id)!, outlineOutset.maxLevel);
@@ -280,22 +296,21 @@ function cardEntriesOf(comments: Comment[]) {
 const cardEntries = computed(() => cardEntriesOf(shownComments.value));
 
 // Sent comments open too, as the way from the text to what was asked. A fork group opens whole.
-const openedEntries = computed(() => {
-  const ids = opened.value?.ids;
-  if (!ids) return [];
+function placeEntries(place: OpenedPlace) {
   const groups = new Set(
     props.comments.flatMap((comment) =>
-      ids.has(comment.id) && comment.forkGroupId ? [comment.forkGroupId] : [],
+      place.ids.has(comment.id) && comment.forkGroupId ? [comment.forkGroupId] : [],
     ),
   );
   return cardEntriesOf(
     props.comments.filter(
       (comment) =>
         comment.id !== editor.value?.commentId &&
-        (ids.has(comment.id) || (comment.forkGroupId !== null && groups.has(comment.forkGroupId))),
+        (place.ids.has(comment.id) ||
+          (comment.forkGroupId !== null && groups.has(comment.forkGroupId))),
     ),
   );
-});
+}
 
 const floatingCards = computed(() => {
   if (props.compact) return [];
@@ -422,7 +437,7 @@ function pick(root: HTMLElement, element: HTMLElement, blockIndex: number) {
 
 // A tap on a block picks it; a tap on the picked block or anywhere else lets it go. A tap that
 // only clears a text selection picks nothing.
-// On a phone the same tap opens the comments on the tapped text, and the second tap closes both.
+// On a phone the same tap also opens the comments on the tapped text.
 async function onClick(event: MouseEvent) {
   const target = event.target;
   if (!(target instanceof Element) || editor.value) return;
@@ -437,9 +452,11 @@ async function onClick(event: MouseEvent) {
   const element = block && pickableElementAt(block.element, target);
   const alreadyPicked = element === pickedElement;
   unpick();
-  closeOpened();
   if (!root || !block || !element || alreadyPicked) return;
-  if (props.compact && openCommentsAt(event.clientX, event.clientY)) await nextTick();
+  if (props.compact) {
+    actionsPlaceKey.value = openCommentsAt(event.clientX, event.clientY)?.key ?? null;
+    await nextTick();
+  }
   pick(root, element, blocks.indexOf(block));
 }
 
@@ -452,7 +469,7 @@ function caretAt(x: number, y: number) {
 
 function openCommentsAt(x: number, y: number) {
   const caret = caretAt(x, y);
-  if (!caret) return false;
+  if (!caret) return null;
   const hits = props.comments.flatMap((comment) => {
     const range = anchors.value.get(comment.id);
     return range && !range.collapsed && range.isPointInRange(caret.node, caret.offset)
@@ -462,22 +479,51 @@ function openCommentsAt(x: number, y: number) {
   const smallest = hits.sort(
     (first, second) => first.range.toString().length - second.range.toString().length,
   )[0];
-  if (!smallest) return false;
+  if (!smallest) return null;
+  const shown = (id: string) => openedPlaces.value.some((place) => place.ids.has(id));
+  if (shown(smallest.comment.id)) {
+    return openedPlaces.value.find((place) => place.ids.has(smallest.comment.id)) ?? null;
+  }
+  const ids = hits.flatMap(({ comment }) => (shown(comment.id) ? [] : [comment.id]));
+  return openPlace(smallest.comment.messageId, smallest.comment, smallest.range, ids);
+}
+
+function openPlace(messageId: string, anchor: TextAnchor, range: Range, ids: string[]) {
   const mount = document.createElement('span');
   mount.setAttribute(insertedAttribute, '');
   mount.className = 'opened-comments';
-  const actionsMount = document.createElement('span');
-  const cardsMount = document.createElement('span');
-  mount.append(actionsMount, cardsMount);
-  insertAfterRange(smallest.range, mount);
+  const [actionsMount, editorMount, cardsMount] = [0, 1, 2].map(() =>
+    document.createElement('span'),
+  ) as [HTMLElement, HTMLElement, HTMLElement];
+  mount.append(actionsMount, editorMount, cardsMount);
+  insertAfterRange(range, mount);
   fitToMessageWidth(mount);
-  opened.value = {
-    ids: new Set(hits.map(({ comment }) => comment.id)),
+  const { quote, startOffset, endOffset } = anchor;
+  const place: OpenedPlace = {
+    key: newId(),
+    messageId,
+    anchor: { quote, startOffset, endOffset },
+    ids: new Set(ids),
     mount,
     actionsMount,
+    editorMount,
     cardsMount,
   };
-  return true;
+  openedPlaces.value = [...openedPlaces.value, place];
+  return place;
+}
+
+// A message that renders again drops what was inserted into it, so open places go back in.
+function restorePlaces(root: HTMLElement) {
+  const lost = openedPlaces.value.filter((place) => {
+    if (place.mount.isConnected) return false;
+    const anchorRoot = root.querySelector<HTMLElement>(`[data-anchor-root="${place.messageId}"]`);
+    const range = anchorRoot && locateAnchor(anchorRoot, place.anchor);
+    if (!range) return true;
+    insertAfterRange(range, place.mount);
+    return false;
+  });
+  for (const place of lost) closePlace(place);
 }
 
 // Cards inside a list item or a quote span the whole message, not only the indented text.
@@ -515,11 +561,34 @@ function insertAfterRange(range: Range, mount: HTMLElement) {
   point.insertNode(mount);
 }
 
-function closeOpened() {
-  const mount = opened.value?.mount;
-  if (!mount) return;
-  opened.value = null;
-  mount.remove();
+function closePlace(place: OpenedPlace) {
+  if (actionsPlaceKey.value === place.key) {
+    unpick();
+    actionsPlaceKey.value = null;
+  }
+  if (editor.value?.placeKey === place.key) editor.value.placeKey = null;
+  openedPlaces.value = openedPlaces.value.filter((opened) => opened !== place);
+  place.mount.remove();
+}
+
+function closeAllPlaces() {
+  for (const place of openedPlaces.value) closePlace(place);
+}
+
+function setPlaceIds(place: OpenedPlace, ids: Set<string>) {
+  if (ids.size === 0 && editor.value?.placeKey !== place.key) {
+    closePlace(place);
+    return;
+  }
+  openedPlaces.value = openedPlaces.value.map((opened) =>
+    opened === place ? { ...place, ids } : opened,
+  );
+}
+
+function closeCards(place: OpenedPlace, comments: Comment[]) {
+  const closed = new Set(comments.map((comment) => comment.id));
+  setPlaceIds(place, new Set([...place.ids].filter((id) => !closed.has(id))));
+  measure();
 }
 
 function playPicked() {
@@ -545,17 +614,20 @@ function onSelectionChange() {
   selectionTimer = setTimeout(showCommentButton, selectionSettleMs);
 }
 
+// On a phone the editor opens in the text after the quote, where the saved comment then shows.
 function openEditor() {
   if (!actions.value) return;
-  const { messageId, anchor, lineTop, lineLeft } = actions.value;
+  const { messageId, anchor, lineTop } = actions.value;
+  const anchorRoot = container()?.querySelector<HTMLElement>(`[data-anchor-root="${messageId}"]`);
+  const range = props.compact && anchorRoot ? locateAnchor(anchorRoot, anchor) : null;
+  const place = range ? openPlace(messageId, anchor, range, []) : null;
   editor.value = {
     messageId,
     anchor,
     top: lineTop,
-    left: props.compact
-      ? Math.max(0, Math.min(lineLeft, layerWidth.value - draftCardWidth))
-      : railLeft.value,
+    left: railLeft.value,
     commentId: null,
+    placeKey: place?.key ?? null,
   };
   selection.value = null;
   picked.value = null;
@@ -588,10 +660,13 @@ function toggleBookmark() {
   window.getSelection()?.removeAllRanges();
 }
 
-function closeEditor() {
+function closeEditor(savedCommentId: string | null) {
+  const place = editorPlace.value;
   editor.value = null;
   highlightPicked(null);
   window.getSelection()?.removeAllRanges();
+  if (place)
+    setPlaceIds(place, new Set([...place.ids, ...(savedCommentId ? [savedCommentId] : [])]));
 }
 
 function openSubmitted(comment: Comment) {
@@ -626,7 +701,7 @@ onBeforeUnmount(() => {
   container()?.removeEventListener('click', onClick);
   highlightPicked(null);
   document.removeEventListener('selectionchange', onSelectionChange);
-  closeOpened();
+  closeAllPlaces();
   resizeObserver?.disconnect();
   if ('highlights' in CSS) CSS.highlights.clear();
 });
@@ -698,14 +773,22 @@ watch(
       />
     </template>
 
-    <Teleport v-if="opened" :to="opened.cardsMount">
-      <template v-for="entry in openedEntries" :key="entry.first.id">
+    <Teleport v-for="place in openedPlaces" :key="place.key" :to="place.cardsMount">
+      <template v-for="entry in placeEntries(place)" :key="entry.first.id">
         <ForkGroupCard
           v-if="entry.first.forkGroupId"
           :comments="entry.comments"
+          closable
           @open="openSubmitted"
+          @close="closeCards(place, entry.comments)"
         />
-        <CommentCard v-else :comment="entry.first" @open="openSubmitted" />
+        <CommentCard
+          v-else
+          :comment="entry.first"
+          closable
+          @open="openSubmitted"
+          @close="closeCards(place, entry.comments)"
+        />
       </template>
     </Teleport>
 
@@ -731,13 +814,13 @@ watch(
       </template>
     </Teleport>
 
-    <Teleport :to="opened?.actionsMount" :disabled="!actionsInOpened">
+    <Teleport :to="actionsPlace?.actionsMount" :disabled="!actionsPlace">
       <div
         v-if="actions && (commentable || playable)"
         class="selection-actions"
-        :class="{ 'in-opened': actionsInOpened }"
+        :class="{ 'in-opened': actionsPlace }"
         :style="
-          actionsInOpened
+          actionsPlace
             ? undefined
             : { top: `${actions.buttonTop}px`, left: `${actions.buttonLeft}px` }
         "
@@ -797,19 +880,21 @@ watch(
       </div>
     </Teleport>
 
-    <CommentEditor
-      v-if="editor"
-      :exploration-id="explorationId"
-      :view-fork-id="forkId"
-      :message-id="editor.messageId"
-      :anchor="editor.anchor"
-      :top="editor.top"
-      :left="editor.left"
-      :width="draftCardWidth"
-      :in-rail="!compact"
-      @created="(commentId) => editor && (editor.commentId = commentId)"
-      @close="closeEditor"
-    />
+    <Teleport :to="editorPlace?.editorMount" :disabled="!editorPlace">
+      <CommentEditor
+        v-if="editor"
+        :exploration-id="explorationId"
+        :view-fork-id="forkId"
+        :message-id="editor.messageId"
+        :anchor="editor.anchor"
+        :top="editor.top"
+        :left="editor.left"
+        :width="draftCardWidth"
+        :in-rail="!editorPlace"
+        @created="(commentId) => editor && (editor.commentId = commentId)"
+        @close="closeEditor"
+      />
+    </Teleport>
   </div>
 </template>
 

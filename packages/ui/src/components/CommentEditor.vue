@@ -23,7 +23,10 @@ const props = defineProps<{
   width: number;
   inRail: boolean;
 }>();
-const emit = defineEmits<{ created: [commentId: string]; close: [] }>();
+const emit = defineEmits<{
+  created: [commentId: string];
+  close: [savedCommentId: string | null];
+}>();
 
 const commentTypes: { type: CommentType; label: string }[] = [
   { type: 'inline', label: 'Comment' },
@@ -93,9 +96,9 @@ watch([body, type, noteGroupId], autosave.changed);
 
 onMounted(() => textarea.value?.focus());
 
-function close(action: () => void) {
+function close(action: () => void, saved: boolean) {
   autosave.finish(action);
-  emit('close');
+  emit('close', saved ? commentId : null);
 }
 
 function addSaved() {
@@ -129,7 +132,7 @@ function addSaved() {
 
 function save() {
   if (!body.value.trim()) return;
-  close(addSaved);
+  close(addSaved, true);
 }
 
 function forkNow() {
@@ -144,14 +147,14 @@ function forkNow() {
       forkId: viewForkId,
       commentId,
     });
-  });
+  }, true);
 }
 
 function cancel() {
   close(() => {
     if (created)
       outbox.add({ type: 'comment.delete', explorationId: props.explorationId, commentId });
-  });
+  }, false);
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -164,7 +167,10 @@ function onKeydown(event: KeyboardEvent) {
   <div
     class="comment-editor"
     :class="[type, { expanded, 'in-rail': inRail }]"
-    :style="expandedStyle ?? { top: `${top}px`, left: `${left}px`, width: `${width}px` }"
+    :style="
+      expandedStyle ??
+      (inRail ? { top: `${top}px`, left: `${left}px`, width: `${width}px` } : undefined)
+    "
   >
     <p class="quote">{{ anchor.quote }}</p>
     <textarea
@@ -199,10 +205,6 @@ function onKeydown(event: KeyboardEvent) {
 
 <style scoped>
 .comment-editor {
-  position: absolute;
-  z-index: 4;
-  transform: translateY(-100%);
-  margin-top: -6px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
@@ -213,16 +215,14 @@ function onKeydown(event: KeyboardEvent) {
 }
 
 .comment-editor.in-rail {
-  transform: none;
-  margin-top: 0;
+  position: absolute;
+  z-index: 4;
 }
 
 .comment-editor.expanded {
   z-index: 7;
   display: flex;
   flex-direction: column;
-  transform: none;
-  margin-top: 0;
 }
 
 .expanded textarea {

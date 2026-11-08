@@ -223,6 +223,10 @@ html.image-viewer-open {
   line-height: 1.5;
 }
 
+.opened-comments > span {
+  display: block;
+}
+
 ::highlight(comment-flash) {
   background-color: var(--accent-soft);
   text-decoration: underline solid var(--accent) 2px;
