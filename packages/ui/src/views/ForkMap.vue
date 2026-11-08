@@ -140,7 +140,10 @@ const layout = computed(() => {
 
 <style scoped>
 .map-page {
-  padding: 0 1rem 2rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding: 0 1rem;
 }
 
 .top {
@@ -155,8 +158,11 @@ const layout = computed(() => {
   font-size: 0.875rem;
 }
 
+/* Down to the bottom of the screen, so a swipe anywhere below a short map scrolls it sideways. */
 .canvas-scroll {
+  flex: 1;
   overflow-x: auto;
+  padding-bottom: 2rem;
 }
 
 .canvas {
