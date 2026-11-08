@@ -363,8 +363,8 @@ onMounted(findBlocks);
   display: flex;
   flex-direction: column;
   padding: 0.4rem 0.75rem;
-  border-left: 3px solid var(--accent);
-  border-radius: 0 var(--radius) var(--radius) 0;
+  border-top: 3px solid var(--accent);
+  border-radius: 0 0 var(--radius) var(--radius);
   background: var(--accent-soft);
   color: var(--text);
   font-size: 0.875rem;
@@ -424,7 +424,7 @@ onMounted(findBlocks);
 
 .content :deep(.answer-card.unknown) {
   background: none;
-  border-left-color: var(--border);
+  border-top-color: var(--border);
 }
 
 .content :deep(.answer-card.unknown::after) {
