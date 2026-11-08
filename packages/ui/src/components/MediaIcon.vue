@@ -31,7 +31,8 @@ defineProps<{
     | 'bookmarked'
     | 'to-comment'
     | 'to-answer'
-    | 'chevron-up';
+    | 'chevron-up'
+    | 'eye';
 }>();
 </script>
 
@@ -88,6 +89,10 @@ defineProps<{
     <path v-else-if="name === 'to-answer'" d="M7 7l10 10M17 9v8H9" />
     <path v-else-if="name === 'chevron-up'" d="M6 15l6-6 6 6" />
     <path
+      v-else-if="name === 'eye'"
+      d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 1 0 0-6z"
+    />
+    <path
       v-else
       d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"
     />
@@ -124,7 +129,8 @@ defineProps<{
 .media-icon.bookmark,
 .media-icon.to-comment,
 .media-icon.to-answer,
-.media-icon.chevron-up {
+.media-icon.chevron-up,
+.media-icon.eye {
   fill: none;
   stroke: currentColor;
   stroke-width: 2;

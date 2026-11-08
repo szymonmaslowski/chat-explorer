@@ -37,6 +37,7 @@ const nearBottomPx = 200;
 
 const route = useRoute();
 const router = useRouter();
+const commentLayer = ref<InstanceType<typeof CommentLayer> | null>(null);
 // Narrower than the text and the comment rail together, comments list under their messages.
 const compact = useMediaQuery('(max-width: 1080px), (hover: none)');
 const commentTyping = useCommentTyping();
@@ -280,6 +281,7 @@ watch(
         </template>
         <CommentLayer
           :key="fork.id"
+          ref="commentLayer"
           :exploration-id="explorationId"
           :fork-id="fork.id"
           :comments="viewComments"
@@ -309,6 +311,8 @@ watch(
           :hint="state.exploration?.title ?? ''"
           :last-message-id="path.at(-1)?.id ?? null"
           @submitted="onSubmitted"
+          @show-drafts="commentLayer?.showDrafts()"
+          @hide-drafts="commentLayer?.hideDrafts()"
         />
       </div>
     </template>

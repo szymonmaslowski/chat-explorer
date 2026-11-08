@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { CommentType } from '@shared/types';
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed } from 'vue';
+import { useDropUp } from '../composables/useDropUp';
 import MediaIcon from './MediaIcon.vue';
 
 const type = defineModel<CommentType>({ required: true });
@@ -11,35 +12,18 @@ const options: { type: CommentType; label: string; icon: 'comment' | 'fork' | 'n
   { type: 'note', label: 'Note', icon: 'note' },
 ];
 
-const open = ref(false);
-const picker = ref<HTMLElement | null>(null);
+const { open, closeOnEscape } = useDropUp('picker');
 const current = computed(() => options.find((option) => option.type === type.value)!);
 
 function choose(choice: CommentType) {
   type.value = choice;
   open.value = false;
 }
-
-function closeOnEscape(event: KeyboardEvent) {
-  if (!open.value) return;
-  event.stopPropagation();
-  open.value = false;
-}
-
-function closeOutside(event: PointerEvent) {
-  if (event.target instanceof Node && !picker.value?.contains(event.target)) open.value = false;
-}
-
-watch(open, (isOpen) => {
-  if (isOpen) document.addEventListener('pointerdown', closeOutside);
-  else document.removeEventListener('pointerdown', closeOutside);
-});
-onBeforeUnmount(() => document.removeEventListener('pointerdown', closeOutside));
 </script>
 
 <template>
-  <div ref="picker" class="type-picker" @keydown.escape="closeOnEscape">
-    <div v-if="open" class="options" role="menu" aria-label="Comment type">
+  <div ref="picker" class="drop-up" @keydown.escape="closeOnEscape">
+    <div v-if="open" class="drop-up-menu" role="menu" aria-label="Comment type">
       <button
         v-for="option in options"
         :key="option.type"
@@ -70,10 +54,6 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeOutside))
 </template>
 
 <style scoped>
-.type-picker {
-  position: relative;
-}
-
 button {
   display: inline-flex;
   align-items: center;
@@ -99,27 +79,12 @@ button.note {
   color: var(--type-colour);
 }
 
-.options {
-  position: absolute;
-  bottom: calc(100% + 0.3rem);
-  left: 0;
-  z-index: 5;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  padding: 0.3rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-}
-
-.options button {
+.drop-up-menu button {
   color: var(--type-colour);
   white-space: nowrap;
 }
 
-.options button[aria-checked='true'] {
+.drop-up-menu button[aria-checked='true'] {
   border-color: var(--type-colour);
   background: var(--type-soft);
 }

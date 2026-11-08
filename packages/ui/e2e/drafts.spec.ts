@@ -209,3 +209,47 @@ test('saves the reply box text as a general comment, sent with the next Submit',
   await page.goto(`/e/${explorationId}/notes`);
   await expect(page.locator('.note .description')).toContainText('Save this for later');
 });
+
+test('shows and hides every draft in the text from the menu above the reply box', async ({
+  page,
+  request,
+}) => {
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'Explain caching' } })
+  ).json();
+  await attachFakeSession(request, explorationId);
+  const answer = 'Alpha paragraph here.\n\nBravo paragraph here.';
+  await deliverAndAnswer(request, explorationId, answer);
+  await detachFakeSession(request);
+  const snapshot = await (await request.get(`/api/explorations/${explorationId}`)).json();
+  const message = snapshot.messages.at(-1);
+  for (const [quote, startOffset] of [
+    ['Alpha', 0],
+    ['Bravo', 21],
+  ] as const) {
+    await request.post(`/api/explorations/${explorationId}/comments`, {
+      data: {
+        messageId: message.id,
+        viewForkId: message.forkId,
+        quote,
+        startOffset,
+        endOffset: startOffset + quote.length,
+        body: `About ${quote}`,
+      },
+    });
+  }
+  await page.goto(`/e/${explorationId}`);
+  const cards = page.locator('.opened-comments .comment-card');
+  await expect(page.locator('.comment-outlines path')).toHaveCount(2);
+  await expect(cards).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Drafts' }).click();
+  await page.getByRole('menuitem', { name: 'Show all drafts' }).click();
+  await expect(cards).toHaveText([/About Alpha/, /About Bravo/]);
+  await expect(page.getByRole('menuitem')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Drafts' }).click();
+  await page.getByRole('menuitem', { name: 'Hide all drafts' }).click();
+  await expect(cards).toHaveCount(0);
+  await expect(page.locator('[data-inserted]')).toHaveCount(0);
+});

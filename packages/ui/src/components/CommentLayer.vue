@@ -624,6 +624,30 @@ function openSubmitted(comment: Comment) {
   }
 }
 
+// Opens every draft that quotes text, each after its quote.
+function showDrafts() {
+  for (const comment of props.comments) {
+    const range = anchors.value.get(comment.id);
+    const shown = openedPlaces.value.some((place) => place.ids.has(comment.id));
+    if (comment.status !== 'draft' || editedIds.value.has(comment.id) || shown) continue;
+    if (range && !range.collapsed) openPlace(comment.messageId, comment, range, [comment.id]);
+  }
+  measure();
+}
+
+// Closes the drafts left open, keeping editors and other comments where they are.
+function hideDrafts() {
+  const drafts = new Set(
+    props.comments.flatMap((comment) => (comment.status === 'draft' ? [comment.id] : [])),
+  );
+  for (const place of openedPlaces.value) {
+    setPlaceIds(place, new Set([...place.ids].filter((id) => !drafts.has(id))));
+  }
+  measure();
+}
+
+defineExpose({ showDrafts, hideDrafts });
+
 let resizeObserver: ResizeObserver | null = null;
 onMounted(() => {
   const root = container();

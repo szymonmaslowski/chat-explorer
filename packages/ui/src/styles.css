@@ -170,6 +170,31 @@ html.image-viewer-open {
   line-height: 1.2;
 }
 
+/* A menu that opens above its button, see useDropUp. */
+.drop-up {
+  position: relative;
+}
+
+.drop-up-menu {
+  position: absolute;
+  bottom: calc(100% + 0.3rem);
+  left: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.3rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.drop-up-menu.from-right {
+  right: 0;
+  left: auto;
+}
+
 /* Named for screen readers and tests, not shown. */
 .visually-hidden {
   position: absolute;

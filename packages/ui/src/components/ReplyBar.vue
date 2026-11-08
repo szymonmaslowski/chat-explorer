@@ -11,6 +11,7 @@ import { newId, outbox } from '../stores/outbox';
 import { replyDrafts } from '../stores/reply-drafts';
 import AttachButton from './AttachButton.vue';
 import DictationButton from './DictationButton.vue';
+import DraftsMenu from './DraftsMenu.vue';
 import ExpandButton from './ExpandButton.vue';
 import FileDraftList from './FileDraftList.vue';
 import ListenButton from './ListenButton.vue';
@@ -25,7 +26,7 @@ const props = defineProps<{
   // The message a general comment is written after; null while the fork has none.
   lastMessageId: string | null;
 }>();
-const emit = defineEmits<{ submitted: [] }>();
+const emit = defineEmits<{ submitted: []; showDrafts: []; hideDrafts: [] }>();
 
 const textarea = ref<HTMLTextAreaElement | null>(null);
 const expanded = ref(false);
@@ -45,6 +46,7 @@ const fileCount = computed(() => files.readyIds.value.length);
 const beingEdited = computed(() => props.drafts.filter((draft) => draft.editBody !== null));
 const editingCount = computed(() => beingEdited.value.length);
 const readyDrafts = computed(() => props.drafts.filter((draft) => draft.editBody === null));
+const hasQuotedDrafts = computed(() => props.drafts.some((draft) => draft.quote !== ''));
 // A comment in a fork group belongs to the group's fork, which counts once.
 const countOf = (type: CommentType) =>
   readyDrafts.value.filter((draft) => draft.type === type && draft.forkGroupId === null).length;
@@ -240,6 +242,7 @@ function onKeydown(event: KeyboardEvent) {
           >{{ plural(editingCount, 'comment') }} being edited</RouterLink
         ><template v-if="editingCount && summary">, </template>{{ summary }}
       </p>
+      <DraftsMenu v-if="hasQuotedDrafts" @show="emit('showDrafts')" @hide="emit('hideDrafts')" />
     </div>
     <textarea
       ref="textarea"
