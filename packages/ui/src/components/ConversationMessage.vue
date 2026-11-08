@@ -133,10 +133,12 @@ onMounted(findBlocks);
         {{ formatDateTime(message.createdAt) }}
       </time>
       <span v-if="isNew" class="new-label">New</span>
+    </header>
+    <div v-if="jumpable" class="message-actions">
       <button
         v-if="speakable"
         type="button"
-        class="listen"
+        class="icon-button"
         :aria-label="listenLabel"
         :title="listenLabel"
         @click="playMessage"
@@ -144,9 +146,8 @@ onMounted(findBlocks);
         <MediaIcon :name="currentIndex !== -1 && speech.playing ? 'pause' : 'play'" />
       </button>
       <button
-        v-if="message.role === 'assistant' && message.content"
         type="button"
-        class="listen"
+        class="icon-button"
         :aria-label="copied ? 'Copied' : 'Copy the answer'"
         title="Copy the whole answer"
         @click="copyMessage"
@@ -154,9 +155,8 @@ onMounted(findBlocks);
         <MediaIcon :name="copied ? 'check' : 'copy'" />
       </button>
       <button
-        v-if="jumpable"
         type="button"
-        class="listen"
+        class="icon-button"
         aria-label="Go to the end of the answer"
         title="Go to the end of the answer"
         @click="jumpTo('end')"
@@ -164,16 +164,16 @@ onMounted(findBlocks);
         <MediaIcon name="to-end" />
       </button>
       <button
-        v-if="message.role === 'assistant' && !isUnread(message)"
+        v-if="!isUnread(message)"
         type="button"
-        class="listen"
+        class="icon-button"
         aria-label="Mark unread from here"
         title="Mark this answer and the later ones unread"
         @click="emit('markUnread')"
       >
         <MediaIcon name="unread" />
       </button>
-    </header>
+    </div>
     <div v-for="comment in quotedComments" :key="comment.id" class="quoted-comment">
       <RouterLink
         v-if="comment.quote"
@@ -271,16 +271,11 @@ onMounted(findBlocks);
   font-variant-numeric: tabular-nums;
 }
 
-.listen {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.1rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  text-transform: none;
-  letter-spacing: normal;
-  color: var(--text-muted);
+.message-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
 }
 
 .message-end {
