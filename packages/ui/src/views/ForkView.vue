@@ -13,6 +13,7 @@ import SessionError from '../components/SessionError.vue';
 import SpeechPlayer from '../components/SpeechPlayer.vue';
 import AttentionDot from '../components/AttentionDot.vue';
 import MediaIcon from '../components/MediaIcon.vue';
+import { useCommentTyping } from '../composables/useCommentTyping';
 import { useMediaQuery } from '../composables/useMediaQuery';
 import { useReadTracking } from '../composables/useReadTracking';
 import { commentRailWidth } from '../lib/card-layout';
@@ -36,6 +37,10 @@ const nearBottomPx = 200;
 const route = useRoute();
 // Narrower than the text and the comment rail together, comments list under their messages.
 const compact = useMediaQuery('(max-width: 1080px), (hover: none)');
+const commentTyping = useCommentTyping();
+// On a phone the reply box gives its room to the comment being typed. Without its marker, the
+// rest of the page counts on no dock.
+const dockHidden = computed(() => compact.value && commentTyping.value);
 const commentRail = `${commentRailWidth}px`;
 const state = computed(() => openExploration(props.explorationId));
 const chatArchived = computed(() => Boolean(state.value.exploration?.archivedAt));
@@ -280,7 +285,7 @@ watch(
         :files="filesOfSubmission(submission.id)"
       />
 
-      <div class="dock" data-dock>
+      <div v-show="!dockHidden" class="dock" :data-dock="dockHidden ? undefined : ''">
         <ReplyBar
           v-if="!archived"
           :exploration-id="explorationId"

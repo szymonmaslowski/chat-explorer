@@ -135,6 +135,33 @@ test.describe('on a phone', () => {
     await expect(page.locator('[data-inserted]')).toHaveCount(0);
   });
 
+  test('keeps several new comments open and hides the reply box while typing one', async ({
+    page,
+    request,
+  }) => {
+    const explorationId = await startAnsweredChat(
+      request,
+      'Use Redis.\n\nKeep the cache keys short.\n\nExpire them after an hour.',
+    );
+    await page.goto(`/e/${explorationId}`);
+    const replyBox = page.getByPlaceholder('Reply to Claude');
+    await expect(replyBox).toBeVisible();
+
+    await page.getByText('Use Redis.').tap();
+    await page.getByRole('button', { name: 'Comment', exact: true }).click();
+    await expect(page.locator('.comment-editor textarea')).toBeFocused();
+    await expect(replyBox).toBeHidden();
+
+    await page.getByText('Expire them after an hour.').tap();
+    await page.getByRole('button', { name: 'Comment', exact: true }).click();
+    await expect(page.locator('.opened-comments .comment-editor')).toHaveCount(2);
+
+    await page.locator('.comment-editor').first().getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.locator('.comment-editor')).toHaveCount(1);
+    await page.locator('.comment-editor').getByRole('button', { name: 'Cancel' }).click();
+    await expect(replyBox).toBeVisible();
+  });
+
   test('puts the block buttons between the text and full-width comments', async ({
     page,
     request,
