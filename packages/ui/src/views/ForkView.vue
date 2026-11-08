@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import type { Message } from '@shared/types';
+import { useRoute, useRouter } from 'vue-router';
 import BookmarkList from '../components/BookmarkList.vue';
 import CommentLayer from '../components/CommentLayer.vue';
 import ExplorationHeader from '../components/ExplorationHeader.vue';
@@ -28,6 +29,7 @@ import {
 import { scrollToAndFlash } from '../lib/flash';
 import { forkAttention, isUnread } from '../lib/read-state';
 import { openExploration } from '../stores/exploration';
+import { newId, outbox } from '../stores/outbox';
 import { stopSpeech } from '../stores/speech';
 
 const props = defineProps<{ explorationId: string; forkId?: string }>();
@@ -35,6 +37,7 @@ const props = defineProps<{ explorationId: string; forkId?: string }>();
 const nearBottomPx = 200;
 
 const route = useRoute();
+const router = useRouter();
 // Narrower than the text and the comment rail together, comments list under their messages.
 const compact = useMediaQuery('(max-width: 1080px), (hover: none)');
 const commentTyping = useCommentTyping();
@@ -63,6 +66,19 @@ const awaitingAnswer = computed(() => path.value.at(-1)?.role === 'user');
 const lastAnswer = computed(() => path.value.findLast((message) => message.role === 'assistant'));
 const attention = computed(() => forkAttention(state.value));
 const { newIds, markUnread } = useReadTracking({ state, fork, path });
+
+// The new fork opens at once, empty, with the answer as the last message of its history.
+function forkAtAnswer(message: Message) {
+  const forkId = newId();
+  outbox.add({
+    type: 'fork.create',
+    explorationId: props.explorationId,
+    forkId,
+    parentForkId: message.forkId,
+    baseMessageId: message.id,
+  });
+  void router.push(`/e/${props.explorationId}/f/${forkId}`);
+}
 const answeredPart = computed(() => answeredPartLookup(state.value.comments, state.value.messages));
 const viewComments = computed(() =>
   [...state.value.comments.values()].filter(
@@ -250,7 +266,9 @@ watch(
             :shared="ownStart !== -1 && index < ownStart"
             :is-new="newIds.has(message.id)"
             :answered-part="answeredPart"
+            :forkable="!archived"
             @mark-unread="markUnread(message.id)"
+            @fork="forkAtAnswer(message)"
           />
           <div :id="`comments-${message.id}`" class="message-comments" />
           <RouterLink

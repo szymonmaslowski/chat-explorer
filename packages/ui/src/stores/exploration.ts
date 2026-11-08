@@ -219,6 +219,29 @@ function leaveGroup(state: ExplorationState, comment: Comment) {
 }
 
 // Shows a change before the daemon has it, as the daemon will once it does.
+// A fork the reader started, shown until the daemon's copy replaces it.
+function addNewFork(
+  state: ExplorationState,
+  fork: Pick<Fork, 'parentForkId' | 'baseMessageId'> & { forkId: string },
+  summary: string,
+  now: number,
+) {
+  if (state.forks.has(fork.forkId)) return;
+  state.forks.set(fork.forkId, {
+    id: fork.forkId,
+    explorationId: state.explorationId,
+    parentForkId: fork.parentForkId,
+    baseMessageId: fork.baseMessageId,
+    originCommentId: null,
+    tipMessageId: null,
+    kind: 'soft',
+    summary,
+    createdAt: now,
+    updatedAt: now,
+    archivedAt: null,
+  });
+}
+
 export function applyChange(state: ExplorationState, change: Change) {
   if (change.explorationId !== state.explorationId) return;
   const now = Date.now();
@@ -343,23 +366,12 @@ export function applyChange(state: ExplorationState, change: Change) {
       }
       break;
     }
+    case 'fork.create':
+      addNewFork(state, change, '', now);
+      break;
     case 'note.fork': {
-      const { submissionId: id, forkId, parentForkId, baseMessageId, noteId, message } = change;
-      if (!state.forks.has(forkId)) {
-        state.forks.set(forkId, {
-          id: forkId,
-          explorationId: state.explorationId,
-          parentForkId,
-          baseMessageId,
-          originCommentId: null,
-          tipMessageId: null,
-          kind: 'soft',
-          summary: message.trim(),
-          createdAt: now,
-          updatedAt: now,
-          archivedAt: null,
-        });
-      }
+      const { submissionId: id, forkId, noteId, message } = change;
+      addNewFork(state, change, message.trim(), now);
       const note = state.notes.get(noteId);
       state.queuedSubmissions.set(id, {
         id,

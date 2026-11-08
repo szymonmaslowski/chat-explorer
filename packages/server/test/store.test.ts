@@ -374,6 +374,31 @@ describe('submission queue', () => {
     expect(snapshot.comments[0]!.createdForkId).toBe(created.id);
   });
 
+  it("starts an empty fork after one of Claude's answers, where the first message replies to it", () => {
+    const { store, explorationId, mainForkId, question, answer } = setup();
+    const fork = store.forkAtAnswer(answer.id, { forkId: 'frk0000001' });
+    expect(fork).toMatchObject({
+      id: 'frk0000001',
+      parentForkId: mainForkId,
+      baseMessageId: answer.id,
+      tipMessageId: null,
+      summary: 'Answer one with some text to quote',
+    });
+    expect(store.forkAtAnswer(answer.id, { forkId: 'frk0000001' })).toEqual(fork);
+    expect(() => store.forkAtAnswer(question.id)).toThrow("Only one of Claude's answers");
+
+    store.submit(explorationId, fork.id, 'Go on from here');
+    store.deliverQueued(explorationId);
+
+    const [pending] = store.pendingForks(explorationId);
+    expect(pending).toMatchObject({ forkId: fork.id, isNewFork: true, baseMessageId: answer.id });
+    expect(store.readFork(fork.id).messages.map((message) => message.text)).toEqual([
+      'Question one',
+      'Answer one with some text to quote',
+      'Go on from here',
+    ]);
+  });
+
   it('refuses a new fork with nothing but fork comments', () => {
     const { store, explorationId, mainForkId, answer } = setup();
     draft(store, explorationId, {

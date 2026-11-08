@@ -42,7 +42,7 @@ import type {
   Role,
   Snapshot,
 } from '../shared/types.js';
-import { commentTag, messageTag } from '../shared/answer-tags.js';
+import { commentTag, messageTag, withoutTagLines } from '../shared/answer-tags.js';
 import { defaultClaudeModel, type ClaudeModel } from '../shared/models.js';
 import {
   inTextOrder,
@@ -835,6 +835,36 @@ export class ChatStore {
 
   // Starts a fork of the main fork at once, holding one queued message about the note, so the
   // reader can open it before Claude answers. The main fork's drafts stay as they are.
+  // A fork that starts after one of Claude's answers: its history ends with that answer, and the
+  // first message written there replies to it. Named after the answer until Claude names it.
+  forkAtAnswer(messageId: string, options: { forkId?: string } = {}) {
+    const message = this.requireMessageRow(messageId);
+    const explorationId = message.exploration_id;
+    const existing = options.forkId
+      ? this.db.get<ForkRow>('SELECT * FROM forks WHERE id = ?', options.forkId)
+      : undefined;
+    if (existing) {
+      if (existing.exploration_id !== explorationId) {
+        throw new StoreError('invalid', `Id ${options.forkId} is already taken.`);
+      }
+      return toFork(existing);
+    }
+    if (message.role !== 'assistant') {
+      throw new StoreError('invalid', "Only one of Claude's answers can start a fork.");
+    }
+    this.requireWritableFork(message.fork_id, explorationId);
+    const fork = this.insertFork({
+      id: options.forkId,
+      explorationId,
+      parentForkId: message.fork_id,
+      baseMessageId: message.id,
+      originCommentId: null,
+      summary: summaryFrom(withoutTagLines(message.content)),
+    });
+    this.publish([[explorationId, { type: 'fork.created', fork: toFork(fork) }]]);
+    return toFork(fork);
+  }
+
   forkFromNote(noteId: string, message: string, options: { id?: string; forkId?: string } = {}) {
     const note = toNote(this.requireNoteRow(noteId));
     const { explorationId } = note;

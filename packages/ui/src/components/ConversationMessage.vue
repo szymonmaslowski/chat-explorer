@@ -23,8 +23,9 @@ const props = defineProps<{
   shared: boolean;
   isNew: boolean;
   answeredPart: AnsweredPartLookup;
+  forkable: boolean;
 }>();
-const emit = defineEmits<{ markUnread: [] }>();
+const emit = defineEmits<{ markUnread: []; fork: [] }>();
 
 const html = computed(() =>
   props.message.content ? renderMarkdown(props.message.content, props.answeredPart) : '',
@@ -172,6 +173,16 @@ onMounted(findBlocks);
         @click="emit('markUnread')"
       >
         <MediaIcon name="unread" />
+      </button>
+      <button
+        v-if="forkable"
+        type="button"
+        class="icon-button"
+        aria-label="Fork from here"
+        title="Start a fork that goes on from this answer"
+        @click="emit('fork')"
+      >
+        <MediaIcon name="fork" />
       </button>
     </div>
     <div v-for="comment in quotedComments" :key="comment.id" class="quoted-comment">

@@ -110,6 +110,8 @@ export const api = {
       json: { id: submissionId },
       keepalive,
     }),
+  forkAtAnswer: (messageId: string, forkId: string, keepalive = false) =>
+    call<Fork>(`/api/messages/${messageId}/fork`, { json: { forkId }, keepalive }),
   forkFromNote: (
     noteId: string,
     ids: { submissionId: string; forkId: string },

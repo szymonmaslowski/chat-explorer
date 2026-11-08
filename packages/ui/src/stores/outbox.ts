@@ -50,6 +50,14 @@ export type Change =
       commentId: string;
     }
   | {
+      type: 'fork.create';
+      explorationId: string;
+      forkId: string;
+      parentForkId: string;
+      // The answer of Claude's the fork starts after.
+      baseMessageId: string;
+    }
+  | {
       type: 'note.fork';
       explorationId: string;
       submissionId: string;
@@ -146,6 +154,7 @@ export const subjectOf = (change: Change) => {
     case 'comment.leave-fork-group':
       return change.commentId;
     case 'reply-draft.save':
+    case 'fork.create':
       return change.forkId;
     case 'submit':
       return change.submission.id;
@@ -264,6 +273,8 @@ function send(change: Change) {
     }
     case 'fork-now':
       return api.forkNow(change.commentId, change.submissionId, keepalive);
+    case 'fork.create':
+      return api.forkAtAnswer(change.baseMessageId, change.forkId, keepalive);
     case 'note.fork':
       return api.forkFromNote(
         change.noteId,

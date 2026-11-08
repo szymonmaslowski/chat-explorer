@@ -81,6 +81,7 @@ const forkNowBody = z.object({ id: clientId });
 const readMessagesBody = z.object({ messageIds: z.array(z.string()).min(1) });
 const unreadFromBody = z.object({ viewForkId: z.string() });
 const noteForkBody = z.object({ id: clientId, forkId: clientId, message: z.string() });
+const answerForkBody = z.object({ forkId: clientId });
 const newBookmarkBody = z.object({
   id: clientId,
   forkId: z.string(),
@@ -481,6 +482,11 @@ export function createApp(options: AppOptions) {
   app.put('/api/notes/:id/group', async (context) => {
     const { groupId } = noteGroupBody.parse(await context.req.json());
     return context.json(store.changeNoteGroup(context.req.param('id'), groupId));
+  });
+
+  app.post('/api/messages/:id/fork', async (context) => {
+    const { forkId } = answerForkBody.parse(await context.req.json());
+    return context.json(store.forkAtAnswer(context.req.param('id'), { forkId }), 201);
   });
 
   app.post('/api/notes/:id/fork', async (context) => {
