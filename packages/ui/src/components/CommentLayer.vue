@@ -390,6 +390,8 @@ function caretAt(x: number, y: number) {
   return range ? { node: range.startContainer, offset: range.startOffset } : null;
 }
 
+// Every comment covering the tapped spot opens after its own quote. Comments whose quotes end at
+// the same point share one place. The block's buttons go to the place of the smallest quote.
 function openCommentsAt(x: number, y: number) {
   const caret = caretAt(x, y);
   if (!caret) return null;
@@ -403,12 +405,21 @@ function openCommentsAt(x: number, y: number) {
     (first, second) => first.range.toString().length - second.range.toString().length,
   )[0];
   if (!smallest) return null;
-  const shown = (id: string) => openedPlaces.value.some((place) => place.ids.has(id));
-  if (shown(smallest.comment.id)) {
-    return openedPlaces.value.find((place) => place.ids.has(smallest.comment.id)) ?? null;
+  const placeHolding = (id: string) => openedPlaces.value.find((place) => place.ids.has(id));
+  const closedByEnd: { range: Range; comments: Comment[] }[] = [];
+  for (const { comment, range } of hits) {
+    if (placeHolding(comment.id)) continue;
+    const sameEnd = closedByEnd.find(
+      (group) => group.range.compareBoundaryPoints(Range.END_TO_END, range) === 0,
+    );
+    if (sameEnd) sameEnd.comments.push(comment);
+    else closedByEnd.push({ range, comments: [comment] });
   }
-  const ids = hits.flatMap(({ comment }) => (shown(comment.id) ? [] : [comment.id]));
-  return openPlace(smallest.comment.messageId, smallest.comment, smallest.range, ids);
+  for (const { range, comments } of closedByEnd) {
+    const ids = comments.map((comment) => comment.id);
+    openPlace(comments[0]!.messageId, comments[0]!, range, ids);
+  }
+  return placeHolding(smallest.comment.id) ?? null;
 }
 
 function openPlace(messageId: string, anchor: TextAnchor, range: Range, ids: string[]) {

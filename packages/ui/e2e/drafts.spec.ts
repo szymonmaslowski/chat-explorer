@@ -253,3 +253,47 @@ test('shows and hides every draft in the text from the menu above the reply box'
   await expect(cards).toHaveCount(0);
   await expect(page.locator('[data-inserted]')).toHaveCount(0);
 });
+
+test('opens every comment on the clicked text after its own quote', async ({ page, request }) => {
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'Explain caching' } })
+  ).json();
+  await attachFakeSession(request, explorationId);
+  const answer = 'First sentence here. Middle sentence here. Last sentence here.';
+  await deliverAndAnswer(request, explorationId, answer);
+  await detachFakeSession(request);
+  const snapshot = await (await request.get(`/api/explorations/${explorationId}`)).json();
+  const message = snapshot.messages.at(-1);
+  for (const [quote, body] of [
+    [answer, 'About the section'],
+    ['Middle sentence here.', 'About the middle'],
+  ] as const) {
+    const startOffset = answer.indexOf(quote);
+    await request.post(`/api/explorations/${explorationId}/comments`, {
+      data: {
+        messageId: message.id,
+        viewForkId: message.forkId,
+        quote,
+        startOffset,
+        endOffset: startOffset + quote.length,
+        body,
+      },
+    });
+  }
+  await page.goto(`/e/${explorationId}`);
+  await clickQuotedText(page, 'Middle sentence');
+
+  const order = await page.evaluate(() => {
+    const content = document.querySelector('.message.assistant [data-anchor-root]')!;
+    const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+    const seen: string[] = [];
+    while (walker.nextNode()) {
+      const text = walker.currentNode.textContent!;
+      if (text.includes('Last sentence')) seen.push('last sentence');
+      if (text.includes('About the middle')) seen.push('middle card');
+      if (text.includes('About the section')) seen.push('section card');
+    }
+    return seen;
+  });
+  expect(order).toEqual(['middle card', 'last sentence', 'section card']);
+});
