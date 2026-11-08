@@ -817,8 +817,7 @@ watch(
   stroke: var(--note);
 }
 
-.comment-outlines .draft,
-.comment-outlines .queued {
+.comment-outlines .inline {
   stroke-dasharray: 4 3;
 }
 
