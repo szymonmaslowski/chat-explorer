@@ -212,11 +212,17 @@ test('ticks checklist notes, sorts them and drags them into place', async ({
   ).json();
   for (const topic of ['Chocolate', 'Milk', 'Lemon']) {
     await request.post(`/api/explorations/${explorationId}/notes`, {
-      data: { groupId: group.id, topic },
+      data: { groupId: group.id, topic, description: topic === 'Lemon' ? 'Two, unwaxed.' : '' },
     });
   }
   await page.goto(`/e/${explorationId}/notes`);
   await expect(topics(page)).toHaveText(['Lemon', 'Milk', 'Chocolate']);
+
+  const lemon = page.locator('.note', { hasText: 'Lemon' });
+  await lemon.click();
+  await expect(lemon).not.toHaveClass(/expanded/);
+  await lemon.getByRole('button', { name: 'Expand' }).click();
+  await expect(lemon).toHaveClass(/expanded/);
 
   await page.locator('.note', { hasText: 'Milk' }).click();
   await page.getByRole('button', { name: 'Check', exact: true }).click();
@@ -374,8 +380,7 @@ test('reads an expanded note aloud, from the start or from a tapped block', asyn
   const paragraph = (text: string) => item.locator('.description p', { hasText: text });
 
   await item.click();
-  await expect(item.getByRole('button', { name: 'Listen' })).toHaveCount(0);
-  await item.getByRole('button', { name: 'Expand' }).click();
+  await expect(item.getByRole('button', { name: 'Expand' })).toHaveCount(0);
   await item.getByRole('button', { name: 'Listen' }).click();
   await expect(player.locator('.block-count')).toHaveText('1/3');
   await expect(paragraph('First')).toHaveClass(/speaking/);

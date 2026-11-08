@@ -37,7 +37,9 @@ const emit = defineEmits<{
   fork: [message: string];
 }>();
 
-const expanded = ref(false);
+// A checklist keeps its notes to one line, opened one by one; elsewhere picking a note opens it.
+const expandedByButton = ref(false);
+const expanded = computed(() => (props.checklist ? expandedByButton.value : props.selected));
 const choosingGroup = ref(false);
 const forking = ref(false);
 const { copied, copy } = useCopied();
@@ -201,11 +203,11 @@ function changeGroup(groupId: string | null) {
         <MediaIcon name="grip" />
       </button>
       <button
-        v-if="html"
+        v-if="html && checklist"
         type="button"
         :aria-label="expanded ? 'Collapse' : 'Expand'"
         :title="expanded ? 'Collapse' : 'Expand'"
-        @click="expanded = !expanded"
+        @click="expandedByButton = !expandedByButton"
       >
         <MediaIcon :name="expanded ? 'shrink' : 'expand'" />
       </button>
