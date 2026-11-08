@@ -4,6 +4,7 @@ import { onBeforeUnmount, ref, watch } from 'vue';
 import { api } from '../api';
 import AttentionDot from '../components/AttentionDot.vue';
 import ConfirmButton from '../components/ConfirmButton.vue';
+import MediaIcon from '../components/MediaIcon.vue';
 import NewExploration from '../components/NewExploration.vue';
 import ThemeSwitch from '../components/ThemeSwitch.vue';
 import { relativeTime } from '@shared/time';
@@ -104,8 +105,12 @@ async function removeFromList(explorationId: string, change: (id: string) => Pro
           <ConfirmButton
             v-if="!archived"
             label="Archive"
+            title="Archive"
+            class="icon-button"
             @confirm="removeFromList(exploration.id, api.archive)"
-          />
+          >
+            <MediaIcon name="archive" /><span class="visually-hidden">Archive</span>
+          </ConfirmButton>
           <template v-else>
             <ConfirmButton
               label="Restore"
