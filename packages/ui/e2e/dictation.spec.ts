@@ -1,5 +1,11 @@
 import { expect } from '@playwright/test';
-import { clearReply, openSeededExploration, test } from './helpers';
+import {
+  clearReply,
+  openSeededExploration,
+  seededDraftQuote,
+  tapQuotedText,
+  test,
+} from './helpers';
 
 test('dictates a reply into the text box', async ({ page }) => {
   await openSeededExploration(page);
@@ -41,7 +47,8 @@ test.describe('on a phone', () => {
 
   test('dictates into a comment being edited', async ({ page }) => {
     await openSeededExploration(page);
-    const card = page.locator('.comment-card.draft').first();
+    await tapQuotedText(page, seededDraftQuote);
+    const card = page.locator('.opened-comments .comment-card.draft');
     await card.getByRole('button', { name: 'Edit' }).click();
     const editor = card.locator('textarea');
     const before = await editor.inputValue();

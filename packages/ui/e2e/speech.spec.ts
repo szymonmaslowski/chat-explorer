@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
-import { openSeededExploration, test } from './helpers';
+import { openSeededExploration, seededDraftQuote, tapQuotedText, test } from './helpers';
 
 async function playFrom(page: Page, block: Locator) {
   await block.click();
@@ -152,7 +152,8 @@ test.describe('on a phone', () => {
   test('reads aloud a saved comment and the comment being edited', async ({ page }) => {
     await openSeededExploration(page);
     const player = page.getByRole('region', { name: 'Reading aloud' });
-    const card = page.locator('.comment-card.draft').first();
+    await tapQuotedText(page, seededDraftQuote);
+    const card = page.locator('.opened-comments .comment-card.draft');
     await card.getByRole('button', { name: 'Listen' }).click();
     await expect(player.locator('.block-count')).toHaveText('1/1');
     await player.getByRole('button', { name: 'Stop reading' }).click();

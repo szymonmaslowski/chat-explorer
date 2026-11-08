@@ -17,12 +17,17 @@ const boxDrawing = /[─-╿]/g;
 const minimumBoxDrawing = 3;
 const urlText = /^(https?:\/\/|www\.)/;
 
+// Marks what the page puts inside a message, such as a comment opened in the text, so it is not
+// read or counted as the message's text.
+export const insertedAttribute = 'data-inserted';
+
 const collapse = (text: string) => text.replace(/\s+/g, ' ').trim();
 
 // A link written out as an address is read as its host name instead of letter by letter.
 function spokenText(element: Element) {
   const copy = element.cloneNode(true) as Element;
-  for (const removed of copy.querySelectorAll('ul, ol, pre, table')) removed.remove();
+  for (const removed of copy.querySelectorAll(`ul, ol, pre, table, [${insertedAttribute}]`))
+    removed.remove();
   for (const link of copy.querySelectorAll('a')) {
     if (urlText.test(link.textContent ?? '')) {
       try {

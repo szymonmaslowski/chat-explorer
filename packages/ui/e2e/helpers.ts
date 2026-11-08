@@ -32,6 +32,28 @@ export async function openSeededExploration(page: Page) {
   return seeded.id;
 }
 
+// On a phone, quoted comments open with a tap on the text they quote.
+export async function tapQuotedText(page: Page, quote: string) {
+  const point = await page.evaluate((text) => {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const node = walker.currentNode as Text;
+      const at = node.data.indexOf(text);
+      if (at === -1 || node.parentElement?.closest('[data-inserted]')) continue;
+      node.parentElement!.scrollIntoView({ block: 'center' });
+      const range = document.createRange();
+      range.setStart(node, at + 2);
+      range.setEnd(node, at + 3);
+      const box = range.getBoundingClientRect();
+      return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+    }
+    throw new Error(`"${text}" not found`);
+  }, quote);
+  await page.touchscreen.tap(point.x, point.y);
+}
+
+export const seededDraftQuote = 'store a version number per entity';
+
 export const shimId = 'e2e-shim';
 
 // Stands in for Claude: attaches like the MCP shim does, takes the queued feedback and answers.

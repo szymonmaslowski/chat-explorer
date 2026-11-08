@@ -1,10 +1,21 @@
 <script setup lang="ts">
 import { inTextOrder } from '@shared/fork-groups';
+import { insertedAttribute } from '@shared/speech-blocks';
 import type { Bookmark, Comment } from '@shared/types';
-import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  shallowRef,
+  watch,
+} from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { anchorOfRange, clampToRoot, locateAnchor, type TextAnchor } from '../lib/anchoring';
 import { draftCardWidth, layoutCards, railLeftOf, submittedCardWidth } from '../lib/card-layout';
+import { lineBoxes, nestingLevels, outlinePath } from '../lib/outlines';
 import { pointer } from '../lib/pointer';
 import { useCopied } from '../composables/useCopied';
 import { blockClipboardText } from '../lib/clipboard';
@@ -36,6 +47,8 @@ const props = defineProps<{
 
 const estimatedHeight = { draft: 78, queued: 60, submitted: 28 } as const;
 const flashMs = 1_400;
+// Each comment around another sits this much further out, up to the room between lines.
+const outlineOutset = { base: 1, step: 2, maxLevel: 3 };
 const selectionSettleMs = 300;
 // Keeps the button clear of the selection handles on touch screens.
 const touchButtonOffset = 24;
@@ -56,6 +69,11 @@ const anchorBoxes = shallowRef(new Map<string, { top: number; left: number }>())
 const messageOrder = shallowRef<string[]>([]);
 const heights = reactive(new Map<string, number>());
 const trayIds = shallowRef(new Set<string>());
+const outlines = shallowRef<{ comment: Comment; path: string }[]>([]);
+// The comments of a card the mouse is over, outlined more strongly.
+const hoveredIds = ref(new Set<string>());
+// On a phone, the comments opened with a tap on their text, shown in the text after it.
+const opened = shallowRef<{ ids: Set<string>; mount: HTMLElement } | null>(null);
 interface ActionsPlacement {
   messageId: string;
   anchor: TextAnchor;
@@ -141,6 +159,7 @@ function locateAll(root: HTMLElement, items: (TextAnchor & { id: string; message
 function reanchor() {
   const root = container();
   if (!root) return;
+  if (opened.value && (!opened.value.mount.isConnected || !props.compact)) closeOpened();
   anchors.value = locateAll(root, props.comments);
   bookmarkRanges.value = locateAll(root, props.bookmarks);
   messageOrder.value = [...root.querySelectorAll<HTMLElement>('[data-anchor-root]')].flatMap(
@@ -156,8 +175,35 @@ function measure() {
   const boxes = new Map<string, { top: number; left: number }>();
   for (const [id, range] of anchors.value) boxes.set(id, relative(firstLineRect(range)));
   anchorBoxes.value = boxes;
+  measureOutlines();
   updateTray();
 }
+
+function measureOutlines() {
+  const quoted = props.comments.filter((comment) => {
+    const range = anchors.value.get(comment.id);
+    return range && !range.collapsed;
+  });
+  const levels = nestingLevels(quoted);
+  const openedBox = opened.value?.mount.getBoundingClientRect();
+  const insideOpened = (rect: DOMRect) =>
+    openedBox !== undefined && rect.top >= openedBox.top && rect.bottom <= openedBox.bottom;
+  outlines.value = quoted.map((comment) => {
+    const rects = [...anchors.value.get(comment.id)!.getClientRects()];
+    const level = Math.min(levels.get(comment.id)!, outlineOutset.maxLevel);
+    return {
+      comment,
+      path: outlinePath(
+        lineBoxes(rects.filter((rect) => !insideOpened(rect)).map(relative)),
+        outlineOutset.base + outlineOutset.step * level,
+      ),
+    };
+  });
+}
+
+const outlineKind = (comment: Comment) => (comment.forkGroupId ? 'fork' : comment.type);
+const hover = (comments: Comment[]) =>
+  (hoveredIds.value = new Set(comments.map((comment) => comment.id)));
 
 function updateTray() {
   if (props.compact) {
@@ -189,25 +235,7 @@ function updateTray() {
 
 function paintHighlights() {
   if (!('highlights' in CSS)) return;
-  const groups: Record<string, Range[]> = {
-    bookmark: [...bookmarkRanges.value.values()],
-    'comment-inline': [],
-    'comment-fork': [],
-    'comment-note': [],
-    'comment-submitted': [],
-  };
-  for (const comment of props.comments) {
-    const range = anchors.value.get(comment.id);
-    // A general comment marks no text. Safari paints its empty range across the whole line.
-    if (!range || range.collapsed) continue;
-    // A comment in a fork group goes to the group's fork, so it is marked as a fork.
-    const type = comment.forkGroupId ? 'fork' : comment.type;
-    const group = comment.status === 'submitted' ? 'comment-submitted' : `comment-${type}`;
-    groups[group]!.push(range);
-  }
-  for (const [name, ranges] of Object.entries(groups)) {
-    CSS.highlights.set(name, new Highlight(...ranges));
-  }
+  CSS.highlights.set('bookmark', new Highlight(...bookmarkRanges.value.values()));
 }
 
 function flash(range: Range) {
@@ -232,13 +260,33 @@ function scrollToRange(range: Range) {
 
 // A comment on its own, or the comments of a fork group in text order. A group shows as one card
 // at the place of its first comment.
-const cardEntries = computed(() => {
+function cardEntriesOf(comments: Comment[]) {
   const entries = new Map<string, Comment[]>();
-  for (const comment of inTextOrder(shownComments.value, messageOrder.value)) {
+  for (const comment of inTextOrder(comments, messageOrder.value)) {
     const key = comment.forkGroupId ?? comment.id;
     entries.set(key, [...(entries.get(key) ?? []), comment]);
   }
-  return [...entries.values()].map((comments) => ({ first: comments[0]!, comments }));
+  return [...entries.values()].map((group) => ({ first: group[0]!, comments: group }));
+}
+
+const cardEntries = computed(() => cardEntriesOf(shownComments.value));
+
+// Sent comments open too, as the way from the text to what was asked. A fork group opens whole.
+const openedEntries = computed(() => {
+  const ids = opened.value?.ids;
+  if (!ids) return [];
+  const groups = new Set(
+    props.comments.flatMap((comment) =>
+      ids.has(comment.id) && comment.forkGroupId ? [comment.forkGroupId] : [],
+    ),
+  );
+  return cardEntriesOf(
+    props.comments.filter(
+      (comment) =>
+        comment.id !== editor.value?.commentId &&
+        (ids.has(comment.id) || (comment.forkGroupId !== null && groups.has(comment.forkGroupId))),
+    ),
+  );
 });
 
 const floatingCards = computed(() => {
@@ -267,10 +315,12 @@ const trayComments = computed(() =>
   props.comments.filter((comment) => trayIds.value.has(comment.id)),
 );
 
+// On a phone only general comments are listed under their message; the others open with a tap on
+// the text they quote.
 const listedComments = computed(() => {
   if (!props.compact) return [];
   const byMessage = new Map<string, (typeof cardEntries.value)[number][]>();
-  for (const entry of cardEntries.value) {
+  for (const entry of cardEntries.value.filter(({ first }) => !first.quote)) {
     const { messageId } = entry.first;
     byMessage.set(messageId, [...(byMessage.get(messageId) ?? []), entry]);
   }
@@ -364,10 +414,11 @@ function pick(root: HTMLElement, element: HTMLElement, blockIndex: number) {
 
 // A tap on a block picks it; a tap on the picked block or anywhere else lets it go. A tap that
 // only clears a text selection picks nothing.
-function onClick(event: MouseEvent) {
+// On a phone the same tap opens the comments on the tapped text, and the second tap closes both.
+async function onClick(event: MouseEvent) {
   const target = event.target;
   if (!(target instanceof Element) || editor.value) return;
-  if (target.closest('button, a, input, textarea, select, label')) return;
+  if (target.closest(`[${insertedAttribute}], button, a, input, textarea, select, label`)) return;
   if (selectionAtPointerDown || !window.getSelection()?.isCollapsed) {
     unpick();
     return;
@@ -378,7 +429,69 @@ function onClick(event: MouseEvent) {
   const element = block && pickableElementAt(block.element, target);
   const alreadyPicked = element === pickedElement;
   unpick();
-  if (root && block && element && !alreadyPicked) pick(root, element, blocks.indexOf(block));
+  closeOpened();
+  if (!root || !block || !element || alreadyPicked) return;
+  if (props.compact && openCommentsAt(event.clientX, event.clientY)) await nextTick();
+  pick(root, element, blocks.indexOf(block));
+}
+
+function caretAt(x: number, y: number) {
+  const position = document.caretPositionFromPoint?.(x, y);
+  if (position) return { node: position.offsetNode, offset: position.offset };
+  const range = document.caretRangeFromPoint?.(x, y);
+  return range ? { node: range.startContainer, offset: range.startOffset } : null;
+}
+
+function openCommentsAt(x: number, y: number) {
+  const caret = caretAt(x, y);
+  if (!caret) return false;
+  const hits = props.comments.flatMap((comment) => {
+    const range = anchors.value.get(comment.id);
+    return range && !range.collapsed && range.isPointInRange(caret.node, caret.offset)
+      ? [{ comment, range }]
+      : [];
+  });
+  const smallest = hits.sort(
+    (first, second) => first.range.toString().length - second.range.toString().length,
+  )[0];
+  if (!smallest) return false;
+  const mount = document.createElement('span');
+  mount.setAttribute(insertedAttribute, '');
+  mount.className = 'opened-comments';
+  insertAfterRange(smallest.range, mount);
+  opened.value = { ids: new Set(hits.map(({ comment }) => comment.id)), mount };
+  return true;
+}
+
+// After the quote, outside any link or bold text around its end; after a code block or table
+// as a whole, since a card cannot sit inside them.
+function insertAfterRange(range: Range, mount: HTMLElement) {
+  const end = range.endContainer;
+  const element = end instanceof Element ? end : end.parentElement!;
+  const root = element.closest('[data-anchor-root]')!;
+  const whole = element.closest('pre, table');
+  if (whole && root.contains(whole)) return whole.after(mount);
+  const block =
+    element.closest('p, li, h1, h2, h3, h4, h5, h6, blockquote, dd, dt, th, td') ?? root;
+  let outermostInline: Element | null = null;
+  for (
+    let inline: Element | null = element;
+    inline && inline !== block;
+    inline = inline.parentElement
+  ) {
+    outermostInline = inline;
+  }
+  if (outermostInline) return outermostInline.after(mount);
+  const point = document.createRange();
+  point.setStart(end, range.endOffset);
+  point.insertNode(mount);
+}
+
+function closeOpened() {
+  const mount = opened.value?.mount;
+  if (!mount) return;
+  opened.value = null;
+  mount.remove();
 }
 
 function playPicked() {
@@ -485,6 +598,7 @@ onBeforeUnmount(() => {
   container()?.removeEventListener('click', onClick);
   highlightPicked(null);
   document.removeEventListener('selectionchange', onSelectionChange);
+  closeOpened();
   resizeObserver?.disconnect();
   if ('highlights' in CSS) CSS.highlights.clear();
 });
@@ -517,6 +631,19 @@ watch(
 
 <template>
   <div ref="layer" class="comment-layer">
+    <svg class="comment-outlines" aria-hidden="true">
+      <path
+        v-for="outline in outlines"
+        :key="outline.comment.id"
+        :d="outline.path"
+        :class="[
+          outlineKind(outline.comment),
+          outline.comment.status,
+          { hovered: hoveredIds.has(outline.comment.id) },
+        ]"
+      />
+    </svg>
+
     <Teleport to="#comment-tray" defer>
       <CommentTray :comments="trayComments" @jump="scrollToComment" />
     </Teleport>
@@ -529,6 +656,8 @@ watch(
         @measure="(height) => heights.set(card.id, height)"
         @open="openSubmitted"
         @jump="(comment) => scrollToComment(comment.id)"
+        @mouseenter="hover(card.comments)"
+        @mouseleave="hover([])"
       />
       <CommentCard
         v-else
@@ -536,8 +665,21 @@ watch(
         :placement="card"
         @measure="(height) => heights.set(card.id, height)"
         @open="openSubmitted"
+        @mouseenter="hover(card.comments)"
+        @mouseleave="hover([])"
       />
     </template>
+
+    <Teleport v-if="opened" :to="opened.mount">
+      <template v-for="entry in openedEntries" :key="entry.first.id">
+        <ForkGroupCard
+          v-if="entry.first.forkGroupId"
+          :comments="entry.comments"
+          @open="openSubmitted"
+        />
+        <CommentCard v-else :comment="entry.first" @open="openSubmitted" />
+      </template>
+    </Teleport>
 
     <Teleport
       v-for="group in listedComments"
@@ -645,6 +787,44 @@ watch(
 
 .comment-layer > * {
   pointer-events: auto;
+}
+
+.comment-layer > .comment-outlines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.comment-outlines path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.comment-outlines .fork {
+  stroke: var(--fork);
+}
+
+.comment-outlines .note {
+  stroke: var(--note);
+}
+
+.comment-outlines .draft,
+.comment-outlines .queued {
+  stroke-dasharray: 4 3;
+}
+
+.comment-outlines .submitted {
+  stroke: var(--text-muted);
+  stroke-width: 1;
+}
+
+.comment-outlines .hovered {
+  stroke-width: 2.5;
 }
 
 .selection-actions {

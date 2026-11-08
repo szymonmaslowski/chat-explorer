@@ -209,25 +209,18 @@ html.image-viewer-open {
   background: var(--accent-soft);
 }
 
-::highlight(comment-inline) {
-  background-color: var(--accent-soft);
-}
-
-::highlight(comment-fork) {
-  background-color: var(--fork-soft);
-}
-
-::highlight(comment-note) {
-  background-color: var(--note-soft);
-}
-
 ::highlight(bookmark) {
   background-color: var(--bookmark-soft);
 }
 
-::highlight(comment-submitted) {
-  text-decoration: underline dotted var(--text-muted);
-  text-underline-offset: 3px;
+/* A comment opened with a tap on a phone, inside the text it quotes. */
+.opened-comments {
+  display: block;
+  margin: 0.5rem 0;
+  font-size: 1rem;
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1.5;
 }
 
 ::highlight(comment-flash) {

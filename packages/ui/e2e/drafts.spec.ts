@@ -194,9 +194,7 @@ test('saves the reply box text as a general comment, sent with the next Submit',
   const card = page.locator('.comment-card.draft', { hasText: 'Keep the answers short' });
   await expect(card).toBeVisible();
   await expect(card.locator('.quote')).toHaveCount(0);
-  const highlighted = () =>
-    page.evaluate(() => [...(CSS.highlights.get('comment-inline') ?? [])].length);
-  expect(await highlighted()).toBe(0);
+  await expect(page.locator('.comment-outlines path')).toHaveCount(0);
   const lastLine = (await page.locator('.message.assistant .content p').last().boundingBox())!;
   const cardBox = (await card.boundingBox())!;
   expect(Math.abs(cardBox.y - lastLine.y)).toBeLessThan(lastLine.height);

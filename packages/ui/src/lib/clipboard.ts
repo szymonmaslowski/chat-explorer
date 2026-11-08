@@ -1,3 +1,4 @@
+import { insertedAttribute } from '@shared/speech-blocks';
 import { blockTextRange } from './speech-blocks';
 
 export interface ClipboardText {
@@ -31,8 +32,8 @@ export function blockClipboardText(element: HTMLElement): ClipboardText {
     );
     return { plain: rows.join('\n'), html: element.outerHTML };
   }
-  const range = blockTextRange(element);
   const html = document.createElement('div');
-  html.append(range.cloneContents());
-  return { plain: range.toString().trim(), html: html.innerHTML };
+  html.append(blockTextRange(element).cloneContents());
+  for (const inserted of html.querySelectorAll(`[${insertedAttribute}]`)) inserted.remove();
+  return { plain: (html.textContent ?? '').trim(), html: html.innerHTML };
 }
