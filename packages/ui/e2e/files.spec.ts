@@ -41,6 +41,13 @@ test('sends pasted and picked files with a reply, and Claude gets their paths', 
   await page.getByRole('button', { name: 'Remove archive.zip' }).click();
   await expect(page.locator('.reply-bar .summary')).toHaveText('2 files');
 
+  await page.getByRole('button', { name: 'Open screenshot.png' }).click();
+  const draftViewer = page.getByRole('dialog', { name: 'Image' });
+  await expect(draftViewer.locator('img')).toHaveAttribute('src', /\/api\/files\/\w+/);
+  await draftViewer.getByRole('button', { name: 'Back' }).click();
+  await expect(draftViewer).toHaveCount(0);
+  await expect(drafts).toHaveCount(2);
+
   await page.getByRole('button', { name: 'Submit' }).click();
   await expect(page.locator('.queued-submission')).toContainText('2 files');
   await expect(drafts).toHaveCount(0);
