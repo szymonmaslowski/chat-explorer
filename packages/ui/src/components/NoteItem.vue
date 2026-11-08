@@ -235,17 +235,6 @@ function changeGroup(groupId: string | null) {
           <MediaIcon name="trash" /><span class="visually-hidden">Delete</span>
         </ConfirmButton>
       </template>
-      <button
-        v-if="checklist && !readOnly"
-        type="button"
-        class="check-button"
-        :class="{ on: note.checked }"
-        :aria-label="note.checked ? 'Uncheck' : 'Check'"
-        :title="note.checked ? 'Uncheck' : 'Check'"
-        @click="emit('toggleChecked')"
-      >
-        <MediaIcon name="check" />
-      </button>
     </div>
     <div v-if="selected" class="note-id" @click.stop>
       <span class="muted">ID</span>
@@ -257,6 +246,17 @@ function changeGroup(groupId: string | null) {
         @click="copy({ plain: note.id })"
       >
         <MediaIcon :name="copied ? 'check' : 'copy'" />
+      </button>
+      <button
+        v-if="checklist && !readOnly"
+        type="button"
+        class="check-button"
+        :class="{ on: note.checked }"
+        :aria-label="note.checked ? 'Uncheck' : 'Check'"
+        :title="note.checked ? 'Uncheck' : 'Check'"
+        @click="emit('toggleChecked')"
+      >
+        <MediaIcon name="check" />
       </button>
     </div>
     <NoteForkComposer
@@ -428,11 +428,11 @@ function changeGroup(groupId: string | null) {
   padding: 0.2rem 0.45rem;
 }
 
-.actions .check-button {
+.note-id .check-button {
   margin-left: auto;
 }
 
-.actions button.on {
+.note-id button.on {
   color: var(--accent);
   border-color: var(--accent);
   background: var(--accent-soft);
