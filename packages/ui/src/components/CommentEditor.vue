@@ -9,6 +9,7 @@ import { insertAtCursor } from '../lib/insert-text';
 import { sortedGroups } from '../lib/notes';
 import { openExploration } from '../stores/exploration';
 import { newId, outbox } from '../stores/outbox';
+import CommentTypePicker from './CommentTypePicker.vue';
 import DictationButton from './DictationButton.vue';
 import ExpandButton from './ExpandButton.vue';
 import ListenButton from './ListenButton.vue';
@@ -28,11 +29,6 @@ const emit = defineEmits<{
   close: [savedCommentId: string | null];
 }>();
 
-const commentTypes: { type: CommentType; label: string }[] = [
-  { type: 'inline', label: 'Comment' },
-  { type: 'fork', label: 'Fork' },
-  { type: 'note', label: 'Note' },
-];
 const newGroupChoice = '';
 
 const body = ref('');
@@ -181,11 +177,7 @@ function onKeydown(event: KeyboardEvent) {
       @keydown="onKeydown"
     />
     <div class="actions">
-      <div class="types" role="radiogroup" aria-label="Comment type">
-        <label v-for="option in commentTypes" :key="option.type">
-          <input v-model="type" type="radio" :value="option.type" /> {{ option.label }}
-        </label>
-      </div>
+      <CommentTypePicker v-model="type" />
       <select v-if="type === 'note'" v-model="pickedGroup" aria-label="Note group">
         <option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }}</option>
         <option :value="newGroupChoice">{{ newGroupName }} (new)</option>
@@ -236,17 +228,6 @@ function onKeydown(event: KeyboardEvent) {
 
 .comment-editor.note {
   border-left-color: var(--note);
-}
-
-.types {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.types label {
-  display: flex;
-  align-items: center;
-  gap: 0.2rem;
 }
 
 .quote {

@@ -2,6 +2,7 @@ import { expect } from '@playwright/test';
 import {
   answeredChat,
   attachFakeSession,
+  chooseCommentType,
   deliverAndAnswer,
   detachFakeSession,
   selectAnswer,
@@ -24,7 +25,7 @@ test('starts a fork from a new comment at once, leaving the other drafts and the
   await selectAnswer(page);
   await page.getByRole('button', { name: 'Comment', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Fork now' })).toHaveCount(0);
-  await page.locator('.comment-editor').getByLabel('Fork', { exact: true }).check();
+  await chooseCommentType(page.locator('.comment-editor'), 'Fork');
   await page.getByPlaceholder('Your comment').fill('Try it this way');
   await page.getByRole('button', { name: 'Fork now' }).click();
 
@@ -49,7 +50,7 @@ test('starts a fork from a saved fork comment at once', async ({ page, request }
   await selectAnswer(page);
   await page.getByRole('button', { name: 'Comment', exact: true }).click();
   await page.getByPlaceholder('Your comment').fill('Later fork');
-  await page.locator('.comment-editor').getByLabel('Fork', { exact: true }).check();
+  await chooseCommentType(page.locator('.comment-editor'), 'Fork');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   const card = page.locator('.comment-card.draft');
 

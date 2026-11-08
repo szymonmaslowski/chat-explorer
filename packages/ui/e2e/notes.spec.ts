@@ -1,5 +1,12 @@
 import { expect, type APIRequestContext, type Page } from '@playwright/test';
-import { answeredChat, attachFakeSession, detachFakeSession, selectAnswer, test } from './helpers';
+import {
+  answeredChat,
+  attachFakeSession,
+  chooseCommentType,
+  detachFakeSession,
+  selectAnswer,
+  test,
+} from './helpers';
 
 async function newChat(request: APIRequestContext) {
   const { explorationId } = await (
@@ -262,7 +269,7 @@ test('turns a note comment into a note on Submit', async ({ page, request }) => 
   await page.goto(`/e/${explorationId}`);
   await selectAnswer(page);
   await page.getByRole('button', { name: 'Comment', exact: true }).click();
-  await page.getByLabel('Note', { exact: true }).check();
+  await chooseCommentType(page.locator('.comment-editor'), 'Note');
   await page.getByLabel('Note group').selectOption({ label: 'Backlog' });
   await page.getByPlaceholder('Your comment').fill('Check this later');
   await page.keyboard.press('ControlOrMeta+Enter');
@@ -294,7 +301,7 @@ test('makes the new group a note comment asks for only on Submit', async ({ page
   await page.goto(`/e/${explorationId}`);
   await selectAnswer(page);
   await page.getByRole('button', { name: 'Comment', exact: true }).click();
-  await page.getByLabel('Note', { exact: true }).check();
+  await chooseCommentType(page.locator('.comment-editor'), 'Note');
   await expect(page.getByLabel('Note group')).toHaveValue(/.+/);
   await page.getByLabel('Note group').selectOption({ label: 'Group 2 (new)' });
   await page.getByPlaceholder('Your comment').fill('In a group of its own');

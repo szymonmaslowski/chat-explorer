@@ -1,4 +1,10 @@
-import { test as base, expect, type APIRequestContext, type Page } from '@playwright/test';
+import {
+  test as base,
+  expect,
+  type APIRequestContext,
+  type Locator,
+  type Page,
+} from '@playwright/test';
 
 // The page shows a change before the daemon has it. Each test waits until its changes are sent,
 // so the next one starts from what the daemon really holds.
@@ -53,6 +59,13 @@ export async function tapQuotedText(page: Page, quote: string) {
 }
 
 export const seededDraftQuote = 'store a version number per entity';
+
+export async function chooseCommentType(scope: Page | Locator, label: 'Comment' | 'Fork' | 'Note') {
+  await scope.getByRole('button', { name: /^Type:/ }).click();
+  await scope.getByRole('menuitemradio', { name: label }).click();
+  await expect(scope.getByRole('menuitemradio')).toHaveCount(0);
+  await expect(scope.getByRole('button', { name: `Type: ${label}` })).toBeVisible();
+}
 
 export const shimId = 'e2e-shim';
 
