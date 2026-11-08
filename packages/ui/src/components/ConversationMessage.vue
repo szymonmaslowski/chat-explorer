@@ -137,14 +137,14 @@ onMounted(findBlocks);
     </header>
     <div v-if="jumpable" class="message-actions">
       <button
-        v-if="speakable"
+        v-if="forkable"
         type="button"
         class="icon-button"
-        :aria-label="listenLabel"
-        :title="listenLabel"
-        @click="playMessage"
+        aria-label="Fork from here"
+        title="Start a fork that goes on from this answer"
+        @click="emit('fork')"
       >
-        <MediaIcon :name="currentIndex !== -1 && speech.playing ? 'pause' : 'play'" />
+        <MediaIcon name="fork" />
       </button>
       <button
         type="button"
@@ -154,15 +154,6 @@ onMounted(findBlocks);
         @click="copyMessage"
       >
         <MediaIcon :name="copied ? 'check' : 'copy'" />
-      </button>
-      <button
-        type="button"
-        class="icon-button"
-        aria-label="Go to the end of the answer"
-        title="Go to the end of the answer"
-        @click="jumpTo('end')"
-      >
-        <MediaIcon name="to-end" />
       </button>
       <button
         v-if="!isUnread(message)"
@@ -175,14 +166,23 @@ onMounted(findBlocks);
         <MediaIcon name="unread" />
       </button>
       <button
-        v-if="forkable"
+        v-if="speakable"
         type="button"
         class="icon-button"
-        aria-label="Fork from here"
-        title="Start a fork that goes on from this answer"
-        @click="emit('fork')"
+        :aria-label="listenLabel"
+        :title="listenLabel"
+        @click="playMessage"
       >
-        <MediaIcon name="fork" />
+        <MediaIcon :name="currentIndex !== -1 && speech.playing ? 'pause' : 'play'" />
+      </button>
+      <button
+        type="button"
+        class="icon-button"
+        aria-label="Go to the end of the answer"
+        title="Go to the end of the answer"
+        @click="jumpTo('end')"
+      >
+        <MediaIcon name="to-end" />
       </button>
     </div>
     <div v-for="comment in quotedComments" :key="comment.id" class="quoted-comment">
