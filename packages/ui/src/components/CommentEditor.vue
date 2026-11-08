@@ -252,8 +252,6 @@ function onKeydown(event: KeyboardEvent) {
 }
 
 .note-group {
-  display: flex;
-  justify-content: flex-end;
   margin-top: 0.4rem;
 }
 </style>
