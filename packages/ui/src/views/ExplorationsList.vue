@@ -200,6 +200,7 @@ async function removeFromList(explorationId: string, change: (id: string) => Pro
 
 .actions {
   display: flex;
+  align-self: flex-end;
   align-items: center;
   gap: 0.4rem;
   margin-left: auto;
