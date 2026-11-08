@@ -3,7 +3,8 @@ import type { MarkdownIt, StateBlock } from 'markdown-it';
 // Claude starts each part of an answer with tags, alone on a line, naming what the part answers:
 // one of the user's comments, or the text of a user message. The page shows each tag as a card
 // of what was asked. The cards hold no text of their own, only attributes the stylesheet shows,
-// so the answer's text, and the comment offsets into it, are the same with or without them.
+// so the answer's text, and the comment offsets into it, are the same with or without them. A
+// card of a comment that quotes text has a button to that comment.
 
 export const commentTag = (commentId: string) => `[c:${commentId}]`;
 export const messageTag = (messageId: string) => `[m:${messageId}]`;
@@ -48,13 +49,15 @@ export function answerTags(markdown: MarkdownIt) {
   const { escapeHtml } = markdown.utils;
   const attribute = (name: string, value: string) => ` ${name}="${escapeHtml(value)}"`;
 
-  function card(written: string, part: AnsweredPart | null) {
+  function card(written: string, kind: string, id: string, part: AnsweredPart | null) {
     if (!part) return `<span class="answer-card unknown"${attribute('data-tag', written)}></span>`;
+    const comment = kind === 'c' ? attribute('data-comment-id', id) : '';
     const quote = part.quote ? attribute('data-quote', part.quote) : '';
     const text = attribute('data-text', part.text);
-    if (!part.href) return `<span class="answer-card"${quote}${text}></span>`;
-    const link = `${attribute('href', part.href)}${attribute('title', 'Show where this was commented')}`;
-    return `<a class="answer-card"${link}${quote}${text}></a>`;
+    const jump = part.href
+      ? `<a class="answer-jump"${attribute('href', part.href)}${attribute('title', 'Show the comment')}${attribute('aria-label', 'Show the comment')}></a>`
+      : '';
+    return `<span class="answer-card"${comment}${quote}${text}>${jump}</span>`;
   }
 
   markdown.block.ruler.before('paragraph', 'answer_tags', tagLineRule, {
@@ -62,7 +65,12 @@ export function answerTags(markdown: MarkdownIt) {
   });
   markdown.renderer.rules.answer_tags = (tokens, index, _options, environment) => {
     const cards = [...tokens[index]!.content.matchAll(tag)].map(([written, kind, id]) =>
-      card(written, environment?.answeredPart?.(kind === 'c' ? 'comment' : 'message', id!) ?? null),
+      card(
+        written,
+        kind!,
+        id!,
+        environment?.answeredPart?.(kind === 'c' ? 'comment' : 'message', id!) ?? null,
+      ),
     );
     return `<div class="answer-tags">${cards.join('')}</div>\n`;
   };

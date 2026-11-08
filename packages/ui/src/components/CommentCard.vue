@@ -3,6 +3,9 @@ import type { Comment, CommentChanges, CommentType } from '@shared/types';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useAutosave } from '../composables/useAutosave';
 import { useExpandedArea } from '../composables/useExpandedArea';
+import { useRouter } from 'vue-router';
+import { answerToComment } from '../lib/conversation';
+import { scrollToAndFlash } from '../lib/flash';
 import { insertAtCursor } from '../lib/insert-text';
 import { sortedGroups } from '../lib/notes';
 import { openExploration } from '../stores/exploration';
@@ -45,6 +48,26 @@ watch(editing, (isEditing) => {
   if (!isEditing) expanded.value = false;
 });
 const isDraft = computed(() => props.comment.status === 'draft');
+const router = useRouter();
+const answer = computed(() =>
+  props.comment.status === 'submitted'
+    ? answerToComment(props.comment.id, openExploration(props.comment.explorationId).messages)
+    : null,
+);
+
+// To the answer's card of this comment when it is on the page, or else to the answer.
+function goToAnswer() {
+  const message = answer.value;
+  if (!message) return;
+  const card = document.querySelector<HTMLElement>(
+    `#m-${message.id} .answer-card[data-comment-id="${props.comment.id}"]`,
+  );
+  if (!card) {
+    void router.push(`/e/${props.comment.explorationId}/f/${message.forkId}#m-${message.id}`);
+    return;
+  }
+  scrollToAndFlash(card);
+}
 const bodyElement = ref<HTMLElement | null>(null);
 // A body cut short by its line limit offers to expand, so a long comment can be read whole.
 const bodyClipped = ref(false);
@@ -240,7 +263,17 @@ function onEditorKeydown(event: KeyboardEvent) {
         <input type="checkbox" :checked="pickedToJoin" @change="togglePicked(comment.id)" />
         Join into one fork
       </label>
-      <div v-else-if="(isDraft || bodyClipped) && joinRole === null" class="actions">
+      <div v-else-if="(isDraft || bodyClipped || answer) && joinRole === null" class="actions">
+        <button
+          v-if="answer"
+          type="button"
+          class="to-answer"
+          aria-label="Show the answer"
+          title="Show Claude's answer to it"
+          @click.stop="goToAnswer"
+        >
+          <MediaIcon name="to-answer" />
+        </button>
         <ExpandButton v-if="bodyClipped" v-model="expanded" @click.stop />
         <template v-if="isDraft">
           <ListenButton :text="comment.body" />
@@ -466,6 +499,10 @@ function onEditorKeydown(event: KeyboardEvent) {
   align-items: center;
   gap: 0.3rem;
   margin-top: 0.35rem;
+}
+
+.to-answer {
+  margin-right: auto;
 }
 
 .spacer {

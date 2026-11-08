@@ -13,6 +13,7 @@ import NoteItem from '../components/NoteItem.vue';
 import SpeechPlayer from '../components/SpeechPlayer.vue';
 import { useDragSort } from '../composables/useDragSort';
 import { mainFork } from '../lib/conversation';
+import { scrollToAndFlash } from '../lib/flash';
 import {
   dropAnchor,
   dropRange,
@@ -28,8 +29,6 @@ import { newId, outbox } from '../stores/outbox';
 import { stopSpeech } from '../stores/speech';
 
 const props = defineProps<{ explorationId: string }>();
-
-const flashMs = 1_400;
 
 const route = useRoute();
 const router = useRouter();
@@ -235,9 +234,7 @@ watch(
     }
     selectedNoteId.value = note.id;
     const target = document.getElementById(`n-${note.id}`);
-    target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    target?.classList.add('flash');
-    setTimeout(() => target?.classList.remove('flash'), flashMs);
+    if (target) scrollToAndFlash(target);
   },
   { flush: 'post', immediate: true },
 );

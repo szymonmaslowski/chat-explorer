@@ -1,4 +1,4 @@
-import type { AnsweredPartLookup } from '@shared/answer-tags';
+import { commentTag, type AnsweredPartLookup } from '@shared/answer-tags';
 import type { Comment, Fork, Message } from '@shared/types';
 
 export function pathTo(messageId: string | null, messages: Map<string, Message>) {
@@ -41,6 +41,12 @@ export function quotedCommentsOf(messageId: string, comments: Map<string, Commen
     .filter((comment) => comment.replyMessageId === messageId)
     .sort((left, right) => left.createdAt - right.createdAt);
 }
+
+// Claude's answer to a sent comment: the message with the comment's tag.
+export const answerToComment = (commentId: string, messages: Map<string, Message>) =>
+  [...messages.values()].find(
+    (message) => message.role === 'assistant' && message.content.includes(commentTag(commentId)),
+  ) ?? null;
 
 export const commentLink = (comment: Comment) =>
   `/e/${comment.explorationId}/f/${comment.viewForkId}#c-${comment.id}`;

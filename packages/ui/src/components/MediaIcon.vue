@@ -28,7 +28,9 @@ defineProps<{
     | 'back'
     | 'unread'
     | 'bookmark'
-    | 'bookmarked';
+    | 'bookmarked'
+    | 'to-comment'
+    | 'to-answer';
 }>();
 </script>
 
@@ -81,6 +83,8 @@ defineProps<{
       d="M6 4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v17l-6-4-6 4z"
     />
     <path v-else-if="name === 'send'" d="M3 11l18-8-8 18-2-8zM11 13l10-10" />
+    <path v-else-if="name === 'to-comment'" d="M7 17L17 7M9 7h8v8" />
+    <path v-else-if="name === 'to-answer'" d="M7 7l10 10M17 9v8H9" />
     <path
       v-else
       d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"
@@ -115,7 +119,9 @@ defineProps<{
 .media-icon.close,
 .media-icon.unarchive,
 .media-icon.back,
-.media-icon.bookmark {
+.media-icon.bookmark,
+.media-icon.to-comment,
+.media-icon.to-answer {
   fill: none;
   stroke: currentColor;
   stroke-width: 2;

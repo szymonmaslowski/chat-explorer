@@ -24,6 +24,7 @@ import {
   mainFork,
   quotedCommentsOf,
 } from '../lib/conversation';
+import { scrollToAndFlash } from '../lib/flash';
 import { forkAttention, isUnread } from '../lib/read-state';
 import { openExploration } from '../stores/exploration';
 import { stopSpeech } from '../stores/speech';
@@ -31,7 +32,6 @@ import { stopSpeech } from '../stores/speech';
 const props = defineProps<{ explorationId: string; forkId?: string }>();
 
 const nearBottomPx = 200;
-const flashMs = 1_400;
 
 const route = useRoute();
 // Narrower than the text and the comment rail together, comments list under their messages.
@@ -143,9 +143,7 @@ watch(
     const target = document.getElementById(hash.slice(1));
     if (!target) return;
     handledHash = hash;
-    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    target.classList.add('flash');
-    setTimeout(() => target.classList.remove('flash'), flashMs);
+    scrollToAndFlash(target);
   },
   { flush: 'post', immediate: true },
 );

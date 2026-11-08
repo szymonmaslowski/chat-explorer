@@ -74,7 +74,7 @@ function openContentImage(event: MouseEvent) {
 }
 
 function openAnsweredComment(event: MouseEvent) {
-  if (!(event.target instanceof HTMLAnchorElement) || !event.target.matches('.answer-card')) return;
+  if (!(event.target instanceof HTMLAnchorElement) || !event.target.matches('.answer-jump')) return;
   event.preventDefault();
   void router.push(event.target.getAttribute('href')!);
 }
@@ -354,7 +354,8 @@ onMounted(findBlocks);
 }
 
 .content :deep(.answer-card) {
-  display: block;
+  display: flex;
+  flex-direction: column;
   padding: 0.4rem 0.75rem;
   border-left: 3px solid var(--accent);
   border-radius: 0 var(--radius) var(--radius) 0;
@@ -369,6 +370,7 @@ onMounted(findBlocks);
 .content :deep(.answer-card[data-quote]::before) {
   content: attr(data-quote);
   display: block;
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -380,6 +382,38 @@ onMounted(findBlocks);
   content: attr(data-text);
   display: block;
   white-space: pre-wrap;
+}
+
+/* After the card's text, which its ::after shows. */
+.content :deep(.answer-jump) {
+  order: 1;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.9rem;
+  min-height: 1.6rem;
+  margin-top: 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.content :deep(.answer-jump::before) {
+  content: '';
+  width: 1rem;
+  height: 1rem;
+  background: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 17L17 7M9 7h8v8'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+@media (pointer: coarse) {
+  .content :deep(.answer-jump) {
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+  }
 }
 
 .content :deep(.answer-card.unknown) {

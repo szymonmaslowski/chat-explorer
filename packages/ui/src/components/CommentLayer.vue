@@ -140,6 +140,8 @@ const editor = ref<{
 const editorPlace = computed(() =>
   openedPlaces.value.find((place) => place.key === editor.value?.placeKey),
 );
+// Sent comments a link from Claude's answer showed, until closed.
+const revealedIds = ref(new Set<string>());
 // The comment open in the editor shows there, not also as a card. A sent comment shows in the
 // reply it went with, and its fork as a link under the message, so it needs no card; a saved note
 // keeps its card, which is the way to the note.
@@ -147,7 +149,9 @@ const shownComments = computed(() =>
   props.comments.filter(
     (comment) =>
       comment.id !== editor.value?.commentId &&
-      (comment.status !== 'submitted' || comment.type === 'note'),
+      (comment.status !== 'submitted' ||
+        comment.type === 'note' ||
+        revealedIds.value.has(comment.id)),
   ),
 );
 
@@ -441,7 +445,8 @@ function pick(root: HTMLElement, element: HTMLElement, blockIndex: number) {
 async function onClick(event: MouseEvent) {
   const target = event.target;
   if (!(target instanceof Element) || editor.value) return;
-  if (target.closest(`[${insertedAttribute}], button, a, input, textarea, select, label`)) return;
+  const ignored = `[${insertedAttribute}], .answer-tags, button, a, input, textarea, select, label`;
+  if (target.closest(ignored)) return;
   if (selectionAtPointerDown || !window.getSelection()?.isCollapsed) {
     unpick();
     return;
@@ -585,6 +590,26 @@ function setPlaceIds(place: OpenedPlace, ids: Set<string>) {
   );
 }
 
+// A link to a comment shows it: on a phone opened in the text, elsewhere as its card even when
+// sent.
+function reveal(commentId: string, range: Range) {
+  const comment = props.comments.find(({ id }) => id === commentId);
+  if (!comment || range.collapsed) return;
+  if (!props.compact) {
+    if (!shownComments.value.includes(comment)) {
+      revealedIds.value = new Set([...revealedIds.value, commentId]);
+    }
+    return;
+  }
+  if (openedPlaces.value.some((place) => place.ids.has(commentId))) return;
+  openPlace(comment.messageId, comment, range, [commentId]);
+}
+
+function hideRevealed(comments: Comment[]) {
+  const hidden = new Set(comments.map((comment) => comment.id));
+  revealedIds.value = new Set([...revealedIds.value].filter((id) => !hidden.has(id)));
+}
+
 function closeCards(place: OpenedPlace, comments: Comment[]) {
   const closed = new Set(comments.map((comment) => comment.id));
   setPlaceIds(place, new Set([...place.ids].filter((id) => !closed.has(id))));
@@ -723,6 +748,7 @@ watch(
         : null;
     const range = ranges?.get(hash.slice(3));
     if (!range) return;
+    if (hash.startsWith('#c-')) reveal(hash.slice(3), range);
     scrollToRange(range);
     handledHash = hash;
     // So the same link scrolls there again the next time.
@@ -756,8 +782,10 @@ watch(
         v-if="card.first.forkGroupId"
         :comments="card.comments"
         :placement="card"
+        :closable="card.comments.some(({ id }) => revealedIds.has(id))"
         @measure="(height) => heights.set(card.id, height)"
         @open="openSubmitted"
+        @close="hideRevealed(card.comments)"
         @jump="(comment) => scrollToComment(comment.id)"
         @mouseenter="hover(card.comments)"
         @mouseleave="hover([])"
@@ -766,8 +794,10 @@ watch(
         v-else
         :comment="card.first"
         :placement="card"
+        :closable="revealedIds.has(card.first.id)"
         @measure="(height) => heights.set(card.id, height)"
         @open="openSubmitted"
+        @close="hideRevealed(card.comments)"
         @mouseenter="hover(card.comments)"
         @mouseleave="hover([])"
       />

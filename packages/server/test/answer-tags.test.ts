@@ -49,8 +49,12 @@ describe('answer tags', () => {
       parts,
     );
     const cards = [...body.querySelectorAll('.answer-card')];
-    expect(cards.map((card) => card.tagName)).toEqual(['A', 'SPAN', 'SPAN']);
-    expect(cards[0]!.getAttribute('href')).toBe('/e/x/f/y#c-aaaaaaaaaa');
+    expect(cards.map((card) => card.querySelector('.answer-jump')?.getAttribute('href'))).toEqual([
+      '/e/x/f/y#c-aaaaaaaaaa',
+      undefined,
+      undefined,
+    ]);
+    expect(cards[0]!.getAttribute('data-comment-id')).toBe('aaaaaaaaaa');
     expect(cards[0]!.getAttribute('data-quote')).toBe('cache keys');
     expect(cards[0]!.getAttribute('data-text')).toBe('Why "these"?');
     expect(cards[1]!.hasAttribute('data-quote')).toBe(false);

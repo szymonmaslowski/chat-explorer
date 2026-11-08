@@ -58,6 +58,59 @@ test('shows the comments an answer part answers as cards above it', async ({ pag
     'They repeat on every request. A minute is enough.',
   );
 
-  await cards.first().click();
+  await expect(cards.last().locator('.answer-jump')).toHaveCount(0);
+  await cards.first().getByRole('link', { name: 'Show the comment' }).click();
   await expect(page).toHaveURL(new RegExp(`/f/${answer.forkId}$`));
+  const revealed = page.locator('.comment-card.submitted', { hasText: 'Why these?' });
+  await expect(revealed).toBeVisible();
+
+  await page.evaluate(() => window.scrollTo({ top: 0 }));
+  await revealed.getByRole('button', { name: 'Show the answer' }).click();
+  await expect(cards.first()).toBeInViewport();
+
+  await revealed.getByRole('button', { name: 'Close' }).click();
+  await expect(revealed).toHaveCount(0);
+});
+
+test.describe('on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
+
+  test('opens the comment in the text from its card in the answer', async ({ page, request }) => {
+    const { explorationId } = await (
+      await request.post('/api/explorations', { data: { message: 'How do I cache responses?' } })
+    ).json();
+    await attachFakeSession(request, explorationId);
+    const firstAnswer = 'Use Redis for the cache keys.';
+    await deliverAndAnswer(request, explorationId, firstAnswer);
+    const snapshot = await (await request.get(`/api/explorations/${explorationId}`)).json();
+    const answer = snapshot.messages.at(-1);
+    const quote = 'cache keys';
+    const startOffset = firstAnswer.indexOf(quote);
+    const comment = await (
+      await request.post(`/api/explorations/${explorationId}/comments`, {
+        data: {
+          messageId: answer.id,
+          viewForkId: answer.forkId,
+          quote,
+          startOffset,
+          endOffset: startOffset + quote.length,
+          body: 'Why these?',
+        },
+      })
+    ).json();
+    await request.post(`/api/explorations/${explorationId}/submit`, {
+      data: { forkId: answer.forkId },
+    });
+    await deliverAndAnswer(request, explorationId, `[c:${comment.id}]\nThey repeat.`);
+    await detachFakeSession(request);
+
+    await page.goto(`/e/${explorationId}`);
+    const card = page.locator('.message.assistant').last().locator('.answer-card');
+    await card.getByRole('link', { name: 'Show the comment' }).click();
+    const opened = page.locator('.opened-comments .comment-card', { hasText: 'Why these?' });
+    await expect(opened).toBeVisible();
+
+    await opened.getByRole('button', { name: 'Show the answer' }).click();
+    await expect(card).toBeInViewport();
+  });
 });
