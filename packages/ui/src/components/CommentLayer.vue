@@ -129,26 +129,33 @@ const pickedPlaying = computed(
     speech.playback?.id === picked.value?.messageId &&
     speech.playback?.index === picked.value?.blockIndex,
 );
-const editor = ref<{
+interface OpenEditor {
+  key: string;
   messageId: string;
   anchor: TextAnchor;
   top: number;
   left: number;
   commentId: string | null;
   placeKey: string | null;
-} | null>(null);
-const editorPlace = computed(() =>
-  openedPlaces.value.find((place) => place.key === editor.value?.placeKey),
+}
+const editors = ref<OpenEditor[]>([]);
+// On a phone each editor sits in the text, so several can be open. The rail has room for one, and
+// while it is open the text offers no more buttons.
+const editorBlocks = computed(() => editors.value.length > 0 && !props.compact);
+const editedIds = computed(
+  () => new Set(editors.value.flatMap((editor) => (editor.commentId ? [editor.commentId] : []))),
 );
+const placeOfEditor = (editor: OpenEditor) =>
+  openedPlaces.value.find((place) => place.key === editor.placeKey);
 // Sent comments a link from Claude's answer showed, until closed.
 const revealedIds = ref(new Set<string>());
-// The comment open in the editor shows there, not also as a card. A sent comment shows in the
+// A comment open in an editor shows there, not also as a card. A sent comment shows in the
 // reply it went with, and its fork as a link under the message, so it needs no card; a saved note
 // keeps its card, which is the way to the note.
 const shownComments = computed(() =>
   props.comments.filter(
     (comment) =>
-      comment.id !== editor.value?.commentId &&
+      !editedIds.value.has(comment.id) &&
       (comment.status !== 'submitted' ||
         comment.type === 'note' ||
         revealedIds.value.has(comment.id)),
@@ -309,7 +316,7 @@ function placeEntries(place: OpenedPlace) {
   return cardEntriesOf(
     props.comments.filter(
       (comment) =>
-        comment.id !== editor.value?.commentId &&
+        !editedIds.value.has(comment.id) &&
         (place.ids.has(comment.id) ||
           (comment.forkGroupId !== null && groups.has(comment.forkGroupId))),
     ),
@@ -397,7 +404,7 @@ function placeActions(
 }
 
 function showCommentButton() {
-  if (editor.value) return;
+  if (editorBlocks.value) return;
   const current = window.getSelection();
   if (!current || current.isCollapsed || current.rangeCount === 0) {
     selection.value = null;
@@ -424,7 +431,7 @@ function highlightPicked(element: HTMLElement | null) {
 
 function unpick() {
   picked.value = null;
-  if (!editor.value) highlightPicked(null);
+  if (!editorBlocks.value) highlightPicked(null);
 }
 
 function pick(root: HTMLElement, element: HTMLElement, blockIndex: number) {
@@ -444,7 +451,7 @@ function pick(root: HTMLElement, element: HTMLElement, blockIndex: number) {
 // On a phone the same tap also opens the comments on the tapped text.
 async function onClick(event: MouseEvent) {
   const target = event.target;
-  if (!(target instanceof Element) || editor.value) return;
+  if (!(target instanceof Element) || editorBlocks.value) return;
   const ignored = `[${insertedAttribute}], .answer-tags, button, a, input, textarea, select, label`;
   if (target.closest(ignored)) return;
   if (selectionAtPointerDown || !window.getSelection()?.isCollapsed) {
@@ -571,7 +578,7 @@ function closePlace(place: OpenedPlace) {
     unpick();
     actionsPlaceKey.value = null;
   }
-  if (editor.value?.placeKey === place.key) editor.value.placeKey = null;
+  for (const editor of editors.value) if (editor.placeKey === place.key) editor.placeKey = null;
   openedPlaces.value = openedPlaces.value.filter((opened) => opened !== place);
   place.mount.remove();
 }
@@ -581,7 +588,7 @@ function closeAllPlaces() {
 }
 
 function setPlaceIds(place: OpenedPlace, ids: Set<string>) {
-  if (ids.size === 0 && editor.value?.placeKey !== place.key) {
+  if (ids.size === 0 && !editors.value.some((editor) => editor.placeKey === place.key)) {
     closePlace(place);
     return;
   }
@@ -633,7 +640,7 @@ const copyPicked = () => pickedElement && copy(blockClipboardText(pickedElement)
 
 // Touch and keyboard selections have no mouseup, so the button follows a selection that settled.
 function onSelectionChange() {
-  if (!editor.value && window.getSelection()?.isCollapsed) selection.value = null;
+  if (!editorBlocks.value && window.getSelection()?.isCollapsed) selection.value = null;
   if (mouseButtonDown) return;
   clearTimeout(selectionTimer);
   selectionTimer = setTimeout(showCommentButton, selectionSettleMs);
@@ -646,16 +653,19 @@ function openEditor() {
   const anchorRoot = container()?.querySelector<HTMLElement>(`[data-anchor-root="${messageId}"]`);
   const range = props.compact && anchorRoot ? locateAnchor(anchorRoot, anchor) : null;
   const place = range ? openPlace(messageId, anchor, range, []) : null;
-  editor.value = {
+  editors.value.push({
+    key: newId(),
     messageId,
     anchor,
     top: lineTop,
     left: railLeft.value,
     commentId: null,
     placeKey: place?.key ?? null,
-  };
+  });
   selection.value = null;
   picked.value = null;
+  // The rail editor keeps the block marked as what it comments on; in the text it is right there.
+  if (place) highlightPicked(null);
 }
 
 function toggleBookmark() {
@@ -685,13 +695,15 @@ function toggleBookmark() {
   window.getSelection()?.removeAllRanges();
 }
 
-function closeEditor(savedCommentId: string | null) {
-  const place = editorPlace.value;
-  editor.value = null;
-  highlightPicked(null);
-  window.getSelection()?.removeAllRanges();
-  if (place)
-    setPlaceIds(place, new Set([...place.ids, ...(savedCommentId ? [savedCommentId] : [])]));
+function closeEditor(editor: OpenEditor, savedCommentId: string | null) {
+  const place = placeOfEditor(editor);
+  editors.value = editors.value.filter(({ key }) => key !== editor.key);
+  if (!place) {
+    highlightPicked(null);
+    window.getSelection()?.removeAllRanges();
+    return;
+  }
+  setPlaceIds(place, new Set([...place.ids, ...(savedCommentId ? [savedCommentId] : [])]));
 }
 
 function openSubmitted(comment: Comment) {
@@ -910,9 +922,13 @@ watch(
       </div>
     </Teleport>
 
-    <Teleport :to="editorPlace?.editorMount" :disabled="!editorPlace">
+    <Teleport
+      v-for="editor in editors"
+      :key="editor.key"
+      :to="placeOfEditor(editor)?.editorMount"
+      :disabled="!placeOfEditor(editor)"
+    >
       <CommentEditor
-        v-if="editor"
         :exploration-id="explorationId"
         :view-fork-id="forkId"
         :message-id="editor.messageId"
@@ -920,9 +936,9 @@ watch(
         :top="editor.top"
         :left="editor.left"
         :width="draftCardWidth"
-        :in-rail="!editorPlace"
-        @created="(commentId) => editor && (editor.commentId = commentId)"
-        @close="closeEditor"
+        :in-rail="!placeOfEditor(editor)"
+        @created="(commentId) => (editor.commentId = commentId)"
+        @close="(savedCommentId) => closeEditor(editor, savedCommentId)"
       />
     </Teleport>
   </div>
