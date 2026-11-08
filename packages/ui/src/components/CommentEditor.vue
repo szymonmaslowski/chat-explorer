@@ -178,10 +178,6 @@ function onKeydown(event: KeyboardEvent) {
     />
     <div class="actions">
       <CommentTypePicker v-model="type" />
-      <select v-if="type === 'note'" v-model="pickedGroup" aria-label="Note group">
-        <option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }}</option>
-        <option :value="newGroupChoice">{{ newGroupName }} (new)</option>
-      </select>
       <DictationButton :hint="anchor.quote" @text="insertDictation" />
       <ListenButton :text="body" />
       <ExpandButton v-model="expanded" />
@@ -191,6 +187,12 @@ function onKeydown(event: KeyboardEvent) {
         Fork now
       </button>
       <button type="button" class="primary" :disabled="!body.trim()" @click="save">Save</button>
+    </div>
+    <div v-if="type === 'note'" class="note-group">
+      <select v-model="pickedGroup" aria-label="Note group">
+        <option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }}</option>
+        <option :value="newGroupChoice">{{ newGroupName }} (new)</option>
+      </select>
     </div>
   </div>
 </template>
@@ -247,5 +249,11 @@ function onKeydown(event: KeyboardEvent) {
 
 .spacer {
   flex: 1;
+}
+
+.note-group {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.4rem;
 }
 </style>
