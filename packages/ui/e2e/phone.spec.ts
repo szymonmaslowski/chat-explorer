@@ -1,5 +1,13 @@
 import { expect } from '@playwright/test';
-import { openSeededExploration, seededDraftQuote, tapQuotedText, test } from './helpers';
+import {
+  attachFakeSession,
+  deliverAndAnswer,
+  detachFakeSession,
+  openSeededExploration,
+  seededDraftQuote,
+  tapQuotedText,
+  test,
+} from './helpers';
 
 test('starts a new exploration and reports a Claude that cannot start', async ({ page }) => {
   await page.goto('/');
@@ -85,5 +93,44 @@ test.describe('on a phone', () => {
     await tapQuotedText(page, seededDraftQuote);
     await expect(opened).toHaveCount(0);
     await expect(page.locator('[data-inserted]')).toHaveCount(0);
+  });
+
+  test('keeps the block buttons off comments opened at the end of the block', async ({
+    page,
+    request,
+  }) => {
+    const { explorationId } = await (
+      await request.post('/api/explorations', { data: { message: 'How do I cache responses?' } })
+    ).json();
+    await attachFakeSession(request, explorationId);
+    const answer = [
+      'Use Redis.',
+      'Keep the cache keys short and expire them after an hour.',
+      ...Array.from({ length: 8 }, () => 'A later paragraph keeps the reply box away from the card.'),
+    ].join('\n\n');
+    await deliverAndAnswer(request, explorationId, answer);
+    const snapshot = await (await request.get(`/api/explorations/${explorationId}`)).json();
+    const message = snapshot.messages.at(-1);
+    const quote = 'expire them after an hour.';
+    const startOffset = answer.replaceAll('\n\n', '').indexOf(quote);
+    await request.post(`/api/explorations/${explorationId}/comments`, {
+      data: {
+        messageId: message.id,
+        viewForkId: message.forkId,
+        quote,
+        startOffset,
+        endOffset: startOffset + quote.length,
+        body: 'Why an hour?',
+      },
+    });
+    await detachFakeSession(request);
+
+    await page.goto(`/e/${explorationId}`);
+    await expect(page.locator('.comment-outlines path')).toHaveCount(1);
+    await tapQuotedText(page, quote);
+    const card = (await page.locator('.opened-comments .comment-card').boundingBox())!;
+    const actions = (await page.locator('.selection-actions').boundingBox())!;
+    expect(actions.y).toBeGreaterThanOrEqual(card.y + card.height);
+    expect(actions.y + actions.height).toBeLessThan(page.viewportSize()!.height);
   });
 });

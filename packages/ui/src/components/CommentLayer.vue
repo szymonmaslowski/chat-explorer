@@ -353,8 +353,12 @@ function placeActions(
   const rects = range.getClientRects();
   const lastLine = relative(rects[rects.length - 1] ?? range.getBoundingClientRect());
   const firstLine = relative(firstLineRect(range));
+  // Comments opened at the end of the block go above the buttons, which would cover their own.
+  const mount = opened.value?.mount;
+  const card = mount && range.intersectsNode(mount) ? relative(mount.getBoundingClientRect()) : null;
+  const end = card && card.bottom >= lastLine.bottom ? card : lastLine;
   const height = coarsePointer.value ? actionButtonHeight.touch : actionButtonHeight.mouse;
-  const below = lastLine.bottom + 4 + (clearHandles && coarsePointer.value ? touchButtonOffset : 0);
+  const below = end.bottom + 4 + (clearHandles && coarsePointer.value ? touchButtonOffset : 0);
   // The reply box covers what is below it, so at the end of the page the buttons go above the text.
   const dockTop = document.querySelector('[data-dock]')?.getBoundingClientRect().top ?? Infinity;
   const layerTop = layer.value!.getBoundingClientRect().top;
@@ -363,7 +367,7 @@ function placeActions(
     messageId: root.dataset.anchorRoot!,
     anchor,
     buttonTop: underDock ? firstLine.top - 4 - height : below,
-    buttonLeft: Math.max(0, Math.min(lastLine.right + 6, layerWidth.value - width)),
+    buttonLeft: Math.max(0, Math.min(end.right + 6, layerWidth.value - width)),
     lineTop: firstLine.top,
     lineLeft: firstLine.left,
   };
