@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { noReply } from '../store/run-context.js';
 import type { Lease, PendingMessage } from '../store/runs.js';
 import { RunnerClient, StaleLeaseError } from './client.js';
 import type { Engine, EngineEvent, EngineRun } from './engine.js';
@@ -107,6 +108,7 @@ class ForkWorker {
   // Text Claude wrote before a tool call is activity; text after the last one is the answer.
   private pendingText: string[] = [];
   private contextWindow: number | null = null;
+  private lastUsage: { model: string; contextTokens: number } | null = null;
   private reports: Promise<unknown> = Promise.resolve();
   private finished = false;
   private closing = false;
@@ -233,11 +235,8 @@ class ForkWorker {
         this.pendingText.push(event.text);
         return;
       case 'usage':
-        await client.usage(this.lease, {
-          model: event.model,
-          contextTokens: event.contextTokens,
-          contextWindow: this.contextWindow,
-        });
+        this.lastUsage = { model: event.model, contextTokens: event.contextTokens };
+        await client.usage(this.lease, { ...this.lastUsage, contextWindow: this.contextWindow });
         return;
       case 'rate-limited':
         await client.waiting(
@@ -247,12 +246,17 @@ class ForkWorker {
         return;
       case 'turn-finished':
         this.pendingText = [];
-        this.contextWindow = event.contextWindow;
+        // The window size comes only with the result, after the turn's last usage.
+        if (event.contextWindow !== this.contextWindow && this.lastUsage) {
+          this.contextWindow = event.contextWindow;
+          await client.usage(this.lease, { ...this.lastUsage, contextWindow: this.contextWindow });
+        }
         if (event.failed) {
           await this.failAndStop(event.answer || 'Claude Code reported an error.');
           return;
         }
-        if (event.answer.trim()) await client.answer(this.lease, event.answer);
+        const answer = event.answer.trim();
+        if (answer && answer !== noReply) await client.answer(this.lease, event.answer);
         await client.finishTurn(this.lease, this.newestSentId!);
         this.turnOpen = false;
         this.idleSince = Date.now();

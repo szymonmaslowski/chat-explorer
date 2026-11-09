@@ -126,6 +126,23 @@ describe('the runner', () => {
     await runner.stop();
   });
 
+  it('posts nothing for a turn whose answers all went out with the answer tool', async () => {
+    const { runner, engineRuns, store, explorationId, mainForkId, messages } = setup();
+    runner.start();
+    store.submit(explorationId, mainForkId, 'Quick');
+    await until(() => engineRuns[0]?.sent.length === 1);
+    const before = messages().length;
+    engineRuns[0]!.emit({
+      type: 'turn-finished',
+      answer: '[no reply]',
+      failed: false,
+      contextWindow: null,
+    });
+    await until(() => store.snapshot(explorationId).forkRuns[0]?.status === 'idle');
+    expect(messages()).toHaveLength(before);
+    await runner.stop();
+  });
+
   it('lets an idle engine go and resumes its session for the next message', async () => {
     const { runner, engineRuns, store, explorationId, mainForkId, messages } = setup({
       idleCloseMs: 30,
