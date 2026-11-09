@@ -29,6 +29,7 @@ test.describe('on a wide screen', () => {
 
     await page.locator(`.main-column .exploration a[href="/e/${explorationId}/map"]`).click();
     await expect(page).toHaveURL(`/e/${explorationId}/map`);
+    await expect(chatsColumn(page).locator('.exploration.current')).toHaveCount(1);
     await expect(headerLinks(page)).toHaveText(/^Map\s*·\s*Notes$/);
 
     await page.locator(`.main-column .fork-box[href="/e/${explorationId}/f/${forkId}"]`).click();
@@ -40,6 +41,10 @@ test.describe('on a wide screen', () => {
     );
     await expect(headerLinks(page)).toHaveText('Notes');
     await expect(mapColumn(page).locator('.controls')).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Close' }).click();
+    await expect(page).toHaveURL(`/e/${explorationId}/map`);
+    await expect(mapColumn(page)).toHaveCount(0);
   });
 
   test('opens all three at once for a chat with only its main fork', async ({ page, request }) => {

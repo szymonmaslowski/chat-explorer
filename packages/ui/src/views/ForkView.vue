@@ -18,6 +18,7 @@ import ForkRunStatus from '../components/ForkRunStatus.vue';
 import UsageChip from '../components/UsageChip.vue';
 import MediaIcon from '../components/MediaIcon.vue';
 import { useCommentTyping } from '../composables/useCommentTyping';
+import { useLayout } from '../composables/useLayout';
 import { useMediaQuery } from '../composables/useMediaQuery';
 import { useReadTracking } from '../composables/useReadTracking';
 import {
@@ -40,6 +41,7 @@ const nearBottomPx = 200;
 
 const route = useRoute();
 const router = useRouter();
+const { mapColumn } = useLayout();
 const commentLayer = ref<InstanceType<typeof CommentLayer> | null>(null);
 // Narrower than the text and the comment rail together, comments list under their messages.
 const compact = useMediaQuery('(max-width: 1080px), (hover: none)');
@@ -244,6 +246,16 @@ watch(
           :fork="fork"
           :archived-by="archivedBy"
         />
+        <button
+          v-if="mapColumn"
+          type="button"
+          class="icon-button"
+          aria-label="Close"
+          title="Close this fork, back to the map"
+          @click="router.push(`/e/${explorationId}/map`)"
+        >
+          <MediaIcon name="close" />
+        </button>
       </template>
       <BookmarkList
         v-if="bookmarksOpen"
