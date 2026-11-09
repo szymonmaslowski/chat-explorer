@@ -72,4 +72,8 @@ const currentForkId = computed(() => {
 .main-column.beside :deep(.fork-view) {
   max-width: none;
 }
+
+.columns .main-column :deep(.notes-view) {
+  max-width: none;
+}
 </style>

@@ -66,6 +66,8 @@ test.describe('on a wide screen', () => {
     await page.goto(`/e/${explorationId}/notes`);
     await expect(chatsColumn(page)).toBeVisible();
     await expect(mapColumn(page)).toHaveCount(0);
+    const notes = await page.locator('.main-column .notes-view').boundingBox();
+    expect(notes!.width).toBeGreaterThan(1300);
     await headerLinks(page).getByRole('link', { name: 'Map' }).click();
     await expect(page).toHaveURL(`/e/${explorationId}/map`);
   });
