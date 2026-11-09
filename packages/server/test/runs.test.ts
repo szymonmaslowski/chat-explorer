@@ -111,6 +111,19 @@ describe('leases', () => {
     expect(() => runs.heartbeat(mainForkId, lease.leaseId)).toThrow('no longer yours');
   });
 
+  it('does not count a message a stopped turn handled as awaiting an answer', () => {
+    const { runs, store, ask, mainForkId, explorationId } = setup();
+    const question = ask('Never mind');
+    const lease = runs.claim(mainForkId, 'runner-a')!;
+    expect(store.forkMap(explorationId)[0]?.awaitingAnswer).toBe(true);
+    runs.stopped(mainForkId, lease.leaseId, question.id);
+    expect(store.forkMap(explorationId)[0]).toMatchObject({
+      awaitingAnswer: false,
+      run: { handledUpTo: question.id },
+    });
+    expect(store.listExplorations('active')[0]?.awaitingAnswer).toBe(false);
+  });
+
   it('marks a released fork idle', () => {
     const { runs, store, ask, mainForkId, explorationId } = setup();
     ask('A question');

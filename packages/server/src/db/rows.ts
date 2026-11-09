@@ -324,6 +324,7 @@ export const toForkRun = (row: ForkRunRow): ForkRun => ({
   statusDetail: row.status_detail,
   attempt: row.attempt,
   heldByTerminal: row.lease_id !== null && isShimRunnerId(row.runner_id),
+  handledUpTo: row.input_cursor,
   model: row.model,
   contextTokens: row.context_tokens,
   contextWindow: row.context_window,

@@ -64,7 +64,7 @@ const layout = computed(() => {
       fork,
       ...position(node.x, node.y),
       messageCount: messageCounts.get(fork.id) ?? 0,
-      awaitingAnswer: awaitsAnswer(fork, state.value.messages),
+      awaitingAnswer: awaitsAnswer(fork, state.value.messages, state.value.forkRuns.get(fork.id)),
       attention: attention.get(fork.id),
       archived: archivedForks.value.has(fork.id),
     };

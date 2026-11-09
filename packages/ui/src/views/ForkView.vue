@@ -29,7 +29,7 @@ import {
   quotedCommentsOf,
 } from '../lib/conversation';
 import { scrollToAndFlash } from '../lib/flash';
-import { forkAttention, isUnread } from '../lib/read-state';
+import { awaitsAnswer, forkAttention, isUnread } from '../lib/read-state';
 import { openExploration } from '../stores/exploration';
 import { newId, outbox } from '../stores/outbox';
 import { stopSpeech } from '../stores/speech';
@@ -64,9 +64,11 @@ const pathIds = computed(() => new Set(path.value.map((message) => message.id)))
 const ownStart = computed(() =>
   path.value.findIndex((message) => message.forkId === fork.value?.id),
 );
-const awaitingAnswer = computed(() => path.value.at(-1)?.role === 'user');
 const forkRun = computed(() =>
   fork.value ? (state.value.forkRuns.get(fork.value.id) ?? null) : null,
+);
+const awaitingAnswer = computed(
+  () => !!fork.value && awaitsAnswer(fork.value, state.value.messages, forkRun.value ?? undefined),
 );
 // By the user message a turn answered, each attempt's activity in order.
 const activityGroups = computed(() => {

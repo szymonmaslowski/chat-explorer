@@ -94,6 +94,13 @@ export interface PendingFork {
   repliesTo: { messageId: string; excerpt: string } | null;
 }
 
+// A fork ends with a user message no turn handled yet; a stopped turn handled it without an answer.
+const awaitingAnswer = `(
+  (SELECT role FROM messages WHERE messages.id = forks.tip_message_id) = 'user'
+  AND forks.tip_message_id IS NOT
+    (SELECT input_cursor FROM fork_runs WHERE fork_runs.fork_id = forks.id)
+)`;
+
 // Starts a message the session answering the main fork sends into another fork.
 export const supervisorMessagePrefix = '**From the main fork:**';
 
@@ -246,8 +253,7 @@ export class ChatStore {
               WHERE messages.exploration_id = explorations.id AND messages.read_at IS NULL
            ) AS has_unread,
            EXISTS (
-             SELECT 1 FROM forks JOIN messages ON messages.id = forks.tip_message_id
-              WHERE forks.exploration_id = explorations.id AND messages.role = 'user'
+             SELECT 1 FROM forks WHERE forks.exploration_id = explorations.id AND ${awaitingAnswer}
            ) AS awaiting_answer
          FROM explorations WHERE ${filters[view]}`,
       )
@@ -464,10 +470,10 @@ export class ChatStore {
         .map((row) => [row.fork_id, toForkRun(row)]),
     );
     return this.db
-      .all<ForkRow & { message_count: number; tip_role: Role | null }>(
+      .all<ForkRow & { message_count: number; awaiting_answer: number }>(
         `SELECT forks.*,
            (SELECT count(*) FROM messages WHERE messages.fork_id = forks.id) AS message_count,
-           (SELECT role FROM messages WHERE messages.id = forks.tip_message_id) AS tip_role
+           ${awaitingAnswer} AS awaiting_answer
          FROM forks WHERE exploration_id = ? ORDER BY created_at, rowid`,
         explorationId,
       )
@@ -478,7 +484,7 @@ export class ChatStore {
         summary: row.summary,
         kind: row.kind,
         messageCount: row.message_count,
-        awaitingAnswer: row.tip_role === 'user',
+        awaitingAnswer: row.awaiting_answer === 1,
         run: runs.get(row.id) ?? null,
       }));
   }

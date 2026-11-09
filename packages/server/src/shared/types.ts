@@ -175,6 +175,8 @@ export interface ForkRun {
   attempt: number;
   // An attached terminal session holds the fork: the page cannot stop it.
   heldByTerminal: boolean;
+  // The newest user message a turn handled, answered or stopped.
+  handledUpTo: string | null;
   model: string | null;
   contextTokens: number | null;
   contextWindow: number | null;
