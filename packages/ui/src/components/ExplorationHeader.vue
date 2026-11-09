@@ -2,6 +2,7 @@
 import type { Fork } from '@shared/types';
 import { computed } from 'vue';
 import { api } from '../api';
+import { useLayout, type LayoutPage } from '../composables/useLayout';
 import { forkLineage, forkTitle } from '../lib/conversation';
 import type { ExplorationState } from '../stores/exploration';
 import ConfirmButton from './ConfirmButton.vue';
@@ -10,7 +11,25 @@ import SessionStatusBar from './SessionStatusBar.vue';
 import ThemeSwitch from './ThemeSwitch.vue';
 
 // With a fork, the title is the fork's, under the path to it: the chat, then the forks above it.
-const props = defineProps<{ state: ExplorationState; fork?: Fork }>();
+// Beside the main column, as `side`, the status and theme stay with the main column's header.
+const props = defineProps<{
+  state: ExplorationState;
+  page: Exclude<LayoutPage, 'chats'>;
+  fork?: Fork;
+  side?: boolean;
+}>();
+
+const { chatsColumn, mapColumn } = useLayout();
+// A page shown in a column of its own needs no link.
+const links = computed(() => {
+  const chat = `/e/${props.state.explorationId}`;
+  const mapUrl = props.fork ? `${chat}/map?from=${props.fork.id}` : `${chat}/map`;
+  return [
+    chatsColumn.value ? null : { label: 'Chats', to: '/' },
+    mapColumn.value ? null : { label: 'Map', to: props.page === 'map' ? null : mapUrl },
+    { label: 'Notes', to: props.page === 'notes' ? null : `${chat}/notes` },
+  ].filter((link) => link !== null);
+});
 
 const chatTitle = computed(() => props.state.exploration?.title || 'Untitled chat');
 const forksBetween = computed(() =>
@@ -22,10 +41,13 @@ const forksBetween = computed(() =>
   <header class="exploration-header">
     <div class="bar">
       <nav class="links">
-        <RouterLink to="/">Chats</RouterLink>
-        <slot name="links" />
+        <template v-for="(link, index) in links" :key="link.label">
+          <template v-if="index > 0">·</template>
+          <RouterLink v-if="link.to" :to="link.to">{{ link.label }}</RouterLink>
+          <span v-else>{{ link.label }}</span>
+        </template>
       </nav>
-      <div class="controls">
+      <div v-if="!side" class="controls">
         <SessionStatusBar
           v-if="!state.exploration?.archivedAt"
           :status="state.sessionStatus"

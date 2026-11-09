@@ -242,10 +242,7 @@ watch(
 
 <template>
   <div class="page notes-view">
-    <ExplorationHeader :state="state" class="top" data-sticky-header>
-      <template #links>
-        · <RouterLink :to="`/e/${explorationId}/map`">Map</RouterLink> · <span>Notes</span>
-      </template>
+    <ExplorationHeader :state="state" page="notes" class="top" data-sticky-header>
       <SpeechPlayer />
     </ExplorationHeader>
 

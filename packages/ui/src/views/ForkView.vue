@@ -196,11 +196,13 @@ watch(
 
 <template>
   <div class="page fork-view">
-    <ExplorationHeader :state="state" :fork="fork ?? undefined" class="top" data-sticky-header>
-      <template v-if="fork" #links>
-        · <RouterLink :to="`/e/${explorationId}/map?from=${fork.id}`">Map</RouterLink> ·
-        <RouterLink :to="`/e/${explorationId}/notes`">Notes</RouterLink>
-      </template>
+    <ExplorationHeader
+      :state="state"
+      page="fork"
+      :fork="fork ?? undefined"
+      class="top"
+      data-sticky-header
+    >
       <template v-if="fork && archivedBy && !chatArchived" #title-badge>
         <span class="archived-label">
           <template v-if="archivedBy.id === fork.id">Archived</template>

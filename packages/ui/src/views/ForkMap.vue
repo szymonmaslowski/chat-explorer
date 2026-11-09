@@ -8,7 +8,7 @@ import { archivingFork, forkTitle } from '../lib/conversation';
 import { awaitsAnswer, forkAttention } from '../lib/read-state';
 import { openExploration } from '../stores/exploration';
 
-const props = defineProps<{ explorationId: string; currentForkId?: string }>();
+const props = defineProps<{ explorationId: string; currentForkId?: string; side?: boolean }>();
 
 // Narrow enough that the main fork and its children fit side by side on a phone.
 const boxWidth = 160;
@@ -93,11 +93,7 @@ const layout = computed(() => {
 
 <template>
   <div class="map-page">
-    <ExplorationHeader :state="state" class="top">
-      <template #links>
-        · <span>Map</span> · <RouterLink :to="`/e/${explorationId}/notes`">Notes</RouterLink>
-      </template>
-    </ExplorationHeader>
+    <ExplorationHeader :state="state" page="map" :side="side" class="top" />
 
     <label v-if="archivedForks.size > 0" class="show-archived">
       <input v-model="showArchived" type="checkbox" />

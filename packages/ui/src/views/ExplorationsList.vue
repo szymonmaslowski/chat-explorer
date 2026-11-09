@@ -10,7 +10,8 @@ import ThemeSwitch from '../components/ThemeSwitch.vue';
 import { relativeTime } from '@shared/time';
 import { openEventStream } from '../lib/event-stream';
 
-const props = defineProps<{ archived?: boolean }>();
+// As `sidebar`, the list sits beside the open chat.
+const props = defineProps<{ archived?: boolean; sidebar?: boolean }>();
 
 // Changes come in bursts, such as an answer and its fork, so they are reloaded once.
 const reloadDelayMs = 300;
@@ -73,7 +74,7 @@ async function removeFromList(explorationId: string, change: (id: string) => Pro
       <RouterLink :to="archived ? '/' : '/archived'" class="view-link">
         {{ archived ? 'Chats' : 'Archived' }}
       </RouterLink>
-      <ThemeSwitch />
+      <ThemeSwitch v-if="!sidebar" />
     </div>
     <NewExploration v-if="!archived" />
     <p v-if="failed" class="muted">Could not load chats.</p>
