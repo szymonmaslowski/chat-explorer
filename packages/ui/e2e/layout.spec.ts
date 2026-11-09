@@ -39,7 +39,9 @@ test.describe('on a wide screen', () => {
       'href',
       `/e/${explorationId}/f/${forkId}`,
     );
-    await expect(headerLinks(page)).toHaveText('Notes');
+    await expect(headerLinks(page)).toHaveText('');
+    const conversation = await page.locator('.main-column .conversation').boundingBox();
+    expect(conversation!.width).toBeGreaterThan(800);
     await expect(mapColumn(page).locator('.controls')).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Close' }).click();
@@ -80,7 +82,7 @@ test.describe('on a medium screen', () => {
     await page.goto(`/e/${explorationId}/f/${forkId}`);
     await expect(chatsColumn(page)).toHaveCount(0);
     await expect(mapColumn(page)).toBeVisible();
-    await expect(headerLinks(page)).toHaveText(/^Chats\s*·\s*Notes$/);
+    await expect(headerLinks(page)).toHaveText('Chats');
 
     await page.goto(`/e/${explorationId}/map`);
     await expect(mapColumn(page)).toHaveCount(0);

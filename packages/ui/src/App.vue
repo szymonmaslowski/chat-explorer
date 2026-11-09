@@ -49,7 +49,7 @@ const currentForkId = computed(() => {
 }
 
 .chats-column {
-  flex: 0 0 22rem;
+  flex: 0 0 25rem;
 }
 
 .map-column {
@@ -63,6 +63,11 @@ const currentForkId = computed(() => {
 }
 
 .columns .main-column.beside {
-  flex: 0 0 calc(var(--column) + 2rem);
+  flex: 0 0 50%;
+}
+
+/* Beside the map the conversation takes its whole half of the screen. */
+.main-column.beside :deep(.fork-view) {
+  max-width: none;
 }
 </style>

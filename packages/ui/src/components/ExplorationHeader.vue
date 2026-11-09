@@ -20,14 +20,16 @@ const props = defineProps<{
 }>();
 
 const { chatsColumn, mapColumn } = useLayout();
-// A page shown in a column of its own needs no link.
+// A page shown in a column of its own needs no link, nor Notes next to the map's own.
 const links = computed(() => {
   const chat = `/e/${props.state.explorationId}`;
   const mapUrl = props.fork ? `${chat}/map?from=${props.fork.id}` : `${chat}/map`;
   return [
     chatsColumn.value ? null : { label: 'Chats', to: '/' },
     mapColumn.value ? null : { label: 'Map', to: props.page === 'map' ? null : mapUrl },
-    { label: 'Notes', to: props.page === 'notes' ? null : `${chat}/notes` },
+    props.page === 'fork' && mapColumn.value
+      ? null
+      : { label: 'Notes', to: props.page === 'notes' ? null : `${chat}/notes` },
   ].filter((link) => link !== null);
 });
 
