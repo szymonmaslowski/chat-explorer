@@ -37,6 +37,15 @@ describe('claiming forks', () => {
     expect(runs.claimable()).toEqual([]);
   });
 
+  it('claims the new fork a submission starts, not the fork it was sent from', () => {
+    const { runs, store, mainForkId, explorationId } = setup();
+    store.submit(explorationId, mainForkId, 'Branch off here', { newFork: true });
+    expect(runs.claim(mainForkId, 'runner-a')).toBeNull();
+    const [, newFork] = store.forkMap(explorationId);
+    expect(runs.claimable()).toEqual([{ forkId: newFork!.id, explorationId }]);
+    expect(store.forkMap(explorationId)[0]?.run).toBeNull();
+  });
+
   it('leaves a chat with a live terminal session to that session', () => {
     const { runs, ask, store, explorationId } = setup();
     ask('Still there?');
@@ -100,6 +109,14 @@ describe('leases', () => {
     runs.fail(mainForkId, lease.leaseId, 'Docker is not running.');
     expect(runs.claimable()).toHaveLength(1);
     expect(() => runs.heartbeat(mainForkId, lease.leaseId)).toThrow('no longer yours');
+  });
+
+  it('marks a released fork idle', () => {
+    const { runs, store, ask, mainForkId, explorationId } = setup();
+    ask('A question');
+    const lease = runs.claim(mainForkId, 'runner-a')!;
+    runs.release(mainForkId, lease.leaseId);
+    expect(store.forkMap(explorationId)[0]?.run).toMatchObject({ status: 'idle' });
   });
 });
 

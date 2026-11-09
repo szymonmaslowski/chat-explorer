@@ -126,6 +126,7 @@ export class RunStore {
 
   // A lease that expired without being released belonged to a run that died: that attempt failed.
   claim(forkId: string, runnerId: string, attachedShimId?: string): Lease | null {
+    this.deliverNewForks(forkId);
     const claimed = this.db.transaction(() => {
       const fork = this.claimable(attachedShimId).find((candidate) => candidate.forkId === forkId);
       if (!fork) return null;
@@ -168,6 +169,16 @@ export class RunStore {
     });
     this.publishRun(forkId);
     return claimed;
+  }
+
+  // A submission that starts a new fork waits on the fork it came from, which then looks like it
+  // needs an answer. Delivering it creates the new fork, which does.
+  private deliverNewForks(forkId: string) {
+    const startsAFork = this.db.get<{ exploration_id: string }>(
+      "SELECT exploration_id FROM submissions WHERE fork_id = ? AND status = 'queued' AND new_fork = 1",
+      forkId,
+    );
+    if (startsAFork) this.chats.deliverQueued(startsAFork.exploration_id);
   }
 
   // A runner that slept through its lease keeps it, unless another runner claimed the fork since.
@@ -334,7 +345,7 @@ export class RunStore {
   // The runner let the fork go after its turn, for example when its process went idle.
   release(forkId: string, leaseId: string) {
     this.requireLease(forkId, leaseId);
-    this.update(forkId, noLease);
+    this.update(forkId, { ...noLease, status: 'idle', status_detail: null });
     this.publishRun(forkId);
   }
 

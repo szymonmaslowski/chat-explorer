@@ -246,4 +246,8 @@ export const migrations = [
   -- The reader asked the runner to stop the fork's turn.
   ALTER TABLE fork_runs ADD COLUMN stop_requested INTEGER NOT NULL DEFAULT 0;
   `,
+  `
+  -- A released lease used to leave the fork marked as answering.
+  UPDATE fork_runs SET status = 'idle' WHERE status = 'answering' AND lease_id IS NULL;
+  `,
 ];
