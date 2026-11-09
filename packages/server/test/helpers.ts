@@ -16,9 +16,11 @@ import type { LaunchSpec, SessionProcess } from '../src/sessions/launch-claude.j
 import type { ExplorationEvent } from '../src/shared/types.js';
 import { EventBus } from '../src/store/event-bus.js';
 import { FeedbackHub } from '../src/store/feedback-hub.js';
+import { RunStore } from '../src/store/runs.js';
 import { ChatStore } from '../src/store/store.js';
 
 export const testPort = 4999;
+export const testMachineToken = 'test-machine-token';
 
 export function createTestStore() {
   const clock = { now: 1_000_000 };
@@ -35,7 +37,8 @@ export function createTestStore() {
     onStatusChange: (explorationId) => hub.refreshStatus(explorationId),
   });
   const hub = new FeedbackHub(store, bus, now, sessions);
-  return { clock, database, bus, store, hub, sessions, launches, events };
+  const runs = new RunStore(database, bus, store, now);
+  return { clock, database, bus, store, hub, sessions, runs, launches, events };
 }
 
 export function createTestSessions(input: {
@@ -189,6 +192,8 @@ export function createTestApp(options: { publicUrl?: string } = {}) {
     hub: context.hub,
     bus: context.bus,
     sessions: context.sessions,
+    runs: context.runs,
+    machineToken: testMachineToken,
     transcriber,
     speaker,
     fileStorage,

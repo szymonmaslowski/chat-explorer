@@ -65,10 +65,15 @@ export class RunStore {
          WHERE explorations.archived_at IS NULL AND explorations.deleted_at IS NULL
            AND (fork_runs.lease_id IS NULL OR fork_runs.lease_expires_at <= ?)
            AND (fork_runs.status IS NULL OR fork_runs.status != 'failed')
-           AND EXISTS (
-             SELECT 1 FROM messages
-             WHERE messages.fork_id = forks.id AND messages.role = 'user'
-               AND messages.rowid > ${unansweredAfter}
+           AND (
+             EXISTS (
+               SELECT 1 FROM messages
+               WHERE messages.fork_id = forks.id AND messages.role = 'user'
+                 AND messages.rowid > ${unansweredAfter}
+             )
+             OR EXISTS (
+               SELECT 1 FROM submissions WHERE fork_id = forks.id AND status = 'queued'
+             )
            )
          ORDER BY forks.created_at, forks.rowid`,
         this.now(),
@@ -132,8 +137,11 @@ export class RunStore {
     );
   }
 
+  // Submissions wait in the queue, where the reader can still cancel them, until the runner takes
+  // them as the fork's input.
   pendingInput(forkId: string, leaseId: string): PendingMessage[] {
-    this.requireLease(forkId, leaseId);
+    const row = this.requireLease(forkId, leaseId);
+    this.chats.deliverQueued(row.exploration_id);
     return this.db
       .all<MessageRow>(
         `SELECT messages.* FROM messages

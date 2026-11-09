@@ -17,8 +17,10 @@ import type { ExplorationListItem, ExplorationView, Snapshot } from '../shared/t
 import { StoreError } from '../store/errors.js';
 import type { EventBus } from '../store/event-bus.js';
 import type { FeedbackHub } from '../store/feedback-hub.js';
+import type { RunStore } from '../store/runs.js';
 import type { ChatStore } from '../store/store.js';
 import { guardLocalRequests } from './guard.js';
+import { registerRunnerRoutes } from './runner-routes.js';
 import { serveUi } from './static-ui.js';
 
 export interface AppOptions {
@@ -26,6 +28,8 @@ export interface AppOptions {
   hub: FeedbackHub;
   bus: EventBus;
   sessions: BackgroundSessions;
+  runs: RunStore;
+  machineToken: string;
   transcriber: Transcriber;
   speaker: Speaker;
   fileStorage: FileStorage;
@@ -209,6 +213,13 @@ export function createApp(options: AppOptions) {
     }
     console.error(error);
     return context.json({ error: 'internal', message: 'Internal error' }, 500);
+  });
+
+  registerRunnerRoutes(app, { runs: options.runs, bus, machineToken: options.machineToken });
+
+  app.post('/api/forks/:id/retry', (context) => {
+    options.runs.retry(context.req.param('id'));
+    return context.json({ ok: true });
   });
 
   app.get('/api/health', (context) =>

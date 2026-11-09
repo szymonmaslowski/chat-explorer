@@ -18,6 +18,8 @@ export function loadConfig() {
     filesPath: join(home, 'files'),
     speechPath: join(home, 'speech'),
     speechCachePath: join(home, 'speech-cache'),
+    runnerPath: join(home, 'runner'),
+    machineTokenPath: join(home, 'runner', 'machine-token'),
     baseUrl: `http://127.0.0.1:${port}`,
   };
 }

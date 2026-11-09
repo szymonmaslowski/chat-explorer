@@ -21,7 +21,9 @@ import { SpeechCache } from '../speech/speech-cache.js';
 import { Database } from '../db/database.js';
 import { EventBus } from '../store/event-bus.js';
 import { FeedbackHub } from '../store/feedback-hub.js';
+import { RunStore } from '../store/runs.js';
 import { ChatStore } from '../store/store.js';
+import { ensureMachineToken } from '../runner/machine-token.js';
 import { packageVersion } from '../version.js';
 import { probe } from './control.js';
 
@@ -34,6 +36,7 @@ const settings = loadSettingsOrExit();
 const database = new Database(config.databasePath);
 const bus = new EventBus();
 const store = new ChatStore(database, bus);
+const runs = new RunStore(database, bus, store);
 const sessions = new BackgroundSessions({
   store,
   bus,
@@ -83,6 +86,8 @@ const app = createApp({
   hub,
   bus,
   sessions,
+  runs,
+  machineToken: ensureMachineToken(config.machineTokenPath),
   transcriber,
   speaker,
   fileStorage,

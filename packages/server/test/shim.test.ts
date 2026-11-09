@@ -11,8 +11,14 @@ import { FileStorage } from '../src/files/file-storage.js';
 import { createShim } from '../src/mcp/shim.js';
 import { EventBus } from '../src/store/event-bus.js';
 import { FeedbackHub } from '../src/store/feedback-hub.js';
+import { RunStore } from '../src/store/runs.js';
 import { ChatStore } from '../src/store/store.js';
-import { createTestSessions, createTestSpeaker, createTestTranscriber } from './helpers.js';
+import {
+  createTestSessions,
+  createTestSpeaker,
+  createTestTranscriber,
+  testMachineToken,
+} from './helpers.js';
 
 const version = '0.0.0-test';
 let server: Server;
@@ -24,7 +30,8 @@ beforeEach(async () => {
   process.env.CHAT_EXPLORER_PORT = String(40_000 + Math.floor(Math.random() * 20_000));
   config = loadConfig();
   const bus = new EventBus();
-  const store = new ChatStore(new Database(':memory:'), bus);
+  const database = new Database(':memory:');
+  const store = new ChatStore(database, bus);
   const { sessions } = createTestSessions({
     store,
     bus,
@@ -36,6 +43,8 @@ beforeEach(async () => {
     hub,
     bus,
     sessions,
+    runs: new RunStore(database, bus, store),
+    machineToken: testMachineToken,
     transcriber: createTestTranscriber().transcriber,
     speaker: createTestSpeaker().speaker,
     fileStorage: new FileStorage(store, '/nonexistent'),
