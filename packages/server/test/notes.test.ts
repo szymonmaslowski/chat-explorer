@@ -505,7 +505,6 @@ describe('Claude and notes', () => {
     const group = store.createNoteGroup(explorationId, { name: 'Shopping', checklist: true });
     store.createNote(explorationId, { groupId: group.id, topic: 'Old' });
     const { noteIds } = store.addNotes({
-      shimId: 'shim-a',
       explorationId,
       groupId: group.id,
       notes: [{ topic: 'Lemon' }, { topic: 'Milk', description: '1.5%' }],
@@ -520,19 +519,6 @@ describe('Claude and notes', () => {
       sourceMessageId: answer.id,
       sourceQuote: null,
     });
-  });
-
-  it('lets only the attached session add notes', () => {
-    const { store, explorationId } = attached();
-    const group = store.createNoteGroup(explorationId, {});
-    expect(() =>
-      store.addNotes({
-        shimId: 'other',
-        explorationId,
-        groupId: group.id,
-        notes: [{ topic: 'x' }],
-      }),
-    ).toThrow(expect.objectContaining({ code: 'detached' }));
   });
 
   it('marks a note for deletion until the user keeps or deletes it', () => {

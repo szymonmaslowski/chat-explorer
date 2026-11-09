@@ -603,15 +603,17 @@ export function createApp(options: AppOptions) {
   });
 
   internal.patch('/forks/:id', async (context) => {
-    const body = forkSummaryBody.parse(await context.req.json());
-    return context.json(store.updateForkSummary({ forkId: context.req.param('id'), ...body }));
+    const forkId = context.req.param('id');
+    const { shimId, summary } = forkSummaryBody.parse(await context.req.json());
+    store.requireAttachedShim(store.forkExplorationId(forkId), shimId);
+    return context.json(store.updateForkSummary({ forkId, summary }));
   });
 
   internal.patch('/explorations/:id', async (context) => {
-    const body = explorationChangesBody.parse(await context.req.json());
-    return context.json(
-      store.updateExploration({ explorationId: context.req.param('id'), ...body }),
-    );
+    const explorationId = context.req.param('id');
+    const { shimId, ...changes } = explorationChangesBody.parse(await context.req.json());
+    store.requireAttachedShim(explorationId, shimId);
+    return context.json(store.updateExploration({ explorationId, ...changes }));
   });
 
   internal.post('/explorations/:id/feedback', async (context) => {
@@ -637,8 +639,10 @@ export function createApp(options: AppOptions) {
   });
 
   internal.post('/explorations/:id/notes', async (context) => {
-    const body = claudeNotesBody.parse(await context.req.json());
-    return context.json(store.addNotes({ explorationId: context.req.param('id'), ...body }), 201);
+    const explorationId = context.req.param('id');
+    const { shimId, ...notes } = claudeNotesBody.parse(await context.req.json());
+    store.requireAttachedShim(explorationId, shimId);
+    return context.json(store.addNotes({ explorationId, ...notes }), 201);
   });
 
   // Claude changes a note only while its session is attached to the note's chat.

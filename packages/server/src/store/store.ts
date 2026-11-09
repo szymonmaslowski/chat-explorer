@@ -315,13 +315,11 @@ export class ChatStore {
   }
 
   updateExploration(input: {
-    shimId: string;
     explorationId: string;
     title?: string | undefined;
     summary?: string | undefined;
   }) {
     const { explorationId } = input;
-    this.requireAttachedShim(explorationId, input.shimId);
     const row = this.requireExplorationRow(explorationId);
     this.db.run(
       'UPDATE explorations SET title = ?, summary = ?, updated_at = ? WHERE id = ?',
@@ -438,9 +436,8 @@ export class ChatStore {
     this.publish([[explorationId, { type: 'exploration.deleted', explorationId }]]);
   }
 
-  updateForkSummary(input: { shimId: string; forkId: string; summary: string }) {
+  updateForkSummary(input: { forkId: string; summary: string }) {
     const row = this.requireForkRow(input.forkId);
-    this.requireAttachedShim(row.exploration_id, input.shimId);
     this.db.run(
       'UPDATE forks SET summary = ?, updated_at = ? WHERE id = ?',
       input.summary,
@@ -1481,14 +1478,12 @@ export class ChatStore {
 
   // Claude's notes go first in the group in the order given, linked to the message that asked.
   addNotes(input: {
-    shimId: string;
     explorationId: string;
     groupId: string;
     notes: { topic?: string | undefined; description?: string | undefined }[];
     sourceMessageId?: string | undefined;
   }) {
     const { explorationId } = input;
-    this.requireAttachedShim(explorationId, input.shimId);
     this.requireWritable(explorationId);
     const group = this.requireNoteGroupRow(input.groupId, explorationId);
     const notes = input.notes.map((note) => ({
@@ -1573,6 +1568,10 @@ export class ChatStore {
           })),
         })),
     };
+  }
+
+  forkExplorationId(forkId: string) {
+    return this.requireForkRow(forkId).exploration_id;
   }
 
   noteExplorationId(noteId: string) {

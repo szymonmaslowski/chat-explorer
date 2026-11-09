@@ -41,7 +41,6 @@ const { exploration, mainFork } = store.createExploration({
 });
 store.attach({ explorationId: exploration.id, shimId, sessionId: 'seed-session', takeover: true });
 store.updateExploration({
-  shimId,
   explorationId: exploration.id,
   summary: 'Comparing in-memory, shared and HTTP caching, then invalidation.',
 });
@@ -77,14 +76,12 @@ for (const pending of store.pendingForks(exploration.id)) {
   });
   if (pending.isNewFork) {
     store.updateForkSummary({
-      shimId,
       forkId: pending.forkId,
       summary: 'Purging cached responses on a CDN',
     });
   }
 }
 store.updateForkSummary({
-  shimId,
   forkId: mainFork.id,
   summary: 'Caching options and invalidation',
 });

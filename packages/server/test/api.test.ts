@@ -224,3 +224,30 @@ describe('internal API', () => {
     expect(await response.json()).toMatchObject({ error: 'detached' });
   });
 });
+
+describe("Claude's changes from a terminal session", () => {
+  it('come only from the session attached to the chat', async () => {
+    const { request, store } = createTestApp();
+    const { explorationId, mainForkId } = seedConversation(store);
+    store.attach({ explorationId, shimId: 'shim-a', sessionId: 'session-a', takeover: false });
+    const group = store.createNoteGroup(explorationId, {});
+    const attempts = [
+      request(`/api/internal/explorations/${explorationId}/notes`, {
+        method: 'POST',
+        json: { shimId: 'other', groupId: group.id, notes: [{ topic: 'x' }] },
+      }),
+      request(`/api/internal/forks/${mainForkId}`, {
+        method: 'PATCH',
+        json: { shimId: 'other', summary: 'x' },
+      }),
+      request(`/api/internal/explorations/${explorationId}`, {
+        method: 'PATCH',
+        json: { shimId: 'other', title: 'x' },
+      }),
+    ];
+    for (const response of await Promise.all(attempts)) {
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({ error: 'detached' });
+    }
+  });
+});
