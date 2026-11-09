@@ -28,7 +28,11 @@ test('shows what the runner does in a fork, its usage, and stops it on request',
     await request.post('/api/explorations', { data: { message: 'Research caching' } })
   ).json();
   const runner = fakeRunner(request);
-  const { lease } = await runner.call('claim', { runnerId: 'e2e-runner', waitMs: 5_000 });
+  const { lease } = await runner.call('claim', {
+    runnerId: 'e2e-runner',
+    explorationId,
+    waitMs: 5_000,
+  });
   const fork = `forks/${lease.forkId}`;
   const { messages } = await runner.call(`${fork}/input`, { leaseId: lease.leaseId });
   await runner.call(`${fork}/turn/start`, { leaseId: lease.leaseId });
@@ -75,7 +79,11 @@ test('offers Retry on a fork whose runner failed too often', async ({ page, requ
   ).json();
   const runner = fakeRunner(request);
   for (let attempt = 0; attempt < 3; attempt++) {
-    const { lease } = await runner.call('claim', { runnerId: 'e2e-runner', waitMs: 5_000 });
+    const { lease } = await runner.call('claim', {
+      runnerId: 'e2e-runner',
+      explorationId,
+      waitMs: 5_000,
+    });
     await runner.call(`forks/${lease.forkId}/fail`, {
       leaseId: lease.leaseId,
       reason: 'Docker is not running.',

@@ -17,7 +17,11 @@ export interface RunnerRoutesOptions {
 
 const maxWaitMs = 60_000;
 const waitBody = z.object({ waitMs: z.number().int().min(0).max(maxWaitMs).default(0) });
-const claimBody = waitBody.extend({ runnerId: z.string().min(1) });
+// A runner for one chat, such as a terminal session, claims only that chat's forks.
+const claimBody = waitBody.extend({
+  runnerId: z.string().min(1),
+  explorationId: z.string().optional(),
+});
 const leaseBody = z.object({ leaseId: z.string() });
 const contextBody = leaseBody.extend({ resume: z.boolean() });
 const inputBody = leaseBody.extend({ ...waitBody.shape, after: z.string().optional() });
@@ -62,11 +66,14 @@ export function registerRunnerRoutes(app: Hono, options: RunnerRoutesOptions) {
   );
 
   app.post('/api/runner/claim', async (context) => {
-    const { runnerId, waitMs } = claimBody.parse(await context.req.json());
+    const { runnerId, waitMs, explorationId } = claimBody.parse(await context.req.json());
     const lease = await waitUntil(
       bus,
       () => {
-        for (const { forkId } of runs.claimable()) {
+        const candidates = runs
+          .claimable()
+          .filter((fork) => !explorationId || fork.explorationId === explorationId);
+        for (const { forkId } of candidates) {
           const claimed = runs.claim(forkId, runnerId);
           if (claimed) return claimed;
         }

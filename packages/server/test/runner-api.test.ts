@@ -67,4 +67,17 @@ describe('runner API', () => {
     const stale = await runner(`forks/${mainForkId}/heartbeat`, { leaseId: 'not-mine' });
     expect(stale).toMatchObject({ status: 409, body: { error: 'stale_lease' } });
   });
+
+  it('claims only the forks of one chat for a runner that asks so', async () => {
+    const { runner, store, explorationId, mainForkId } = setup();
+    const other = store.createExploration({ messages: [{ role: 'user', content: 'Other' }] });
+    store.submit(explorationId, mainForkId, 'Mine');
+    const { body } = await runner('claim', { runnerId: 'r', explorationId });
+    expect(body.lease).toMatchObject({ forkId: mainForkId });
+    const none = await runner('claim', { runnerId: 'r', explorationId });
+    expect(none.body.lease).toBeNull();
+    expect((await runner('claim', { runnerId: 'r' })).body.lease).toMatchObject({
+      forkId: other.mainFork.id,
+    });
+  });
 });
