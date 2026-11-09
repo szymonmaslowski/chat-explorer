@@ -77,8 +77,8 @@ export class RunStore {
     private readonly now: () => number = Date.now,
   ) {}
 
-  // A chat with a live terminal session attached is left to that session, the way a second runner
-  // would leave a fork another runner holds; only that session, as `attachedShimId`, claims there.
+  // In a chat with a live terminal session attached, the session answers the main fork and the
+  // runner the others. With no runner online the session, as `attachedShimId`, takes them all.
   claimable(attachedShimId?: string) {
     return this.db
       .all<{ fork_id: string; exploration_id: string }>(
@@ -117,7 +117,11 @@ export class RunStore {
       explorationId,
     );
     if (answering) return 'answering';
-    return this.now() - this.lastRunnerSeenAt < runnerOnlineMs ? 'listening' : 'detached';
+    return this.runnerOnline() ? 'listening' : 'detached';
+  }
+
+  private runnerOnline() {
+    return this.now() - this.lastRunnerSeenAt < runnerOnlineMs;
   }
 
   // A lease that expired without being released belonged to a run that died: that attempt failed.
@@ -387,8 +391,9 @@ export class RunStore {
       : null;
   }
 
-  // An attached terminal session is a runner for its chat: it claims that chat's forks, holds them
-  // while it heartbeats, and lets one go once it answered.
+  // An attached terminal session is a runner for its chat's main fork, or for all its forks while
+  // no runner is online: it claims them, holds them while it heartbeats, and lets one go once it
+  // answered.
   claimForShim(explorationId: string, shimId: string) {
     for (const fork of this.claimable(shimId)) {
       if (fork.explorationId === explorationId)
@@ -431,10 +436,11 @@ export class RunStore {
 
   private answerable(forkId: string, explorationId: string, attachedShimId?: string) {
     const attachment = this.chats.attachment(explorationId);
-    if (attachment?.live && attachment.shimId !== attachedShimId) return false;
     try {
-      this.chats.requireWritableFork(forkId);
-      return true;
+      const fork = this.chats.requireWritableFork(forkId);
+      if (!attachment?.live) return true;
+      const isMain = fork.parent_fork_id === null;
+      return attachment.shimId === attachedShimId ? isMain || !this.runnerOnline() : !isMain;
     } catch (error) {
       if (error instanceof StoreError) return false;
       throw error;

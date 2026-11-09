@@ -28,6 +28,9 @@ function setup() {
   return { ...context, ...conversation, hub, feedback };
 }
 
+const forkIds = (result: Awaited<ReturnType<ReturnType<typeof setup>['feedback']>>) =>
+  result.status === 'feedback' ? result.forks.map((fork) => fork.forkId) : [];
+
 describe('an attached terminal session as the runner of its chat', () => {
   it('holds the forks it was handed until it answers them', async () => {
     const { store, runs, feedback, explorationId, mainForkId } = setup();
@@ -71,5 +74,25 @@ describe('an attached terminal session as the runner of its chat', () => {
     store.detach('shim-a');
     clock.now += leaseMs + 1;
     expect(runs.claimable()).toEqual([{ forkId: mainForkId, explorationId }]);
+  });
+
+  it('answers only the main fork while a runner is online, and leaves the others to it', async () => {
+    const { store, runs, feedback, explorationId, mainForkId, answer } = setup();
+    const side = store.forkAtAnswer(answer.id);
+    store.submit(explorationId, side.id, 'For the runner');
+    store.submit(explorationId, mainForkId, 'For the session');
+    runs.runnerSeen();
+
+    expect(forkIds(await feedback())).toEqual([mainForkId]);
+    expect(runs.claimable()).toEqual([{ forkId: side.id, explorationId }]);
+  });
+
+  it('takes all forks of its chat while no runner is online', async () => {
+    const { store, feedback, explorationId, mainForkId, answer } = setup();
+    const side = store.forkAtAnswer(answer.id);
+    store.submit(explorationId, side.id, 'Nobody else is here');
+    store.submit(explorationId, mainForkId, 'Main too');
+
+    expect(forkIds(await feedback()).toSorted()).toEqual([mainForkId, side.id].toSorted());
   });
 });
