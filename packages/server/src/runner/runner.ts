@@ -37,6 +37,19 @@ const defaultTimings: RunnerTimings = {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const maxTopicLength = 60;
+
+export const noteTopicPrompt = (description: string) =>
+  `Write a topic for this note: a short title under ${maxTopicLength} characters, in the language of the note. Reply with the title only.\n\n<note>\n${description}\n</note>`;
+
+const shortTopic = (topic: string) => {
+  const line = topic
+    .replace(/^["']|["']$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return line.length > maxTopicLength ? `${line.slice(0, maxTopicLength - 1)}…` : line;
+};
+
 // The agent loop: claims forks that need an answer, up to a limit, and keeps one live engine per
 // fork until it has been idle for a while.
 export class Runner {
@@ -52,6 +65,7 @@ export class Runner {
 
   start() {
     void this.claimLoop();
+    void this.noteTopicLoop();
   }
 
   async stop() {
@@ -75,6 +89,33 @@ export class Runner {
       try {
         const lease = await client.claim(runnerId, this.timings.claimWaitMs, this.abort.signal);
         if (lease && !this.stopped) this.startWorker(lease);
+      } catch (error) {
+        if (this.stopped) return;
+        this.options.onError?.(error);
+        await sleep(this.timings.retryMs);
+      }
+    }
+  }
+
+  // Notes saved without a topic get one from a short completion. One that fails is not retried
+  // until the runner restarts, so a broken note cannot loop.
+  private async noteTopicLoop() {
+    const { client, engine } = this.options;
+    const failed = new Set<string>();
+    while (!this.stopped) {
+      try {
+        const notes = await client.noteTopics(this.timings.claimWaitMs, this.abort.signal);
+        const todo = notes.filter((note) => !failed.has(note.noteId));
+        if (todo.length === 0 && notes.length > 0) await sleep(this.timings.claimWaitMs);
+        for (const note of todo) {
+          try {
+            const topic = await engine.complete(noteTopicPrompt(note.description));
+            await client.setNoteTopic(note.noteId, shortTopic(topic));
+          } catch (error) {
+            failed.add(note.noteId);
+            this.options.onError?.(error);
+          }
+        }
       } catch (error) {
         if (this.stopped) return;
         this.options.onError?.(error);

@@ -32,6 +32,19 @@ export class RunnerClient {
     return lease;
   }
 
+  async noteTopics(waitMs: number, signal?: AbortSignal) {
+    const { notes } = await this.post<{ notes: { noteId: string; description: string }[] }>(
+      '/api/runner/note-topics',
+      { waitMs },
+      signal,
+    );
+    return notes;
+  }
+
+  setNoteTopic(noteId: string, topic: string) {
+    return this.post(`/api/runner/notes/${noteId}/topic`, { topic });
+  }
+
   heartbeat(lease: Lease) {
     return this.fork(lease, 'heartbeat', {});
   }

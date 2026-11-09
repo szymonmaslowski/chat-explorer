@@ -36,6 +36,7 @@ const usageBody = leaseBody.extend({
 });
 const waitingBody = leaseBody.extend({ until: z.string() });
 const failBody = leaseBody.extend({ reason: z.string() });
+const topicBody = z.object({ topic: z.string().trim().min(1) });
 
 const sameSecret = (given: string, expected: string) => {
   const givenBytes = Buffer.from(given);
@@ -74,6 +75,25 @@ export function registerRunnerRoutes(app: Hono, options: RunnerRoutesOptions) {
       context.req.raw.signal,
     );
     return context.json({ lease });
+  });
+
+  app.post('/api/runner/note-topics', async (context) => {
+    const { waitMs } = waitBody.parse(await context.req.json());
+    const notes = await waitUntil(
+      bus,
+      () => {
+        const waiting = runs.notesNeedingTopic();
+        return waiting.length > 0 ? waiting : null;
+      },
+      waitMs,
+      context.req.raw.signal,
+    );
+    return context.json({ notes: notes ?? [] });
+  });
+
+  app.post('/api/runner/notes/:noteId/topic', async (context) => {
+    const { topic } = topicBody.parse(await context.req.json());
+    return context.json(runs.setNoteTopic(context.req.param('noteId'), topic));
   });
 
   app.post('/api/runner/forks/:forkId/heartbeat', async (context) => {

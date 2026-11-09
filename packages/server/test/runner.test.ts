@@ -14,7 +14,12 @@ interface FakeRun {
 
 function fakeEngine() {
   const runs: FakeRun[] = [];
+  const prompts: string[] = [];
   const engine: Engine = {
+    complete: async (prompt) => {
+      prompts.push(prompt);
+      return '"Redis keys"';
+    },
     start(spec) {
       const listeners: ((event: EngineEvent) => void)[] = [];
       const exitListeners: ((result: { code: number | null; error?: string }) => void)[] = [];
@@ -37,7 +42,7 @@ function fakeEngine() {
       };
     },
   };
-  return { engine, runs };
+  return { engine, runs, prompts };
 }
 
 const until = async (condition: () => boolean, timeoutMs = 3_000) => {
@@ -57,7 +62,7 @@ function setup(timings = {}) {
       headers: { ...Object.fromEntries(new Headers(init.headers)), host: '127.0.0.1:4999' },
     }),
   );
-  const { engine, runs: engineRuns } = fakeEngine();
+  const { engine, runs: engineRuns, prompts } = fakeEngine();
   const errors: unknown[] = [];
   const runner = new Runner({
     client,
@@ -69,7 +74,7 @@ function setup(timings = {}) {
     onError: (error) => errors.push(error),
   });
   const messages = () => context.store.readFork(conversation.mainForkId).messages;
-  return { ...context, ...conversation, runner, engineRuns, errors, messages };
+  return { ...context, ...conversation, runner, engineRuns, prompts, errors, messages };
 }
 
 describe('the runner', () => {
@@ -180,6 +185,20 @@ describe('the runner', () => {
       store.snapshot(explorationId).activities.every((activity) => activity.interrupted),
     );
     expect(engineRuns[1]!.sent[0]).toMatch(/Crash please$/);
+    await runner.stop();
+  });
+
+  it('names a note saved without a topic', async () => {
+    const { runner, store, explorationId, prompts } = setup();
+    const group = store.createNoteGroup(explorationId, {});
+    const note = store.createNote(explorationId, {
+      groupId: group.id,
+      description: 'Use Redis for the cache keys.',
+    });
+    runner.start();
+    await until(() => store.note(note.id).topic !== null);
+    expect(store.note(note.id).topic).toBe('Redis keys');
+    expect(prompts[0]).toContain('Use Redis for the cache keys.');
     await runner.stop();
   });
 });

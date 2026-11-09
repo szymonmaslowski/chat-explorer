@@ -101,8 +101,52 @@ export function claudeDockerArguments(
   ];
 }
 
+// The model for small jobs, cheap and quick.
+const completionModel = 'haiku';
+
+export const claudeCompletionArguments = (prompt: string, image: string) => [
+  'run',
+  '--rm',
+  '--cap-drop',
+  'ALL',
+  '--security-opt',
+  'no-new-privileges',
+  '--env',
+  'CLAUDE_CODE_OAUTH_TOKEN',
+  image,
+  'claude',
+  '-p',
+  prompt,
+  '--model',
+  completionModel,
+  '--tools',
+  '',
+  '--output-format',
+  'json',
+];
+
 export function claudeCodeEngine(options: ClaudeEngineOptions): Engine {
   return {
+    complete(prompt) {
+      return new Promise((resolve, reject) => {
+        const child = spawn('docker', claudeCompletionArguments(prompt, options.image), {
+          stdio: ['ignore', 'pipe', 'pipe'],
+          env: { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: options.oauthToken() },
+        });
+        let output = '';
+        child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()));
+        child.on('error', reject);
+        child.on('exit', () => {
+          try {
+            const result = JSON.parse(output) as { result?: string; is_error?: boolean };
+            if (result.is_error || !result.result) throw new Error(result.result ?? 'No answer.');
+            resolve(result.result.trim());
+          } catch (error) {
+            reject(error instanceof Error ? error : new Error(String(error)));
+          }
+        });
+      });
+    },
     start(spec) {
       const folders = forkFolders(options.forksPath, spec.forkId);
       mkdirSync(folders.work, { recursive: true });

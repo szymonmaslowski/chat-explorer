@@ -305,6 +305,27 @@ export class RunStore {
     this.publishRun(forkId);
   }
 
+  // Notes saved without a topic in chats no terminal session answers, for the runner to name.
+  notesNeedingTopic() {
+    return this.db
+      .all<{ id: string; exploration_id: string; description: string }>(
+        `SELECT notes.id, notes.exploration_id, notes.description FROM notes
+         JOIN explorations ON explorations.id = notes.exploration_id
+         WHERE notes.topic IS NULL
+           AND explorations.archived_at IS NULL AND explorations.deleted_at IS NULL
+         ORDER BY notes.created_at, notes.rowid`,
+      )
+      .filter((row) => !this.chats.attachment(row.exploration_id)?.live)
+      .map((row) => ({ noteId: row.id, description: row.description }));
+  }
+
+  // A topic the runner wrote, kept only if the note still has none.
+  setNoteTopic(noteId: string, topic: string) {
+    const note = this.chats.note(noteId);
+    if (note.topic !== null) return note;
+    return this.chats.updateNote(noteId, { topic });
+  }
+
   // The job a tools token belongs to, while its lease lasts.
   jobForToolsToken(token: string): Job | null {
     const row = this.db.get<ForkRunRow>(

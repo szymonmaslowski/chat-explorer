@@ -32,4 +32,6 @@ export interface EngineRun {
 
 export interface Engine {
   start(spec: EngineRunSpec): EngineRun;
+  // A single answer without tools or a session, for small jobs like naming a note.
+  complete(prompt: string): Promise<string>;
 }

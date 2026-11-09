@@ -1660,6 +1660,10 @@ export class ChatStore {
     return this.requireNoteRow(noteId).exploration_id;
   }
 
+  note(noteId: string) {
+    return toNote(this.requireNoteRow(noteId));
+  }
+
   // Claude never deletes a note itself: the page shows the request and the user decides.
   requestNoteDeletion(noteId: string) {
     return this.setDeletionRequestedAt(noteId, this.now());
