@@ -15,6 +15,15 @@ const settingsSchema = z
     defaultModel: z.enum(claudeModels).default(defaultClaudeModel),
     idleMinutes: z.number().positive().default(60),
     maxSessions: z.number().int().positive().default(3),
+    // The agent loop: a runner next to the daemon answers forks, in place of Claude Code sessions.
+    runner: z
+      .object({
+        enabled: z.boolean().default(false),
+        maxParallel: z.number().int().positive().default(3),
+        idleMinutes: z.number().positive().default(10),
+      })
+      .strict()
+      .prefault({}),
     dictation: z
       .object({
         model: z.enum(whisperModels).default(defaultWhisperModel),

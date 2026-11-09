@@ -24,6 +24,8 @@ import { FeedbackHub } from '../store/feedback-hub.js';
 import { RunStore } from '../store/runs.js';
 import { ChatStore } from '../store/store.js';
 import { ensureMachineToken } from '../runner/machine-token.js';
+import type { Runner } from '../runner/runner.js';
+import { startRunner } from '../runner/start.js';
 import { packageVersion } from '../version.js';
 import { probe } from './control.js';
 
@@ -45,7 +47,10 @@ const sessions = new BackgroundSessions({
   launch: claudeLauncher(config),
   canResume: (sessionId) => findTranscript(sessionId) !== null,
   onStatusChange: (explorationId) => hub.refreshStatus(explorationId),
+  autoStart: !settings.runner.enabled,
 });
+const machineToken = ensureMachineToken(config.machineTokenPath);
+let runner: Runner | null = null;
 const hub = new FeedbackHub(store, bus, Date.now, sessions);
 const modelPath = whisperModelPath(config.modelsPath, settings.dictation.model);
 const transcriber = new Transcriber({
@@ -71,7 +76,8 @@ bus.subscribe((_explorationId, event) => {
   }
 });
 
-const shutdown = () => {
+const shutdown = async () => {
+  await runner?.stop();
   sessions.stopAll();
   chatterbox.stop();
   hub.stop();
@@ -87,7 +93,7 @@ const app = createApp({
   bus,
   sessions,
   runs,
-  machineToken: ensureMachineToken(config.machineTokenPath),
+  machineToken,
   transcriber,
   speaker,
   fileStorage,
@@ -96,7 +102,7 @@ const app = createApp({
   publicUrl: settings.publicUrl,
   version: packageVersion,
   uiDirectory: fileURLToPath(new URL('../ui', import.meta.url)),
-  onShutdown: shutdown,
+  onShutdown: () => void shutdown(),
 });
 
 const server = createServer(getRequestListener(app.fetch));
@@ -117,10 +123,24 @@ server.listen(config.port, '127.0.0.1', () => {
   console.log(
     `chat-explorer ${packageVersion} listening on ${config.baseUrl} (pid ${process.pid})`,
   );
+  if (!settings.runner.enabled) return;
+  startRunner({
+    baseUrl: config.baseUrl,
+    port: config.port,
+    machineToken,
+    runnerPath: config.runnerPath,
+    filesPath: config.filesPath,
+    maxParallel: settings.runner.maxParallel,
+    idleMinutes: settings.runner.idleMinutes,
+    log: (message) => console.log(message),
+  }).then(
+    (started) => (runner = started),
+    (error: unknown) => console.error(`The runner could not start: ${String(error)}`),
+  );
 });
 
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
+process.on('SIGTERM', () => void shutdown());
+process.on('SIGINT', () => void shutdown());
 
 function loadSettingsOrExit() {
   try {

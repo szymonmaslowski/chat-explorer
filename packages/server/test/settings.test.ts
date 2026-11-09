@@ -27,6 +27,7 @@ describe('settings', () => {
       defaultModel: 'sonnet',
       idleMinutes: 60,
       maxSessions: 3,
+      runner: { enabled: false, maxParallel: 3, idleMinutes: 10 },
       dictation: { model: 'large-v3-turbo-q5_0', language: 'auto' },
       speech: { engine: 'chatterbox', cacheMegabytes: 1024 },
     });

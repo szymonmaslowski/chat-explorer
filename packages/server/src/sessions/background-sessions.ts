@@ -25,6 +25,8 @@ export interface BackgroundSessionsOptions {
   launch: Launcher;
   canResume: (sessionId: string) => boolean;
   onStatusChange: (explorationId: string) => void;
+  // Off while a runner answers forks, so a submit does not also start a session.
+  autoStart?: boolean;
   now?: () => number;
 }
 
@@ -59,12 +61,12 @@ export class BackgroundSessions implements StartingSessions {
         event.note.topic === null;
       if (event.type === 'submission.queued' || needsTopic) {
         if (session) session.lastActiveAt = this.now();
-        else this.startIfUnattended(explorationId);
+        else if (options.autoStart !== false) this.startIfUnattended(explorationId);
       }
     });
     this.checkTimer = setInterval(() => {
       this.stopIdle();
-      this.startForUnansweredQueues();
+      if (options.autoStart !== false) this.startForUnansweredQueues();
     }, checkIntervalMs);
     this.checkTimer.unref();
   }
