@@ -48,8 +48,10 @@ const currentForkId = computed(() => {
   border-right: 1px solid var(--border);
 }
 
+/* A 12-column grid: chats 2, map 4, a fork 6; the chats keep room for their cards. */
 .chats-column {
-  flex: 0 0 25rem;
+  flex: 0 0 calc(100% / 6);
+  min-width: 18rem;
 }
 
 .map-column {
@@ -66,7 +68,7 @@ const currentForkId = computed(() => {
   flex: 0 0 50%;
 }
 
-/* Beside the map the conversation takes its whole half of the screen. */
+/* Beside the map the conversation fills its half of the screen. */
 .main-column.beside :deep(.fork-view) {
   max-width: none;
 }
