@@ -153,6 +153,7 @@ const shortened = (text: string, length: number) => {
   return singleLine.length > length ? `${singleLine.slice(0, length - 1)}…` : singleLine;
 };
 const summaryFrom = (text: string) => shortened(text, forkSummaryLength);
+const pageMessageLength = 2_000;
 const excerptOf = (text: string) => shortened(text, repliesToExcerptLength);
 
 // A comment in a fork group goes to the group's fork, whatever its own type.
@@ -536,6 +537,33 @@ export class ChatStore {
               count: omittedRows.length,
               forks: omittedForkIds.map((id) => ({ id, summary: this.requireForkRow(id).summary })),
             },
+    };
+  }
+
+  // A page of a fork's path for the job tools, newest last, going back from `before`. Long
+  // messages are cut, so one answer cannot fill the reader's context.
+  readForkPage(forkId: string, options: { limit: number; before?: string | undefined }) {
+    const fork = this.requireForkRow(forkId);
+    const path = this.pathTo(fork.tip_message_id);
+    const end = options.before ? path.findIndex((row) => row.id === options.before) : path.length;
+    if (end === -1) {
+      throw new StoreError('not_found', `Message ${options.before} is not in fork ${forkId}.`);
+    }
+    const start = Math.max(0, end - options.limit);
+    return {
+      forkId,
+      summary: fork.summary,
+      messages: path.slice(start, end).map((row) => {
+        const text = this.messageText(row);
+        return {
+          id: row.id,
+          forkId: row.fork_id,
+          role: row.role,
+          text: text.length > pageMessageLength ? `${text.slice(0, pageMessageLength)}…` : text,
+          truncated: text.length > pageMessageLength,
+        };
+      }),
+      nextBefore: start > 0 ? path[start]!.id : null,
     };
   }
 

@@ -231,4 +231,9 @@ export const migrations = [
   );
   CREATE INDEX activities_by_fork ON activities (fork_id, created_at);
   `,
+  `
+  -- The secret the engine sends to the job tools, valid while the lease it came with lasts.
+  ALTER TABLE fork_runs ADD COLUMN tools_token TEXT;
+  CREATE UNIQUE INDEX fork_runs_by_tools_token ON fork_runs (tools_token);
+  `,
 ];

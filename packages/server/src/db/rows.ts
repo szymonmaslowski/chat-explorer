@@ -146,6 +146,7 @@ export interface ForkRunRow {
   lease_id: string | null;
   runner_id: string | null;
   lease_expires_at: number | null;
+  tools_token: string | null;
   attempt: number;
   failed_attempts: number;
   status: RunStatus;

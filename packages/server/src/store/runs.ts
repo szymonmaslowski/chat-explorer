@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import type { Database } from '../db/database.js';
 import {
   toActivity,
@@ -23,6 +24,14 @@ export interface Lease {
   attempt: number;
   // The engine session from earlier turns, to resume; null for a fork's first run.
   sessionId: string | null;
+  // What the engine sends to the job tools; it stops working when the lease ends.
+  toolsToken: string;
+}
+
+export interface Job {
+  forkId: string;
+  explorationId: string;
+  leaseId: string;
 }
 
 export interface PendingMessage {
@@ -35,6 +44,13 @@ export interface RunUsage {
   contextTokens: number;
   contextWindow: number | null;
 }
+
+const noLease = {
+  lease_id: null,
+  runner_id: null,
+  lease_expires_at: null,
+  tools_token: null,
+} as const;
 
 // The user messages of a fork after this rowid have not been answered: after the newest one a turn
 // answered, or for a fork no runner has answered yet, after its newest answer.
@@ -96,9 +112,7 @@ export class RunStore {
       }
       if (failedAttempts >= maxFailedAttempts) {
         this.update(forkId, {
-          lease_id: null,
-          runner_id: null,
-          lease_expires_at: null,
+          ...noLease,
           failed_attempts: failedAttempts,
           status: 'failed',
           status_detail: 'The runner stopped answering three times.',
@@ -106,10 +120,12 @@ export class RunStore {
         return null;
       }
       const leaseId = newId();
+      const toolsToken = randomBytes(24).toString('base64url');
       this.update(forkId, {
         lease_id: leaseId,
         runner_id: runnerId,
         lease_expires_at: this.now() + leaseMs,
+        tools_token: toolsToken,
         attempt: row.attempt + 1,
         failed_attempts: failedAttempts,
         status: 'answering',
@@ -121,6 +137,7 @@ export class RunStore {
         leaseId,
         attempt: row.attempt + 1,
         sessionId: row.session_id,
+        toolsToken,
       };
     });
     this.publishRun(forkId);
@@ -228,7 +245,7 @@ export class RunStore {
   // The runner let the fork go after its turn, for example when its process went idle.
   release(forkId: string, leaseId: string) {
     this.requireLease(forkId, leaseId);
-    this.update(forkId, { lease_id: null, runner_id: null, lease_expires_at: null });
+    this.update(forkId, noLease);
     this.publishRun(forkId);
   }
 
@@ -238,9 +255,7 @@ export class RunStore {
     const failedAttempts = row.failed_attempts + 1;
     this.interrupt(row);
     this.update(forkId, {
-      lease_id: null,
-      runner_id: null,
-      lease_expires_at: null,
+      ...noLease,
       failed_attempts: failedAttempts,
       status: failedAttempts >= maxFailedAttempts ? 'failed' : 'idle',
       status_detail: failedAttempts >= maxFailedAttempts ? reason : null,
@@ -253,6 +268,17 @@ export class RunStore {
     this.ensureRow(forkId, fork.exploration_id);
     this.update(forkId, { failed_attempts: 0, status: 'idle', status_detail: null });
     this.publishRun(forkId);
+  }
+
+  // The job a tools token belongs to, while its lease lasts.
+  jobForToolsToken(token: string): Job | null {
+    const row = this.db.get<ForkRunRow>(
+      'SELECT * FROM fork_runs WHERE tools_token = ? AND lease_id IS NOT NULL',
+      token,
+    );
+    return row
+      ? { forkId: row.fork_id, explorationId: row.exploration_id, leaseId: row.lease_id! }
+      : null;
   }
 
   private answerable(forkId: string, explorationId: string) {

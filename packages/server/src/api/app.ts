@@ -20,6 +20,7 @@ import type { FeedbackHub } from '../store/feedback-hub.js';
 import type { RunStore } from '../store/runs.js';
 import type { ChatStore } from '../store/store.js';
 import { guardLocalRequests } from './guard.js';
+import { registerJobTools } from './job-tools.js';
 import { registerRunnerRoutes } from './runner-routes.js';
 import { serveUi } from './static-ui.js';
 
@@ -216,6 +217,7 @@ export function createApp(options: AppOptions) {
   });
 
   registerRunnerRoutes(app, { runs: options.runs, bus, machineToken: options.machineToken });
+  registerJobTools(app, { store, runs: options.runs });
 
   app.post('/api/forks/:id/retry', (context) => {
     options.runs.retry(context.req.param('id'));
