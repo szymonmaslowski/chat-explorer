@@ -51,7 +51,7 @@ const sessions = new BackgroundSessions({
 });
 const machineToken = ensureMachineToken(config.machineTokenPath);
 let runner: Runner | null = null;
-const hub = new FeedbackHub(store, bus, Date.now, sessions);
+const hub = new FeedbackHub(store, bus, Date.now, sessions, settings.runner.enabled ? runs : null);
 const modelPath = whisperModelPath(config.modelsPath, settings.dictation.model);
 const transcriber = new Transcriber({
   language: settings.dictation.language,

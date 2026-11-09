@@ -14,6 +14,8 @@ import { newId } from './ids.js';
 import type { ChatStore } from './store.js';
 
 export const leaseMs = 60_000;
+// A runner that asked for work within this time counts as online.
+const runnerOnlineMs = 90_000;
 // After this many attempts that died before answering, the fork waits for Retry.
 export const maxFailedAttempts = 3;
 const maxUpdateLines = 10;
@@ -65,6 +67,8 @@ const unansweredAfter = `COALESCE(
 // The agent loop's side of the store: which forks need an answer, the lease of the runner working
 // on each, the user messages it has not answered yet, and what it reports back.
 export class RunStore {
+  private lastRunnerSeenAt = 0;
+
   constructor(
     private readonly db: Database,
     private readonly bus: EventBus,
@@ -98,6 +102,21 @@ export class RunStore {
       )
       .filter((row) => this.answerable(row.fork_id, row.exploration_id))
       .map((row) => ({ forkId: row.fork_id, explorationId: row.exploration_id }));
+  }
+
+  runnerSeen() {
+    this.lastRunnerSeenAt = this.now();
+  }
+
+  // How the chat looks from the runner's side: working while one of its forks is answered,
+  // listening while a runner is around, detached otherwise.
+  status(explorationId: string): 'answering' | 'listening' | 'detached' {
+    const answering = this.db.get<{ fork_id: string }>(
+      "SELECT fork_id FROM fork_runs WHERE exploration_id = ? AND status = 'answering' LIMIT 1",
+      explorationId,
+    );
+    if (answering) return 'answering';
+    return this.now() - this.lastRunnerSeenAt < runnerOnlineMs ? 'listening' : 'detached';
   }
 
   // A lease that expired without being released belonged to a run that died: that attempt failed.

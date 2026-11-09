@@ -135,3 +135,20 @@ describe('what a turn reports', () => {
     expect(runs.claim(mainForkId, 'runner-b')).toMatchObject({ sessionId: 'session-1' });
   });
 });
+
+describe('status from the runner', () => {
+  it('is listening while a runner is around, working while a fork is answered', () => {
+    const { runs, ask, clock, explorationId, mainForkId } = setup();
+    expect(runs.status(explorationId)).toBe('detached');
+    runs.runnerSeen();
+    expect(runs.status(explorationId)).toBe('listening');
+    ask('A question');
+    const lease = runs.claim(mainForkId, 'runner-a')!;
+    expect(runs.status(explorationId)).toBe('answering');
+    runs.finishTurn(mainForkId, lease.leaseId, runs.pendingInput(mainForkId, lease.leaseId)[0]!.id);
+    runs.release(mainForkId, lease.leaseId);
+    expect(runs.status(explorationId)).toBe('listening');
+    clock.now += 120_000;
+    expect(runs.status(explorationId)).toBe('detached');
+  });
+});

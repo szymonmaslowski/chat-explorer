@@ -29,6 +29,11 @@ export interface StartingSessions {
   isStarting(explorationId: string): boolean;
 }
 
+// Where answers come from when no terminal session is attached: a runner, when one is in use.
+export interface RunnerStatus {
+  status(explorationId: string): 'answering' | 'listening' | 'detached';
+}
+
 // A shim long-polls in rounds, so after a round times out there is a short gap before the next one.
 const listeningGraceMs = 5_000;
 
@@ -46,6 +51,7 @@ export class FeedbackHub {
     private readonly bus: EventBus,
     private readonly now: () => number = Date.now,
     private readonly startingSessions: StartingSessions = { isStarting: () => false },
+    private readonly runner: RunnerStatus | null = null,
   ) {
     bus.subscribe((explorationId, event) => {
       if (event.type === 'session.status') return;
@@ -109,6 +115,7 @@ export class FeedbackHub {
   status(explorationId: string): SessionStatus {
     const attachment = this.store.attachment(explorationId);
     if (!attachment?.live) {
+      if (this.runner) return this.runner.status(explorationId);
       return this.startingSessions.isStarting(explorationId) ? 'starting' : 'detached';
     }
     if (this.isListening(explorationId)) return 'listening';

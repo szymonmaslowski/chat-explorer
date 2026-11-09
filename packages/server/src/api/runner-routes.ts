@@ -67,6 +67,7 @@ export function registerRunnerRoutes(app: Hono, options: RunnerRoutesOptions) {
 
   app.post('/api/runner/claim', async (context) => {
     const { runnerId, waitMs, explorationId } = claimBody.parse(await context.req.json());
+    runs.runnerSeen();
     const lease = await waitUntil(
       bus,
       () => {
