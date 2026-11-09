@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import type { Database } from '../db/database.js';
 import {
   toActivity,
+  shimRunnerId,
   toForkRun,
   type ActivityRow,
   type ForkRunRow,
@@ -19,8 +20,6 @@ const runnerOnlineMs = 90_000;
 // After this many attempts that died before answering, the fork waits for Retry.
 export const maxFailedAttempts = 3;
 const maxUpdateLines = 10;
-
-const shimRunnerId = (shimId: string) => `shim:${shimId}`;
 
 export interface Lease {
   forkId: string;
@@ -183,10 +182,10 @@ export class RunStore {
     return this.requireLease(forkId, leaseId).stop_requested === 1;
   }
 
-  // Only a fork a runner is working on can be stopped.
+  // Only a fork a runner is working on can be stopped; a terminal session never reads the flag.
   requestStop(forkId: string) {
     const row = this.db.get<ForkRunRow>('SELECT * FROM fork_runs WHERE fork_id = ?', forkId);
-    if (!row?.lease_id) return false;
+    if (!row?.lease_id || toForkRun(row).heldByTerminal) return false;
     this.update(forkId, { stop_requested: 1 });
     this.publishRun(forkId);
     return true;

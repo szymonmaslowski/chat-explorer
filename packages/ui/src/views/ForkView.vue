@@ -65,7 +65,9 @@ const ownStart = computed(() =>
   path.value.findIndex((message) => message.forkId === fork.value?.id),
 );
 const awaitingAnswer = computed(() => path.value.at(-1)?.role === 'user');
-const forkRun = computed(() => (fork.value ? (state.value.forkRuns.get(fork.value.id) ?? null) : null));
+const forkRun = computed(() =>
+  fork.value ? (state.value.forkRuns.get(fork.value.id) ?? null) : null,
+);
 // By the user message a turn answered, each attempt's activity in order.
 const activityGroups = computed(() => {
   const groups = new Map<string, Map<number, Activity[]>>();
@@ -335,7 +337,7 @@ watch(
           :exploration-id="explorationId"
           :fork-id="fork.id"
           :drafts="drafts"
-          :answering="forkRun?.status === 'answering'"
+          :answering="forkRun?.status === 'answering' && !forkRun.heldByTerminal"
           :saved-draft="state.replyDrafts.get(fork.id) ?? null"
           :hint="state.exploration?.title ?? ''"
           :last-message-id="path.at(-1)?.id ?? null"

@@ -314,12 +314,16 @@ export const toBookmark = (row: BookmarkRow): Bookmark => ({
   createdAt: row.created_at,
 });
 
+export const shimRunnerId = (shimId: string) => `shim:${shimId}`;
+const isShimRunnerId = (runnerId: string | null) => runnerId?.startsWith('shim:') ?? false;
+
 export const toForkRun = (row: ForkRunRow): ForkRun => ({
   forkId: row.fork_id,
   explorationId: row.exploration_id,
   status: row.status,
   statusDetail: row.status_detail,
   attempt: row.attempt,
+  heldByTerminal: row.lease_id !== null && isShimRunnerId(row.runner_id),
   model: row.model,
   contextTokens: row.context_tokens,
   contextWindow: row.context_window,

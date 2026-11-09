@@ -173,6 +173,8 @@ export interface ForkRun {
   // Why it failed, or until when it waits for the usage limit.
   statusDetail: string | null;
   attempt: number;
+  // An attached terminal session holds the fork: the page cannot stop it.
+  heldByTerminal: boolean;
   model: string | null;
   contextTokens: number | null;
   contextWindow: number | null;

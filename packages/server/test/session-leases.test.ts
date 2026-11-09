@@ -35,7 +35,11 @@ describe('an attached terminal session as the runner of its chat', () => {
     const result = await feedback();
     expect(result).toMatchObject({ status: 'feedback', forks: [{ forkId: mainForkId }] });
     expect(runs.claimable()).toEqual([]);
-    expect(store.snapshot(explorationId).forkRuns[0]).toMatchObject({ status: 'answering' });
+    expect(store.snapshot(explorationId).forkRuns[0]).toMatchObject({
+      status: 'answering',
+      heldByTerminal: true,
+    });
+    expect(runs.requestStop(mainForkId)).toBe(false);
 
     const handedAgain = await feedback();
     expect(handedAgain).toMatchObject({ forks: [{ forkId: mainForkId }] });
@@ -48,7 +52,10 @@ describe('an attached terminal session as the runner of its chat', () => {
       content: 'Answered.',
     });
     runs.finishShimTurn(mainForkId, 'shim-a', fork!.inReplyTo);
-    expect(store.snapshot(explorationId).forkRuns[0]).toMatchObject({ status: 'idle' });
+    expect(store.snapshot(explorationId).forkRuns[0]).toMatchObject({
+      status: 'idle',
+      heldByTerminal: false,
+    });
     expect(await feedback()).toEqual({ status: 'timeout' });
   });
 

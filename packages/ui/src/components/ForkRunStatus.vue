@@ -35,6 +35,9 @@ async function act(action: (forkId: string) => Promise<unknown>) {
   <p v-else-if="run?.status === 'waiting_limit'" class="run-status muted">
     Waiting for the usage limit{{ until }}.
   </p>
+  <p v-else-if="run?.status === 'answering' && run.heldByTerminal" class="run-status muted">
+    Claude is answering in the terminal…
+  </p>
   <p v-else-if="run?.status === 'answering'" class="run-status muted">
     Claude is working…
     <button type="button" :disabled="busy" @click="act(api.stopFork)">Stop</button>
