@@ -155,8 +155,9 @@ export class RunStore {
   }
 
   // Submissions wait in the queue, where the reader can still cancel them, until the runner takes
-  // them as the fork's input.
-  pendingInput(forkId: string, leaseId: string): PendingMessage[] {
+  // them as the fork's input. `afterMessageId` skips what the runner already handed to its engine
+  // during the turn.
+  pendingInput(forkId: string, leaseId: string, afterMessageId?: string): PendingMessage[] {
     const row = this.requireLease(forkId, leaseId);
     this.chats.deliverQueued(row.exploration_id);
     return this.db
@@ -165,8 +166,10 @@ export class RunStore {
          JOIN forks ON forks.id = messages.fork_id
          LEFT JOIN fork_runs ON fork_runs.fork_id = forks.id
          WHERE forks.id = ? AND messages.role = 'user' AND messages.rowid > ${unansweredAfter}
+           AND messages.rowid > COALESCE((SELECT rowid FROM messages WHERE id = ?), 0)
          ORDER BY messages.rowid`,
         forkId,
+        afterMessageId ?? null,
       )
       .map((row) => ({ id: row.id, text: this.chats.messageText(row) }));
   }

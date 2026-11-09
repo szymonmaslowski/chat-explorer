@@ -3,10 +3,13 @@ import type { Hono } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { z } from 'zod';
 import type { EventBus } from '../store/event-bus.js';
+import { buildRunContext } from '../store/run-context.js';
 import type { RunStore } from '../store/runs.js';
+import type { ChatStore } from '../store/store.js';
 import { waitUntil } from '../store/wait-until.js';
 
 export interface RunnerRoutesOptions {
+  store: ChatStore;
   runs: RunStore;
   bus: EventBus;
   machineToken: string;
@@ -16,7 +19,8 @@ const maxWaitMs = 60_000;
 const waitBody = z.object({ waitMs: z.number().int().min(0).max(maxWaitMs).default(0) });
 const claimBody = waitBody.extend({ runnerId: z.string().min(1) });
 const leaseBody = z.object({ leaseId: z.string() });
-const inputBody = leaseBody.extend(waitBody.shape);
+const contextBody = leaseBody.extend({ resume: z.boolean() });
+const inputBody = leaseBody.extend({ ...waitBody.shape, after: z.string().optional() });
 const finishBody = leaseBody.extend({ upToMessageId: z.string() });
 const answerBody = leaseBody.extend({ content: z.string().min(1) });
 const activityBody = leaseBody.extend({
@@ -42,7 +46,7 @@ const sameSecret = (given: string, expected: string) => {
 // What a runner calls: claim a fork that needs an answer, hold it with heartbeats, take its new
 // messages, report back, and let it go. Every call carries the machine token.
 export function registerRunnerRoutes(app: Hono, options: RunnerRoutesOptions) {
-  const { runs, bus, machineToken } = options;
+  const { store, runs, bus, machineToken } = options;
 
   app.use(
     '/api/runner/*',
@@ -80,17 +84,24 @@ export function registerRunnerRoutes(app: Hono, options: RunnerRoutesOptions) {
 
   app.post('/api/runner/forks/:forkId/input', async (context) => {
     const forkId = context.req.param('forkId');
-    const { leaseId, waitMs } = inputBody.parse(await context.req.json());
+    const { leaseId, waitMs, after } = inputBody.parse(await context.req.json());
     const messages = await waitUntil(
       bus,
       () => {
-        const pending = runs.pendingInput(forkId, leaseId);
+        const pending = runs.pendingInput(forkId, leaseId, after);
         return pending.length > 0 ? pending : null;
       },
       waitMs,
       context.req.raw.signal,
     );
     return context.json({ messages: messages ?? [] });
+  });
+
+  app.post('/api/runner/forks/:forkId/context', async (context) => {
+    const forkId = context.req.param('forkId');
+    const { leaseId, resume } = contextBody.parse(await context.req.json());
+    const pendingIds = new Set(runs.pendingInput(forkId, leaseId).map((message) => message.id));
+    return context.json(buildRunContext(store, forkId, { resume, pendingIds }));
   });
 
   app.post('/api/runner/forks/:forkId/turn/start', async (context) => {

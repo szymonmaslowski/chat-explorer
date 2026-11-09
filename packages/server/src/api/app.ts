@@ -216,7 +216,12 @@ export function createApp(options: AppOptions) {
     return context.json({ error: 'internal', message: 'Internal error' }, 500);
   });
 
-  registerRunnerRoutes(app, { runs: options.runs, bus, machineToken: options.machineToken });
+  registerRunnerRoutes(app, {
+    store,
+    runs: options.runs,
+    bus,
+    machineToken: options.machineToken,
+  });
   registerJobTools(app, { store, runs: options.runs });
 
   app.post('/api/forks/:id/retry', (context) => {
