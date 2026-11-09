@@ -20,6 +20,7 @@ export function loadConfig() {
     speechCachePath: join(home, 'speech-cache'),
     runnerPath: join(home, 'runner'),
     machineTokenPath: join(home, 'runner', 'machine-token'),
+    runnerLogPath: join(home, 'runner.log'),
     baseUrl: `http://127.0.0.1:${port}`,
   };
 }

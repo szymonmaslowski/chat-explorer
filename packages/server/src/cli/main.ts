@@ -26,6 +26,8 @@ Commands:
   start                       Start the daemon if it is not running and print its URL
   stop                        Stop the daemon
   status                      Show whether the daemon runs, its version and attached sessions
+  runner                      Run the runner in the foreground, against CHAT_EXPLORER_BACKEND_URL
+                              or the local daemon
   list [--archived|--deleted] [--json]
                               List explorations
   open [id] [--fork <forkId>] Open the UI in the browser
@@ -53,6 +55,9 @@ const truncate = (text: string, length: number) =>
   text.length > length ? `${text.slice(0, length - 1)}…` : text;
 
 const commands: Record<string, (args: string[]) => Promise<void>> = {
+  async runner() {
+    await import('../runner/main.js');
+  },
   async start() {
     const { health, started } = await ensureRunning();
     console.log(

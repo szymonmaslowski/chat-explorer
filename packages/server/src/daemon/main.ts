@@ -24,8 +24,7 @@ import { FeedbackHub } from '../store/feedback-hub.js';
 import { RunStore } from '../store/runs.js';
 import { ChatStore } from '../store/store.js';
 import { ensureMachineToken } from '../runner/machine-token.js';
-import type { Runner } from '../runner/runner.js';
-import { startRunner } from '../runner/start.js';
+import { superviseRunner } from '../runner/supervisor.js';
 import { packageVersion } from '../version.js';
 import { probe } from './control.js';
 
@@ -50,7 +49,7 @@ const sessions = new BackgroundSessions({
   autoStart: !settings.runner.enabled,
 });
 const machineToken = ensureMachineToken(config.machineTokenPath);
-let runner: Runner | null = null;
+let runner: ReturnType<typeof superviseRunner> | null = null;
 const hub = new FeedbackHub(store, bus, Date.now, sessions, settings.runner.enabled ? runs : null);
 const modelPath = whisperModelPath(config.modelsPath, settings.dictation.model);
 const transcriber = new Transcriber({
@@ -124,19 +123,10 @@ server.listen(config.port, '127.0.0.1', () => {
     `chat-explorer ${packageVersion} listening on ${config.baseUrl} (pid ${process.pid})`,
   );
   if (!settings.runner.enabled) return;
-  startRunner({
-    baseUrl: config.baseUrl,
-    port: config.port,
-    machineToken,
-    runnerPath: config.runnerPath,
-    filesPath: config.filesPath,
-    maxParallel: settings.runner.maxParallel,
-    idleMinutes: settings.runner.idleMinutes,
-    log: (message) => console.log(message),
-  }).then(
-    (started) => (runner = started),
-    (error: unknown) => console.error(`The runner could not start: ${String(error)}`),
-  );
+  runner = superviseRunner({
+    logPath: config.runnerLogPath,
+    env: { CHAT_EXPLORER_HOME: config.home, CHAT_EXPLORER_PORT: String(config.port) },
+  });
 });
 
 process.on('SIGTERM', () => void shutdown());
