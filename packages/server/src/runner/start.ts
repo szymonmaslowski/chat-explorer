@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { claudeCodeEngine } from './claude-engine.js';
 import { ensureImage, installedClaudeVersion } from './claude-image.js';
 import { RunnerClient } from './client.js';
+import { ensureEgress } from './egress.js';
 import { Runner } from './runner.js';
 
 export interface StartRunnerOptions {
@@ -29,6 +30,7 @@ export async function startRunner(options: StartRunnerOptions) {
   if (!version) throw new Error('Claude Code is not installed, so the runner has no version.');
   options.log(`Preparing the Claude Code ${version} image…`);
   const image = await ensureImage(version);
+  await ensureEgress(image, options.port);
   const runner = new Runner({
     client: new RunnerClient(options.baseUrl, options.machineToken),
     engine: claudeCodeEngine({

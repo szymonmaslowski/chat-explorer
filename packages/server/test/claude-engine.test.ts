@@ -82,6 +82,12 @@ describe('starting Claude Code in Docker', () => {
     filesPath: '/home/me/.chat-explorer/files',
   });
 
+  it('reaches the outside only through the egress proxy', () => {
+    expect(args).toEqual(expect.arrayContaining(['--network', 'chat-explorer-sandbox']));
+    expect(args).toContain('HTTPS_PROXY=http://chat-explorer-egress:3128');
+    expect(args).toContain('HTTP_PROXY=http://chat-explorer-egress:3128');
+  });
+
   it('runs hardened, with the token from the environment and nothing else of the host', () => {
     expect(args).toEqual(expect.arrayContaining(['--cap-drop', 'ALL', '--rm', '--interactive']));
     expect(args).toContain('CLAUDE_CODE_OAUTH_TOKEN');

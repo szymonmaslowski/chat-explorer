@@ -3,6 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { parseClaudeStreamLine, streamUserMessage } from './claude-stream.js';
+import { sandboxArguments } from './egress.js';
 import type { Engine, EngineEvent, EngineRun, EngineRunSpec } from './engine.js';
 
 export interface ClaudeEnginePaths {
@@ -65,6 +66,7 @@ export function claudeDockerArguments(
     'CLAUDE_CODE_OAUTH_TOKEN',
     '--env',
     'DISABLE_AUTOUPDATER=1',
+    ...sandboxArguments,
     '--volume',
     `${folders.work}:${folders.work}`,
     '--workdir',
@@ -113,6 +115,7 @@ export const claudeCompletionArguments = (prompt: string, image: string) => [
   'no-new-privileges',
   '--env',
   'CLAUDE_CODE_OAUTH_TOKEN',
+  ...sandboxArguments,
   image,
   'claude',
   '-p',
