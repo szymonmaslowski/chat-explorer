@@ -51,6 +51,7 @@ const noLease = {
   runner_id: null,
   lease_expires_at: null,
   tools_token: null,
+  stop_requested: 0,
 } as const;
 
 // The user messages of a fork after this rowid have not been answered: after the newest one a turn
@@ -146,13 +147,42 @@ export class RunStore {
   }
 
   // A runner that slept through its lease keeps it, unless another runner claimed the fork since.
+  // The answer says whether the reader asked to stop.
   heartbeat(forkId: string, leaseId: string) {
-    this.requireLease(forkId, leaseId);
+    const row = this.requireLease(forkId, leaseId);
     this.db.run(
       'UPDATE fork_runs SET lease_expires_at = ? WHERE fork_id = ?',
       this.now() + leaseMs,
       forkId,
     );
+    return { stop: row.stop_requested === 1 };
+  }
+
+  stopRequested(forkId: string, leaseId: string) {
+    return this.requireLease(forkId, leaseId).stop_requested === 1;
+  }
+
+  // Only a fork a runner is working on can be stopped.
+  requestStop(forkId: string) {
+    const row = this.db.get<ForkRunRow>('SELECT * FROM fork_runs WHERE fork_id = ?', forkId);
+    if (!row?.lease_id) return false;
+    this.update(forkId, { stop_requested: 1 });
+    this.publishRun(forkId);
+    return true;
+  }
+
+  // The runner stopped the turn: the messages it had count as handled, without an answer, and
+  // the fork is free again.
+  stopped(forkId: string, leaseId: string, upToMessageId: string | null) {
+    this.requireLease(forkId, leaseId);
+    this.update(forkId, {
+      ...noLease,
+      ...(upToMessageId ? { input_cursor: upToMessageId } : {}),
+      failed_attempts: 0,
+      status: 'idle',
+      status_detail: null,
+    });
+    this.publishRun(forkId);
   }
 
   // Submissions wait in the queue, where the reader can still cancel them, until the runner takes

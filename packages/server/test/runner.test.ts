@@ -201,4 +201,23 @@ describe('the runner', () => {
     expect(prompts[0]).toContain('Use Redis for the cache keys.');
     await runner.stop();
   });
+
+  it('stops a turn the reader stops, and answers the next message afresh', async () => {
+    const { runner, engineRuns, store, runs, explorationId, mainForkId, messages } = setup();
+    runner.start();
+    store.submit(explorationId, mainForkId, 'Something long');
+    await until(() => engineRuns[0]?.sent.length === 1);
+    expect(runs.requestStop(mainForkId)).toBe(true);
+    await until(() => engineRuns[0]!.stopped);
+    await until(() => runner.activeForks.length === 0);
+    const activities = store.snapshot(explorationId).activities;
+    expect(activities.at(-1)).toMatchObject({ kind: 'progress', text: 'Stopped' });
+    expect(runs.claimable()).toEqual([]);
+
+    store.submit(explorationId, mainForkId, 'Do this instead');
+    await until(() => engineRuns[1]?.sent.length === 1);
+    expect(engineRuns[1]!.sent[0]).toMatch(/Do this instead$/);
+    expect(messages().at(-1)?.text).toBe('Do this instead');
+    await runner.stop();
+  });
 });

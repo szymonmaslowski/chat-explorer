@@ -46,7 +46,7 @@ export class RunnerClient {
   }
 
   heartbeat(lease: Lease) {
-    return this.fork(lease, 'heartbeat', {});
+    return this.fork<{ stop: boolean }>(lease, 'heartbeat', {});
   }
 
   context(lease: Lease, resume: boolean) {
@@ -56,7 +56,7 @@ export class RunnerClient {
   // New messages of the fork, after `after`, the newest one the engine already has.
   // `others` is what changed in the chat's other forks since the engine last heard.
   input(lease: Lease, options: { waitMs: number; after: string | null }, signal?: AbortSignal) {
-    return this.fork<{ messages: PendingMessage[]; others: string | null }>(
+    return this.fork<{ messages: PendingMessage[]; others: string | null; stop: boolean }>(
       lease,
       'input',
       { waitMs: options.waitMs, after: options.after ?? undefined },
@@ -94,6 +94,10 @@ export class RunnerClient {
 
   release(lease: Lease) {
     return this.fork(lease, 'release', {});
+  }
+
+  stopped(lease: Lease, upToMessageId: string | null) {
+    return this.fork(lease, 'stopped', { upToMessageId });
   }
 
   fail(lease: Lease, reason: string) {

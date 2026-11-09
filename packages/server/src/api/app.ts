@@ -230,6 +230,10 @@ export function createApp(options: AppOptions) {
     return context.json(store.setForkAwareness(context.req.param('id'), awareness));
   });
 
+  app.post('/api/forks/:id/stop', (context) =>
+    context.json({ stopping: options.runs.requestStop(context.req.param('id')) }),
+  );
+
   app.post('/api/forks/:id/retry', (context) => {
     options.runs.retry(context.req.param('id'));
     return context.json({ ok: true });

@@ -242,4 +242,8 @@ export const migrations = [
     CHECK (awareness IN ('aware', 'separate'));
   ALTER TABLE fork_runs ADD COLUMN others_seen_rowid INTEGER;
   `,
+  `
+  -- The reader asked the runner to stop the fork's turn.
+  ALTER TABLE fork_runs ADD COLUMN stop_requested INTEGER NOT NULL DEFAULT 0;
+  `,
 ];

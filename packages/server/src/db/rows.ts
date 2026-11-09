@@ -150,6 +150,7 @@ export interface ForkRunRow {
   lease_expires_at: number | null;
   tools_token: string | null;
   others_seen_rowid: number | null;
+  stop_requested: number;
   attempt: number;
   failed_attempts: number;
   status: RunStatus;

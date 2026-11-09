@@ -37,6 +37,7 @@ const usageBody = leaseBody.extend({
 const waitingBody = leaseBody.extend({ until: z.string() });
 const failBody = leaseBody.extend({ reason: z.string() });
 const topicBody = z.object({ topic: z.string().trim().min(1) });
+const stoppedBody = leaseBody.extend({ upToMessageId: z.string().nullable() });
 
 const sameSecret = (given: string, expected: string) => {
   const givenBytes = Buffer.from(given);
@@ -98,24 +99,26 @@ export function registerRunnerRoutes(app: Hono, options: RunnerRoutesOptions) {
 
   app.post('/api/runner/forks/:forkId/heartbeat', async (context) => {
     const { leaseId } = leaseBody.parse(await context.req.json());
-    runs.heartbeat(context.req.param('forkId'), leaseId);
-    return context.json({ ok: true });
+    return context.json(runs.heartbeat(context.req.param('forkId'), leaseId));
   });
 
   app.post('/api/runner/forks/:forkId/input', async (context) => {
     const forkId = context.req.param('forkId');
     const { leaseId, waitMs, after } = inputBody.parse(await context.req.json());
-    const messages = await waitUntil(
+    // A stop the reader asked for ends the wait at once.
+    const input = await waitUntil(
       bus,
       () => {
+        if (runs.stopRequested(forkId, leaseId)) return { messages: [], stop: true };
         const pending = runs.pendingInput(forkId, leaseId, after);
-        return pending.length > 0 ? pending : null;
+        return pending.length > 0 ? { messages: pending, stop: false } : null;
       },
       waitMs,
       context.req.raw.signal,
     );
-    if (!messages) return context.json({ messages: [], others: null });
-    return context.json({ messages, others: runs.othersUpdate(forkId, leaseId) });
+    if (!input) return context.json({ messages: [], others: null, stop: false });
+    const others = input.messages.length > 0 ? runs.othersUpdate(forkId, leaseId) : null;
+    return context.json({ ...input, others });
   });
 
   app.post('/api/runner/forks/:forkId/context', async (context) => {
@@ -171,6 +174,12 @@ export function registerRunnerRoutes(app: Hono, options: RunnerRoutesOptions) {
   app.post('/api/runner/forks/:forkId/release', async (context) => {
     const { leaseId } = leaseBody.parse(await context.req.json());
     runs.release(context.req.param('forkId'), leaseId);
+    return context.json({ ok: true });
+  });
+
+  app.post('/api/runner/forks/:forkId/stopped', async (context) => {
+    const { leaseId, upToMessageId } = stoppedBody.parse(await context.req.json());
+    runs.stopped(context.req.param('forkId'), leaseId, upToMessageId);
     return context.json({ ok: true });
   });
 

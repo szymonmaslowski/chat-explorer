@@ -153,6 +153,7 @@ class ForkWorker {
   private reports: Promise<unknown> = Promise.resolve();
   private finished = false;
   private closing = false;
+  private stopping = false;
   private exited: Promise<void> = Promise.resolve();
 
   constructor(
@@ -167,7 +168,10 @@ class ForkWorker {
     const { client, engine } = this.options;
     try {
       this.heartbeat = setInterval(() => {
-        client.heartbeat(this.lease).catch((error: unknown) => this.onReportError(error));
+        client
+          .heartbeat(this.lease)
+          .then(({ stop }) => stop && this.stopTurn())
+          .catch((error: unknown) => this.onReportError(error));
       }, this.timings.heartbeatMs);
       const resume = this.lease.sessionId !== null;
       const context = await client.context(this.lease, resume);
@@ -210,8 +214,8 @@ class ForkWorker {
 
   private async inputLoop() {
     const { client } = this.options;
-    while (!this.finished && !this.closing) {
-      let input: { messages: PendingMessage[]; others: string | null };
+    while (!this.finished && !this.closing && !this.stopping) {
+      let input: { messages: PendingMessage[]; others: string | null; stop: boolean };
       try {
         input = await client.input(
           this.lease,
@@ -221,6 +225,10 @@ class ForkWorker {
       } catch (error) {
         if (this.finished || this.closing) return;
         throw error;
+      }
+      if (input.stop) {
+        this.stopTurn();
+        return;
       }
       if (input.messages.length > 0) {
         await this.send(input.messages, input.others);
@@ -315,11 +323,30 @@ class ForkWorker {
     });
   }
 
+  // The reader asked to stop: the turn ends at once, without an answer.
+  private stopTurn() {
+    if (this.finished || this.stopping) return;
+    this.stopping = true;
+    this.abort.abort();
+    this.engineRun?.stop({ immediately: true });
+  }
+
   private async onExit(result: { code: number | null; error?: string }) {
     if (this.finished) return;
     this.finished = true;
     this.abort.abort();
     const { client } = this.options;
+    if (this.stopping) {
+      if (this.newestSentId) {
+        await client.activity(this.lease, {
+          afterMessageId: this.newestSentId,
+          kind: 'progress',
+          text: 'Stopped',
+        });
+      }
+      await client.stopped(this.lease, this.newestSentId);
+      return;
+    }
     if (this.closing || (!this.turnOpen && result.code === 0)) {
       await client.release(this.lease);
       return;
