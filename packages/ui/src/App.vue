@@ -21,7 +21,7 @@ const currentForkId = computed(() => {
 <template>
   <div class="layout" :class="{ columns: chatsColumn || mapColumn }">
     <aside v-if="chatsColumn" class="side-column chats-column">
-      <ExplorationsList sidebar />
+      <ExplorationsList sidebar :current-exploration-id="explorationId ?? undefined" />
     </aside>
     <section v-if="mapColumn && explorationId" class="side-column map-column">
       <ForkMap side :exploration-id="explorationId" :current-fork-id="currentForkId" />

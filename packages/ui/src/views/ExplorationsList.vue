@@ -10,8 +10,12 @@ import ThemeSwitch from '../components/ThemeSwitch.vue';
 import { relativeTime } from '@shared/time';
 import { openEventStream } from '../lib/event-stream';
 
-// As `sidebar`, the list sits beside the open chat.
-const props = defineProps<{ archived?: boolean; sidebar?: boolean }>();
+// As `sidebar`, the list sits beside the open chat, which it marks.
+const props = defineProps<{
+  archived?: boolean;
+  sidebar?: boolean;
+  currentExplorationId?: string;
+}>();
 
 // Changes come in bursts, such as an answer and its fork, so they are reloaded once.
 const reloadDelayMs = 300;
@@ -85,7 +89,12 @@ async function removeFromList(explorationId: string, change: (id: string) => Pro
       </template>
     </p>
     <ul v-else-if="explorations" class="explorations">
-      <li v-for="exploration in explorations" :key="exploration.id" class="exploration">
+      <li
+        v-for="exploration in explorations"
+        :key="exploration.id"
+        class="exploration"
+        :class="{ current: exploration.id === currentExplorationId }"
+      >
         <AttentionDot
           v-if="attentionOf(exploration)"
           :attention="attentionOf(exploration)!"
@@ -175,6 +184,11 @@ async function removeFromList(explorationId: string, change: (id: string) => Pro
 
 .exploration:hover {
   border-color: var(--accent);
+}
+
+.exploration.current {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 .dot {
