@@ -4,8 +4,9 @@ import { spawn } from 'node:child_process';
 // through only the hosts on its list: the model's API over CONNECT, the daemon's job tools over
 // plain HTTP. Anything else, even a hostname lookup, fails.
 export const sandboxNetwork = 'chat-explorer-sandbox';
-export const egressContainer = 'chat-explorer-egress';
-export const proxyUrl = `http://${egressContainer}:3128`;
+// One proxy per daemon port, so a second daemon, such as a test one, keeps its own list.
+export const egressContainer = (port: number) => `chat-explorer-egress-${port}`;
+const proxyUrl = (port: number) => `http://${egressContainer(port)}:3128`;
 
 export const allowedHosts = (port: number) => [
   'api.anthropic.com:443',
@@ -45,13 +46,13 @@ server.listen(3128);
 `;
 
 // What a container of the engine adds to reach the outside only through the proxy.
-export const sandboxArguments = [
+export const sandboxArguments = (port: number) => [
   '--network',
   sandboxNetwork,
   '--env',
-  `HTTPS_PROXY=${proxyUrl}`,
+  `HTTPS_PROXY=${proxyUrl(port)}`,
   '--env',
-  `HTTP_PROXY=${proxyUrl}`,
+  `HTTP_PROXY=${proxyUrl(port)}`,
   '--env',
   'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1',
 ];
@@ -80,13 +81,13 @@ export async function ensureEgress(image: string, port: number) {
       'create the sandbox network',
     );
   }
-  await docker(['rm', '--force', egressContainer]);
+  await docker(['rm', '--force', egressContainer(port)]);
   await required(
     [
       'run',
       '--detach',
       '--name',
-      egressContainer,
+      egressContainer(port),
       '--restart',
       'unless-stopped',
       '--cap-drop',
@@ -105,7 +106,7 @@ export async function ensureEgress(image: string, port: number) {
     'start the egress proxy',
   );
   await required(
-    ['network', 'connect', sandboxNetwork, egressContainer],
+    ['network', 'connect', sandboxNetwork, egressContainer(port)],
     'connect the egress proxy',
   );
 }

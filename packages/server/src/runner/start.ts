@@ -35,6 +35,7 @@ export async function startRunner(options: StartRunnerOptions) {
     client: new RunnerClient(options.baseUrl, options.machineToken),
     engine: claudeCodeEngine({
       image,
+      port: options.port,
       forksPath: join(options.runnerPath, 'forks'),
       filesPath: options.filesPath,
       oauthToken: () => readClaudeToken(options.runnerPath),

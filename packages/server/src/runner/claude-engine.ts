@@ -15,6 +15,8 @@ export interface ClaudeEnginePaths {
 
 export interface ClaudeEngineOptions extends ClaudeEnginePaths {
   image: string;
+  // The daemon's port, which names the egress proxy the engine goes out through.
+  port: number;
   oauthToken: () => string;
 }
 
@@ -66,7 +68,7 @@ export function claudeDockerArguments(
     'CLAUDE_CODE_OAUTH_TOKEN',
     '--env',
     'DISABLE_AUTOUPDATER=1',
-    ...sandboxArguments,
+    ...sandboxArguments(options.port),
     '--volume',
     `${folders.work}:${folders.work}`,
     '--workdir',
@@ -106,7 +108,7 @@ export function claudeDockerArguments(
 // The model for small jobs, cheap and quick.
 const completionModel = 'haiku';
 
-export const claudeCompletionArguments = (prompt: string, image: string) => [
+export const claudeCompletionArguments = (prompt: string, image: string, port: number) => [
   'run',
   '--rm',
   '--cap-drop',
@@ -115,7 +117,7 @@ export const claudeCompletionArguments = (prompt: string, image: string) => [
   'no-new-privileges',
   '--env',
   'CLAUDE_CODE_OAUTH_TOKEN',
-  ...sandboxArguments,
+  ...sandboxArguments(port),
   image,
   'claude',
   '-p',
@@ -132,10 +134,14 @@ export function claudeCodeEngine(options: ClaudeEngineOptions): Engine {
   return {
     complete(prompt) {
       return new Promise((resolve, reject) => {
-        const child = spawn('docker', claudeCompletionArguments(prompt, options.image), {
-          stdio: ['ignore', 'pipe', 'pipe'],
-          env: { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: options.oauthToken() },
-        });
+        const child = spawn(
+          'docker',
+          claudeCompletionArguments(prompt, options.image, options.port),
+          {
+            stdio: ['ignore', 'pipe', 'pipe'],
+            env: { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: options.oauthToken() },
+          },
+        );
         let output = '';
         child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()));
         child.on('error', reject);
