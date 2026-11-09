@@ -1,5 +1,7 @@
 import type { ClaudeModel } from '../shared/models.js';
 import type {
+  Activity,
+  ActivityKind,
   Bookmark,
   Comment,
   CommentStatus,
@@ -8,6 +10,7 @@ import type {
   FileKind,
   Fork,
   ForkKind,
+  ForkRun,
   Message,
   MessageFile,
   MessageSource,
@@ -16,6 +19,7 @@ import type {
   NoteGroup,
   QueuedSubmission,
   Role,
+  RunStatus,
 } from '../shared/types.js';
 
 export interface ExplorationRow {
@@ -131,6 +135,37 @@ export interface NoteRow {
   deletion_requested_at: number | null;
   created_at: number;
   updated_at: number;
+}
+
+export interface ForkRunRow {
+  fork_id: string;
+  exploration_id: string;
+  engine: string;
+  session_id: string | null;
+  input_cursor: string | null;
+  lease_id: string | null;
+  runner_id: string | null;
+  lease_expires_at: number | null;
+  attempt: number;
+  failed_attempts: number;
+  status: RunStatus;
+  status_detail: string | null;
+  model: string | null;
+  context_tokens: number | null;
+  context_window: number | null;
+  updated_at: number;
+}
+
+export interface ActivityRow {
+  id: string;
+  exploration_id: string;
+  fork_id: string;
+  after_message_id: string;
+  attempt: number;
+  kind: ActivityKind;
+  text: string;
+  interrupted: number;
+  created_at: number;
 }
 
 export interface BookmarkRow {
@@ -270,5 +305,29 @@ export const toBookmark = (row: BookmarkRow): Bookmark => ({
   quote: row.quote,
   startOffset: row.start_offset,
   endOffset: row.end_offset,
+  createdAt: row.created_at,
+});
+
+export const toForkRun = (row: ForkRunRow): ForkRun => ({
+  forkId: row.fork_id,
+  explorationId: row.exploration_id,
+  status: row.status,
+  statusDetail: row.status_detail,
+  attempt: row.attempt,
+  model: row.model,
+  contextTokens: row.context_tokens,
+  contextWindow: row.context_window,
+  updatedAt: row.updated_at,
+});
+
+export const toActivity = (row: ActivityRow): Activity => ({
+  id: row.id,
+  explorationId: row.exploration_id,
+  forkId: row.fork_id,
+  afterMessageId: row.after_message_id,
+  attempt: row.attempt,
+  kind: row.kind,
+  text: row.text,
+  interrupted: row.interrupted === 1,
   createdAt: row.created_at,
 });

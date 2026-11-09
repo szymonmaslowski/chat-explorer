@@ -160,6 +160,38 @@ export interface ReplyDraft {
   updatedAt: number;
 }
 
+// The agent loop's state of a fork: what its runner is doing and how full the context is.
+export type RunStatus = 'idle' | 'answering' | 'waiting_limit' | 'failed';
+
+export interface ForkRun {
+  forkId: string;
+  explorationId: string;
+  status: RunStatus;
+  // Why it failed, or until when it waits for the usage limit.
+  statusDetail: string | null;
+  attempt: number;
+  model: string | null;
+  contextTokens: number | null;
+  contextWindow: number | null;
+  updatedAt: number;
+}
+
+export type ActivityKind = 'tool' | 'text' | 'progress';
+
+export interface Activity {
+  id: string;
+  explorationId: string;
+  forkId: string;
+  // The newest user message of the turn it belongs to.
+  afterMessageId: string;
+  attempt: number;
+  kind: ActivityKind;
+  text: string;
+  // From an attempt that died before it answered.
+  interrupted: boolean;
+  createdAt: number;
+}
+
 export interface Snapshot {
   exploration: Exploration;
   forks: Fork[];
@@ -171,6 +203,8 @@ export interface Snapshot {
   noteGroups: NoteGroup[];
   notes: Note[];
   bookmarks: Bookmark[];
+  forkRuns: ForkRun[];
+  activities: Activity[];
   sessionStatus: SessionStatus;
   sessionError: string | null;
 }
@@ -200,6 +234,9 @@ export type ExplorationEvent =
   | { type: 'files.released'; fileIds: string[] }
   | { type: 'exploration.updated'; exploration: Exploration }
   | { type: 'exploration.deleted'; explorationId: string }
+  | { type: 'fork-run.updated'; run: ForkRun }
+  | { type: 'activity.added'; activity: Activity }
+  | { type: 'activities.interrupted'; forkId: string; attempt: number }
   | { type: 'session.attached'; shimId: string }
   | { type: 'session.status'; status: SessionStatus }
   | { type: 'session.error'; message: string | null };

@@ -1,6 +1,8 @@
 import type { Database } from '../db/database.js';
 import {
+  toActivity,
   toBookmark,
+  toForkRun,
   toComment,
   toExploration,
   toFork,
@@ -9,7 +11,9 @@ import {
   toNote,
   toNoteGroup,
   toQueuedSubmission,
+  type ActivityRow,
   type BookmarkRow,
+  type ForkRunRow,
   type CommentRow,
   type ExplorationRow,
   type FileRow,
@@ -298,6 +302,15 @@ export class ChatStore {
           explorationId,
         )
         .map(toBookmark),
+      forkRuns: this.db
+        .all<ForkRunRow>('SELECT * FROM fork_runs WHERE exploration_id = ?', explorationId)
+        .map(toForkRun),
+      activities: this.db
+        .all<ActivityRow>(
+          'SELECT * FROM activities WHERE exploration_id = ? ORDER BY created_at, rowid',
+          explorationId,
+        )
+        .map(toActivity),
     };
   }
 
@@ -549,6 +562,24 @@ export class ChatStore {
     }
     const { message, fork: updatedFork } = this.db.transaction(() => {
       const appended = this.appendMessage(fork, 'assistant', repairMarkdown(input.content), 'live');
+      this.keepFilesShownIn(appended.message);
+      return appended;
+    });
+    this.publish([
+      [
+        fork.exploration_id,
+        { type: 'message.added', message: toMessage(message), fork: toFork(updatedFork) },
+      ],
+    ]);
+    return toMessage(message);
+  }
+
+  // An answer from a runner's turn. It goes after the fork's newest message, which may be one the
+  // reader sent while Claude was working; its tags say which messages it answers.
+  addRunnerAnswer(forkId: string, content: string) {
+    const fork = this.requireWritableFork(forkId);
+    const { message, fork: updatedFork } = this.db.transaction(() => {
+      const appended = this.appendMessage(fork, 'assistant', repairMarkdown(content), 'live');
       this.keepFilesShownIn(appended.message);
       return appended;
     });
@@ -2042,7 +2073,7 @@ export class ChatStore {
 
   // A fork is read only while it or a fork above it is archived. Drafts can still be saved, so
   // text typed just before archiving is kept for when the fork is restored.
-  private requireWritableFork(forkId: string, explorationId?: string) {
+  requireWritableFork(forkId: string, explorationId?: string) {
     const row = this.requireForkRow(forkId, explorationId);
     this.requireWritable(row.exploration_id);
     const archived = this.db.get<{ id: string }>(

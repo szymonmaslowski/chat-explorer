@@ -1,0 +1,311 @@
+import type { Database } from '../db/database.js';
+import {
+  toActivity,
+  toForkRun,
+  type ActivityRow,
+  type ForkRunRow,
+  type MessageRow,
+} from '../db/rows.js';
+import type { ActivityKind } from '../shared/types.js';
+import { StoreError } from './errors.js';
+import type { EventBus } from './event-bus.js';
+import { newId } from './ids.js';
+import type { ChatStore } from './store.js';
+
+export const leaseMs = 60_000;
+// After this many attempts that died before answering, the fork waits for Retry.
+export const maxFailedAttempts = 3;
+
+export interface Lease {
+  forkId: string;
+  explorationId: string;
+  leaseId: string;
+  attempt: number;
+  // The engine session from earlier turns, to resume; null for a fork's first run.
+  sessionId: string | null;
+}
+
+export interface PendingMessage {
+  id: string;
+  text: string;
+}
+
+export interface RunUsage {
+  model: string;
+  contextTokens: number;
+  contextWindow: number | null;
+}
+
+// The user messages of a fork after this rowid have not been answered: after the newest one a turn
+// answered, or for a fork no runner has answered yet, after its newest answer.
+const unansweredAfter = `COALESCE(
+  (SELECT rowid FROM messages WHERE id = fork_runs.input_cursor),
+  (SELECT max(rowid) FROM messages WHERE fork_id = forks.id AND role = 'assistant'),
+  0
+)`;
+
+// The agent loop's side of the store: which forks need an answer, the lease of the runner working
+// on each, the user messages it has not answered yet, and what it reports back.
+export class RunStore {
+  constructor(
+    private readonly db: Database,
+    private readonly bus: EventBus,
+    private readonly chats: ChatStore,
+    private readonly now: () => number = Date.now,
+  ) {}
+
+  // A chat with a live terminal session attached is left to that session, the way a second runner
+  // would leave a fork another runner holds.
+  claimable() {
+    return this.db
+      .all<{ fork_id: string; exploration_id: string }>(
+        `SELECT forks.id AS fork_id, forks.exploration_id FROM forks
+         JOIN explorations ON explorations.id = forks.exploration_id
+         LEFT JOIN fork_runs ON fork_runs.fork_id = forks.id
+         WHERE explorations.archived_at IS NULL AND explorations.deleted_at IS NULL
+           AND (fork_runs.lease_id IS NULL OR fork_runs.lease_expires_at <= ?)
+           AND (fork_runs.status IS NULL OR fork_runs.status != 'failed')
+           AND EXISTS (
+             SELECT 1 FROM messages
+             WHERE messages.fork_id = forks.id AND messages.role = 'user'
+               AND messages.rowid > ${unansweredAfter}
+           )
+         ORDER BY forks.created_at, forks.rowid`,
+        this.now(),
+      )
+      .filter((row) => this.answerable(row.fork_id, row.exploration_id))
+      .map((row) => ({ forkId: row.fork_id, explorationId: row.exploration_id }));
+  }
+
+  // A lease that expired without being released belonged to a run that died: that attempt failed.
+  claim(forkId: string, runnerId: string): Lease | null {
+    const claimed = this.db.transaction(() => {
+      const fork = this.claimable().find((candidate) => candidate.forkId === forkId);
+      if (!fork) return null;
+      const row = this.ensureRow(forkId, fork.explorationId);
+      let failedAttempts = row.failed_attempts;
+      const died = row.lease_id !== null;
+      if (died) {
+        failedAttempts += 1;
+        this.interrupt(row);
+      }
+      if (failedAttempts >= maxFailedAttempts) {
+        this.update(forkId, {
+          lease_id: null,
+          runner_id: null,
+          lease_expires_at: null,
+          failed_attempts: failedAttempts,
+          status: 'failed',
+          status_detail: 'The runner stopped answering three times.',
+        });
+        return null;
+      }
+      const leaseId = newId();
+      this.update(forkId, {
+        lease_id: leaseId,
+        runner_id: runnerId,
+        lease_expires_at: this.now() + leaseMs,
+        attempt: row.attempt + 1,
+        failed_attempts: failedAttempts,
+        status: 'answering',
+        status_detail: null,
+      });
+      return {
+        forkId,
+        explorationId: fork.explorationId,
+        leaseId,
+        attempt: row.attempt + 1,
+        sessionId: row.session_id,
+      };
+    });
+    this.publishRun(forkId);
+    return claimed;
+  }
+
+  // A runner that slept through its lease keeps it, unless another runner claimed the fork since.
+  heartbeat(forkId: string, leaseId: string) {
+    this.requireLease(forkId, leaseId);
+    this.db.run(
+      'UPDATE fork_runs SET lease_expires_at = ? WHERE fork_id = ?',
+      this.now() + leaseMs,
+      forkId,
+    );
+  }
+
+  pendingInput(forkId: string, leaseId: string): PendingMessage[] {
+    this.requireLease(forkId, leaseId);
+    return this.db
+      .all<MessageRow>(
+        `SELECT messages.* FROM messages
+         JOIN forks ON forks.id = messages.fork_id
+         LEFT JOIN fork_runs ON fork_runs.fork_id = forks.id
+         WHERE forks.id = ? AND messages.role = 'user' AND messages.rowid > ${unansweredAfter}
+         ORDER BY messages.rowid`,
+        forkId,
+      )
+      .map((row) => ({ id: row.id, text: this.chats.messageText(row) }));
+  }
+
+  startTurn(forkId: string, leaseId: string) {
+    this.requireLease(forkId, leaseId);
+    this.update(forkId, { status: 'answering', status_detail: null });
+    this.publishRun(forkId);
+  }
+
+  // Every message handed to the engine up to `upToMessageId` is answered once its turn ends.
+  finishTurn(forkId: string, leaseId: string, upToMessageId: string) {
+    this.requireLease(forkId, leaseId);
+    this.update(forkId, {
+      input_cursor: upToMessageId,
+      failed_attempts: 0,
+      status: 'idle',
+      status_detail: null,
+    });
+    this.publishRun(forkId);
+  }
+
+  answer(forkId: string, leaseId: string, content: string) {
+    this.requireLease(forkId, leaseId);
+    return this.chats.addRunnerAnswer(forkId, content);
+  }
+
+  addActivity(
+    forkId: string,
+    leaseId: string,
+    input: { afterMessageId: string; kind: ActivityKind; text: string },
+  ) {
+    const row = this.requireLease(forkId, leaseId);
+    const id = newId();
+    this.db.run(
+      `INSERT INTO activities (id, exploration_id, fork_id, after_message_id, attempt, kind, text,
+         created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      id,
+      row.exploration_id,
+      forkId,
+      input.afterMessageId,
+      row.attempt,
+      input.kind,
+      input.text,
+      this.now(),
+    );
+    const activity = toActivity(
+      this.db.get<ActivityRow>('SELECT * FROM activities WHERE id = ?', id)!,
+    );
+    this.bus.publish(row.exploration_id, { type: 'activity.added', activity });
+    return activity;
+  }
+
+  recordSession(forkId: string, leaseId: string, sessionId: string) {
+    this.requireLease(forkId, leaseId);
+    this.update(forkId, { session_id: sessionId });
+  }
+
+  recordUsage(forkId: string, leaseId: string, usage: RunUsage) {
+    this.requireLease(forkId, leaseId);
+    this.update(forkId, {
+      model: usage.model,
+      context_tokens: usage.contextTokens,
+      context_window: usage.contextWindow,
+    });
+    this.publishRun(forkId);
+  }
+
+  waitForUsageLimit(forkId: string, leaseId: string, until: string) {
+    this.requireLease(forkId, leaseId);
+    this.update(forkId, { status: 'waiting_limit', status_detail: until });
+    this.publishRun(forkId);
+  }
+
+  // The runner let the fork go after its turn, for example when its process went idle.
+  release(forkId: string, leaseId: string) {
+    this.requireLease(forkId, leaseId);
+    this.update(forkId, { lease_id: null, runner_id: null, lease_expires_at: null });
+    this.publishRun(forkId);
+  }
+
+  // The run died before answering. The fork is claimable again, until it has failed too often.
+  fail(forkId: string, leaseId: string, reason: string) {
+    const row = this.requireLease(forkId, leaseId);
+    const failedAttempts = row.failed_attempts + 1;
+    this.interrupt(row);
+    this.update(forkId, {
+      lease_id: null,
+      runner_id: null,
+      lease_expires_at: null,
+      failed_attempts: failedAttempts,
+      status: failedAttempts >= maxFailedAttempts ? 'failed' : 'idle',
+      status_detail: failedAttempts >= maxFailedAttempts ? reason : null,
+    });
+    this.publishRun(forkId);
+  }
+
+  retry(forkId: string) {
+    const fork = this.chats.requireWritableFork(forkId);
+    this.ensureRow(forkId, fork.exploration_id);
+    this.update(forkId, { failed_attempts: 0, status: 'idle', status_detail: null });
+    this.publishRun(forkId);
+  }
+
+  private answerable(forkId: string, explorationId: string) {
+    if (this.chats.attachment(explorationId)?.live) return false;
+    try {
+      this.chats.requireWritableFork(forkId);
+      return true;
+    } catch (error) {
+      if (error instanceof StoreError) return false;
+      throw error;
+    }
+  }
+
+  private interrupt(row: ForkRunRow) {
+    const marked = this.db.run(
+      'UPDATE activities SET interrupted = 1 WHERE fork_id = ? AND attempt = ? AND interrupted = 0',
+      row.fork_id,
+      row.attempt,
+    );
+    if (Number(marked.changes) > 0) {
+      this.bus.publish(row.exploration_id, {
+        type: 'activities.interrupted',
+        forkId: row.fork_id,
+        attempt: row.attempt,
+      });
+    }
+  }
+
+  private requireLease(forkId: string, leaseId: string) {
+    const row = this.db.get<ForkRunRow>('SELECT * FROM fork_runs WHERE fork_id = ?', forkId);
+    if (!row || row.lease_id !== leaseId) {
+      throw new StoreError('stale_lease', `The lease on fork ${forkId} is no longer yours.`);
+    }
+    return row;
+  }
+
+  private ensureRow(forkId: string, explorationId: string) {
+    this.db.run(
+      `INSERT INTO fork_runs (fork_id, exploration_id, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT (fork_id) DO NOTHING`,
+      forkId,
+      explorationId,
+      this.now(),
+    );
+    return this.db.get<ForkRunRow>('SELECT * FROM fork_runs WHERE fork_id = ?', forkId)!;
+  }
+
+  private update(forkId: string, changes: Partial<Omit<ForkRunRow, 'fork_id' | 'updated_at'>>) {
+    const columns = Object.keys(changes);
+    this.db.run(
+      `UPDATE fork_runs SET ${columns.map((column) => `${column} = ?`).join(', ')}, updated_at = ?
+       WHERE fork_id = ?`,
+      ...columns.map((column) => changes[column as keyof typeof changes] ?? null),
+      this.now(),
+      forkId,
+    );
+  }
+
+  private publishRun(forkId: string) {
+    const row = this.db.get<ForkRunRow>('SELECT * FROM fork_runs WHERE fork_id = ?', forkId);
+    if (row)
+      this.bus.publish(row.exploration_id, { type: 'fork-run.updated', run: toForkRun(row) });
+  }
+}

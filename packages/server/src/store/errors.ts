@@ -4,6 +4,7 @@ export type StoreErrorCode =
   | 'not_draft'
   | 'already_sent'
   | 'stale_tip'
+  | 'stale_lease'
   | 'attached_elsewhere'
   | 'detached'
   | 'too_many_sessions'
@@ -24,6 +25,7 @@ const httpStatusByCode: Record<StoreErrorCode, 400 | 404 | 409 | 413 | 415 | 500
   not_draft: 409,
   already_sent: 409,
   stale_tip: 409,
+  stale_lease: 409,
   attached_elsewhere: 409,
   detached: 409,
   too_many_sessions: 503,

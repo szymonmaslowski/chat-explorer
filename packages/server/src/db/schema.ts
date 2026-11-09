@@ -193,4 +193,42 @@ export const migrations = [
   );
   CREATE INDEX bookmarks_by_exploration ON bookmarks (exploration_id);
   `,
+  `
+  -- The agent loop: per fork, the engine session, which user messages it has answered, the lease
+  -- of the runner working on it, its status and its usage.
+  CREATE TABLE fork_runs (
+    fork_id TEXT PRIMARY KEY REFERENCES forks (id) ON DELETE CASCADE,
+    exploration_id TEXT NOT NULL REFERENCES explorations (id) ON DELETE CASCADE,
+    engine TEXT NOT NULL DEFAULT 'claude-code',
+    session_id TEXT,
+    input_cursor TEXT,
+    lease_id TEXT,
+    runner_id TEXT,
+    lease_expires_at INTEGER,
+    attempt INTEGER NOT NULL DEFAULT 0,
+    failed_attempts INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'idle'
+      CHECK (status IN ('idle', 'answering', 'waiting_limit', 'failed')),
+    status_detail TEXT,
+    model TEXT,
+    context_tokens INTEGER,
+    context_window INTEGER,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX fork_runs_by_exploration ON fork_runs (exploration_id);
+
+  -- What Claude was doing during a turn, shown collapsed and never part of the fork's context.
+  CREATE TABLE activities (
+    id TEXT PRIMARY KEY,
+    exploration_id TEXT NOT NULL REFERENCES explorations (id) ON DELETE CASCADE,
+    fork_id TEXT NOT NULL REFERENCES forks (id) ON DELETE CASCADE,
+    after_message_id TEXT NOT NULL,
+    attempt INTEGER NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('tool', 'text', 'progress')),
+    text TEXT NOT NULL,
+    interrupted INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX activities_by_fork ON activities (fork_id, created_at);
+  `,
 ];
