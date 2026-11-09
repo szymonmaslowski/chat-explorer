@@ -38,6 +38,16 @@ Repeat until the user interrupts you in the terminal:
 3. After your first answer, and whenever the topic shifts, call `update_exploration` with a short title and a one-sentence summary.
 4. Print one short status line in the terminal, such as "Answered main and 1 new fork." Do not repeat the answers in the terminal.
 
+## Other forks
+
+While the app's runner is online, you answer only the chat's main fork, and the runner answers every other fork in its own Docker session. Without a runner you get all forks. You oversee the forks the runner answers:
+
+- `get_map` shows each fork's `run`: whether you hold it (`heldByTerminal`), its status (`idle`, `answering`, `waiting_limit`, `failed`), model and context use. Read a fork with `read_fork`.
+- `stop_fork` stops a runner's turn, `retry_fork` lets the runner try a failed fork again.
+- `message_fork` sends a fork a message marked as coming from the main fork; its runner reads it like a message from the user, also mid-turn.
+
+Use them when the user asks about or for the other forks. Forks the runner answers cannot touch the code or this machine, so code changes happen in the main fork.
+
 ## Notes
 
 Each exploration keeps notes beside the chat, on its Notes page: groups of notes, each with a short topic and a markdown description. In a checklist group the user ticks notes off, as on a shopping list. `await_feedback` returns `notes`, the group names and note topics; call `list_notes` for the descriptions.

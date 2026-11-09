@@ -1,5 +1,5 @@
 import type { ClaudeModel } from '../shared/models.js';
-import type { ChatStore } from './store.js';
+import { supervisorMessagePrefix, type ChatStore } from './store.js';
 
 // What a runner needs to start an engine for a fork: the model, the standing instructions, and for
 // a fork without an engine session yet, the conversation it continues.
@@ -23,6 +23,7 @@ How the user's messages look:
 - A comment starts with its tag on its own line, [c:<commentId>], then the quoted text as a "> " block, then the comment on it.
 - When a message has comments, its own text starts with [m:<messageId>].
 - Attached files are listed with their paths; open them with the Read tool.
+- A message that starts with ${supervisorMessagePrefix} comes from the Claude session answering the chat's main fork, which oversees the other forks for the user. Treat it like a message from the user.
 
 How to answer:
 - Start each part of your answer with the tags of what it answers, alone on their own line, for example [c:x7k2p9q4mz], or [c:x7k2p9q4mz] [m:q3ws8h2kd1] for a part that answers both. The page shows each tag as a card of the comment, so do not repeat the comment or quote it again. You may group and reorder parts. Copy the ids exactly. Messages without tags get an answer without tags.

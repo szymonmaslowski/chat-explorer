@@ -34,6 +34,7 @@ import type {
   FileKind,
   ForkAwareness,
   ForkKind,
+  ForkRun,
   MessageSource,
   NewBookmark,
   NewComment,
@@ -93,6 +94,9 @@ export interface PendingFork {
   repliesTo: { messageId: string; excerpt: string } | null;
 }
 
+// Starts a message the session answering the main fork sends into another fork.
+export const supervisorMessagePrefix = '**From the main fork:**';
+
 export interface ForkMapEntry {
   id: string;
   parentForkId: string | null;
@@ -101,6 +105,7 @@ export interface ForkMapEntry {
   kind: ForkKind;
   messageCount: number;
   awaitingAnswer: boolean;
+  run: ForkRun | null;
 }
 
 export interface ForkRead {
@@ -453,6 +458,11 @@ export class ChatStore {
 
   forkMap(explorationId: string): ForkMapEntry[] {
     this.requireExplorationRow(explorationId);
+    const runs = new Map(
+      this.db
+        .all<ForkRunRow>('SELECT * FROM fork_runs WHERE exploration_id = ?', explorationId)
+        .map((row) => [row.fork_id, toForkRun(row)]),
+    );
     return this.db
       .all<ForkRow & { message_count: number; tip_role: Role | null }>(
         `SELECT forks.*,
@@ -469,6 +479,7 @@ export class ChatStore {
         kind: row.kind,
         messageCount: row.message_count,
         awaitingAnswer: row.tip_role === 'user',
+        run: runs.get(row.id) ?? null,
       }));
   }
 
@@ -662,6 +673,25 @@ export class ChatStore {
       this.keepFilesShownIn(appended.message);
       return appended;
     });
+    this.publish([
+      [
+        fork.exploration_id,
+        { type: 'message.added', message: toMessage(message), fork: toFork(updatedFork) },
+      ],
+    ]);
+    return toMessage(message);
+  }
+
+  // A message from the session answering the main fork, which supervises the chat's other forks.
+  addSupervisorMessage(forkId: string, text: string) {
+    const fork = this.requireWritableFork(forkId);
+    if (fork.parent_fork_id === null) {
+      throw new StoreError('invalid', 'The main fork is yours to answer; message the other forks.');
+    }
+    if (!text.trim()) throw new StoreError('invalid', 'Write a message for the fork.');
+    const { message, fork: updatedFork } = this.db.transaction(() =>
+      this.appendMessage(fork, 'user', `${supervisorMessagePrefix}\n\n${text.trim()}`, 'live'),
+    );
     this.publish([
       [
         fork.exploration_id,

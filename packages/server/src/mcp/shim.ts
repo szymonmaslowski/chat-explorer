@@ -179,7 +179,7 @@ export function createShim(options: ShimOptions) {
     'get_map',
     {
       description:
-        'Get the fork tree of an exploration: each fork with its parent, summary, message count and whether it awaits an answer. No message bodies.',
+        'Get the fork tree of an exploration: each fork with its parent, summary, message count, whether it awaits an answer, and its run: who answers it (heldByTerminal), status (idle, answering, waiting_limit, failed), model and context use. No message bodies.',
       inputSchema: {
         explorationId: z.string().optional().describe('Defaults to the attached exploration'),
       },
@@ -203,6 +203,48 @@ export function createShim(options: ShimOptions) {
     tool(async ({ forkId, limit }: { forkId: string; limit?: number | undefined }) => {
       const query = limit ? `?limit=${limit}` : '';
       return json(await request<ForkRead>(`/api/internal/forks/${forkId}${query}`));
+    }),
+  );
+
+  server.registerTool(
+    'stop_fork',
+    {
+      description:
+        "Stop the runner's current turn in another fork of the attached chat. The messages it was answering stay unanswered.",
+      inputSchema: { forkId: z.string() },
+    },
+    tool(async ({ forkId }: { forkId: string }) => {
+      requireAttachment();
+      return json(await request(`/api/internal/forks/${forkId}/stop`, { json: { shimId } }));
+    }),
+  );
+
+  server.registerTool(
+    'retry_fork',
+    {
+      description: 'Let the runner try again on a fork whose runs failed.',
+      inputSchema: { forkId: z.string() },
+    },
+    tool(async ({ forkId }: { forkId: string }) => {
+      requireAttachment();
+      return json(await request(`/api/internal/forks/${forkId}/retry`, { json: { shimId } }));
+    }),
+  );
+
+  server.registerTool(
+    'message_fork',
+    {
+      description:
+        'Send a message into another fork of the attached chat, shown as coming from the main fork. The runner answering that fork reads it like a message from the user, also in the middle of a turn.',
+      inputSchema: { forkId: z.string(), text: z.string().min(1) },
+    },
+    tool(async ({ forkId, text }: { forkId: string; text: string }) => {
+      requireAttachment();
+      return json(
+        await request(`/api/internal/forks/${forkId}/supervisor-messages`, {
+          json: { shimId, text },
+        }),
+      );
     }),
   );
 

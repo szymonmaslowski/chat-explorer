@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FeedbackHub } from '../src/store/feedback-hub.js';
 import { leaseMs } from '../src/store/runs.js';
+import { supervisorMessagePrefix } from '../src/store/store.js';
 import { createTestStore, seedConversation } from './helpers.js';
 
 function setup() {
@@ -94,5 +95,35 @@ describe('an attached terminal session as the runner of its chat', () => {
     store.submit(explorationId, mainForkId, 'Main too');
 
     expect(forkIds(await feedback()).toSorted()).toEqual([mainForkId, side.id].toSorted());
+  });
+});
+
+describe('the main fork overseeing the other forks', () => {
+  it('sends a fork a message the runner picks up, marked as coming from the main fork', () => {
+    const { store, runs, explorationId, answer } = setup();
+    const side = store.forkAtAnswer(answer.id);
+    runs.runnerSeen();
+    store.addSupervisorMessage(side.id, 'Look at the second option too.');
+
+    expect(store.readFork(side.id).messages.at(-1)).toMatchObject({
+      role: 'user',
+      text: `${supervisorMessagePrefix}\n\nLook at the second option too.`,
+    });
+    expect(runs.claimable()).toEqual([{ forkId: side.id, explorationId }]);
+  });
+
+  it('refuses to message the main fork', () => {
+    const { store, mainForkId } = setup();
+    expect(() => store.addSupervisorMessage(mainForkId, 'Hi')).toThrow(/main fork/);
+  });
+
+  it("shows each fork's run on the map", async () => {
+    const { store, feedback, explorationId, mainForkId } = setup();
+    store.submit(explorationId, mainForkId, 'Working on it');
+    await feedback();
+    expect(store.forkMap(explorationId)[0]?.run).toMatchObject({
+      status: 'answering',
+      heldByTerminal: true,
+    });
   });
 });

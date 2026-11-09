@@ -225,6 +225,29 @@ describe('internal API', () => {
   });
 });
 
+describe('the main fork overseeing the other forks', () => {
+  it('lets only the attached session message, stop or retry another fork', async () => {
+    const { request, store } = createTestApp();
+    const { explorationId, answer } = seedConversation(store);
+    store.attach({ explorationId, shimId: 'shim-a', sessionId: 'session-a', takeover: false });
+    const side = store.forkAtAnswer(answer.id);
+    const send = (shimId: string) =>
+      request(`/api/internal/forks/${side.id}/supervisor-messages`, {
+        method: 'POST',
+        json: { shimId, text: 'Compare it with the first one.' },
+      });
+    expect((await send('shim-b')).status).toBe(409);
+    expect((await send('shim-a')).status).toBe(201);
+    for (const action of ['stop', 'retry']) {
+      const response = await request(`/api/internal/forks/${side.id}/${action}`, {
+        method: 'POST',
+        json: { shimId: 'shim-b' },
+      });
+      expect(response.status).toBe(409);
+    }
+  });
+});
+
 describe("Claude's changes from a terminal session", () => {
   it('come only from the session attached to the chat', async () => {
     const { request, store } = createTestApp();

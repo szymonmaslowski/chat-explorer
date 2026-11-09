@@ -130,6 +130,7 @@ const startExplorationBody = shimBody.extend({
 const attachBody = shimBody.extend({ sessionId: z.string(), takeover: z.boolean().default(false) });
 const addMessageBody = shimBody.extend({ inReplyTo: z.string(), content: z.string().min(1) });
 const forkSummaryBody = shimBody.extend({ summary: z.string() });
+const supervisorMessageBody = shimBody.extend({ text: z.string().min(1) });
 const explorationChangesBody = shimBody.extend({
   title: z.string().optional(),
   summary: z.string().optional(),
@@ -627,6 +628,31 @@ export function createApp(options: AppOptions) {
     const { shimId, summary } = forkSummaryBody.parse(await context.req.json());
     store.requireAttachedShim(store.forkExplorationId(forkId), shimId);
     return context.json(store.updateForkSummary({ forkId, summary }));
+  });
+
+  // The session answering the main fork oversees the chat's other forks, which the runner answers.
+  const supervisedForkId = (forkId: string, shimId: string) => {
+    store.requireAttachedShim(store.forkExplorationId(forkId), shimId);
+    return forkId;
+  };
+
+  internal.post('/forks/:id/stop', async (context) => {
+    const { shimId } = shimBody.parse(await context.req.json());
+    const forkId = supervisedForkId(context.req.param('id'), shimId);
+    return context.json({ stopping: options.runs.requestStop(forkId) });
+  });
+
+  internal.post('/forks/:id/retry', async (context) => {
+    const { shimId } = shimBody.parse(await context.req.json());
+    options.runs.retry(supervisedForkId(context.req.param('id'), shimId));
+    return context.json({ ok: true });
+  });
+
+  internal.post('/forks/:id/supervisor-messages', async (context) => {
+    const { shimId, text } = supervisorMessageBody.parse(await context.req.json());
+    const forkId = supervisedForkId(context.req.param('id'), shimId);
+    const message = store.addSupervisorMessage(forkId, text);
+    return context.json({ messageId: message.id }, 201);
   });
 
   internal.patch('/explorations/:id', async (context) => {
