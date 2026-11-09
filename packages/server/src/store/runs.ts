@@ -20,6 +20,8 @@ const runnerOnlineMs = 90_000;
 export const maxFailedAttempts = 3;
 const maxUpdateLines = 10;
 
+const shimRunnerId = (shimId: string) => `shim:${shimId}`;
+
 export interface Lease {
   forkId: string;
   explorationId: string;
@@ -77,8 +79,8 @@ export class RunStore {
   ) {}
 
   // A chat with a live terminal session attached is left to that session, the way a second runner
-  // would leave a fork another runner holds.
-  claimable() {
+  // would leave a fork another runner holds; only that session, as `attachedShimId`, claims there.
+  claimable(attachedShimId?: string) {
     return this.db
       .all<{ fork_id: string; exploration_id: string }>(
         `SELECT forks.id AS fork_id, forks.exploration_id FROM forks
@@ -100,7 +102,7 @@ export class RunStore {
          ORDER BY forks.created_at, forks.rowid`,
         this.now(),
       )
-      .filter((row) => this.answerable(row.fork_id, row.exploration_id))
+      .filter((row) => this.answerable(row.fork_id, row.exploration_id, attachedShimId))
       .map((row) => ({ forkId: row.fork_id, explorationId: row.exploration_id }));
   }
 
@@ -120,9 +122,9 @@ export class RunStore {
   }
 
   // A lease that expired without being released belonged to a run that died: that attempt failed.
-  claim(forkId: string, runnerId: string): Lease | null {
+  claim(forkId: string, runnerId: string, attachedShimId?: string): Lease | null {
     const claimed = this.db.transaction(() => {
-      const fork = this.claimable().find((candidate) => candidate.forkId === forkId);
+      const fork = this.claimable(attachedShimId).find((candidate) => candidate.forkId === forkId);
       if (!fork) return null;
       const row = this.ensureRow(forkId, fork.explorationId);
       let failedAttempts = row.failed_attempts;
@@ -386,8 +388,51 @@ export class RunStore {
       : null;
   }
 
-  private answerable(forkId: string, explorationId: string) {
-    if (this.chats.attachment(explorationId)?.live) return false;
+  // An attached terminal session is a runner for its chat: it claims that chat's forks, holds them
+  // while it heartbeats, and lets one go once it answered.
+  claimForShim(explorationId: string, shimId: string) {
+    for (const fork of this.claimable(shimId)) {
+      if (fork.explorationId === explorationId)
+        this.claim(fork.forkId, shimRunnerId(shimId), shimId);
+    }
+    return this.db
+      .all<ForkRunRow>(
+        'SELECT * FROM fork_runs WHERE exploration_id = ? AND runner_id = ? AND lease_id IS NOT NULL',
+        explorationId,
+        shimRunnerId(shimId),
+      )
+      .map((row) => {
+        // Taking the input delivers the fork's queued submissions as its messages.
+        this.pendingInput(row.fork_id, row.lease_id!);
+        return row.fork_id;
+      });
+  }
+
+  renewShimLeases(shimId: string) {
+    this.db.run(
+      'UPDATE fork_runs SET lease_expires_at = ? WHERE runner_id = ? AND lease_id IS NOT NULL',
+      this.now() + leaseMs,
+      shimRunnerId(shimId),
+    );
+  }
+
+  // The session answered the fork up to `upToMessageId`.
+  finishShimTurn(forkId: string, shimId: string, upToMessageId: string) {
+    const row = this.db.get<ForkRunRow>('SELECT * FROM fork_runs WHERE fork_id = ?', forkId);
+    if (!row?.lease_id || row.runner_id !== shimRunnerId(shimId)) return;
+    this.update(forkId, {
+      ...noLease,
+      input_cursor: upToMessageId,
+      failed_attempts: 0,
+      status: 'idle',
+      status_detail: null,
+    });
+    this.publishRun(forkId);
+  }
+
+  private answerable(forkId: string, explorationId: string, attachedShimId?: string) {
+    const attachment = this.chats.attachment(explorationId);
+    if (attachment?.live && attachment.shimId !== attachedShimId) return false;
     try {
       this.chats.requireWritableFork(forkId);
       return true;

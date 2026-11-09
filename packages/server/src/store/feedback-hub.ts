@@ -29,9 +29,11 @@ export interface StartingSessions {
   isStarting(explorationId: string): boolean;
 }
 
-// Where answers come from when no terminal session is attached: a runner, when one is in use.
-export interface RunnerStatus {
+// With a runner in use, the attached session is a runner for its chat: it claims forks with
+// leases, and the chat's status without a session follows the runner.
+export interface SessionLeases {
   status(explorationId: string): 'answering' | 'listening' | 'detached';
+  claimForShim(explorationId: string, shimId: string): string[];
 }
 
 // A shim long-polls in rounds, so after a round times out there is a short gap before the next one.
@@ -51,7 +53,7 @@ export class FeedbackHub {
     private readonly bus: EventBus,
     private readonly now: () => number = Date.now,
     private readonly startingSessions: StartingSessions = { isStarting: () => false },
-    private readonly runner: RunnerStatus | null = null,
+    private readonly leases: SessionLeases | null = null,
   ) {
     bus.subscribe((explorationId, event) => {
       if (event.type === 'session.status') return;
@@ -115,7 +117,7 @@ export class FeedbackHub {
   status(explorationId: string): SessionStatus {
     const attachment = this.store.attachment(explorationId);
     if (!attachment?.live) {
-      if (this.runner) return this.runner.status(explorationId);
+      if (this.leases) return this.leases.status(explorationId);
       return this.startingSessions.isStarting(explorationId) ? 'starting' : 'detached';
     }
     if (this.isListening(explorationId)) return 'listening';
@@ -140,8 +142,13 @@ export class FeedbackHub {
     if (!this.store.hasExploration(explorationId)) return { status: 'deleted' };
     if (this.store.attachment(explorationId)?.shimId !== shimId) return { status: 'detached' };
     this.store.requireAttachedShim(explorationId, shimId);
-    this.store.deliverQueued(explorationId);
-    const forks = this.store.pendingForks(explorationId);
+    // Forks the session holds include ones handed out before and not answered yet, so a session
+    // that lost track gets them again.
+    const held = this.leases ? new Set(this.leases.claimForShim(explorationId, shimId)) : null;
+    if (!held) this.store.deliverQueued(explorationId);
+    const forks = this.store
+      .pendingForks(explorationId)
+      .filter((fork) => !held || held.has(fork.forkId));
     let handed = this.handedNotes.get(explorationId);
     if (handed?.shimId !== shimId) {
       handed = { shimId, noteIds: new Set() };

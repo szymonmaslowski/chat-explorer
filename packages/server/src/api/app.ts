@@ -594,6 +594,7 @@ export function createApp(options: AppOptions) {
   internal.post('/heartbeat', async (context) => {
     const { shimId } = shimBody.parse(await context.req.json());
     const explorationIds = store.heartbeat(shimId);
+    options.runs.renewShimLeases(shimId);
     for (const explorationId of explorationIds) hub.refreshStatus(explorationId);
     return context.json({ explorationIds });
   });
@@ -614,8 +615,10 @@ export function createApp(options: AppOptions) {
   });
 
   internal.post('/forks/:id/messages', async (context) => {
+    const forkId = context.req.param('id');
     const body = addMessageBody.parse(await context.req.json());
-    const message = store.addAssistantMessage({ forkId: context.req.param('id'), ...body });
+    const message = store.addAssistantMessage({ forkId, ...body });
+    options.runs.finishShimTurn(forkId, body.shimId, body.inReplyTo);
     return context.json({ messageId: message.id }, 201);
   });
 
