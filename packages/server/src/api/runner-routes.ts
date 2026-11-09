@@ -94,14 +94,18 @@ export function registerRunnerRoutes(app: Hono, options: RunnerRoutesOptions) {
       waitMs,
       context.req.raw.signal,
     );
-    return context.json({ messages: messages ?? [] });
+    if (!messages) return context.json({ messages: [], others: null });
+    return context.json({ messages, others: runs.othersUpdate(forkId, leaseId) });
   });
 
   app.post('/api/runner/forks/:forkId/context', async (context) => {
     const forkId = context.req.param('forkId');
     const { leaseId, resume } = contextBody.parse(await context.req.json());
     const pendingIds = new Set(runs.pendingInput(forkId, leaseId).map((message) => message.id));
-    return context.json(buildRunContext(store, forkId, { resume, pendingIds }));
+    const runContext = buildRunContext(store, forkId, { resume, pendingIds });
+    // A new session's digest covers the other forks so far; a resumed one hears from now on.
+    if (!resume) runs.markOthersSeen(forkId, leaseId);
+    return context.json(runContext);
   });
 
   app.post('/api/runner/forks/:forkId/turn/start', async (context) => {

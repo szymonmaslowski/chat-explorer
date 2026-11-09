@@ -32,6 +32,7 @@ import type {
   ExplorationListItem,
   ExplorationView,
   FileKind,
+  ForkAwareness,
   ForkKind,
   MessageSource,
   NewBookmark,
@@ -469,6 +470,59 @@ export class ChatStore {
         messageCount: row.message_count,
         awaitingAnswer: row.tip_role === 'user',
       }));
+  }
+
+  fork(forkId: string) {
+    return toFork(this.requireForkRow(forkId));
+  }
+
+  setForkAwareness(forkId: string, awareness: ForkAwareness) {
+    const row = this.requireWritableFork(forkId);
+    this.db.run(
+      'UPDATE forks SET awareness = ?, updated_at = ? WHERE id = ?',
+      awareness,
+      this.now(),
+      forkId,
+    );
+    const fork = toFork(this.requireForkRow(forkId));
+    this.publish([[row.exploration_id, { type: 'fork.updated', fork }]]);
+    return fork;
+  }
+
+  // The chat's other forks that are not archived, each with its messages after `afterRowid` and
+  // the start of its newest answer, for an engine to hear what happened elsewhere.
+  otherForks(forkId: string, afterRowid = 0) {
+    const fork = this.requireForkRow(forkId);
+    return this.db
+      .all<{ id: string; summary: string; new_messages: number; latest_answer: string | null }>(
+        `SELECT forks.id, forks.summary,
+           (SELECT count(*) FROM messages
+             WHERE messages.fork_id = forks.id AND messages.rowid > ?) AS new_messages,
+           (SELECT content FROM messages
+             WHERE messages.fork_id = forks.id AND messages.role = 'assistant'
+             ORDER BY rowid DESC LIMIT 1) AS latest_answer
+         FROM forks
+         WHERE exploration_id = ? AND id != ? AND archived_at IS NULL
+         ORDER BY created_at, rowid`,
+        afterRowid,
+        fork.exploration_id,
+        forkId,
+      )
+      .map((row) => ({
+        forkId: row.id,
+        summary: row.summary || 'Untitled fork',
+        newMessages: row.new_messages,
+        latestAnswer: row.latest_answer ? excerptOf(withoutTagLines(row.latest_answer)) : null,
+      }));
+  }
+
+  newestMessageRowid(explorationId: string) {
+    return (
+      this.db.get<{ rowid: number | null }>(
+        'SELECT max(rowid) AS rowid FROM messages WHERE exploration_id = ?',
+        explorationId,
+      )?.rowid ?? 0
+    );
   }
 
   // Reading is allowed in archived chats and forks too, so their unread marks can be cleared.

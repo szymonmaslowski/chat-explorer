@@ -41,18 +41,14 @@ export class RunnerClient {
   }
 
   // New messages of the fork, after `after`, the newest one the engine already has.
-  async input(
-    lease: Lease,
-    options: { waitMs: number; after: string | null },
-    signal?: AbortSignal,
-  ) {
-    const { messages } = await this.fork<{ messages: PendingMessage[] }>(
+  // `others` is what changed in the chat's other forks since the engine last heard.
+  input(lease: Lease, options: { waitMs: number; after: string | null }, signal?: AbortSignal) {
+    return this.fork<{ messages: PendingMessage[]; others: string | null }>(
       lease,
       'input',
       { waitMs: options.waitMs, after: options.after ?? undefined },
       signal,
     );
-    return messages;
   }
 
   startTurn(lease: Lease) {

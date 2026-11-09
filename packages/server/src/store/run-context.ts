@@ -36,6 +36,27 @@ Tools:
 - Notes are kept beside the chat in groups. When the user asks you to note, save or remember something, use add_notes (after add_note_group when no group fits) and pass sourceMessageId, the id of their message. You cannot delete notes; request_note_deletion asks the user.
 - list_forks and read_fork show the chat's other forks and older messages of this one.`;
 
+const maxDigestLines = 30;
+
+// What the chat's other forks are about, for an aware fork's new session. Each line has the fork's
+// id, so the engine can read more with read_fork.
+function othersDigest(store: ChatStore, forkId: string) {
+  if (store.fork(forkId).awareness === 'separate') return null;
+  const others = store.otherForks(forkId);
+  if (others.length === 0) return null;
+  const shown = others.slice(0, maxDigestLines);
+  return [
+    "The chat's other forks, for context only (answer from this fork; read one with read_fork if it matters):",
+    ...shown.map(
+      (fork) =>
+        `- [${fork.forkId}] ${fork.summary}${fork.latestAnswer ? `. Latest answer: ${fork.latestAnswer}` : ''}`,
+    ),
+    ...(others.length > shown.length
+      ? [`- and ${others.length - shown.length} more, see list_forks`]
+      : []),
+  ].join('\n');
+}
+
 export function buildRunContext(
   store: ChatStore,
   forkId: string,
@@ -54,6 +75,7 @@ export function buildRunContext(
     kept.unshift(message);
   }
   const omitted = answered.length - kept.length;
+  const digest = othersDigest(store, forkId);
   const isNewFork = !fork.messages.some(
     (message) => message.forkId === forkId && message.role === 'assistant',
   );
@@ -67,6 +89,7 @@ export function buildRunContext(
     ...(isNewFork
       ? ['This fork is new: give it a summary with set_fork_summary once you know its topic.']
       : []),
+    ...(digest ? ['', digest] : []),
   ];
   const messages = kept.map(
     (message) => `<message id="${message.id}" role="${message.role}">\n${message.text}\n</message>`,

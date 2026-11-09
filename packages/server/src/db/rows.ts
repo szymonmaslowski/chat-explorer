@@ -9,6 +9,7 @@ import type {
   Exploration,
   FileKind,
   Fork,
+  ForkAwareness,
   ForkKind,
   ForkRun,
   Message,
@@ -46,6 +47,7 @@ export interface ForkRow {
   tip_message_id: string | null;
   kind: ForkKind;
   summary: string;
+  awareness: ForkAwareness;
   created_at: number;
   updated_at: number;
   archived_at: number | null;
@@ -147,6 +149,7 @@ export interface ForkRunRow {
   runner_id: string | null;
   lease_expires_at: number | null;
   tools_token: string | null;
+  others_seen_rowid: number | null;
   attempt: number;
   failed_attempts: number;
   status: RunStatus;
@@ -211,6 +214,7 @@ export const toFork = (row: ForkRow): Fork => ({
   tipMessageId: row.tip_message_id,
   kind: row.kind,
   summary: row.summary,
+  awareness: row.awareness,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   archivedAt: row.archived_at,

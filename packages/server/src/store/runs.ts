@@ -16,6 +16,7 @@ import type { ChatStore } from './store.js';
 export const leaseMs = 60_000;
 // After this many attempts that died before answering, the fork waits for Retry.
 export const maxFailedAttempts = 3;
+const maxUpdateLines = 10;
 
 export interface Lease {
   forkId: string;
@@ -222,6 +223,37 @@ export class RunStore {
     );
     this.bus.publish(row.exploration_id, { type: 'activity.added', activity });
     return activity;
+  }
+
+  // The chat's messages up to this one count as heard by the fork's engine.
+  markOthersSeen(forkId: string, leaseId: string) {
+    const row = this.requireLease(forkId, leaseId);
+    this.update(forkId, { others_seen_rowid: this.chats.newestMessageRowid(row.exploration_id) });
+  }
+
+  // The chat's other forks that changed since the engine last heard, as one block to put before
+  // its next message; null for a separate fork or when nothing changed. A fork that never heard
+  // starts listening from now.
+  othersUpdate(forkId: string, leaseId: string) {
+    const row = this.requireLease(forkId, leaseId);
+    if (this.chats.fork(forkId).awareness === 'separate') return null;
+    this.markOthersSeen(forkId, leaseId);
+    if (row.others_seen_rowid === null) return null;
+    const changed = this.chats
+      .otherForks(forkId, row.others_seen_rowid)
+      .filter((fork) => fork.newMessages > 0);
+    if (changed.length === 0) return null;
+    const shown = changed.slice(0, maxUpdateLines);
+    return [
+      "Meanwhile in this chat's other forks (read one with read_fork if it matters here):",
+      ...shown.map(
+        (fork) =>
+          `- [${fork.forkId}] ${fork.summary}: ${fork.newMessages} new message${fork.newMessages === 1 ? '' : 's'}`,
+      ),
+      ...(changed.length > shown.length
+        ? [`- and ${changed.length - shown.length} more, see list_forks`]
+        : []),
+    ].join('\n');
   }
 
   recordSession(forkId: string, leaseId: string, sessionId: string) {

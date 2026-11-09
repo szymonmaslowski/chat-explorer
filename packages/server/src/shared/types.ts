@@ -3,6 +3,8 @@ import type { ClaudeModel } from './models.js';
 export type Role = 'user' | 'assistant';
 export type MessageSource = 'import' | 'live';
 export type ForkKind = 'soft' | 'hard';
+// An aware fork's engine hears about the chat's other forks; a separate one only its own path.
+export type ForkAwareness = 'aware' | 'separate';
 export type CommentType = 'inline' | 'fork' | 'note';
 export type CommentStatus = 'draft' | 'queued' | 'submitted';
 export type SessionStatus = 'starting' | 'listening' | 'answering' | 'attached' | 'detached';
@@ -37,6 +39,7 @@ export interface Fork {
   tipMessageId: string | null;
   kind: ForkKind;
   summary: string;
+  awareness: ForkAwareness;
   createdAt: number;
   updatedAt: number;
   // Set on the fork the reader archived; the forks below it count as archived too.

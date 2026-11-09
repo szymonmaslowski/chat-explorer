@@ -236,6 +236,7 @@ function addNewFork(
     tipMessageId: null,
     kind: 'soft',
     summary,
+    awareness: 'aware',
     createdAt: now,
     updatedAt: now,
     archivedAt: null,

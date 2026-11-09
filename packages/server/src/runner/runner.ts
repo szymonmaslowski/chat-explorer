@@ -170,9 +170,9 @@ class ForkWorker {
   private async inputLoop() {
     const { client } = this.options;
     while (!this.finished && !this.closing) {
-      let messages: PendingMessage[];
+      let input: { messages: PendingMessage[]; others: string | null };
       try {
-        messages = await client.input(
+        input = await client.input(
           this.lease,
           { waitMs: this.timings.inputWaitMs, after: this.newestSentId },
           this.abort.signal,
@@ -181,8 +181,8 @@ class ForkWorker {
         if (this.finished || this.closing) return;
         throw error;
       }
-      if (messages.length > 0) {
-        await this.send(messages);
+      if (input.messages.length > 0) {
+        await this.send(input.messages, input.others);
         continue;
       }
       const now = Date.now();
@@ -197,15 +197,15 @@ class ForkWorker {
     }
   }
 
-  private async send(messages: PendingMessage[]) {
+  private async send(messages: PendingMessage[], others: string | null) {
     if (!this.turnOpen) {
       this.turnOpen = true;
       this.lastEventAt = Date.now();
       await this.options.client.startTurn(this.lease);
     }
     for (const [index, message] of messages.entries()) {
-      const history = index === 0 ? this.history : null;
-      this.engineRun!.send(history ? `${history}\n\n${message.text}` : message.text);
+      const before = index === 0 ? [this.history, others].filter(Boolean) : [];
+      this.engineRun!.send([...before, message.text].join('\n\n'));
       this.history = null;
       this.newestSentId = message.id;
     }

@@ -40,3 +40,42 @@ describe('the context of a new engine session', () => {
     ).toBeNull();
   });
 });
+
+describe("hearing about the chat's other forks", () => {
+  function chatWithTwoForks() {
+    const context = createTestStore();
+    const { exploration, mainFork } = context.store.createExploration({
+      messages: [
+        { role: 'user', content: 'Question' },
+        { role: 'assistant', content: 'Answer' },
+      ],
+    });
+    const answer = context.store.readFork(mainFork.id).messages.at(-1)!;
+    const side = context.store.forkAtAnswer(answer.id);
+    context.store.updateForkSummary({ forkId: side.id, summary: 'Side topic' });
+    return { ...context, explorationId: exploration.id, mainFork, side };
+  }
+
+  it('gives a new session of an aware fork a digest of the others, and a separate one none', () => {
+    const { store, mainFork, side } = chatWithTwoForks();
+    const aware = buildRunContext(store, mainFork.id, { resume: false, pendingIds: new Set() });
+    expect(aware.history).toContain(`- [${side.id}] Side topic`);
+    store.setForkAwareness(mainFork.id, 'separate');
+    const separate = buildRunContext(store, mainFork.id, { resume: false, pendingIds: new Set() });
+    expect(separate.history).not.toContain(side.id);
+  });
+
+  it('tells a running fork which other forks changed since it last heard', () => {
+    const { store, runs, explorationId, mainFork, side } = chatWithTwoForks();
+    store.submit(explorationId, mainFork.id, 'Main question');
+    const lease = runs.claim(mainFork.id, 'runner-a')!;
+    expect(runs.othersUpdate(mainFork.id, lease.leaseId)).toBeNull();
+
+    store.submit(explorationId, side.id, 'Side question');
+    store.deliverQueued(explorationId);
+    expect(runs.othersUpdate(mainFork.id, lease.leaseId)).toBe(
+      `Meanwhile in this chat's other forks (read one with read_fork if it matters here):\n- [${side.id}] Side topic: 1 new message`,
+    );
+    expect(runs.othersUpdate(mainFork.id, lease.leaseId)).toBeNull();
+  });
+});

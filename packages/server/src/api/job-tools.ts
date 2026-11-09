@@ -76,15 +76,19 @@ function toolsFor(job: Job, { store, runs }: JobToolsOptions) {
     ),
   );
 
-  server.registerTool(
-    'list_forks',
-    {
-      description:
-        "The chat's fork tree: every fork's id, parent, summary, message count and whether it waits for an answer.",
-      inputSchema: {},
-    },
-    tool(() => ({ forks: store.forkMap(job.explorationId) })),
-  );
+  // A separate fork hears nothing of the others: it can read only itself.
+  const aware = store.fork(job.forkId).awareness === 'aware';
+  if (aware) {
+    server.registerTool(
+      'list_forks',
+      {
+        description:
+          "The chat's fork tree: every fork's id, parent, summary, message count and whether it waits for an answer.",
+        inputSchema: {},
+      },
+      tool(() => ({ forks: store.forkMap(job.explorationId) })),
+    );
+  }
 
   server.registerTool(
     'read_fork',
@@ -108,6 +112,9 @@ function toolsFor(job: Job, { store, runs }: JobToolsOptions) {
         before?: string | undefined;
       }) => {
         sameChat(job, store.forkExplorationId(forkId), `Fork ${forkId}`);
+        if (!aware && forkId !== job.forkId) {
+          throw new StoreError('not_found', `This fork reads only itself, not fork ${forkId}.`);
+        }
         return store.readForkPage(forkId, { limit: limit ?? defaultPageSize, before });
       },
     ),

@@ -236,4 +236,10 @@ export const migrations = [
   ALTER TABLE fork_runs ADD COLUMN tools_token TEXT;
   CREATE UNIQUE INDEX fork_runs_by_tools_token ON fork_runs (tools_token);
   `,
+  `
+  -- Whether a fork's engine hears about the chat's other forks, and how far it has heard.
+  ALTER TABLE forks ADD COLUMN awareness TEXT NOT NULL DEFAULT 'aware'
+    CHECK (awareness IN ('aware', 'separate'));
+  ALTER TABLE fork_runs ADD COLUMN others_seen_rowid INTEGER;
+  `,
 ];

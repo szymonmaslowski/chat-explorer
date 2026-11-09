@@ -87,6 +87,7 @@ const readMessagesBody = z.object({ messageIds: z.array(z.string()).min(1) });
 const unreadFromBody = z.object({ viewForkId: z.string() });
 const noteForkBody = z.object({ id: clientId, forkId: clientId, message: z.string() });
 const answerForkBody = z.object({ forkId: clientId });
+const forkAwarenessBody = z.object({ awareness: z.enum(['aware', 'separate']) });
 const newBookmarkBody = z.object({
   id: clientId,
   forkId: z.string(),
@@ -223,6 +224,11 @@ export function createApp(options: AppOptions) {
     machineToken: options.machineToken,
   });
   registerJobTools(app, { store, runs: options.runs });
+
+  app.patch('/api/forks/:id/awareness', async (context) => {
+    const { awareness } = forkAwarenessBody.parse(await context.req.json());
+    return context.json(store.setForkAwareness(context.req.param('id'), awareness));
+  });
 
   app.post('/api/forks/:id/retry', (context) => {
     options.runs.retry(context.req.param('id'));

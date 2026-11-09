@@ -102,4 +102,17 @@ describe('job tools', () => {
     runs.release(mainForkId, lease.leaseId);
     await expect(connect(lease.toolsToken)).rejects.toThrow();
   });
+
+  it('lets a separate fork read only itself', async () => {
+    const { connect, call, lease, store, mainForkId, answer } = await setup();
+    const side = store.forkAtAnswer(answer.id);
+    store.setForkAwareness(mainForkId, 'separate');
+    const client = await connect(lease.toolsToken);
+    const tools = (await client.listTools()).tools.map((tool) => tool.name);
+    expect(tools).not.toContain('list_forks');
+    expect(await call(client, 'read_fork', { forkId: side.id })).toMatchObject({ isError: true });
+    expect(await call(client, 'read_fork', { forkId: mainForkId })).toMatchObject({
+      isError: false,
+    });
+  });
 });
