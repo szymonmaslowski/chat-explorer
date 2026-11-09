@@ -144,28 +144,33 @@ watch(
   },
 );
 
-// Another device may have changed the draft meanwhile; a box being typed in is left alone.
+// Another page or device may have changed the draft, or submitted it; a box with changes still
+// on their way to the daemon is left alone.
+const hasUnsavedChanges = () =>
+  autosave.isDirty() || outbox.isPending(props.forkId) || files.uploading.value;
+
+function applyIfChanged(draft: ReplyDraft) {
+  const json = JSON.stringify({
+    text: draft.text,
+    newFork: draft.newFork,
+    fileIds: draft.files.map((file) => file.id),
+  });
+  if (draft.forkId !== props.forkId || json === (lastSaved.get(draft.forkId) ?? emptyDraft)) return;
+  applyDraft(draft);
+}
+
+watch(
+  () => props.savedDraft,
+  (draft) => {
+    if (draft && !hasUnsavedChanges()) applyIfChanged(draft);
+  },
+);
+
 async function refreshFromDaemon() {
   if (document.visibilityState !== 'visible') return;
-  if (
-    autosave.isDirty() ||
-    outbox.isPending(props.forkId) ||
-    files.uploading.value ||
-    document.activeElement === textarea.value
-  ) {
-    return;
-  }
-  const forkId = props.forkId;
-  const draft = await api.replyDraft(forkId).catch(() => null);
-  const json =
-    draft &&
-    JSON.stringify({
-      text: draft.text,
-      newFork: draft.newFork,
-      fileIds: draft.files.map((file) => file.id),
-    });
-  if (!draft || forkId !== props.forkId || json === lastSaved.get(forkId)) return;
-  applyDraft(draft);
+  if (hasUnsavedChanges() || document.activeElement === textarea.value) return;
+  const draft = await api.replyDraft(props.forkId).catch(() => null);
+  if (draft) applyIfChanged(draft);
 }
 onMounted(() => document.addEventListener('visibilitychange', refreshFromDaemon));
 onBeforeUnmount(() => document.removeEventListener('visibilitychange', refreshFromDaemon));

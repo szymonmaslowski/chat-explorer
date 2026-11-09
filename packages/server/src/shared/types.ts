@@ -239,6 +239,7 @@ export type ExplorationEvent =
   | { type: 'bookmark.deleted'; bookmarkId: string }
   | { type: 'files.updated'; files: MessageFile[] }
   | { type: 'files.released'; fileIds: string[] }
+  | { type: 'reply-draft.updated'; draft: ReplyDraft }
   | { type: 'exploration.updated'; exploration: Exploration }
   | { type: 'exploration.deleted'; explorationId: string }
   | { type: 'fork-run.updated'; run: ForkRun }

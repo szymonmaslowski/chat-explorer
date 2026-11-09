@@ -43,6 +43,39 @@ test('keeps the reply box, its fork tick and its files through a reload', async 
   await expect(page.locator('.reply-bar .file-drafts li')).toHaveCount(0);
 });
 
+test('empties the reply box on another page once one page submits it', async ({
+  page,
+  browser,
+  request,
+}) => {
+  const explorationId = await answeredChat(request);
+  await page.goto(`/e/${explorationId}`);
+  const other = await (await browser.newContext()).newPage();
+  await other.goto(`/e/${explorationId}`);
+  const otherReply = other.getByPlaceholder('Reply to Claude');
+  await otherReply.fill('Typed on the laptop');
+  await other.locator('.reply-bar input[type=file]').setInputFiles({
+    name: 'photo.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from('not really a png'),
+  });
+  await expect(other.locator('.reply-bar .file-drafts li')).not.toContainText('Uploading');
+  // The laptop's box keeps focus, as it does when its tab goes to the background.
+  await otherReply.focus();
+
+  const reply = page.getByPlaceholder('Reply to Claude');
+  await expect(reply).toHaveValue('Typed on the laptop');
+  await expect(page.locator('.reply-bar .file-drafts li')).toHaveText(/photo\.png/);
+  await page.getByRole('button', { name: 'Submit' }).click();
+
+  await expect(otherReply).toHaveValue('');
+  await expect(other.locator('.reply-bar .file-drafts li')).toHaveCount(0);
+  await otherReply.fill('Next thought');
+  await expect(other.getByText('Could not save')).toHaveCount(0);
+  await expect(reply).toHaveValue('Next thought');
+  await other.context().close();
+});
+
 test('reopens an unsaved new comment in its editor, and Cancel deletes it', async ({
   page,
   request,

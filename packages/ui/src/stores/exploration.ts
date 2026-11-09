@@ -69,6 +69,7 @@ const eventTypes: ExplorationEvent['type'][] = [
   'bookmark.created',
   'bookmark.deleted',
   'fork-run.updated',
+  'reply-draft.updated',
   'activity.added',
   'activities.interrupted',
   'exploration.updated',
@@ -106,6 +107,9 @@ export function applyEvent(state: ExplorationState, event: ExplorationEvent) {
       break;
     case 'fork-run.updated':
       state.forkRuns.set(event.run.forkId, event.run);
+      break;
+    case 'reply-draft.updated':
+      state.replyDrafts.set(event.draft.forkId, event.draft);
       break;
     case 'activity.added':
       state.activities.set(event.activity.id, event.activity);

@@ -935,6 +935,7 @@ export class ChatStore {
       return this.notesFromComments(noteDrafts);
     });
     this.publish(noteEvents);
+    this.publishReplyDraft(forkId);
     if (!forClaude) return toQueuedSubmission(this.requireSubmissionRow(id));
     const submission = this.publishSubmission(explorationId, id, claudeDrafts);
     if (files.length > 0) {
@@ -1462,7 +1463,15 @@ export class ChatStore {
         this.now(),
       );
     });
-    return this.replyDraft(forkId);
+    return this.publishReplyDraft(forkId);
+  }
+
+  // Other pages showing the fork's reply box follow what one of them saved or submitted.
+  private publishReplyDraft(forkId: string) {
+    const draft = this.replyDraft(forkId);
+    const { exploration_id: explorationId } = this.requireForkRow(forkId);
+    this.publish([[explorationId, { type: 'reply-draft.updated', draft }]]);
+    return draft;
   }
 
   createNoteGroup(explorationId: string, input: NewNoteGroup) {
