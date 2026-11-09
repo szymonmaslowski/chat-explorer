@@ -170,7 +170,7 @@ html.image-viewer-open {
   line-height: 1.2;
 }
 
-/* A menu that opens above its button, see useDropUp. */
+/* A menu that opens above its button, see usePopover. */
 .drop-up {
   position: relative;
 }

@@ -1,8 +1,8 @@
 import { onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 
-// A menu that opens above its button and closes on a pick, a tap outside or Escape. `rootRef`
+// A menu or panel opened by a button that closes on a pick, a tap outside or Escape. `rootRef`
 // names the template ref of the element holding both.
-export function useDropUp(rootRef: string) {
+export function usePopover(rootRef: string) {
   const open = ref(false);
   const root = useTemplateRef<HTMLElement>(rootRef);
 

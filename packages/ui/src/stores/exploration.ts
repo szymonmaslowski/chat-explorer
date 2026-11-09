@@ -1,9 +1,11 @@
 import type {
+  Activity,
   Bookmark,
   Comment,
   Exploration,
   ExplorationEvent,
   Fork,
+  ForkRun,
   Message,
   MessageFile,
   Note,
@@ -35,6 +37,9 @@ export interface ExplorationState {
   noteGroups: Map<string, NoteGroup>;
   notes: Map<string, Note>;
   bookmarks: Map<string, Bookmark>;
+  // By fork: what the runner is doing there.
+  forkRuns: Map<string, ForkRun>;
+  activities: Map<string, Activity>;
   sessionStatus: SessionStatus;
   sessionError: string | null;
   connected: boolean;
@@ -63,6 +68,9 @@ const eventTypes: ExplorationEvent['type'][] = [
   'note.group-changed',
   'bookmark.created',
   'bookmark.deleted',
+  'fork-run.updated',
+  'activity.added',
+  'activities.interrupted',
   'exploration.updated',
   'exploration.deleted',
   'session.status',
@@ -95,6 +103,19 @@ export function applyEvent(state: ExplorationState, event: ExplorationEvent) {
     case 'fork.created':
     case 'fork.updated':
       state.forks.set(event.fork.id, event.fork);
+      break;
+    case 'fork-run.updated':
+      state.forkRuns.set(event.run.forkId, event.run);
+      break;
+    case 'activity.added':
+      state.activities.set(event.activity.id, event.activity);
+      break;
+    case 'activities.interrupted':
+      for (const activity of state.activities.values()) {
+        if (activity.forkId === event.forkId && activity.attempt === event.attempt) {
+          state.activities.set(activity.id, { ...activity, interrupted: true });
+        }
+      }
       break;
     case 'comment.created':
     case 'comment.updated':
@@ -513,6 +534,8 @@ function applySnapshot(state: ExplorationState, snapshot: Snapshot) {
   state.noteGroups = byId(snapshot.noteGroups);
   state.notes = byId(snapshot.notes);
   state.bookmarks = byId(snapshot.bookmarks);
+  state.forkRuns = new Map(snapshot.forkRuns.map((run) => [run.forkId, run]));
+  state.activities = byId(snapshot.activities);
   state.sessionStatus = snapshot.sessionStatus;
   state.sessionError = snapshot.sessionError;
   state.status = 'ready';
@@ -533,6 +556,8 @@ function createExplorationStore(explorationId: string) {
     noteGroups: new Map(),
     notes: new Map(),
     bookmarks: new Map(),
+    forkRuns: new Map(),
+    activities: new Map(),
     sessionStatus: 'detached',
     sessionError: null,
     connected: false,

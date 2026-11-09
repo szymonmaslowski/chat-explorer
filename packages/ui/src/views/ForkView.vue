@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import type { Message } from '@shared/types';
+import type { Activity, Message } from '@shared/types';
 import { useRoute, useRouter } from 'vue-router';
 import BookmarkList from '../components/BookmarkList.vue';
 import CommentLayer from '../components/CommentLayer.vue';
@@ -12,7 +12,10 @@ import QueuedSubmissionCard from '../components/QueuedSubmissionCard.vue';
 import ReplyBar from '../components/ReplyBar.vue';
 import SessionError from '../components/SessionError.vue';
 import SpeechPlayer from '../components/SpeechPlayer.vue';
+import ActivityGroup from '../components/ActivityGroup.vue';
 import AttentionDot from '../components/AttentionDot.vue';
+import ForkRunStatus from '../components/ForkRunStatus.vue';
+import UsageChip from '../components/UsageChip.vue';
 import MediaIcon from '../components/MediaIcon.vue';
 import { useCommentTyping } from '../composables/useCommentTyping';
 import { useMediaQuery } from '../composables/useMediaQuery';
@@ -62,6 +65,24 @@ const ownStart = computed(() =>
   path.value.findIndex((message) => message.forkId === fork.value?.id),
 );
 const awaitingAnswer = computed(() => path.value.at(-1)?.role === 'user');
+const forkRun = computed(() => (fork.value ? (state.value.forkRuns.get(fork.value.id) ?? null) : null));
+// By the user message a turn answered, each attempt's activity in order.
+const activityGroups = computed(() => {
+  const groups = new Map<string, Map<number, Activity[]>>();
+  const ordered = [...state.value.activities.values()]
+    .filter((activity) => activity.forkId === fork.value?.id)
+    .sort((left, right) => left.createdAt - right.createdAt);
+  for (const activity of ordered) {
+    const attempts = groups.get(activity.afterMessageId) ?? new Map<number, Activity[]>();
+    attempts.set(activity.attempt, [...(attempts.get(activity.attempt) ?? []), activity]);
+    groups.set(activity.afterMessageId, attempts);
+  }
+  return new Map([...groups].map(([messageId, attempts]) => [messageId, [...attempts.values()]]));
+});
+const isWorking = (group: Activity[]) =>
+  forkRun.value?.status === 'answering' &&
+  group[0]?.attempt === forkRun.value.attempt &&
+  !group.some((activity) => activity.interrupted);
 const lastAnswer = computed(() => path.value.findLast((message) => message.role === 'assistant'));
 const attention = computed(() => forkAttention(state.value));
 const { newIds, markUnread } = useReadTracking({ state, fork, path });
@@ -188,6 +209,7 @@ watch(
         </span>
       </template>
       <template v-if="fork" #title-actions>
+        <UsageChip v-if="forkRun?.model" :fork="fork" :run="forkRun" />
         <button
           v-if="viewBookmarks.length > 0"
           type="button"
@@ -268,6 +290,12 @@ watch(
             @mark-unread="markUnread(message.id)"
             @fork="forkAtAnswer(message)"
           />
+          <ActivityGroup
+            v-for="group in activityGroups.get(message.id) ?? []"
+            :key="`${message.id}-${group[0]!.attempt}`"
+            :activities="group"
+            :working="isWorking(group)"
+          />
           <div :id="`comments-${message.id}`" class="message-comments" />
           <RouterLink
             v-for="child in replyForksAt(message.id)"
@@ -291,7 +319,7 @@ watch(
         />
       </div>
 
-      <p v-if="awaitingAnswer" class="answering muted">Claude is answering…</p>
+      <ForkRunStatus :fork-id="fork.id" :run="forkRun" :awaiting-answer="awaitingAnswer" />
 
       <QueuedSubmissionCard
         v-for="submission in queuedSubmissions"
@@ -307,6 +335,7 @@ watch(
           :exploration-id="explorationId"
           :fork-id="fork.id"
           :drafts="drafts"
+          :answering="forkRun?.status === 'answering'"
           :saved-draft="state.replyDrafts.get(fork.id) ?? null"
           :hint="state.exploration?.title ?? ''"
           :last-message-id="path.at(-1)?.id ?? null"

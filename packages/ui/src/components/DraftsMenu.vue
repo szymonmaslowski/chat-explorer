@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { useDropUp } from '../composables/useDropUp';
+import { usePopover } from '../composables/usePopover';
 import MediaIcon from './MediaIcon.vue';
 
 const emit = defineEmits<{ show: []; hide: [] }>();
-const { open, closeOnEscape } = useDropUp('root');
+const { open, closeOnEscape } = usePopover('root');
 
 function choose(action: 'show' | 'hide') {
   open.value = false;

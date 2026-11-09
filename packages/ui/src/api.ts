@@ -6,6 +6,7 @@ import type {
   Exploration,
   ExplorationListItem,
   Fork,
+  ForkAwareness,
   MessageFile,
   NewBookmark,
   NewComment,
@@ -110,6 +111,11 @@ export const api = {
       json: { id: submissionId },
       keepalive,
     }),
+  stopFork: (forkId: string) =>
+    call<{ stopping: boolean }>(`/api/forks/${forkId}/stop`, { json: {} }),
+  setForkAwareness: (forkId: string, awareness: ForkAwareness) =>
+    call<Fork>(`/api/forks/${forkId}/awareness`, { method: 'PATCH', json: { awareness } }),
+  retryFork: (forkId: string) => call<{ ok: true }>(`/api/forks/${forkId}/retry`, { json: {} }),
   forkAtAnswer: (messageId: string, forkId: string, keepalive = false) =>
     call<Fork>(`/api/messages/${messageId}/fork`, { json: { forkId }, keepalive }),
   forkFromNote: (

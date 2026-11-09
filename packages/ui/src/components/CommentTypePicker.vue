@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { CommentType } from '@shared/types';
 import { computed } from 'vue';
-import { useDropUp } from '../composables/useDropUp';
+import { usePopover } from '../composables/usePopover';
 import MediaIcon from './MediaIcon.vue';
 
 const type = defineModel<CommentType>({ required: true });
@@ -12,7 +12,7 @@ const options: { type: CommentType; label: string; icon: 'comment' | 'fork' | 'n
   { type: 'note', label: 'Note', icon: 'note' },
 ];
 
-const { open, closeOnEscape } = useDropUp('picker');
+const { open, closeOnEscape } = usePopover('picker');
 const current = computed(() => options.find((option) => option.type === type.value)!);
 
 function choose(choice: CommentType) {
