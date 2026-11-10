@@ -424,7 +424,7 @@ test('copies a tapped block or a selection of a note as a quote naming the note'
 
   await item.click();
   await item.locator('.description p', { hasText: 'Second' }).click();
-  await item.getByRole('button', { name: 'Copy this block as a quote' }).click();
+  await item.getByRole('button', { name: 'Copy as a quote' }).click();
   await expect(item.getByRole('button', { name: 'Copied' })).toBeVisible();
   await expect
     .poll(clipboard)
@@ -437,7 +437,15 @@ test('copies a tapped block or a selection of a note as a quote naming the note'
     window.getSelection()!.removeAllRanges();
     window.getSelection()!.addRange(range);
   });
-  await item.getByRole('button', { name: 'Copy the selection as a quote' }).click();
+  const first = (await item.locator('.description p', { hasText: 'First' }).boundingBox())!;
+  const copyButton = (await item.getByRole('button', { name: 'Copy as a quote' }).boundingBox())!;
+  const playButton = (await item
+    .getByRole('button', { name: 'Read aloud from here' })
+    .boundingBox())!;
+  expect(copyButton.y).toBeGreaterThanOrEqual(first.y + first.height);
+  expect(playButton.y).toBe(copyButton.y);
+  expect(playButton.x).toBeGreaterThan(copyButton.x);
+  await item.getByRole('button', { name: 'Copy as a quote' }).click();
   await expect.poll(clipboard).toBe(`From the note "Quote me" (id ${note.id}):\n\n> paragraph`);
 });
 

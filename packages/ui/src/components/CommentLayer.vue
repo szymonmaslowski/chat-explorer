@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { actionButtonHeight, actionButtonWidth, touchButtonOffset } from '../lib/action-placement';
 import { inTextOrder } from '@shared/fork-groups';
 import { insertedAttribute } from '@shared/speech-blocks';
 import type { Bookmark, Comment } from '@shared/types';
@@ -36,11 +37,6 @@ const flashMs = 1_400;
 // Each comment around another sits this much further out, up to the room between lines.
 const outlineOutset = { base: 1, step: 2, maxLevel: 3 };
 const selectionSettleMs = 300;
-// Keeps the button clear of the selection handles on touch screens.
-const touchButtonOffset = 24;
-// A round icon button and the gap after it; the height matches .comment-button.
-const actionButtonWidth = { mouse: 38, touch: 50 };
-const actionButtonHeight = { mouse: 32, touch: 44 };
 
 const route = useRoute();
 const coarsePointer = useMediaQuery('(pointer: coarse)');

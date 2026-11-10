@@ -3,9 +3,16 @@ import { renderMarkdown } from '@shared/markdown';
 import type { Note, NoteGroup } from '@shared/types';
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { useCopied } from '../composables/useCopied';
+import { useMediaQuery } from '../composables/useMediaQuery';
+import { placeUnderRange } from '../lib/action-placement';
 import { blockClipboardText, noteQuote } from '../lib/clipboard';
 import { bringToReadingLine } from '../lib/reading-line';
-import { blockIndexAt, speechBlocks, type SpokenElement } from '../lib/speech-blocks';
+import {
+  blockIndexAt,
+  blockTextRange,
+  speechBlocks,
+  type SpokenElement,
+} from '../lib/speech-blocks';
 import { outbox } from '../stores/outbox';
 import {
   checkSpeechAvailable,
@@ -49,7 +56,8 @@ const article = ref<HTMLElement | null>(null);
 const descriptionElement = ref<HTMLElement | null>(null);
 const blocks = shallowRef<SpokenElement[]>([]);
 const pickedIndex = ref<number | null>(null);
-const pickedTop = ref(0);
+const pickedPlace = ref({ top: 0, left: 0 });
+const coarsePointer = useMediaQuery('(pointer: coarse)');
 const speechSource = computed(() => ({ text: props.note.description }));
 const pickable = computed(() => props.selected && expanded.value && blocks.value.length > 0);
 const listenable = computed(() => speech.available && pickable.value);
@@ -58,9 +66,6 @@ const speakingIndex = computed(() =>
 );
 const listenLabel = computed(() =>
   speakingIndex.value === -1 ? 'Listen' : speech.playing ? 'Pause' : 'Resume',
-);
-const pickedPlaying = computed(
-  () => speech.playing && pickedIndex.value !== null && speakingIndex.value === pickedIndex.value,
 );
 
 void checkSpeechAvailable();
@@ -103,8 +108,15 @@ function pickBlock(index: number | null) {
   const element = index === null ? undefined : blocks.value[index]?.element;
   if (!element || !article.value) return;
   element.classList.add('picked');
-  pickedTop.value = element.getBoundingClientRect().top - article.value.getBoundingClientRect().top;
+  pickedPlace.value = placeActions(blockTextRange(element), false);
 }
+
+const placeActions = (range: Range, clearHandles: boolean) =>
+  placeUnderRange(range, article.value!.getBoundingClientRect(), {
+    buttonCount: listenable.value ? 2 : 1,
+    coarse: coarsePointer.value,
+    clearHandles,
+  });
 
 // In an expanded note, a tap on a block of the description picks it to copy or read aloud.
 function pickBlockAt(target: EventTarget | null) {
@@ -130,20 +142,41 @@ function listen() {
   else togglePause();
 }
 
-function playPicked() {
-  if (pickedIndex.value === null) return;
-  playBlock(speechSource.value, spokenBlocks(), pickedIndex.value);
+const selection = ref<{ text: string; blockIndex: number; top: number; left: number } | null>(null);
+// A selection inside a picked block takes the buttons over until it goes.
+const actions = computed(
+  () =>
+    selection.value ??
+    (pickedIndex.value === null
+      ? null
+      : { text: null, blockIndex: pickedIndex.value, ...pickedPlace.value }),
+);
+const actionsPlaying = computed(
+  () =>
+    speech.playing && actions.value !== null && speakingIndex.value === actions.value.blockIndex,
+);
+
+function playActions() {
+  if (!actions.value) return;
+  playBlock(speechSource.value, spokenBlocks(), actions.value.blockIndex);
+  window.getSelection()?.removeAllRanges();
   pickBlock(null);
 }
 
 const { copied: quoteCopied, copy: copyQuote } = useCopied();
 
-function copyPicked() {
-  const element = pickedIndex.value === null ? undefined : blocks.value[pickedIndex.value]?.element;
-  if (element) void copyQuote(noteQuote(props.note, blockClipboardText(element).plain));
+function copyActions() {
+  if (!actions.value) return;
+  const { text, blockIndex } = actions.value;
+  const element = blocks.value[blockIndex]?.element;
+  const quoted = text ?? (element ? blockClipboardText(element).plain : '');
+  if (quoted) void copyQuote(noteQuote(props.note, quoted));
 }
 
-const selection = ref<{ text: string; top: number } | null>(null);
+// A touch screen sends no click after a cancelled touchstart, so its tap acts on pointerup.
+const onTouchUp = (event: PointerEvent, action: () => void) => {
+  if (event.pointerType !== 'mouse') action();
+};
 
 function onSelectionChange() {
   const current = window.getSelection();
@@ -156,14 +189,15 @@ function onSelectionChange() {
     selection.value = null;
     return;
   }
+  const start = range.startContainer;
+  const startElement = start instanceof Element ? start : start.parentElement;
+  const blockIndex = startElement ? blockIndexAt(blocks.value, startElement) : -1;
   selection.value = {
     text: current.toString(),
-    top: range.getBoundingClientRect().top - article.value.getBoundingClientRect().top,
+    blockIndex: Math.max(blockIndex, 0),
+    ...placeActions(range, true),
   };
 }
-
-const copySelection = () =>
-  selection.value && copyQuote(noteQuote(props.note, selection.value.text));
 
 onMounted(() => document.addEventListener('selectionchange', onSelectionChange));
 onBeforeUnmount(() => document.removeEventListener('selectionchange', onSelectionChange));
@@ -295,42 +329,36 @@ function changeGroup(groupId: string | null) {
       <button type="button" role="menuitem" @click="changeGroup(null)">New group…</button>
     </div>
     <div v-if="html" ref="descriptionElement" class="description" v-html="html" />
-    <div v-if="selection" class="block-actions" :style="{ top: `${selection.top}px` }" @click.stop>
-      <button
-        type="button"
-        :aria-label="quoteCopied ? 'Copied' : 'Copy the selection as a quote'"
-        :title="quoteCopied ? 'Copied' : 'Copy the selection as a quote from this note'"
-        @pointerdown.prevent
-        @mousedown.prevent
-        @touchstart.prevent
-        @pointerup="copySelection"
-        @click="copySelection"
-      >
-        <MediaIcon :name="quoteCopied ? 'check' : 'copy'" />
-      </button>
-    </div>
     <div
-      v-else-if="pickedIndex !== null"
+      v-if="actions"
       class="block-actions"
-      :style="{ top: `${pickedTop}px` }"
+      :style="{ top: `${actions.top}px`, left: `${actions.left}px` }"
       @click.stop
     >
       <button
         type="button"
-        :aria-label="quoteCopied ? 'Copied' : 'Copy this block as a quote'"
-        :title="quoteCopied ? 'Copied' : 'Copy this block as a quote from this note'"
-        @click="copyPicked"
+        :aria-label="quoteCopied ? 'Copied' : 'Copy as a quote'"
+        :title="quoteCopied ? 'Copied' : 'Copy as a quote from this note'"
+        @pointerdown.prevent
+        @mousedown.prevent
+        @touchstart.prevent
+        @pointerup="onTouchUp($event, copyActions)"
+        @click="copyActions"
       >
         <MediaIcon :name="quoteCopied ? 'check' : 'copy'" />
       </button>
       <button
         v-if="listenable"
         type="button"
-        :aria-label="pickedPlaying ? 'Pause' : 'Read aloud from here'"
-        :title="pickedPlaying ? 'Pause' : 'Read aloud from here'"
-        @click="playPicked"
+        :aria-label="actionsPlaying ? 'Pause' : 'Read aloud from here'"
+        :title="actionsPlaying ? 'Pause' : 'Read aloud from here'"
+        @pointerdown.prevent
+        @mousedown.prevent
+        @touchstart.prevent
+        @pointerup="onTouchUp($event, playActions)"
+        @click="playActions"
       >
-        <MediaIcon :name="pickedPlaying ? 'pause' : 'play'" />
+        <MediaIcon :name="actionsPlaying ? 'pause' : 'play'" />
       </button>
     </div>
     <div v-if="note.deletionRequestedAt !== null" class="deletion-request" @click.stop>
@@ -397,18 +425,17 @@ function changeGroup(groupId: string | null) {
 
 .block-actions {
   position: absolute;
-  right: 0.5rem;
+  z-index: 2;
   display: flex;
-  gap: 0.3rem;
+  gap: 0.4rem;
 }
 
 .block-actions button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 2rem;
-  min-height: 1.75rem;
-  padding: 0.2rem 0.45rem;
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
   box-shadow: var(--shadow);
 }
 
@@ -515,8 +542,8 @@ function changeGroup(groupId: string | null) {
   .actions button,
   .note-meta button,
   .block-actions button {
-    min-width: 2.75rem;
-    min-height: 2.25rem;
+    width: 2.75rem;
+    height: 2.75rem;
   }
 
   .group-choices button {
