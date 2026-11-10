@@ -27,6 +27,7 @@ defineProps<{
     | 'unarchive'
     | 'back'
     | 'unread'
+    | 'read'
     | 'bookmark'
     | 'bookmarked'
     | 'to-comment'
@@ -81,6 +82,7 @@ defineProps<{
     />
     <path v-else-if="name === 'back'" d="M15 5l-7 7 7 7" />
     <circle v-else-if="name === 'unread'" cx="12" cy="12" r="4.5" />
+    <circle v-else-if="name === 'read'" cx="12" cy="12" r="4.5" />
     <path v-else-if="name === 'note'" d="M5 4h14v10l-6 6H5zM13 20v-6h6M9 9h6M9 13h3" />
     <path
       v-else-if="name === 'bookmark' || name === 'bookmarked'"
@@ -136,6 +138,7 @@ defineProps<{
 .media-icon.chevron-up,
 .media-icon.plus,
 .media-icon.split,
+.media-icon.read,
 .media-icon.eye {
   fill: none;
   stroke: currentColor;

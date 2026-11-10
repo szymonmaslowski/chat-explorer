@@ -44,6 +44,11 @@ test('marks a new answer, clears it once seen, and marks it unread again', async
   await expect(answer).not.toHaveAttribute('data-unread');
   await page.getByRole('button', { name: 'Mark unread', exact: true }).click();
   await expect(answer).toHaveAttribute('data-unread', 'true');
+
+  await answer.getByRole('button', { name: 'Mark read up to here' }).click();
+  await expect(answer).not.toHaveAttribute('data-unread');
+  await expect(answer.locator('.new-label')).toHaveCount(0);
+  await expect(answer.getByRole('button', { name: 'Mark unread from here' })).toBeVisible();
 });
 
 test('opens a fork at its first unread answer and marks forks with new answers', async ({

@@ -74,5 +74,15 @@ export function useReadTracking(input: {
     keepNewMarks();
   }
 
-  return { newIds, markUnread };
+  function markReadUpTo(messageId: string) {
+    const index = input.path.value.findIndex((message) => message.id === messageId);
+    const unread = input.path.value.slice(0, index + 1).filter(isUnread);
+    for (const message of unread) newIds.delete(message.id);
+    markRead(
+      input.state.value,
+      unread.map((message) => message.id),
+    );
+  }
+
+  return { newIds, markUnread, markReadUpTo };
 }

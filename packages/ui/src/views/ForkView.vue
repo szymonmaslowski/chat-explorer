@@ -91,7 +91,7 @@ const isWorking = (group: Activity[]) =>
   !group.some((activity) => activity.interrupted);
 const lastAnswer = computed(() => path.value.findLast((message) => message.role === 'assistant'));
 const attention = computed(() => forkAttention(state.value));
-const { newIds, markUnread } = useReadTracking({ state, fork, path });
+const { newIds, markUnread, markReadUpTo } = useReadTracking({ state, fork, path });
 
 // The new fork opens at once, empty, with the answer as the last message of its history.
 function forkAtAnswer(message: Message) {
@@ -337,6 +337,7 @@ watch(
             :forkable="!archived"
             :splittable="splittable(message, index)"
             @mark-unread="markUnread(message.id)"
+            @mark-read="markReadUpTo(message.id)"
             @fork="forkAtAnswer(message)"
             @split="splitAt(message)"
           />

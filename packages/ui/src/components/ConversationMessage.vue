@@ -27,7 +27,7 @@ const props = defineProps<{
   forkable: boolean;
   splittable: boolean;
 }>();
-const emit = defineEmits<{ markUnread: []; fork: []; split: [] }>();
+const emit = defineEmits<{ markUnread: []; markRead: []; fork: []; split: [] }>();
 
 const html = computed(() =>
   props.message.content ? renderMarkdown(props.message.content, props.answeredPart) : '',
@@ -185,16 +185,6 @@ onMounted(findBlocks);
         <MediaIcon :name="copied ? 'check' : 'copy'" />
       </button>
       <button
-        v-if="speakable"
-        type="button"
-        class="icon-button"
-        :aria-label="listenLabel"
-        :title="listenLabel"
-        @click="playMessage"
-      >
-        <MediaIcon :name="currentIndex !== -1 && speech.playing ? 'pause' : 'play'" />
-      </button>
-      <button
         type="button"
         class="icon-button"
         aria-label="Go to the end of the answer"
@@ -213,6 +203,16 @@ onMounted(findBlocks);
         <MediaIcon :name="linkCopied ? 'check' : 'chain'" />
       </button>
       <button
+        v-if="speakable"
+        type="button"
+        class="icon-button"
+        :aria-label="listenLabel"
+        :title="listenLabel"
+        @click="playMessage"
+      >
+        <MediaIcon :name="currentIndex !== -1 && speech.playing ? 'pause' : 'play'" />
+      </button>
+      <button
         v-if="!isUnread(message)"
         type="button"
         class="icon-button"
@@ -221,6 +221,16 @@ onMounted(findBlocks);
         @click="emit('markUnread')"
       >
         <MediaIcon name="unread" />
+      </button>
+      <button
+        v-else
+        type="button"
+        class="icon-button"
+        aria-label="Mark read up to here"
+        title="Mark this answer and the earlier ones read"
+        @click="emit('markRead')"
+      >
+        <MediaIcon name="read" />
       </button>
     </div>
     <div v-for="comment in quotedComments" :key="comment.id" class="quoted-comment">

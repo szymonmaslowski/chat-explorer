@@ -120,9 +120,7 @@ test('copies a link to a message that opens the fork scrolled to it', async ({
     answer.locator('header').getByRole('button', { name: 'Copy a link to this message' }),
   ).toHaveCount(0);
   const actions = answer.locator('.message-actions button');
-  await expect(actions.last()).toHaveAccessibleName(
-    /Copy a link to this message|Mark unread from here/,
-  );
+  await expect(actions.last()).toHaveAccessibleName(/Mark unread from here|Mark read up to here/);
   await expect(
     answer.locator('.message-actions').getByRole('button', { name: 'Copy a link to this message' }),
   ).toBeVisible();
