@@ -17,7 +17,7 @@ import type {
 } from '@shared/types';
 import { joinForkGroup, leaveForkGroup } from '@shared/fork-groups';
 import { defaultGroupName, noteForkMessage, reorderedIds } from '@shared/notes';
-import { nextTick, reactive, watch } from 'vue';
+import { nextTick, reactive, toRaw, watch } from 'vue';
 import { api, ApiError } from '../api';
 import { openEventStream } from '../lib/event-stream';
 import { applyOrder, notesInGroup, renumberGroup, sortedGroups } from '../lib/notes';
@@ -79,8 +79,46 @@ const eventTypes: ExplorationEvent['type'][] = [
   'session.error',
 ];
 
-const byId = <Item extends { id: string }>(items: Item[]) =>
-  new Map(items.map((item) => [item.id, item]));
+const sameValue = <Value>(shown: Value, next: Value) =>
+  shown === next ||
+  (typeof shown === 'object' &&
+    typeof next === 'object' &&
+    shown !== null &&
+    next !== null &&
+    JSON.stringify(shown) === JSON.stringify(next));
+
+const ignoredFields = new Set<PropertyKey>(['updatedAt']);
+
+// The same apart from when it was last changed, such as the daemon's notice of a change made
+// here or an unchanged item in a reloaded chat.
+function sameContent<Item extends object>(shown: Item, next: Item) {
+  const shownFields = toRaw(shown);
+  const keys = Object.keys(next) as (keyof Item)[];
+  return (
+    keys.length === Object.keys(shownFields).length &&
+    keys.every((key) => ignoredFields.has(key) || sameValue(shownFields[key], next[key]))
+  );
+}
+
+// Keeps what is shown when nothing in it changed, so the components showing it do not render
+// again.
+function put<Item extends object>(items: Map<string, Item>, key: string, item: Item) {
+  const shown = items.get(key);
+  if (!shown || !sameContent(shown, item)) items.set(key, item);
+}
+
+// A reloaded chat changes only what differs from what is shown.
+function syncItems<Item extends object>(
+  items: Map<string, Item>,
+  next: Item[],
+  keyOf: (item: Item) => string,
+) {
+  const keys = new Set(next.map(keyOf));
+  for (const key of [...items.keys()]) if (!keys.has(key)) items.delete(key);
+  for (const item of next) put(items, keyOf(item), item);
+}
+
+const byId = (item: { id: string }) => item.id;
 
 export function applyReadChange(
   state: ExplorationState,
@@ -96,64 +134,64 @@ export function applyReadChange(
 export function applyEvent(state: ExplorationState, event: ExplorationEvent) {
   switch (event.type) {
     case 'message.added':
-      state.messages.set(event.message.id, event.message);
-      state.forks.set(event.fork.id, event.fork);
+      put(state.messages, event.message.id, event.message);
+      put(state.forks, event.fork.id, event.fork);
       break;
     case 'messages.read':
       applyReadChange(state, event.messageIds, event.readAt);
       break;
     case 'fork.created':
     case 'fork.updated':
-      state.forks.set(event.fork.id, event.fork);
+      put(state.forks, event.fork.id, event.fork);
       break;
     case 'fork.split':
-      for (const fork of event.forks) state.forks.set(fork.id, fork);
-      for (const message of event.messages) state.messages.set(message.id, message);
-      for (const comment of event.comments) state.comments.set(comment.id, comment);
-      for (const bookmark of event.bookmarks) state.bookmarks.set(bookmark.id, bookmark);
-      for (const activity of event.activities) state.activities.set(activity.id, activity);
-      for (const note of event.notes) state.notes.set(note.id, note);
-      for (const run of event.forkRuns) state.forkRuns.set(run.forkId, run);
+      for (const fork of event.forks) put(state.forks, fork.id, fork);
+      for (const message of event.messages) put(state.messages, message.id, message);
+      for (const comment of event.comments) put(state.comments, comment.id, comment);
+      for (const bookmark of event.bookmarks) put(state.bookmarks, bookmark.id, bookmark);
+      for (const activity of event.activities) put(state.activities, activity.id, activity);
+      for (const note of event.notes) put(state.notes, note.id, note);
+      for (const run of event.forkRuns) put(state.forkRuns, run.forkId, run);
       break;
     case 'fork-run.updated':
-      state.forkRuns.set(event.run.forkId, event.run);
+      put(state.forkRuns, event.run.forkId, event.run);
       break;
     case 'reply-draft.updated':
-      state.replyDrafts.set(event.draft.forkId, event.draft);
+      put(state.replyDrafts, event.draft.forkId, event.draft);
       break;
     case 'activity.added':
-      state.activities.set(event.activity.id, event.activity);
+      put(state.activities, event.activity.id, event.activity);
       break;
     case 'activities.interrupted':
       for (const activity of state.activities.values()) {
         if (activity.forkId === event.forkId && activity.attempt === event.attempt) {
-          state.activities.set(activity.id, { ...activity, interrupted: true });
+          put(state.activities, activity.id, { ...activity, interrupted: true });
         }
       }
       break;
     case 'comment.created':
     case 'comment.updated':
-      state.comments.set(event.comment.id, event.comment);
+      put(state.comments, event.comment.id, event.comment);
       break;
     case 'comment.deleted':
       state.comments.delete(event.commentId);
       break;
     case 'submission.queued':
-      state.queuedSubmissions.set(event.submission.id, event.submission);
+      put(state.queuedSubmissions, event.submission.id, event.submission);
       break;
     case 'submission.cancelled':
     case 'submission.delivered':
       state.queuedSubmissions.delete(event.submissionId);
       break;
     case 'files.updated':
-      for (const file of event.files) state.files.set(file.id, file);
+      for (const file of event.files) put(state.files, file.id, file);
       break;
     case 'files.released':
       for (const fileId of event.fileIds) state.files.delete(fileId);
       break;
     case 'note-group.created':
     case 'note-group.updated':
-      state.noteGroups.set(event.group.id, event.group);
+      put(state.noteGroups, event.group.id, event.group);
       break;
     case 'note-group.deleted':
       deleteNoteGroup(state, event.groupId);
@@ -163,7 +201,7 @@ export function applyEvent(state: ExplorationState, event: ExplorationEvent) {
       break;
     case 'note.created':
     case 'note.updated':
-      state.notes.set(event.note.id, event.note);
+      put(state.notes, event.note.id, event.note);
       break;
     case 'note.deleted':
       state.notes.delete(event.noteId);
@@ -172,11 +210,11 @@ export function applyEvent(state: ExplorationState, event: ExplorationEvent) {
       applyOrder(state.notes, event.noteIds);
       break;
     case 'note.group-changed':
-      state.notes.set(event.note.id, event.note);
+      put(state.notes, event.note.id, event.note);
       applyOrder(state.notes, event.noteIds);
       break;
     case 'bookmark.created':
-      state.bookmarks.set(event.bookmark.id, event.bookmark);
+      put(state.bookmarks, event.bookmark.id, event.bookmark);
       break;
     case 'bookmark.deleted':
       state.bookmarks.delete(event.bookmarkId);
@@ -254,7 +292,7 @@ const draftJoinableComments = (state: ExplorationState, viewForkId: string) =>
 function setGroups(state: ExplorationState, changes: Map<string, string | null>) {
   for (const [commentId, forkGroupId] of changes) {
     const comment = state.comments.get(commentId);
-    if (comment) state.comments.set(commentId, { ...comment, forkGroupId });
+    if (comment) put(state.comments, commentId, { ...comment, forkGroupId });
   }
 }
 
@@ -272,7 +310,7 @@ function addNewFork(
   now: number,
 ) {
   if (state.forks.has(fork.forkId)) return;
-  state.forks.set(fork.forkId, {
+  put(state.forks, fork.forkId, {
     id: fork.forkId,
     explorationId: state.explorationId,
     parentForkId: fork.parentForkId,
@@ -297,7 +335,7 @@ export function applyChange(state: ExplorationState, change: Change) {
     case 'comment.create': {
       const { id, editBody, type, ...comment } = change.comment;
       const existing = state.comments.get(id);
-      state.comments.set(id, {
+      put(state.comments, id, {
         ...comment,
         id,
         explorationId: state.explorationId,
@@ -320,7 +358,7 @@ export function applyChange(state: ExplorationState, change: Change) {
       const { body, editBody, type, noteGroupId } = change.changes;
       if (!comment) break;
       if (type === 'note') leaveGroup(state, comment);
-      state.comments.set(comment.id, {
+      put(state.comments, comment.id, {
         ...comment,
         body: body ?? comment.body,
         editBody: editBody === undefined ? comment.editBody : editBody,
@@ -354,7 +392,7 @@ export function applyChange(state: ExplorationState, change: Change) {
     case 'fork-group.ungroup':
       for (const comment of state.comments.values()) {
         if (comment.forkGroupId === change.groupId) {
-          state.comments.set(comment.id, { ...comment, forkGroupId: null });
+          put(state.comments, comment.id, { ...comment, forkGroupId: null });
         }
       }
       break;
@@ -368,7 +406,7 @@ export function applyChange(state: ExplorationState, change: Change) {
       // Note comments become notes without Claude; they wait here only for the daemon.
       for (const comment of drafts) {
         const isNote = comment.type === 'note';
-        state.comments.set(comment.id, {
+        put(state.comments, comment.id, {
           ...comment,
           status: 'queued',
           submissionId: isNote ? null : id,
@@ -379,7 +417,7 @@ export function applyChange(state: ExplorationState, change: Change) {
         files.length > 0 ||
         drafts.some((comment) => comment.type !== 'note');
       if (forClaude) {
-        state.queuedSubmissions.set(id, {
+        put(state.queuedSubmissions, id, {
           id,
           explorationId: state.explorationId,
           forkId,
@@ -388,12 +426,12 @@ export function applyChange(state: ExplorationState, change: Change) {
           createdAt: now,
         });
       }
-      for (const file of files) state.files.set(file.id, { ...file, submissionId: id });
+      for (const file of files) put(state.files, file.id, { ...file, submissionId: id });
       break;
     }
     case 'fork-now': {
       const { submissionId: id, forkId, commentId } = change;
-      state.queuedSubmissions.set(id, {
+      put(state.queuedSubmissions, id, {
         id,
         explorationId: state.explorationId,
         forkId,
@@ -410,7 +448,7 @@ export function applyChange(state: ExplorationState, change: Change) {
           )
         : [comment];
       for (const each of sent) {
-        state.comments.set(each.id, { ...each, status: 'queued', submissionId: id });
+        put(state.comments, each.id, { ...each, status: 'queued', submissionId: id });
       }
       break;
     }
@@ -421,7 +459,7 @@ export function applyChange(state: ExplorationState, change: Change) {
       const { submissionId: id, forkId, noteId, message } = change;
       addNewFork(state, change, message.trim(), now);
       const note = state.notes.get(noteId);
-      state.queuedSubmissions.set(id, {
+      put(state.queuedSubmissions, id, {
         id,
         explorationId: state.explorationId,
         forkId,
@@ -435,7 +473,7 @@ export function applyChange(state: ExplorationState, change: Change) {
       state.queuedSubmissions.delete(change.submissionId);
       for (const comment of state.comments.values()) {
         if (comment.submissionId === change.submissionId) {
-          state.comments.set(comment.id, { ...comment, status: 'draft', submissionId: null });
+          put(state.comments, comment.id, { ...comment, status: 'draft', submissionId: null });
         }
       }
       for (const file of state.files.values()) {
@@ -444,7 +482,7 @@ export function applyChange(state: ExplorationState, change: Change) {
       break;
     case 'bookmark.create': {
       const existing = state.bookmarks.get(change.bookmark.id);
-      state.bookmarks.set(change.bookmark.id, {
+      put(state.bookmarks, change.bookmark.id, {
         ...change.bookmark,
         explorationId: state.explorationId,
         createdAt: existing?.createdAt ?? now,
@@ -458,7 +496,7 @@ export function applyChange(state: ExplorationState, change: Change) {
       const { id, name, checklist } = change.group;
       const existing = state.noteGroups.get(id);
       const others = [...state.noteGroups.values()].filter((group) => group.id !== id);
-      state.noteGroups.set(id, {
+      put(state.noteGroups, id, {
         id,
         explorationId: state.explorationId,
         name: name?.trim() || defaultGroupName(others.map((group) => group.name)),
@@ -476,7 +514,7 @@ export function applyChange(state: ExplorationState, change: Change) {
       const otherNames = [...state.noteGroups.values()]
         .filter((other) => other.id !== group.id)
         .map((other) => other.name);
-      state.noteGroups.set(group.id, {
+      put(state.noteGroups, group.id, {
         ...group,
         name: name === undefined ? group.name : name.trim() || defaultGroupName(otherNames),
         checklist: checklist ?? group.checklist,
@@ -495,7 +533,7 @@ export function applyChange(state: ExplorationState, change: Change) {
     case 'note.create': {
       const { id, groupId, topic, description } = change.note;
       const existing = state.notes.get(id);
-      state.notes.set(id, {
+      put(state.notes, id, {
         id,
         explorationId: state.explorationId,
         groupId,
@@ -519,7 +557,7 @@ export function applyChange(state: ExplorationState, change: Change) {
       const note = state.notes.get(change.noteId);
       if (!note) break;
       const { topic, description, checked } = change.changes;
-      state.notes.set(note.id, {
+      put(state.notes, note.id, {
         ...note,
         topic: topic === undefined ? note.topic : topic.trim() || null,
         description: description?.trim() ?? note.description,
@@ -533,7 +571,7 @@ export function applyChange(state: ExplorationState, change: Change) {
       break;
     case 'note.keep': {
       const note = state.notes.get(change.noteId);
-      if (note) state.notes.set(note.id, { ...note, deletionRequestedAt: null, updatedAt: now });
+      if (note) put(state.notes, note.id, { ...note, deletionRequestedAt: null, updatedAt: now });
       break;
     }
     case 'note.reorder': {
@@ -546,7 +584,7 @@ export function applyChange(state: ExplorationState, change: Change) {
     case 'note.change-group': {
       const note = state.notes.get(change.noteId);
       if (!note || note.groupId === change.groupId) break;
-      state.notes.set(note.id, { ...note, groupId: change.groupId, position: 0, updatedAt: now });
+      put(state.notes, note.id, { ...note, groupId: change.groupId, position: 0, updatedAt: now });
       renumberGroup(state.notes, note.groupId);
       renumberGroup(state.notes, change.groupId);
       break;
@@ -555,18 +593,20 @@ export function applyChange(state: ExplorationState, change: Change) {
 }
 
 function applySnapshot(state: ExplorationState, snapshot: Snapshot) {
-  state.exploration = snapshot.exploration;
-  state.forks = byId(snapshot.forks);
-  state.messages = byId(snapshot.messages);
-  state.comments = byId(snapshot.comments);
-  state.queuedSubmissions = byId(snapshot.queuedSubmissions);
-  state.files = byId(snapshot.files);
-  state.replyDrafts = new Map(snapshot.replyDrafts.map((draft) => [draft.forkId, draft]));
-  state.noteGroups = byId(snapshot.noteGroups);
-  state.notes = byId(snapshot.notes);
-  state.bookmarks = byId(snapshot.bookmarks);
-  state.forkRuns = new Map(snapshot.forkRuns.map((run) => [run.forkId, run]));
-  state.activities = byId(snapshot.activities);
+  if (!state.exploration || !sameContent(state.exploration, snapshot.exploration)) {
+    state.exploration = snapshot.exploration;
+  }
+  syncItems(state.forks, snapshot.forks, byId);
+  syncItems(state.messages, snapshot.messages, byId);
+  syncItems(state.comments, snapshot.comments, byId);
+  syncItems(state.queuedSubmissions, snapshot.queuedSubmissions, byId);
+  syncItems(state.files, snapshot.files, byId);
+  syncItems(state.replyDrafts, snapshot.replyDrafts, (draft) => draft.forkId);
+  syncItems(state.noteGroups, snapshot.noteGroups, byId);
+  syncItems(state.notes, snapshot.notes, byId);
+  syncItems(state.bookmarks, snapshot.bookmarks, byId);
+  syncItems(state.forkRuns, snapshot.forkRuns, (run) => run.forkId);
+  syncItems(state.activities, snapshot.activities, byId);
   state.sessionStatus = snapshot.sessionStatus;
   state.sessionError = snapshot.sessionError;
   state.status = 'ready';

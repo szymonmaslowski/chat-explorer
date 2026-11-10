@@ -14,6 +14,38 @@ vi.mock('../src/api', async (importOriginal) => {
 const { applyServerEvent } = await import('../src/stores/exploration');
 const { outbox } = await import('../src/stores/outbox');
 
+const comment = (changes: Partial<Comment> = {}): Comment => ({
+  id: 'c000000002',
+  explorationId: 'e',
+  messageId: 'm',
+  viewForkId: 'f',
+  quote: 'q',
+  startOffset: 0,
+  endOffset: 1,
+  body: 'Body',
+  editBody: null,
+  type: 'inline',
+  status: 'draft',
+  submissionId: null,
+  replyMessageId: null,
+  createdForkId: null,
+  noteGroupId: null,
+  createdNoteId: null,
+  forkGroupId: null,
+  createdAt: 0,
+  updatedAt: 0,
+  ...changes,
+});
+
+it('keeps the shown comment when a notice changes only when it was updated', () => {
+  const shown = comment();
+  const state = { explorationId: 'e', comments: new Map([[shown.id, shown]]) } as ExplorationState;
+  applyServerEvent(state, { type: 'comment.updated', comment: comment({ updatedAt: 5 }) });
+  expect(state.comments.get(shown.id)).toBe(shown);
+  applyServerEvent(state, { type: 'comment.updated', comment: comment({ body: 'New' }) });
+  expect(state.comments.get(shown.id)).toMatchObject({ body: 'New' });
+});
+
 it('keeps a Save made here when the older "created" notice arrives after it', () => {
   const explorationId = 'e';
   const anchor = { messageId: 'm', viewForkId: 'f', quote: 'q', startOffset: 0, endOffset: 1 };
