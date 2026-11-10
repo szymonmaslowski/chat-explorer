@@ -1,0 +1,38 @@
+import { expect } from '@playwright/test';
+import { attachFakeSession, deliverAndAnswer, detachFakeSession, test } from './helpers';
+
+test('opens a chat on the page its settings name, and shows the fork model there', async ({
+  page,
+  request,
+}) => {
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'How do I cache?' } })
+  ).json();
+  await attachFakeSession(request, explorationId);
+  await deliverAndAnswer(request, explorationId, 'Use HTTP caching.');
+  await detachFakeSession(request);
+
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Chats' })).toHaveCount(0);
+  const chat = page.locator('.exploration').filter({ hasText: explorationId });
+  await chat.getByRole('link').first().click();
+  await expect(page).toHaveURL(`/e/${explorationId}`);
+
+  const settings = page.getByRole('region', { name: 'Chat settings' });
+  await expect(settings).toHaveCount(0);
+  await page.getByRole('button', { name: 'Chat settings' }).click();
+  await expect(settings.getByRole('region', { name: 'This fork' })).toContainText('Model:');
+  await expect(settings.getByLabel("Hears about the chat's other forks")).toBeChecked();
+  await settings.getByLabel('Opens on').selectOption('notes');
+
+  await page.getByRole('link', { name: 'Chats' }).click();
+  await expect(page).toHaveURL('/');
+  await chat.getByRole('link').first().click();
+  await expect(page).toHaveURL(`/e/${explorationId}/notes`);
+
+  await page.getByRole('button', { name: 'Chat settings' }).click();
+  await expect(settings.getByLabel('Opens on')).toHaveValue('notes');
+  await expect(settings.getByRole('region', { name: 'This fork' })).toHaveCount(0);
+  await page.getByRole('link', { name: 'Chat', exact: true }).click();
+  await expect(page).toHaveURL(`/e/${explorationId}/map`);
+});

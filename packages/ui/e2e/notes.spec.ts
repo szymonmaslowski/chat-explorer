@@ -395,7 +395,7 @@ test('reads an expanded note aloud, from the start or from a tapped block', asyn
 
   await player.getByRole('button', { name: 'Pause' }).click();
   await expect(item).toHaveClass(/selected/);
-  await page.getByRole('link', { name: 'Map' }).click();
+  await page.getByRole('link', { name: 'Chat', exact: true }).click();
   await expect(player).toHaveCount(0);
 });
 
@@ -491,7 +491,7 @@ test('starts a fork about a note from the note', async ({ page, request }) => {
         `Regarding note [Cache headers](/e/${explorationId}/notes#n-${note.id}) (id \`${note.id}\`):\n\nWhich headers should we send?`,
       ],
     ]);
-  await page.getByRole('link', { name: 'Map' }).click();
+  await page.getByRole('link', { name: 'Chat', exact: true }).click();
   await expect(page.locator('.fork-box')).toHaveCount(2);
 });
 

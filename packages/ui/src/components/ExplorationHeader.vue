@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import type { Fork } from '@shared/types';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { api } from '../api';
 import { useLayout, type LayoutPage } from '../composables/useLayout';
 import { forkLineage, forkTitle } from '../lib/conversation';
 import type { ExplorationState } from '../stores/exploration';
+import ChatSettings from './ChatSettings.vue';
 import ConfirmButton from './ConfirmButton.vue';
+import MediaIcon from './MediaIcon.vue';
 import OutboxFailures from './OutboxFailures.vue';
 import SessionStatusBar from './SessionStatusBar.vue';
 import ThemeSwitch from './ThemeSwitch.vue';
@@ -20,18 +22,21 @@ const props = defineProps<{
 }>();
 
 const { chatsColumn, mapColumn } = useLayout();
-// A page shown in a column of its own needs no link, nor Notes next to the map's own.
+// A page shown in a column of its own needs no link, nor Notes next to the map's own. Chat is
+// the chat's map.
 const links = computed(() => {
   const chat = `/e/${props.state.explorationId}`;
   const mapUrl = props.fork ? `${chat}/map?from=${props.fork.id}` : `${chat}/map`;
   return [
-    chatsColumn.value ? null : { label: 'Chats', to: '/' },
-    mapColumn.value ? null : { label: 'Map', to: props.page === 'map' ? null : mapUrl },
+    mapColumn.value ? null : { label: 'Chat', to: props.page === 'map' ? null : mapUrl },
     props.page === 'fork' && mapColumn.value
       ? null
       : { label: 'Notes', to: props.page === 'notes' ? null : `${chat}/notes` },
   ].filter((link) => link !== null);
 });
+
+const settingsOpen = ref(false);
+const forkRun = computed(() => (props.fork ? props.state.forkRuns.get(props.fork.id) : undefined));
 
 const chatTitle = computed(() => props.state.exploration?.title || 'Untitled chat');
 const forksBetween = computed(() =>
@@ -43,6 +48,15 @@ const forksBetween = computed(() =>
   <header class="exploration-header">
     <div class="bar">
       <nav class="links">
+        <RouterLink
+          v-if="!chatsColumn"
+          to="/"
+          class="home icon-button"
+          aria-label="Chats"
+          title="Chats"
+        >
+          <MediaIcon name="home" />
+        </RouterLink>
         <template v-for="(link, index) in links" :key="link.label">
           <template v-if="index > 0">·</template>
           <RouterLink v-if="link.to" :to="link.to">{{ link.label }}</RouterLink>
@@ -56,9 +70,26 @@ const forksBetween = computed(() =>
           :exploration-id="state.explorationId"
           :has-queued="state.queuedSubmissions.size > 0"
         />
+        <button
+          v-if="state.exploration"
+          type="button"
+          class="icon-button"
+          :aria-expanded="settingsOpen"
+          aria-label="Chat settings"
+          title="Chat settings"
+          @click="settingsOpen = !settingsOpen"
+        >
+          <MediaIcon name="settings" />
+        </button>
         <ThemeSwitch />
       </div>
     </div>
+    <ChatSettings
+      v-if="settingsOpen && state.exploration && !side"
+      :exploration="state.exploration"
+      :fork="fork"
+      :run="forkRun"
+    />
     <template v-if="state.exploration">
       <p v-if="fork" class="fork-path">
         <RouterLink v-if="fork.parentForkId" :to="`/e/${state.explorationId}`">

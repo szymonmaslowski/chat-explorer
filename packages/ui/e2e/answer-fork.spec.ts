@@ -33,6 +33,6 @@ test("starts an empty fork after one of Claude's answers and replies there", asy
   expect(fork.isNewFork).toBe(true);
   expect(fork.userMessages[0].text).toBe('Where should the copy live?');
 
-  await page.getByRole('link', { name: 'Map' }).click();
+  await page.getByRole('link', { name: 'Chat', exact: true }).click();
   await expect(page.locator('.fork-box')).toHaveCount(2);
 });

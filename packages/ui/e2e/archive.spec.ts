@@ -51,7 +51,7 @@ test('takes back an archive that is not confirmed', async ({ page }) => {
   await expect(item.getByRole('button', { name: 'Confirm' })).toHaveCount(0);
 
   await item.getByRole('button', { name: 'Archive' }).click();
-  await page.getByRole('heading', { name: 'Chats' }).click();
+  await page.getByPlaceholder(/Start a new chat/).click();
   await expect(item.getByRole('button', { name: 'Archive' })).toBeVisible();
 });
 

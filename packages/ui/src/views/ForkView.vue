@@ -16,7 +16,6 @@ import SpeechPlayer from '../components/SpeechPlayer.vue';
 import ActivityGroup from '../components/ActivityGroup.vue';
 import AttentionDot from '../components/AttentionDot.vue';
 import ForkRunStatus from '../components/ForkRunStatus.vue';
-import UsageChip from '../components/UsageChip.vue';
 import MediaIcon from '../components/MediaIcon.vue';
 import { useCommentTyping } from '../composables/useCommentTyping';
 import { useLayout } from '../composables/useLayout';
@@ -249,7 +248,6 @@ watch(
         </span>
       </template>
       <template v-if="fork" #title-actions>
-        <UsageChip v-if="forkRun?.model" :fork="fork" :run="forkRun" />
         <button
           v-if="viewBookmarks.length > 0"
           type="button"

@@ -1,6 +1,7 @@
 import type { ClaudeModel } from '@shared/models';
 import type {
   Bookmark,
+  ChatDefaultPage,
   Comment,
   CommentChanges,
   Exploration,
@@ -118,6 +119,11 @@ export const api = {
     }),
   stopFork: (forkId: string) =>
     call<{ stopping: boolean }>(`/api/forks/${forkId}/stop`, { json: {} }),
+  setDefaultPage: (explorationId: string, defaultPage: ChatDefaultPage) =>
+    call<Exploration>(`/api/explorations/${explorationId}`, {
+      method: 'PATCH',
+      json: { defaultPage },
+    }),
   setForkAwareness: (forkId: string, awareness: ForkAwareness) =>
     call<Fork>(`/api/forks/${forkId}/awareness`, { method: 'PATCH', json: { awareness } }),
   retryFork: (forkId: string) => call<{ ok: true }>(`/api/forks/${forkId}/retry`, { json: {} }),

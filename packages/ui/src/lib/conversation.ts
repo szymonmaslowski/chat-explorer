@@ -1,5 +1,5 @@
 import { commentTag, type AnsweredPartLookup } from '@shared/answer-tags';
-import type { Comment, Fork, Message } from '@shared/types';
+import type { Comment, ExplorationListItem, Fork, Message } from '@shared/types';
 
 export function pathTo(messageId: string | null, messages: Map<string, Message>) {
   const path: Message[] = [];
@@ -75,4 +75,10 @@ export function answeredPartLookup(
 export function forkTitle(fork: Fork) {
   if (fork.summary) return fork.summary;
   return fork.parentForkId === null ? 'Main' : 'Untitled fork';
+}
+
+// A chat opens on its notes, or on its map, or with a single fork on that fork's conversation.
+export function chatHomePath(chat: Pick<ExplorationListItem, 'id' | 'defaultPage' | 'forkCount'>) {
+  if (chat.defaultPage === 'notes') return `/e/${chat.id}/notes`;
+  return chat.forkCount > 1 ? `/e/${chat.id}/map` : `/e/${chat.id}`;
 }

@@ -30,7 +30,7 @@ test.describe('on a wide screen', () => {
     await page.locator(`.main-column .exploration a[href="/e/${explorationId}/map"]`).click();
     await expect(page).toHaveURL(`/e/${explorationId}/map`);
     await expect(chatsColumn(page).locator('.exploration.current')).toHaveCount(1);
-    await expect(headerLinks(page)).toHaveText(/^Map\s*·\s*Notes$/);
+    await expect(headerLinks(page)).toHaveText(/^Chat\s*·\s*Notes$/);
 
     await page.locator(`.main-column .fork-box[href="/e/${explorationId}/f/${forkId}"]`).click();
     await expect(page).toHaveURL(`/e/${explorationId}/f/${forkId}`);
@@ -68,7 +68,7 @@ test.describe('on a wide screen', () => {
     await expect(mapColumn(page)).toHaveCount(0);
     const notes = await page.locator('.main-column .notes-view').boundingBox();
     expect(notes!.width).toBeGreaterThan(1300);
-    await headerLinks(page).getByRole('link', { name: 'Map' }).click();
+    await headerLinks(page).getByRole('link', { name: 'Chat', exact: true }).click();
     await expect(page).toHaveURL(`/e/${explorationId}/map`);
   });
 });
@@ -84,7 +84,8 @@ test.describe('on a medium screen', () => {
     await page.goto(`/e/${explorationId}/f/${forkId}`);
     await expect(chatsColumn(page)).toHaveCount(0);
     await expect(mapColumn(page)).toBeVisible();
-    await expect(headerLinks(page)).toHaveText('Chats');
+    await expect(headerLinks(page)).toHaveText('');
+    await expect(headerLinks(page).getByRole('link', { name: 'Chats' })).toBeVisible();
 
     await page.goto(`/e/${explorationId}/map`);
     await expect(mapColumn(page)).toHaveCount(0);

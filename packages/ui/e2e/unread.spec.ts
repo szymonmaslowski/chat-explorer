@@ -90,6 +90,6 @@ test('opens a fork at its first unread answer and marks forks with new answers',
   await expect(page.locator('.message.user').first()).not.toBeInViewport();
   await expect(page.locator('.reply-fork').getByRole('img', { name: 'New answer' })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Map' }).click();
+  await page.getByRole('link', { name: 'Chat', exact: true }).click();
   await expect(page.locator('.fork-box').getByRole('img', { name: 'New answer' })).toHaveCount(2);
 });

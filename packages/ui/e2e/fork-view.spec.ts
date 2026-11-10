@@ -91,7 +91,7 @@ test('queues a submit, scrolls to it and cancels it back into drafts', async ({ 
 
 test('navigates through the map and back and forward with [ and ]', async ({ page }) => {
   const explorationId = await openSeededExploration(page);
-  await page.getByRole('link', { name: 'Map' }).click();
+  await page.getByRole('link', { name: 'Chat', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/e/${explorationId}/map`));
   await page.locator('.fork-box', { hasText: 'Purging cached responses' }).click();
   await expect(page.locator('.fork-title')).toHaveText('Purging cached responses on a CDN');

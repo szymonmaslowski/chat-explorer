@@ -35,7 +35,9 @@ defineProps<{
     | 'chevron-up'
     | 'plus'
     | 'split'
-    | 'eye';
+    | 'eye'
+    | 'home'
+    | 'settings';
 }>();
 </script>
 
@@ -94,6 +96,11 @@ defineProps<{
     <path v-else-if="name === 'chevron-up'" d="M6 15l6-6 6 6" />
     <path v-else-if="name === 'plus'" d="M12 5v14M5 12h14" />
     <path v-else-if="name === 'split'" d="M7 3v8a5 5 0 0 0 5 5h7M16 13l3 3-3 3" />
+    <path v-else-if="name === 'home'" d="M3 11l9-8 9 8M5 9.5V20h5v-6h4v6h5V9.5" />
+    <path
+      v-else-if="name === 'settings'"
+      d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4"
+    />
     <path
       v-else-if="name === 'eye'"
       d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 1 0 0-6z"
@@ -138,6 +145,8 @@ defineProps<{
 .media-icon.chevron-up,
 .media-icon.plus,
 .media-icon.split,
+.media-icon.home,
+.media-icon.settings,
 .media-icon.read,
 .media-icon.eye {
   fill: none;

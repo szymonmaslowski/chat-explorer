@@ -8,6 +8,7 @@ import MediaIcon from '../components/MediaIcon.vue';
 import NewExploration from '../components/NewExploration.vue';
 import ThemeSwitch from '../components/ThemeSwitch.vue';
 import { relativeTime } from '@shared/time';
+import { chatHomePath } from '../lib/conversation';
 import { openEventStream } from '../lib/event-stream';
 
 // As `sidebar`, the list sits beside the open chat, which it marks.
@@ -74,7 +75,7 @@ async function removeFromList(explorationId: string, change: (id: string) => Pro
 <template>
   <main class="page">
     <div class="heading">
-      <h1>{{ archived ? 'Archived' : 'Chats' }}</h1>
+      <h1 v-if="archived">Archived</h1>
       <RouterLink :to="archived ? '/' : '/archived'" class="view-link">
         {{ archived ? 'Chats' : 'Archived' }}
       </RouterLink>
@@ -100,10 +101,7 @@ async function removeFromList(explorationId: string, change: (id: string) => Pro
           :attention="attentionOf(exploration)!"
           class="dot"
         />
-        <RouterLink
-          :to="exploration.forkCount > 1 ? `/e/${exploration.id}/map` : `/e/${exploration.id}`"
-          class="open"
-        >
+        <RouterLink :to="chatHomePath(exploration)" class="open">
           <span class="title">{{ exploration.title || 'Untitled chat' }}</span>
           <span v-if="exploration.summary" class="summary">{{ exploration.summary }}</span>
           <span class="meta muted">
@@ -150,6 +148,7 @@ async function removeFromList(explorationId: string, change: (id: string) => Pro
 }
 
 .view-link {
+  margin-right: auto;
   font-size: 0.9rem;
 }
 
