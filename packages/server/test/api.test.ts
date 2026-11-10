@@ -63,6 +63,20 @@ describe('public API', () => {
     expect(snapshot.messages).toHaveLength(2);
   });
 
+  it('compresses a snapshot for a client that accepts it', async () => {
+    const { request, store } = createTestApp();
+    const { exploration } = store.createExploration({
+      title: 'Long',
+      messages: [{ role: 'user', content: 'x'.repeat(4_000) }],
+    });
+    const response = await request(`/api/explorations/${exploration.id}`, {
+      headers: { 'accept-encoding': 'gzip' },
+    });
+    expect(response.headers.get('content-encoding')).toBe('gzip');
+    const unzipped = new Response(response.body!.pipeThrough(new DecompressionStream('gzip')));
+    expect((await unzipped.json()).exploration.id).toBe(exploration.id);
+  });
+
   it('maps store errors to HTTP statuses', async () => {
     const { request, store } = createTestApp();
     const { explorationId, mainForkId } = seedConversation(store);

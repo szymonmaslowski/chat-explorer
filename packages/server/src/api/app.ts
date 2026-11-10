@@ -2,6 +2,7 @@ import { createReadStream, existsSync } from 'node:fs';
 import { Readable } from 'node:stream';
 import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
+import { compress } from 'hono/compress';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 import { apiVersion } from '../config.js';
@@ -224,6 +225,9 @@ export function createApp(options: AppOptions) {
   const app = new Hono();
 
   app.use('*', guardLocalRequests(port, options.publicUrl));
+  // A long chat's snapshot is megabytes of JSON, loaded again on every reconnect over the
+  // tailnet. Event streams are left as they are, so each event arrives at once.
+  app.use('*', compress());
 
   app.onError((error, context) => {
     if (error instanceof StoreError) {
