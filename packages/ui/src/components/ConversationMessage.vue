@@ -27,7 +27,13 @@ const props = defineProps<{
   forkable: boolean;
   splittable: boolean;
 }>();
-const emit = defineEmits<{ markUnread: []; markRead: []; fork: []; split: [] }>();
+const emit = defineEmits<{
+  markUnread: [];
+  markRead: [];
+  fork: [];
+  split: [];
+  rendered: [];
+}>();
 
 const html = computed(() =>
   props.message.content ? renderMarkdown(props.message.content, props.answeredPart) : '',
@@ -108,7 +114,15 @@ function playMessage() {
   );
 }
 
-watch(html, findBlocks, { flush: 'post' });
+// New text drops the comments opened inside the old one, so the comment layer places them again.
+watch(
+  html,
+  () => {
+    findBlocks();
+    emit('rendered');
+  },
+  { flush: 'post' },
+);
 
 watch(
   [currentIndex, blocks],

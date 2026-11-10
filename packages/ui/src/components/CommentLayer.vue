@@ -5,7 +5,13 @@ import { insertedAttribute } from '@shared/speech-blocks';
 import type { Bookmark, Comment } from '@shared/types';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { anchorOfRange, clampToRoot, locateAnchor, type TextAnchor } from '../lib/anchoring';
+import {
+  anchorOfRange,
+  clampToRoot,
+  locateAnchor,
+  textNodes,
+  type TextAnchor,
+} from '../lib/anchoring';
 import { lineBoxes, nestingLevels, outlinePath } from '../lib/outlines';
 import { useCopied } from '../composables/useCopied';
 import { blockClipboardText } from '../lib/clipboard';
@@ -47,7 +53,7 @@ const anchors = shallowRef(new Map<string, Range>());
 const bookmarkRanges = shallowRef(new Map<string, Range>());
 // The messages on the page, top to bottom, for putting comments in the order of their text.
 const messageOrder = shallowRef<string[]>([]);
-const outlines = shallowRef<{ comment: Comment; path: string }[]>([]);
+const outlines = shallowRef<{ commentId: string; path: string }[]>([]);
 // Comments open in the text right after what they quote, with a tap on it or when written, and
 // stay open until closed.
 interface OpenedPlace {
@@ -135,8 +141,7 @@ const anchorRootOf = (node: Node) =>
   ) ?? null;
 const firstLineRect = (range: Range) => range.getClientRects()[0] ?? range.getBoundingClientRect();
 
-const relative = (rect: DOMRect) => {
-  const base = layer.value!.getBoundingClientRect();
+const relative = (rect: DOMRect, base = layer.value!.getBoundingClientRect()) => {
   return {
     top: rect.top - base.top,
     left: rect.left - base.left,
@@ -145,29 +150,89 @@ const relative = (rect: DOMRect) => {
   };
 };
 
-function locateAll(root: HTMLElement, items: (TextAnchor & { id: string; messageId: string })[]) {
+type AnchoredItem = TextAnchor & { id: string; messageId: string };
+
+// The messages on the page in text order, each reading its text nodes once, when first needed.
+function anchorRootsIn(root: HTMLElement) {
+  const elements = [...root.querySelectorAll<HTMLElement>('[data-anchor-root]')];
+  const nodesByElement = new Map<HTMLElement, Text[]>();
+  const nodesOf = (element: HTMLElement) => {
+    const nodes = nodesByElement.get(element) ?? textNodes(element);
+    nodesByElement.set(element, nodes);
+    return nodes;
+  };
+  return {
+    byMessage: new Map(elements.map((element) => [element.dataset.anchorRoot!, element])),
+    nodesOf,
+  };
+}
+
+function locateAll(roots: ReturnType<typeof anchorRootsIn>, items: AnchoredItem[]) {
   const ranges = new Map<string, Range>();
   for (const item of items) {
-    const anchorRoot = root.querySelector<HTMLElement>(`[data-anchor-root="${item.messageId}"]`);
-    const range = anchorRoot && locateAnchor(anchorRoot, item);
+    const element = roots.byMessage.get(item.messageId);
+    const range = element && locateAnchor(element, item, roots.nodesOf(element));
     if (range) ranges.set(item.id, range);
   }
   return ranges;
 }
 
+// What decides where comments and bookmarks sit. A change to anything else, such as a comment's
+// text or status, leaves them where they are, so the text is not searched and measured again.
+const anchorSignature = (items: AnchoredItem[]) =>
+  items
+    .map(({ id, messageId, startOffset, endOffset, quote }) =>
+      [id, messageId, startOffset, endOffset, quote].join(' '),
+    )
+    .join('\n');
+const commentSignature = (comments: Comment[]) =>
+  `${anchorSignature(comments)}\n${comments.flatMap((comment) => (comment.editBody === null ? [] : [comment.id])).join()}`;
+
 function reanchor() {
   const root = container();
   if (!root) return;
   restorePlaces(root);
-  anchors.value = locateAll(root, props.comments);
-  bookmarkRanges.value = locateAll(root, props.bookmarks);
+  const roots = anchorRootsIn(root);
+  anchors.value = locateAll(roots, props.comments);
+  bookmarkRanges.value = locateAll(roots, props.bookmarks);
   dropGoneComments();
   openBeingEdited();
-  messageOrder.value = [...root.querySelectorAll<HTMLElement>('[data-anchor-root]')].flatMap(
-    (element) => element.dataset.anchorRoot ?? [],
-  );
+  messageOrder.value = [...roots.byMessage.keys()];
+  observeVisibility(roots.byMessage.values());
   paintHighlights();
   measure();
+}
+
+// Outlines are drawn only around text near the screen: measuring a quote lays out its message,
+// which is costly for a long chat and wasted on text nobody sees.
+const visibleMessages = shallowRef(new Set<string>());
+const visibilityMargin = '50% 0px';
+let visibilityObserver: IntersectionObserver | null = null;
+function observeVisibility(elements: Iterable<HTMLElement>) {
+  visibilityObserver?.disconnect();
+  visibilityObserver = new IntersectionObserver(
+    (entries) => {
+      const visible = new Set(visibleMessages.value);
+      for (const entry of entries) {
+        const messageId = (entry.target as HTMLElement).dataset.anchorRoot!;
+        if (entry.isIntersecting) visible.add(messageId);
+        else visible.delete(messageId);
+      }
+      visibleMessages.value = visible;
+      scheduleMeasure();
+    },
+    { rootMargin: visibilityMargin },
+  );
+  for (const element of elements) visibilityObserver.observe(element);
+}
+
+let measureFrame = 0;
+function scheduleMeasure() {
+  if (measureFrame) return;
+  measureFrame = requestAnimationFrame(() => {
+    measureFrame = 0;
+    measure();
+  });
 }
 
 function measure() {
@@ -180,24 +245,35 @@ function measure() {
 function measureOutlines() {
   const quoted = props.comments.filter((comment) => {
     const range = anchors.value.get(comment.id);
-    return range && !range.collapsed;
+    return range && !range.collapsed && visibleMessages.value.has(comment.messageId);
   });
   const levels = nestingLevels(quoted);
   const openedBoxes = openedPlaces.value.map((place) => place.mount.getBoundingClientRect());
   const insideOpened = (rect: DOMRect) =>
     openedBoxes.some((box) => rect.top >= box.top && rect.bottom <= box.bottom);
+  const base = layer.value!.getBoundingClientRect();
   outlines.value = quoted.map((comment) => {
     const rects = [...anchors.value.get(comment.id)!.getClientRects()];
     const level = Math.min(levels.get(comment.id)!, outlineOutset.maxLevel);
     return {
-      comment,
+      commentId: comment.id,
       path: outlinePath(
-        lineBoxes(rects.filter((rect) => !insideOpened(rect)).map(relative)),
+        lineBoxes(rects.filter((rect) => !insideOpened(rect)).map((rect) => relative(rect, base))),
         outlineOutset.base + outlineOutset.step * level,
       ),
     };
   });
 }
+
+// Outlines keep their place until the anchors move, while the comments' kind and status show
+// as they are now.
+const shownOutlines = computed(() => {
+  const byId = new Map(props.comments.map((comment) => [comment.id, comment]));
+  return outlines.value.flatMap(({ commentId, path }) => {
+    const comment = byId.get(commentId);
+    return comment ? [{ comment, path }] : [];
+  });
+});
 
 const outlineKind = (comment: Comment) => (comment.forkGroupId ? 'fork' : comment.type);
 function paintHighlights() {
@@ -664,7 +740,7 @@ onMounted(() => {
   // between the text and the document.
   root?.addEventListener('click', onClick);
   document.addEventListener('selectionchange', onSelectionChange);
-  resizeObserver = new ResizeObserver(() => measure());
+  resizeObserver = new ResizeObserver(scheduleMeasure);
   if (root) resizeObserver.observe(root);
   reanchor();
 });
@@ -679,10 +755,16 @@ onBeforeUnmount(() => {
   document.removeEventListener('selectionchange', onSelectionChange);
   closeAllPlaces();
   resizeObserver?.disconnect();
+  visibilityObserver?.disconnect();
+  cancelAnimationFrame(measureFrame);
   if ('highlights' in CSS) CSS.highlights.clear();
 });
 
-watch(() => [props.comments, props.bookmarks, props.layoutKey], reanchor, { flush: 'post' });
+watch(
+  () => [commentSignature(props.comments), anchorSignature(props.bookmarks), props.layoutKey],
+  reanchor,
+  { flush: 'post' },
+);
 
 let handledHash = '';
 watch(
@@ -710,7 +792,7 @@ watch(
   <div ref="layer" class="comment-layer">
     <svg class="comment-outlines" aria-hidden="true">
       <path
-        v-for="outline in outlines"
+        v-for="outline in shownOutlines"
         :key="outline.comment.id"
         :d="outline.path"
         :class="[outlineKind(outline.comment), outline.comment.status]"

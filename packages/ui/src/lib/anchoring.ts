@@ -6,21 +6,25 @@ export interface TextAnchor {
   endOffset: number;
 }
 
-function textNodes(root: Node) {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, (node) =>
-    node.parentElement?.closest(`[${insertedAttribute}]`)
-      ? NodeFilter.FILTER_REJECT
-      : NodeFilter.FILTER_ACCEPT,
+// Rejecting an inserted element skips its whole subtree, instead of looking up the ancestors of
+// every text node.
+export function textNodes(root: Node) {
+  const walker = document.createTreeWalker(
+    root,
+    NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
+    (node) => {
+      if (!(node instanceof Element)) return NodeFilter.FILTER_ACCEPT;
+      return node.hasAttribute(insertedAttribute)
+        ? NodeFilter.FILTER_REJECT
+        : NodeFilter.FILTER_SKIP;
+    },
   );
   const nodes: Text[] = [];
   while (walker.nextNode()) nodes.push(walker.currentNode as Text);
   return nodes;
 }
 
-const textOf = (root: Node) =>
-  textNodes(root)
-    .map((node) => node.data)
-    .join('');
+const textOf = (nodes: Text[]) => nodes.map((node) => node.data).join('');
 
 export function textOffsetOf(root: Node, container: Node, offset: number) {
   const boundary = document.createRange();
@@ -37,7 +41,7 @@ export function textOffsetOf(root: Node, container: Node, offset: number) {
 export function anchorOfRange(root: Node, range: Range): TextAnchor | null {
   if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return null;
   const start = textOffsetOf(root, range.startContainer, range.startOffset);
-  const selected = textOf(root).slice(
+  const selected = textOf(textNodes(root)).slice(
     start,
     textOffsetOf(root, range.endContainer, range.endOffset),
   );
@@ -55,11 +59,16 @@ export function clampToRoot(root: Node, range: Range) {
   return clamped;
 }
 
-export function rangeFromOffsets(root: Node, startOffset: number, endOffset: number) {
+export function rangeFromOffsets(
+  root: Node,
+  startOffset: number,
+  endOffset: number,
+  nodes = textNodes(root),
+) {
   const range = document.createRange();
   let position = 0;
   let startSet = false;
-  for (const node of textNodes(root)) {
+  for (const node of nodes) {
     const length = node.data.length;
     if (!startSet && startOffset <= position + length) {
       range.setStart(node, startOffset - position);
@@ -75,9 +84,9 @@ export function rangeFromOffsets(root: Node, startOffset: number, endOffset: num
 }
 
 // A general comment quotes nothing, so it sits at the end of the message's last line of text.
-function endOfText(root: Node) {
+function endOfText(root: Node, nodes: Text[]) {
   const range = document.createRange();
-  const lastText = textNodes(root).findLast((node) => node.data.trim() !== '');
+  const lastText = nodes.findLast((node) => node.data.trim() !== '');
   if (lastText) range.setStart(lastText, lastText.data.length);
   else range.setStart(root, root.childNodes.length);
   return range;
@@ -85,12 +94,13 @@ function endOfText(root: Node) {
 
 // The rendered text can differ from when the comment was made, so the stored offsets
 // are only trusted when they still select the quote. Otherwise the quote is searched for.
-export function locateAnchor(root: Node, anchor: TextAnchor) {
-  if (!anchor.quote) return endOfText(root);
-  const text = textOf(root);
+// Locating many anchors in one root can pass its text nodes, read once.
+export function locateAnchor(root: Node, anchor: TextAnchor, nodes = textNodes(root)) {
+  if (!anchor.quote) return endOfText(root, nodes);
+  const text = textOf(nodes);
   if (text.slice(anchor.startOffset, anchor.endOffset) === anchor.quote) {
-    return rangeFromOffsets(root, anchor.startOffset, anchor.endOffset);
+    return rangeFromOffsets(root, anchor.startOffset, anchor.endOffset, nodes);
   }
   const found = text.indexOf(anchor.quote);
-  return found === -1 ? null : rangeFromOffsets(root, found, found + anchor.quote.length);
+  return found === -1 ? null : rangeFromOffsets(root, found, found + anchor.quote.length, nodes);
 }

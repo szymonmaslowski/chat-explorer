@@ -135,6 +135,8 @@ function splittable(message: Message, index: number) {
   );
 }
 
+// Counts messages rendered again with new text, which moves the comments in them.
+const renderedCount = ref(0);
 const splitError = ref<{ messageId: string; text: string } | null>(null);
 async function splitAt(message: Message) {
   splitError.value = null;
@@ -364,6 +366,7 @@ watch(
             @mark-read="markReadUpTo(message.id)"
             @fork="forkAtAnswer(message)"
             @split="splitAt(message)"
+            @rendered="renderedCount++"
           />
           <p v-if="splitError?.messageId === message.id" class="split-error" role="alert">
             {{ splitError.text }}
@@ -392,7 +395,7 @@ watch(
           :fork-id="fork.id"
           :comments="viewComments"
           :bookmarks="viewBookmarks"
-          :layout-key="[...pathIds].join()"
+          :layout-key="`${[...pathIds].join()} ${renderedCount}`"
           :read-only="archived"
         />
       </div>
