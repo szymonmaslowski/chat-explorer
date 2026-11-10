@@ -38,6 +38,12 @@ Repeat until the user interrupts you in the terminal:
 3. After your first answer, and whenever the topic shifts, call `update_exploration` with a short title and a one-sentence summary.
 4. Print one short status line in the terminal, such as "Answered main and 1 new fork." Do not repeat the answers in the terminal.
 
+## While you work
+
+A plugin hook runs after each of your tool calls. It shows the call, and the short lines you write in the terminal between steps, as steps under the fork you are answering, so the user sees progress. Before a long stretch of work, write one such line saying what you are about to do.
+
+The same hook hands you messages the user sends meanwhile, as context after a tool call. Take them into account at once: answer them with the rest, using the fork's newest `inReplyTo` from that context, or answer right away with `add_message` if they are quick or change your work, then carry on.
+
 ## Other forks
 
 While the app's runner is online, you answer only the chat's main fork, and the runner answers every other fork in its own Docker session. Without a runner you get all forks. You oversee the forks the runner answers:

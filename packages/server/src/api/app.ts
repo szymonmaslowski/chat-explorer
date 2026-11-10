@@ -131,6 +131,10 @@ const attachBody = shimBody.extend({ sessionId: z.string(), takeover: z.boolean(
 const addMessageBody = shimBody.extend({ inReplyTo: z.string(), content: z.string().min(1) });
 const forkSummaryBody = shimBody.extend({ summary: z.string() });
 const supervisorMessageBody = shimBody.extend({ text: z.string().min(1) });
+const sessionStepBody = z.object({
+  texts: z.array(z.string().min(1)).default([]),
+  tool: z.string().min(1).nullable().default(null),
+});
 const explorationChangesBody = shimBody.extend({
   title: z.string().optional(),
   summary: z.string().optional(),
@@ -717,6 +721,32 @@ export function createApp(options: AppOptions) {
   internal.post('/notes/:id/deletion-request', async (context) => {
     const { shimId } = shimBody.parse(await context.req.json());
     return context.json(store.requestNoteDeletion(attachedNoteId(context.req.param('id'), shimId)));
+  });
+
+  // After each tool call of an attached session: what it did becomes steps in the forks it
+  // answers, and messages the user sent meanwhile go back to it.
+  internal.post('/sessions/:sessionId/steps', async (context) => {
+    const sessionId = context.req.param('sessionId');
+    const { texts, tool } = sessionStepBody.parse(await context.req.json());
+    const exploration = store.explorationForSession(sessionId);
+    const attachment = exploration ? store.attachment(exploration.id) : null;
+    if (!exploration || !attachment?.live || attachment.sessionId !== sessionId) {
+      return context.json({ explorationId: null, forks: [] });
+    }
+    const { working, arrived } = hub.duringWork(exploration.id, attachment.shimId);
+    const steps = [
+      ...texts.map((text) => ({ kind: 'text' as const, text })),
+      ...(tool ? [{ kind: 'tool' as const, text: tool }] : []),
+    ];
+    for (const fork of working) {
+      for (const step of steps) {
+        options.runs.addShimActivity(fork.forkId, attachment.shimId, {
+          afterMessageId: fork.inReplyTo,
+          ...step,
+        });
+      }
+    }
+    return context.json({ explorationId: exploration.id, forks: arrived });
   });
 
   internal.get('/sessions/:sessionId/exploration', (context) =>

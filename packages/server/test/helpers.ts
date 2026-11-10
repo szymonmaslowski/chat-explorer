@@ -178,8 +178,18 @@ export function createTestSpeaker(
   return { speaker, inspected, spoken: fakeEngines.at(-1)!.spoken };
 }
 
-export function createTestApp(options: { publicUrl?: string } = {}) {
+// With `sessionLeases`, an attached session claims its chat's forks, as with the runner in use.
+export function createTestApp(options: { publicUrl?: string; sessionLeases?: boolean } = {}) {
   const context = createTestStore();
+  const hub = options.sessionLeases
+    ? new FeedbackHub(
+        context.store,
+        context.bus,
+        () => context.clock.now,
+        context.sessions,
+        context.runs,
+      )
+    : context.hub;
   const { transcriber, calls: whisperCalls } = createTestTranscriber();
   const { speaker, inspected, spoken } = createTestSpeaker();
   const fileStorage = new FileStorage(
@@ -189,7 +199,7 @@ export function createTestApp(options: { publicUrl?: string } = {}) {
   );
   const app = createApp({
     store: context.store,
-    hub: context.hub,
+    hub,
     bus: context.bus,
     sessions: context.sessions,
     runs: context.runs,
@@ -215,7 +225,7 @@ export function createTestApp(options: { publicUrl?: string } = {}) {
       body: json ? JSON.stringify(json) : rest.body,
     });
   };
-  return { ...context, app, request, whisperCalls, inspected, spoken, fileStorage };
+  return { ...context, hub, app, request, whisperCalls, inspected, spoken, fileStorage };
 }
 
 export function seedConversation(store: ChatStore) {

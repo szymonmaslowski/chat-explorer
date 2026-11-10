@@ -423,6 +423,20 @@ export class RunStore {
       });
   }
 
+  // What an attached session did while answering a fork it holds.
+  addShimActivity(
+    forkId: string,
+    shimId: string,
+    input: { afterMessageId: string; kind: ActivityKind; text: string },
+  ) {
+    const row = this.db.get<ForkRunRow>(
+      'SELECT * FROM fork_runs WHERE fork_id = ? AND runner_id = ? AND lease_id IS NOT NULL',
+      forkId,
+      shimRunnerId(shimId),
+    );
+    return row ? this.addActivity(forkId, row.lease_id!, input) : null;
+  }
+
   renewShimLeases(shimId: string) {
     this.db.run(
       'UPDATE fork_runs SET lease_expires_at = ? WHERE runner_id = ? AND lease_id IS NOT NULL',

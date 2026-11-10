@@ -5,6 +5,14 @@
         "matcher": "compact",
         "hooks": [{ "type": "command", "command": "chat-explorer hook post-compact" }]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "chat-explorer hook post-tool-use", "timeout": 5 }
+        ]
+      }
     ]
   }
 }

@@ -46,6 +46,9 @@ export class FeedbackHub {
   // Notes already handed to the attached session for a topic. Without this a session that never
   // writes one would get the same note back at once on every call, in a loop.
   private readonly handedNotes = new Map<string, { shimId: string; noteIds: Set<string> }>();
+  // The newest message of each fork handed to the attached session, so a message that arrives
+  // while it works reaches it once, at its next tool call.
+  private readonly handedTips = new Map<string, string>();
   private readonly statusTimer: NodeJS.Timeout;
 
   constructor(
@@ -144,11 +147,7 @@ export class FeedbackHub {
     this.store.requireAttachedShim(explorationId, shimId);
     // Forks the session holds include ones handed out before and not answered yet, so a session
     // that lost track gets them again.
-    const held = this.leases ? new Set(this.leases.claimForShim(explorationId, shimId)) : null;
-    if (!held) this.store.deliverQueued(explorationId);
-    const forks = this.store
-      .pendingForks(explorationId)
-      .filter((fork) => !held || held.has(fork.forkId));
+    const forks = this.heldPendingForks(explorationId, shimId);
     let handed = this.handedNotes.get(explorationId);
     if (handed?.shimId !== shimId) {
       handed = { shimId, noteIds: new Set() };
@@ -159,12 +158,28 @@ export class FeedbackHub {
       .filter((note) => !handed.noteIds.has(note.noteId));
     if (forks.length === 0 && notesNeedingTopic.length === 0) return null;
     for (const note of notesNeedingTopic) handed.noteIds.add(note.noteId);
+    for (const fork of forks) this.handedTips.set(fork.forkId, fork.inReplyTo);
     return {
       status: 'feedback',
       forks,
       notesNeedingTopic,
       notes: this.store.notesIndex(explorationId),
     };
+  }
+
+  // While the attached session works: the forks it answers, and those of them with messages it
+  // has not been handed yet.
+  duringWork(explorationId: string, shimId: string) {
+    const working = this.heldPendingForks(explorationId, shimId);
+    const arrived = working.filter((fork) => this.handedTips.get(fork.forkId) !== fork.inReplyTo);
+    for (const fork of arrived) this.handedTips.set(fork.forkId, fork.inReplyTo);
+    return { working, arrived };
+  }
+
+  private heldPendingForks(explorationId: string, shimId: string) {
+    const held = this.leases ? new Set(this.leases.claimForShim(explorationId, shimId)) : null;
+    if (!held) this.store.deliverQueued(explorationId);
+    return this.store.pendingForks(explorationId).filter((fork) => !held || held.has(fork.forkId));
   }
 
   private isListening(explorationId: string) {
