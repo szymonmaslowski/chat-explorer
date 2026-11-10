@@ -2,10 +2,11 @@
 import type { Fork } from '@shared/types';
 import { stratify, tree } from 'd3-hierarchy';
 import { computed, ref } from 'vue';
+import { api, ApiError } from '../api';
 import AttentionDot from '../components/AttentionDot.vue';
 import ExplorationHeader from '../components/ExplorationHeader.vue';
-import { archivingFork, forkTitle } from '../lib/conversation';
-import { awaitsAnswer, forkAttention } from '../lib/read-state';
+import { archivingFork, forkLineage, forkTitle } from '../lib/conversation';
+import { awaitsAnswer, forkAttention, type Attention } from '../lib/read-state';
 import { openExploration } from '../stores/exploration';
 
 const props = defineProps<{ explorationId: string; currentForkId?: string; side?: boolean }>();
@@ -16,6 +17,7 @@ const boxHeight = 86;
 // Boxes grow by a line once any fork of the chat has bookmarks, so all stay the same height.
 const bookmarksLineHeight = 16;
 const depthGap = 32;
+const toggleSize = 22;
 const siblingGap = 14;
 const padding = 16;
 
@@ -37,13 +39,56 @@ const showArchived = computed({
   set: (shown) => (chosenShowArchived.value = shown),
 });
 
+// The forks on the way to the open fork stay on the map even when collapsed, so it is not missing.
+const revealedForks = computed(() => {
+  const current = props.currentForkId ? state.value.forks.get(props.currentForkId) : undefined;
+  return new Set(current ? forkLineage(current, state.value.forks).map((fork) => fork.id) : []);
+});
+
+const error = ref('');
+
+async function change(request: Promise<unknown>) {
+  error.value = '';
+  try {
+    await request;
+  } catch (failure) {
+    error.value = failure instanceof ApiError ? failure.message : 'Something went wrong.';
+  }
+}
+
+const collapse = (fork: Fork) => change(api.collapseFork(fork.id));
+const expandChildren = (fork: Fork) => change(api.expandCollapsedChildren(fork.id));
+
+function strongestAttention(attentions: (Attention | undefined)[]) {
+  if (attentions.includes('failed')) return 'failed' as const;
+  return attentions.includes('unread') ? ('unread' as const) : undefined;
+}
+
 const forkUrl = (fork: Fork) =>
   fork.parentForkId ? `/e/${props.explorationId}/f/${fork.id}` : `/e/${props.explorationId}`;
 
 const layout = computed(() => {
-  const forks = [...state.value.forks.values()].filter(
+  const shownForks = [...state.value.forks.values()].filter(
     (fork) => showArchived.value || !archivedForks.value.has(fork.id),
   );
+  const childrenOf = new Map<string | null, Fork[]>();
+  for (const fork of shownForks) {
+    childrenOf.set(fork.parentForkId, [...(childrenOf.get(fork.parentForkId) ?? []), fork]);
+  }
+  const subtree = (fork: Fork): Fork[] => [
+    fork,
+    ...(childrenOf.get(fork.id) ?? []).flatMap(subtree),
+  ];
+  const forks: Fork[] = [];
+  const hiddenBelow = new Map<string, Fork[]>();
+  const visit = (fork: Fork) => {
+    forks.push(fork);
+    for (const child of childrenOf.get(fork.id) ?? []) {
+      if (!child.collapsed || revealedForks.value.has(child.id)) visit(child);
+      else hiddenBelow.set(fork.id, [...(hiddenBelow.get(fork.id) ?? []), ...subtree(child)]);
+    }
+  };
+  for (const root of childrenOf.get(null) ?? []) visit(root);
   if (forks.length === 0) return null;
   const bookmarkCounts = new Map<string, number>();
   for (const bookmark of state.value.bookmarks.values()) {
@@ -65,16 +110,24 @@ const layout = computed(() => {
     messageCounts.set(message.forkId, (messageCounts.get(message.forkId) ?? 0) + 1);
   }
   const attention = forkAttention(state.value);
+  const awaiting = (fork: Fork) =>
+    awaitsAnswer(fork, state.value.messages, state.value.forkRuns.get(fork.id));
   const boxes = nodes.map((node) => {
     const fork = node.data;
+    const hidden = hiddenBelow.get(fork.id) ?? [];
     return {
       fork,
       ...position(node.x, node.y),
       messageCount: messageCounts.get(fork.id) ?? 0,
       bookmarkCount: bookmarkCounts.get(fork.id) ?? 0,
-      awaitingAnswer: awaitsAnswer(fork, state.value.messages, state.value.forkRuns.get(fork.id)),
+      awaitingAnswer: awaiting(fork),
       attention: attention.get(fork.id),
       archived: archivedForks.value.has(fork.id),
+      hidden: {
+        count: hidden.length,
+        attention: strongestAttention(hidden.map((each) => attention.get(each.id))),
+        awaitingAnswer: hidden.some(awaiting),
+      },
     };
   });
   const edges = root.links().map(({ source, target }) => {
@@ -94,7 +147,10 @@ const layout = computed(() => {
     boxes,
     edges,
     boxHeight: height,
-    width: Math.max(...boxes.map((box) => box.left)) + boxWidth + padding,
+    width:
+      Math.max(...boxes.map((box) => box.left + (box.hidden.count > 0 ? depthGap : 0))) +
+      boxWidth +
+      padding,
     height: Math.max(...boxes.map((box) => box.top)) + height + padding,
   };
 });
@@ -109,6 +165,7 @@ const layout = computed(() => {
       Show archived forks ({{ archivedForks.size }})
     </label>
 
+    <p v-if="error" class="error" role="alert">{{ error }}</p>
     <p v-if="state.status === 'loading'" class="muted">Loading…</p>
     <p v-else-if="state.status !== 'ready'" class="muted">This chat is not available.</p>
 
@@ -141,6 +198,41 @@ const layout = computed(() => {
             </span>
           </span>
         </RouterLink>
+        <template v-for="box in layout.boxes" :key="`toggles-${box.fork.id}`">
+          <button
+            v-if="box.fork.parentForkId && !revealedForks.has(box.fork.id)"
+            type="button"
+            class="collapse-toggle"
+            :aria-label="`Collapse ${forkTitle(box.fork)}`"
+            title="Hide this fork and the forks below it from the map"
+            :style="{
+              left: `${box.left - toggleSize / 2}px`,
+              top: `${box.top + (layout.boxHeight - toggleSize) / 2}px`,
+              width: `${toggleSize}px`,
+              height: `${toggleSize}px`,
+            }"
+            @click="collapse(box.fork)"
+          >
+            −
+          </button>
+          <button
+            v-if="box.hidden.count > 0"
+            type="button"
+            class="hidden-chip"
+            :class="{ awaiting: box.hidden.awaitingAnswer }"
+            :aria-label="`Show ${box.hidden.count} collapsed fork${box.hidden.count === 1 ? '' : 's'}`"
+            title="Show the collapsed forks below"
+            :style="{
+              left: `${box.left + boxWidth - toggleSize / 2}px`,
+              top: `${box.top + (layout.boxHeight - toggleSize) / 2}px`,
+              height: `${toggleSize}px`,
+            }"
+            @click="expandChildren(box.fork)"
+          >
+            +{{ box.hidden.count }}
+            <AttentionDot v-if="box.hidden.attention" :attention="box.hidden.attention" />
+          </button>
+        </template>
       </div>
     </div>
   </div>
@@ -238,6 +330,41 @@ const layout = computed(() => {
 
 .awaiting {
   color: var(--warning);
+}
+
+.collapse-toggle,
+.hidden-chip {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.collapse-toggle:hover,
+.hidden-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.hidden-chip {
+  padding: 0 0.45rem;
+  font-weight: 600;
+}
+
+.hidden-chip.awaiting {
+  color: var(--warning);
+}
+
+.error {
+  color: var(--danger);
 }
 
 .bookmarks {

@@ -265,6 +265,7 @@ function addNewFork(
     createdAt: now,
     updatedAt: now,
     archivedAt: null,
+    collapsed: false,
   });
 }
 
