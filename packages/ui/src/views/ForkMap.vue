@@ -207,7 +207,7 @@ const layout = computed(() => {
             title="Hide this fork and the forks below it from the map"
             :style="{
               left: `${box.left - toggleSize / 2}px`,
-              top: `${box.top + (layout.boxHeight - toggleSize) / 2}px`,
+              top: `${box.top - toggleSize / 2}px`,
               width: `${toggleSize}px`,
               height: `${toggleSize}px`,
             }"
