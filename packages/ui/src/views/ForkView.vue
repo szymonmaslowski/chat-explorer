@@ -31,7 +31,8 @@ import {
 } from '../lib/conversation';
 import { scrollToAndFlash } from '../lib/flash';
 import { awaitsAnswer, forkAttention, isUnread } from '../lib/read-state';
-import { openExploration } from '../stores/exploration';
+import { applyEvent, openExploration } from '../stores/exploration';
+import { api } from '../api';
 import { newId, outbox } from '../stores/outbox';
 import { stopSpeech } from '../stores/speech';
 
@@ -103,6 +104,36 @@ function forkAtAnswer(message: Message) {
     baseMessageId: message.id,
   });
   void router.push(`/e/${props.explorationId}/f/${forkId}`);
+}
+
+// A message of the user's that follows one of Claude's answers in this fork can take the rest of
+// the fork into a new one, while Claude is not working on it.
+function splittable(message: Message, index: number) {
+  const previous = path.value[index - 1];
+  return (
+    !archived.value &&
+    !awaitingAnswer.value &&
+    forkRun.value?.status !== 'answering' &&
+    message.role === 'user' &&
+    message.forkId === fork.value?.id &&
+    previous?.role === 'assistant' &&
+    previous.forkId === fork.value.id
+  );
+}
+
+const splitError = ref<{ messageId: string; text: string } | null>(null);
+async function splitAt(message: Message) {
+  splitError.value = null;
+  try {
+    const split = await api.splitFork(message.id, newId());
+    applyEvent(state.value, { type: 'fork.split', ...split });
+    void router.push(`/e/${props.explorationId}/f/${split.fork.id}#m-${message.id}`);
+  } catch (error) {
+    splitError.value = {
+      messageId: message.id,
+      text: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 const answeredPart = computed(() => answeredPartLookup(state.value.comments, state.value.messages));
 const viewComments = computed(() =>
@@ -304,9 +335,14 @@ watch(
             :is-new="newIds.has(message.id)"
             :answered-part="answeredPart"
             :forkable="!archived"
+            :splittable="splittable(message, index)"
             @mark-unread="markUnread(message.id)"
             @fork="forkAtAnswer(message)"
+            @split="splitAt(message)"
           />
+          <p v-if="splitError?.messageId === message.id" class="split-error" role="alert">
+            {{ splitError.text }}
+          </p>
           <ActivityGroup
             v-for="group in activityGroups.get(message.id) ?? []"
             :key="`${message.id}-${group[0]!.attempt}`"
@@ -366,6 +402,10 @@ watch(
 </template>
 
 <style scoped>
+.split-error {
+  color: var(--danger);
+}
+
 .top {
   position: sticky;
   top: 0;

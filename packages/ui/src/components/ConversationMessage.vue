@@ -13,6 +13,7 @@ import { isUnread } from '../lib/read-state';
 import { bringToReadingLine, scrollToEdge } from '../lib/reading-line';
 import { speechBlocks, type SpokenElement } from '../lib/speech-blocks';
 import { checkSpeechAvailable, playFrom, speech, togglePause } from '../stores/speech';
+import ConfirmButton from './ConfirmButton.vue';
 import FileIcon from './FileIcon.vue';
 import MediaIcon from './MediaIcon.vue';
 
@@ -24,8 +25,9 @@ const props = defineProps<{
   isNew: boolean;
   answeredPart: AnsweredPartLookup;
   forkable: boolean;
+  splittable: boolean;
 }>();
-const emit = defineEmits<{ markUnread: []; fork: [] }>();
+const emit = defineEmits<{ markUnread: []; fork: []; split: [] }>();
 
 const html = computed(() =>
   props.message.content ? renderMarkdown(props.message.content, props.answeredPart) : '',
@@ -138,15 +140,28 @@ onMounted(findBlocks);
         {{ formatDateTime(message.createdAt) }}
       </time>
       <span v-if="isNew" class="new-label">New</span>
-      <button
-        type="button"
-        class="icon-button copy-link"
-        :aria-label="linkCopied ? 'Link copied' : 'Copy a link to this message'"
-        title="Copy a link that opens this fork at this message"
-        @click="copyLink"
-      >
-        <MediaIcon :name="linkCopied ? 'check' : 'chain'" />
-      </button>
+      <span class="header-actions">
+        <ConfirmButton
+          v-if="splittable"
+          label="Move from here into a new fork"
+          class="icon-button header-button"
+          title="Move this message and the ones after it into a new fork"
+          @confirm="emit('split')"
+        >
+          <MediaIcon name="split" /><span class="visually-hidden"
+            >Move from here into a new fork</span
+          >
+        </ConfirmButton>
+        <button
+          type="button"
+          class="icon-button header-button copy-link"
+          :aria-label="linkCopied ? 'Link copied' : 'Copy a link to this message'"
+          title="Copy a link that opens this fork at this message"
+          @click="copyLink"
+        >
+          <MediaIcon :name="linkCopied ? 'check' : 'chain'" />
+        </button>
+      </span>
     </header>
     <div v-if="jumpable" class="message-actions">
       <button
@@ -288,9 +303,17 @@ onMounted(findBlocks);
   color: var(--text-muted);
 }
 
-.copy-link {
-  margin-left: auto;
+.header-button {
   color: var(--text-muted);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-left: auto;
 }
 
 .time {

@@ -106,6 +106,15 @@ export function applyEvent(state: ExplorationState, event: ExplorationEvent) {
     case 'fork.updated':
       state.forks.set(event.fork.id, event.fork);
       break;
+    case 'fork.split':
+      for (const fork of event.forks) state.forks.set(fork.id, fork);
+      for (const message of event.messages) state.messages.set(message.id, message);
+      for (const comment of event.comments) state.comments.set(comment.id, comment);
+      for (const bookmark of event.bookmarks) state.bookmarks.set(bookmark.id, bookmark);
+      for (const activity of event.activities) state.activities.set(activity.id, activity);
+      for (const note of event.notes) state.notes.set(note.id, note);
+      for (const run of event.forkRuns) state.forkRuns.set(run.forkId, run);
+      break;
     case 'fork-run.updated':
       state.forkRuns.set(event.run.forkId, event.run);
       break;
@@ -213,6 +222,11 @@ const eventSubjects = (event: ExplorationEvent) => {
       return [event.note.id, ...event.noteIds];
     case 'notes.reordered':
       return event.noteIds;
+    case 'fork.split':
+      return [
+        ...event.comments.map((comment) => comment.id),
+        ...event.notes.map((note) => note.id),
+      ];
     default:
       return [];
   }
@@ -272,6 +286,7 @@ function addNewFork(
     updatedAt: now,
     archivedAt: null,
     collapsed: false,
+    needsSummary: false,
   });
 }
 
