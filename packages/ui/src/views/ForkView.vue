@@ -4,6 +4,7 @@ import type { Activity, Message } from '@shared/types';
 import { useRoute, useRouter } from 'vue-router';
 import BookmarkList from '../components/BookmarkList.vue';
 import CommentLayer from '../components/CommentLayer.vue';
+import ConfirmButton from '../components/ConfirmButton.vue';
 import ExplorationHeader from '../components/ExplorationHeader.vue';
 import ForkArchiveControl from '../components/ForkArchiveControl.vue';
 import NoteDeletionNotice from '../components/NoteDeletionNotice.vue';
@@ -90,6 +91,7 @@ const isWorking = (group: Activity[]) =>
   group[0]?.attempt === forkRun.value.attempt &&
   !group.some((activity) => activity.interrupted);
 const lastAnswer = computed(() => path.value.findLast((message) => message.role === 'assistant'));
+const lastUnread = computed(() => path.value.findLast(isUnread));
 const attention = computed(() => forkAttention(state.value));
 const { newIds, markUnread, markReadUpTo } = useReadTracking({ state, fork, path });
 
@@ -260,8 +262,17 @@ watch(
           <MediaIcon name="bookmark" />
           {{ viewBookmarks.length }}
         </button>
+        <ConfirmButton
+          v-if="lastUnread"
+          label="Mark read"
+          class="icon-button"
+          title="Mark every answer in this fork read"
+          @confirm="markReadUpTo(lastUnread.id)"
+        >
+          <MediaIcon name="read" /><span class="visually-hidden">Mark read</span>
+        </ConfirmButton>
         <button
-          v-if="lastAnswer && !isUnread(lastAnswer)"
+          v-else-if="lastAnswer"
           type="button"
           class="icon-button"
           aria-label="Mark unread"

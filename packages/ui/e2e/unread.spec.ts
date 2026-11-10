@@ -45,6 +45,14 @@ test('marks a new answer, clears it once seen, and marks it unread again', async
   await page.getByRole('button', { name: 'Mark unread', exact: true }).click();
   await expect(answer).toHaveAttribute('data-unread', 'true');
 
+  await page.getByRole('button', { name: 'Mark read', exact: true }).click();
+  await expect(answer).toHaveAttribute('data-unread', 'true');
+  await page.getByRole('button', { name: 'Confirm' }).click();
+  await expect(answer).not.toHaveAttribute('data-unread');
+  await expect(page.getByRole('button', { name: 'Mark unread', exact: true })).toBeVisible();
+
+  await answer.getByRole('button', { name: 'Mark unread from here' }).click();
+  await expect(answer).toHaveAttribute('data-unread', 'true');
   await answer.getByRole('button', { name: 'Mark read up to here' }).click();
   await expect(answer).not.toHaveAttribute('data-unread');
   await expect(answer.locator('.new-label')).toHaveCount(0);
