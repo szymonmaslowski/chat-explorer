@@ -163,6 +163,15 @@ function toggleChecked(note: Note) {
   selectedNoteId.value = null;
 }
 
+function reorderGroup(groupId: string, afterGroupId: string | null) {
+  outbox.add({
+    type: 'note-group.reorder',
+    explorationId: props.explorationId,
+    groupId,
+    afterGroupId,
+  });
+}
+
 function reorderNote(noteId: string, index: number) {
   const afterNoteId = dropAnchor(shownNotes.value, notes.value, noteId, index, keepsParts.value);
   const noteIds = notes.value.map((note) => note.id);
@@ -257,6 +266,7 @@ watch(
           @select="selectGroup"
           @toggle-actions="groupActionsShown = !groupActionsShown"
           @add="groupForm = groupForm === 'new' ? null : 'new'"
+          @reorder="reorderGroup"
         />
         <div v-if="groupActionsShown && activeGroup && !groupForm" class="group-actions">
           <button type="button" @click="groupForm = 'edit'">Edit group</button>

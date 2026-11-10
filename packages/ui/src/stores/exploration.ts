@@ -20,7 +20,7 @@ import { defaultGroupName, noteForkMessage, reorderedIds } from '@shared/notes';
 import { nextTick, reactive, watch } from 'vue';
 import { api, ApiError } from '../api';
 import { openEventStream } from '../lib/event-stream';
-import { applyNoteOrder, notesInGroup, renumberGroup } from '../lib/notes';
+import { applyOrder, notesInGroup, renumberGroup, sortedGroups } from '../lib/notes';
 import { outbox, subjectOf, type Change } from './outbox';
 
 export interface ExplorationState {
@@ -60,6 +60,7 @@ const eventTypes: ExplorationEvent['type'][] = [
   'files.released',
   'note-group.created',
   'note-group.updated',
+  'note-groups.reordered',
   'note-group.deleted',
   'note.created',
   'note.updated',
@@ -148,6 +149,9 @@ export function applyEvent(state: ExplorationState, event: ExplorationEvent) {
     case 'note-group.deleted':
       deleteNoteGroup(state, event.groupId);
       break;
+    case 'note-groups.reordered':
+      applyOrder(state.noteGroups, event.groupIds);
+      break;
     case 'note.created':
     case 'note.updated':
       state.notes.set(event.note.id, event.note);
@@ -156,11 +160,11 @@ export function applyEvent(state: ExplorationState, event: ExplorationEvent) {
       state.notes.delete(event.noteId);
       break;
     case 'notes.reordered':
-      applyNoteOrder(state.notes, event.noteIds);
+      applyOrder(state.notes, event.noteIds);
       break;
     case 'note.group-changed':
       state.notes.set(event.note.id, event.note);
-      applyNoteOrder(state.notes, event.noteIds);
+      applyOrder(state.notes, event.noteIds);
       break;
     case 'bookmark.created':
       state.bookmarks.set(event.bookmark.id, event.bookmark);
@@ -200,6 +204,8 @@ const eventSubjects = (event: ExplorationEvent) => {
     case 'note-group.created':
     case 'note-group.updated':
       return [event.group.id];
+    case 'note-groups.reordered':
+      return event.groupIds;
     case 'note.created':
     case 'note.updated':
       return [event.note.id];
@@ -466,6 +472,11 @@ export function applyChange(state: ExplorationState, change: Change) {
     case 'note-group.delete':
       deleteNoteGroup(state, change.groupId);
       break;
+    case 'note-group.reorder': {
+      const groupIds = sortedGroups(state.noteGroups).map((group) => group.id);
+      applyOrder(state.noteGroups, reorderedIds(groupIds, change.groupId, change.afterGroupId));
+      break;
+    }
     case 'note.create': {
       const { id, groupId, topic, description } = change.note;
       const existing = state.notes.get(id);
@@ -514,7 +525,7 @@ export function applyChange(state: ExplorationState, change: Change) {
       const note = state.notes.get(change.noteId);
       if (!note) break;
       const noteIds = notesInGroup(state.notes, note.groupId).map((each) => each.id);
-      applyNoteOrder(state.notes, reorderedIds(noteIds, note.id, change.afterNoteId));
+      applyOrder(state.notes, reorderedIds(noteIds, note.id, change.afterNoteId));
       break;
     }
     case 'note.change-group': {

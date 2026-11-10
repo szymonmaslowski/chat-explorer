@@ -444,3 +444,32 @@ test('starts a fork about a note from the note', async ({ page, request }) => {
   await page.getByRole('link', { name: 'Map' }).click();
   await expect(page.locator('.fork-box')).toHaveCount(2);
 });
+
+test('shows every group in expanded mode and drags one to the start', async ({
+  page,
+  request,
+}) => {
+  const explorationId = await newChat(request);
+  for (const name of ['Shopping', 'Work', 'Ideas']) {
+    await request.post(`/api/explorations/${explorationId}/note-groups`, { data: { name } });
+  }
+  const chips = page.getByRole('tab');
+  await page.goto(`/e/${explorationId}/notes`);
+  await expect(chips).toHaveText(['Shopping', 'Work', 'Ideas']);
+  await expect(page.getByRole('button', { name: /^Drag .* to reorder$/ })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Show all groups' }).click();
+  const handle = page.getByRole('button', { name: 'Drag Ideas to reorder' });
+  const box = (await handle.boundingBox())!;
+  const top = (await chips.first().boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, top.y + 2, { steps: 8 });
+  await expect(page.locator('.group-strip .drop-line')).toBeVisible();
+  await page.mouse.up();
+  await expect(chips).toHaveText(['Ideas', 'Shopping', 'Work']);
+
+  await page.reload();
+  await expect(chips).toHaveText(['Ideas', 'Shopping', 'Work']);
+  await expect(page.getByRole('button', { name: 'Show all groups' })).toBeVisible();
+});

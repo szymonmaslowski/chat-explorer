@@ -8,16 +8,19 @@ export const notesInGroup = (notes: Map<string, Note>, groupId: string) =>
     .filter((note) => note.groupId === groupId)
     .sort((first, second) => first.position - second.position);
 
-// Positions follow the given order; notes it does not list keep theirs.
-export function applyNoteOrder(notes: Map<string, Note>, noteIds: string[]) {
-  noteIds.forEach((noteId, index) => {
-    const note = notes.get(noteId);
-    if (note && note.position !== index + 1) notes.set(noteId, { ...note, position: index + 1 });
+// Positions of notes or groups follow the given order; the ones it does not list keep theirs.
+export function applyOrder<Item extends { position: number }>(
+  items: Map<string, Item>,
+  ids: string[],
+) {
+  ids.forEach((id, index) => {
+    const item = items.get(id);
+    if (item && item.position !== index + 1) items.set(id, { ...item, position: index + 1 });
   });
 }
 
 export const renumberGroup = (notes: Map<string, Note>, groupId: string) =>
-  applyNoteOrder(
+  applyOrder(
     notes,
     notesInGroup(notes, groupId).map((note) => note.id),
   );

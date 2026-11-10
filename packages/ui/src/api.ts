@@ -148,8 +148,7 @@ export const api = {
   archiveFork: (forkId: string) => call<Fork>(`/api/forks/${forkId}/archive`, { method: 'POST' }),
   unarchiveFork: (forkId: string) =>
     call<Fork>(`/api/forks/${forkId}/unarchive`, { method: 'POST' }),
-  collapseFork: (forkId: string) =>
-    call<Fork>(`/api/forks/${forkId}/collapse`, { method: 'POST' }),
+  collapseFork: (forkId: string) => call<Fork>(`/api/forks/${forkId}/collapse`, { method: 'POST' }),
   expandCollapsedChildren: (forkId: string) =>
     call<Fork[]>(`/api/forks/${forkId}/expand-children`, { method: 'POST' }),
   replyDraft: (forkId: string) => call<ReplyDraft>(`/api/forks/${forkId}/reply-draft`),
@@ -189,6 +188,11 @@ export const api = {
     call<NoteGroup>(`/api/note-groups/${groupId}`, { method: 'PATCH', json: changes, keepalive }),
   deleteNoteGroup: (groupId: string, keepalive = false) =>
     call<{ ok: true }>(`/api/note-groups/${groupId}`, { method: 'DELETE', keepalive }),
+  reorderNoteGroup: (groupId: string, afterGroupId: string | null, keepalive = false) =>
+    call<{ groupIds: string[] }>(`/api/note-groups/${groupId}/reorder`, {
+      json: { afterGroupId },
+      keepalive,
+    }),
   createNote: (explorationId: string, note: NewNote, keepalive = false) =>
     call<Note>(`/api/explorations/${explorationId}/notes`, { json: note, keepalive }),
   updateNote: (noteId: string, changes: NoteChanges, keepalive = false) =>
