@@ -18,57 +18,65 @@ const clock = computed(() => {
 
 <template>
   <span v-if="available" class="dictation">
-    <template v-if="state === 'idle'">
-      <button type="button" class="mic" title="Dictate" aria-label="Dictate" @click="start">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="9" y="3" width="6" height="11" rx="3" />
-          <path d="M6 11a6 6 0 0 0 12 0M12 17v4" />
-        </svg>
-      </button>
-      <span v-if="error" class="error" role="alert">{{ error }}</span>
-    </template>
-    <template v-else-if="state === 'recording'">
-      <button
-        type="button"
-        class="mic recording"
-        title="Stop and transcribe"
-        aria-label="Stop dictation"
-        @click="stop"
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="7" y="7" width="10" height="10" />
-        </svg>
-      </button>
-      <span class="meter"><span :style="{ width: `${Math.min(100, level * 400)}%` }" /></span>
-      <span class="clock">{{ clock }}</span>
-      <button
-        type="button"
-        class="cancel"
-        aria-label="Cancel dictation"
-        title="Cancel"
-        @click="cancel"
-      >
-        ✕
-      </button>
-    </template>
-    <template v-else>
-      <span class="muted">Transcribing…</span>
-      <button
-        type="button"
-        class="cancel"
-        aria-label="Cancel dictation"
-        title="Cancel"
-        @click="cancel"
-      >
-        ✕
-      </button>
-    </template>
+    <button
+      v-if="state === 'recording'"
+      type="button"
+      class="mic recording"
+      title="Stop and transcribe"
+      aria-label="Stop dictation"
+      @click="stop"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="7" y="7" width="10" height="10" />
+      </svg>
+    </button>
+    <button
+      v-else
+      type="button"
+      class="mic"
+      title="Dictate"
+      aria-label="Dictate"
+      :disabled="state !== 'idle'"
+      @click="start"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="9" y="3" width="6" height="11" rx="3" />
+        <path d="M6 11a6 6 0 0 0 12 0M12 17v4" />
+      </svg>
+    </button>
+    <span v-if="state !== 'idle' || error" class="status">
+      <span v-if="state === 'idle'" class="error" role="alert">{{ error }}</span>
+      <template v-else>
+        <template v-if="state === 'recording'">
+          <span class="meter"><span :style="{ width: `${Math.min(100, level * 400)}%` }" /></span>
+          <span class="clock">{{ clock }}</span>
+        </template>
+        <span v-else class="muted">Transcribing…</span>
+        <button
+          type="button"
+          class="cancel"
+          aria-label="Cancel dictation"
+          title="Cancel"
+          @click="cancel"
+        >
+          ✕
+        </button>
+      </template>
+    </span>
   </span>
 </template>
 
 <style scoped>
+/* The mic stays among the buttons of the row it sits in, and what it is doing gets a line of its
+   own below them, so the row does not wrap while recording. The row has to wrap. */
 .dictation {
-  display: inline-flex;
+  display: contents;
+}
+
+.status {
+  order: 1;
+  flex-basis: 100%;
+  display: flex;
   align-items: center;
   gap: 0.4rem;
   font-size: 0.8rem;
@@ -108,7 +116,7 @@ const clock = computed(() => {
 }
 
 .meter {
-  width: 3rem;
+  width: 6rem;
   height: 0.35rem;
   border-radius: 999px;
   background: var(--surface-muted);

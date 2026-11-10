@@ -45,6 +45,23 @@ test('continues a dictation from where the last one ended', async ({ page }) => 
 test.describe('on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
 
+  test('shows the recording under the buttons, which keep their row', async ({ page }) => {
+    await openSeededExploration(page);
+    const bar = page.locator('.reply-bar');
+    const submit = bar.getByRole('button', { name: 'Submit' });
+
+    await bar.getByRole('button', { name: 'Dictate' }).click();
+    await expect(bar.locator('.clock')).toHaveText('0:01');
+    const rowTop = (await submit.boundingBox())!.y;
+    const stop = bar.getByRole('button', { name: 'Stop dictation' });
+    expect((await stop.boundingBox())!.y).toBe(rowTop);
+    expect((await bar.locator('.clock').boundingBox())!.y).toBeGreaterThan(rowTop + 30);
+    if (process.env.DICTATION_SHOTS) {
+      await page.screenshot({ path: `${process.env.DICTATION_SHOTS}/recording-phone.png` });
+    }
+    await bar.getByRole('button', { name: 'Cancel dictation' }).click();
+  });
+
   test('dictates into a comment being edited', async ({ page }) => {
     await openSeededExploration(page);
     await tapQuotedText(page, seededDraftQuote);
