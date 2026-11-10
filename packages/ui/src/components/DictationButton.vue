@@ -47,11 +47,6 @@ const clock = computed(() => {
     <span v-if="state !== 'idle' || error" class="status">
       <span v-if="state === 'idle'" class="error" role="alert">{{ error }}</span>
       <template v-else>
-        <template v-if="state === 'recording'">
-          <span class="meter"><span :style="{ width: `${Math.min(100, level * 400)}%` }" /></span>
-          <span class="clock">{{ clock }}</span>
-        </template>
-        <span v-else class="muted">Transcribing…</span>
         <button
           type="button"
           class="cancel"
@@ -61,6 +56,11 @@ const clock = computed(() => {
         >
           ✕
         </button>
+        <template v-if="state === 'recording'">
+          <span class="meter"><span :style="{ width: `${Math.min(100, level * 400)}%` }" /></span>
+          <span class="clock">{{ clock }}</span>
+        </template>
+        <span v-else class="muted">Transcribing…</span>
       </template>
     </span>
   </span>
