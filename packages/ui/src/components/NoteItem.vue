@@ -167,15 +167,6 @@ function changeGroup(groupId: string | null) {
       </span>
     </h3>
     <div v-if="selected && expanded" class="note-meta" @click.stop>
-      <button
-        v-if="listenable"
-        type="button"
-        :aria-label="listenLabel"
-        :title="listenLabel"
-        @click="listen"
-      >
-        <MediaIcon :name="speakingIndex !== -1 && speech.playing ? 'pause' : 'play'" />
-      </button>
       <span class="muted">ID</span>
       <code>{{ note.id }}</code>
       <button
@@ -188,26 +179,17 @@ function changeGroup(groupId: string | null) {
       </button>
     </div>
     <div v-if="selected" class="actions" @click.stop>
+      <ConfirmButton label="Delete" danger title="Delete" @confirm="emit('delete')">
+        <MediaIcon name="trash" /><span class="visually-hidden">Delete</span>
+      </ConfirmButton>
       <button
         type="button"
-        class="handle"
-        aria-label="Drag to reorder"
-        title="Drag to reorder"
-        @pointerdown="emit('dragStart', $event)"
+        :aria-expanded="choosingGroup"
+        aria-label="Move"
+        title="Move to another group"
+        @click="choosingGroup = !choosingGroup"
       >
-        <MediaIcon name="grip" />
-      </button>
-      <button
-        v-if="html && checklist"
-        type="button"
-        :aria-label="expanded ? 'Collapse' : 'Expand'"
-        :title="expanded ? 'Collapse' : 'Expand'"
-        @click="expandedByButton = !expandedByButton"
-      >
-        <MediaIcon :name="expanded ? 'shrink' : 'expand'" />
-      </button>
-      <button type="button" aria-label="Edit" title="Edit" @click="emit('edit')">
-        <MediaIcon name="edit" />
+        <MediaIcon name="move" />
       </button>
       <button
         type="button"
@@ -218,18 +200,36 @@ function changeGroup(groupId: string | null) {
       >
         <MediaIcon name="fork" />
       </button>
+      <button type="button" aria-label="Edit" title="Edit" @click="emit('edit')">
+        <MediaIcon name="edit" />
+      </button>
+      <button
+        v-if="html && checklist"
+        type="button"
+        :aria-label="expanded ? 'Collapse' : 'Expand'"
+        :title="expanded ? 'Collapse' : 'Expand'"
+        @click="expandedByButton = !expandedByButton"
+      >
+        <MediaIcon :name="expanded ? 'shrink' : 'expand'" />
+      </button>
+      <button
+        v-if="listenable"
+        type="button"
+        :aria-label="listenLabel"
+        :title="listenLabel"
+        @click="listen"
+      >
+        <MediaIcon :name="speakingIndex !== -1 && speech.playing ? 'pause' : 'play'" />
+      </button>
       <button
         type="button"
-        :aria-expanded="choosingGroup"
-        aria-label="Move"
-        title="Move to another group"
-        @click="choosingGroup = !choosingGroup"
+        class="handle"
+        aria-label="Drag to reorder"
+        title="Drag to reorder"
+        @pointerdown="emit('dragStart', $event)"
       >
-        <MediaIcon name="move" />
+        <MediaIcon name="grip" />
       </button>
-      <ConfirmButton label="Delete" danger title="Delete" @confirm="emit('delete')">
-        <MediaIcon name="trash" /><span class="visually-hidden">Delete</span>
-      </ConfirmButton>
       <button
         v-if="checklist"
         type="button"
