@@ -89,3 +89,33 @@ test.describe('on a phone', () => {
     }
   });
 });
+
+test('copies a link to a message that opens the fork scrolled to it', async ({
+  page,
+  context,
+  request,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'How do I cache?' } })
+  ).json();
+  await attachFakeSession(request, explorationId);
+  await deliverAndAnswer(
+    request,
+    explorationId,
+    Array(80).fill('A long answer line.').join('\n\n'),
+  );
+  await detachFakeSession(request);
+  await page.goto(`/e/${explorationId}`);
+  const question = page.locator('.message.user');
+
+  await question.getByRole('button', { name: 'Copy a link to this message' }).click();
+  await expect(question.getByRole('button', { name: 'Link copied' })).toBeVisible();
+  const link = await page.evaluate(() => navigator.clipboard.readText());
+  const messageId = await question.getAttribute('data-message-id');
+  expect(link).toBe(`${new URL(page.url()).origin}/e/${explorationId}#m-${messageId}`);
+
+  const opened = await context.newPage();
+  await opened.goto(link);
+  await expect(opened.locator('.message.user')).toBeInViewport();
+});

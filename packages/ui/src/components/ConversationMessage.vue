@@ -2,7 +2,7 @@
 import type { AnsweredPartLookup } from '@shared/answer-tags';
 import type { Comment, Message, MessageFile } from '@shared/types';
 import { computed, onMounted, ref, shallowRef, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { withoutTagLines } from '@shared/answer-tags';
 import { renderMarkdown } from '@shared/markdown';
 import { useCopied } from '../composables/useCopied';
@@ -61,6 +61,10 @@ const copyMessage = () => {
 
 const imageViewer = useImageViewer();
 const router = useRouter();
+const route = useRoute();
+
+const { copied: linkCopied, copy: copyText } = useCopied();
+const copyLink = () => copyText({ plain: `${location.origin}${route.path}#m-${props.message.id}` });
 
 function openImage(event: MouseEvent, file: MessageFile) {
   if (file.kind !== 'image') return;
@@ -134,6 +138,15 @@ onMounted(findBlocks);
         {{ formatDateTime(message.createdAt) }}
       </time>
       <span v-if="isNew" class="new-label">New</span>
+      <button
+        type="button"
+        class="icon-button copy-link"
+        :aria-label="linkCopied ? 'Link copied' : 'Copy a link to this message'"
+        title="Copy a link that opens this fork at this message"
+        @click="copyLink"
+      >
+        <MediaIcon :name="linkCopied ? 'check' : 'chain'" />
+      </button>
     </header>
     <div v-if="jumpable" class="message-actions">
       <button
@@ -272,6 +285,11 @@ onMounted(findBlocks);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.copy-link {
+  margin-left: auto;
   color: var(--text-muted);
 }
 
