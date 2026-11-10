@@ -17,10 +17,10 @@ const boxHeight = 86;
 // Boxes grow by a line once any fork of the chat has bookmarks, so all stay the same height.
 const bookmarksLineHeight = 16;
 const depthGap = 32;
-const toggleSize = 16;
+const toggleSize = 20;
 const chipHeight = 20;
 // How far the collapse button reaches into its box, from the top left corner.
-const toggleOverlap = 3;
+const toggleOverlap = 7;
 const siblingGap = 14;
 const padding = 16;
 
@@ -354,14 +354,14 @@ const layout = computed(() => {
 }
 
 .collapse-toggle {
-  font-size: 0.7rem;
+  font-size: 0.8rem;
 }
 
 /* A bigger target than the small circle, reaching only the box's corner padding. */
 .collapse-toggle::before {
   content: '';
   position: absolute;
-  inset: -6px;
+  inset: -5px;
 }
 
 .collapse-toggle:hover,
