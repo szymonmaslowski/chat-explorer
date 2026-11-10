@@ -56,6 +56,9 @@ const listenable = computed(
 const speakingIndex = computed(() =>
   speech.playback?.id === speechSourceId(speechSource.value) ? speech.playback.index : -1,
 );
+const listenLabel = computed(() =>
+  speakingIndex.value === -1 ? 'Listen' : speech.playing ? 'Pause' : 'Resume',
+);
 const pickedPlaying = computed(
   () => speech.playing && pickedIndex.value !== null && speakingIndex.value === pickedIndex.value,
 );
@@ -163,16 +166,27 @@ function changeGroup(groupId: string | null) {
         · not sent yet
       </span>
     </h3>
-    <button
-      v-if="listenable"
-      type="button"
-      class="listen"
-      :aria-label="speakingIndex === -1 ? 'Listen' : speech.playing ? 'Pause' : 'Resume'"
-      @click.stop="listen"
-    >
-      <MediaIcon :name="speakingIndex !== -1 && speech.playing ? 'pause' : 'play'" />
-      {{ speakingIndex === -1 ? 'Listen' : speech.playing ? 'Pause' : 'Resume' }}
-    </button>
+    <div v-if="selected && expanded" class="note-meta" @click.stop>
+      <button
+        v-if="listenable"
+        type="button"
+        :aria-label="listenLabel"
+        :title="listenLabel"
+        @click="listen"
+      >
+        <MediaIcon :name="speakingIndex !== -1 && speech.playing ? 'pause' : 'play'" />
+      </button>
+      <span class="muted">ID</span>
+      <code>{{ note.id }}</code>
+      <button
+        type="button"
+        :aria-label="copied ? 'Copied' : 'Copy ID'"
+        :title="copied ? 'Copied' : 'Copy ID'"
+        @click="copy({ plain: note.id })"
+      >
+        <MediaIcon :name="copied ? 'check' : 'copy'" />
+      </button>
+    </div>
     <div v-if="html" ref="descriptionElement" class="description" v-html="html" />
     <button
       v-if="pickedIndex !== null"
@@ -234,19 +248,8 @@ function changeGroup(groupId: string | null) {
         <MediaIcon name="trash" /><span class="visually-hidden">Delete</span>
       </ConfirmButton>
     </div>
-    <div v-if="selected" class="note-id" @click.stop>
-      <span class="muted">ID</span>
-      <code>{{ note.id }}</code>
+    <div v-if="selected && checklist" class="check-row" @click.stop>
       <button
-        type="button"
-        :aria-label="copied ? 'Copied' : 'Copy ID'"
-        :title="copied ? 'Copied' : 'Copy ID'"
-        @click="copy({ plain: note.id })"
-      >
-        <MediaIcon :name="copied ? 'check' : 'copy'" />
-      </button>
-      <button
-        v-if="checklist"
         type="button"
         class="check-button"
         :class="{ on: note.checked }"
@@ -334,15 +337,6 @@ function changeGroup(groupId: string | null) {
   border-color: var(--danger);
 }
 
-.listen {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  margin-top: 0.4rem;
-  padding: 0.15rem 0.6rem;
-  font-size: 0.8rem;
-}
-
 .block-play {
   position: absolute;
   right: 0.5rem;
@@ -408,7 +402,8 @@ function changeGroup(groupId: string | null) {
 
 .actions,
 .group-choices,
-.note-id {
+.note-meta,
+.check-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -417,7 +412,8 @@ function changeGroup(groupId: string | null) {
 }
 
 .actions button,
-.note-id button {
+.note-meta button,
+.check-row button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -426,11 +422,11 @@ function changeGroup(groupId: string | null) {
   padding: 0.2rem 0.45rem;
 }
 
-.note-id .check-button {
+.check-row .check-button {
   margin-left: auto;
 }
 
-.note-id button.on {
+.check-row button.on {
   color: var(--accent);
   border-color: var(--accent);
   background: var(--accent-soft);
@@ -446,7 +442,7 @@ function changeGroup(groupId: string | null) {
   cursor: grab;
 }
 
-.note-id {
+.note-meta {
   font-size: 0.8rem;
 }
 
@@ -456,7 +452,8 @@ function changeGroup(groupId: string | null) {
 
 @media (pointer: coarse) {
   .actions button,
-  .note-id button,
+  .note-meta button,
+  .check-row button,
   .block-play {
     min-width: 2.75rem;
     min-height: 2.25rem;

@@ -190,9 +190,9 @@ test('copies the id of a selected note', async ({ page, context, request }) => {
     })
   ).json();
   await page.goto(`/e/${explorationId}/notes`);
-  await expect(page.locator('.note-id')).toHaveCount(0);
+  await expect(page.locator('.note-meta')).toHaveCount(0);
   await page.getByText('Discuss me').click();
-  await expect(page.locator('.note-id code')).toHaveText(note.id);
+  await expect(page.locator('.note-meta code')).toHaveText(note.id);
   await page.getByRole('button', { name: 'Copy ID' }).click();
   await expect(page.getByRole('button', { name: 'Copied' })).toBeVisible();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(note.id);
