@@ -12,7 +12,8 @@ const maxScrollStepPx = 16;
 const pageTop = (element: Element) => element.getBoundingClientRect().top + window.scrollY;
 
 // Drags one item of a vertical list by its handle, with the pointer, so it works with touch too.
-// Items carry `data-drag-id`; the dragged one follows the pointer and a line shows where it lands.
+// Items carry `data-drag-id`. The line showing where the item lands keeps to the pointer, so a
+// tall item lands where the finger is, not where its middle is; `offset` lets the item follow too.
 // The page scrolls while the pointer is near the top or bottom edge.
 export function useDragSort(options: {
   container: Ref<HTMLElement | null>;
@@ -25,6 +26,7 @@ export function useDragSort(options: {
   let dragged: Slot | null = null;
   let others: Slot[] = [];
   let index = 0;
+  let startIndex = 0;
   let clientY = 0;
   let startPageY = 0;
   let frame = 0;
@@ -33,15 +35,23 @@ export function useDragSort(options: {
   function update() {
     const container = options.container.value;
     if (!dragged || !container) return;
-    offset.value = clientY + window.scrollY - startPageY;
-    const middle = dragged.top + offset.value + dragged.height / 2;
-    const passed = others.filter((slot) => slot.top + slot.height / 2 < middle).length;
+    const pointerY = clientY + window.scrollY;
+    offset.value = pointerY - startPageY;
+    const passed = others.filter((slot) => slot.top + slot.height / 2 < pointerY).length;
     const { first, last } = options.range(dragged.id);
     index = Math.min(Math.max(passed, first), last);
+    indicatorTop.value = lineTop(pointerY) - pageTop(container);
+  }
+
+  // Over the item's own place the line stays under the pointer, across the item.
+  function lineTop(pointerY: number) {
+    if (!dragged) return 0;
+    if (index === startIndex) {
+      return Math.min(Math.max(pointerY, dragged.top), dragged.top + dragged.height);
+    }
     const next = others[index];
     const previous = others[index - 1];
-    const lineTop = next ? next.top : previous ? previous.top + previous.height : dragged.top;
-    indicatorTop.value = lineTop - pageTop(container);
+    return next ? next.top : previous ? previous.top + previous.height : dragged.top;
   }
 
   function scrollNearEdges() {
@@ -97,6 +107,7 @@ export function useDragSort(options: {
     if (!dragged) return;
     event.preventDefault();
     others = slots.filter((slot) => slot.id !== itemId);
+    startIndex = slots.indexOf(dragged);
     handle = event.currentTarget;
     handle.setPointerCapture(event.pointerId);
     handle.addEventListener('pointermove', onMove);

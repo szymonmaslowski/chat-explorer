@@ -495,6 +495,46 @@ test('starts a fork about a note from the note', async ({ page, request }) => {
   await expect(page.locator('.fork-box')).toHaveCount(2);
 });
 
+test('drops a dragged note where the finger is, with the note faded in its place', async ({
+  page,
+  request,
+}) => {
+  const explorationId = await newChat(request);
+  const group = await (
+    await request.post(`/api/explorations/${explorationId}/note-groups`, { data: {} })
+  ).json();
+  for (const topic of ['Third', 'Second', 'First']) {
+    await request.post(`/api/explorations/${explorationId}/notes`, {
+      data: {
+        groupId: group.id,
+        topic,
+        description: topic === 'First' ? Array(6).fill('A long line.').join('\n\n') : '',
+      },
+    });
+  }
+  await page.goto(`/e/${explorationId}/notes`);
+  await expect(topics(page)).toHaveText(['First', 'Second', 'Third']);
+  const first = page.locator('.note', { hasText: 'First' });
+  await first.click();
+  const handle = (await first.getByRole('button', { name: 'Drag to reorder' }).boundingBox())!;
+  const second = (await page.locator('.note', { hasText: 'Second' }).boundingBox())!;
+  const x = handle.x + handle.width / 2;
+
+  await page.mouse.move(x, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(x, handle.y + 40, { steps: 4 });
+  await expect(first).toHaveCSS('opacity', '0.3');
+  const overItself = (await page.locator('.drop-line').boundingBox())!;
+  expect(Math.abs(overItself.y - (handle.y + 40))).toBeLessThan(4);
+
+  const target = second.y + second.height * 0.75;
+  await page.mouse.move(x, target, { steps: 8 });
+  const line = (await page.locator('.drop-line').boundingBox())!;
+  expect(Math.abs(line.y - (second.y + second.height))).toBeLessThan(12);
+  await page.mouse.up();
+  await expect(topics(page)).toHaveText(['Second', 'First', 'Third']);
+});
+
 test('shows every group in expanded mode and drags one to the start', async ({ page, request }) => {
   const explorationId = await newChat(request);
   for (const name of ['Shopping', 'Work', 'Ideas']) {

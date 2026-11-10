@@ -60,7 +60,6 @@ const shownNotes = computed(() => (keepsParts.value ? uncheckedFirst(notes.value
 const notesList = ref<HTMLElement | null>(null);
 const {
   draggedId,
-  offset: dragOffset,
   indicatorTop,
   start: startDrag,
 } = useDragSort({
@@ -330,9 +329,6 @@ watch(
             :other-groups="otherGroups"
             :data-drag-id="note.id"
             :class="{ dragged: draggedId === note.id }"
-            :style="
-              draggedId === note.id ? { transform: `translateY(${dragOffset}px)` } : undefined
-            "
             @toggle-selected="toggleSelected(note.id)"
             @toggle-checked="toggleChecked(note)"
             @drag-start="startDrag($event, note.id)"
@@ -410,10 +406,9 @@ watch(
   padding-bottom: 3rem;
 }
 
+/* The note stays in its place, faded, while the line under the finger shows where it goes. */
 .dragged {
-  position: relative;
-  z-index: 2;
-  box-shadow: var(--shadow);
+  opacity: 0.3;
 }
 
 .drop-line {
