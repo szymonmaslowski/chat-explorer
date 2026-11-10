@@ -51,6 +51,7 @@ export interface ForkRow {
   created_at: number;
   updated_at: number;
   archived_at: number | null;
+  collapsed: number;
 }
 
 export interface MessageRow {
@@ -219,6 +220,7 @@ export const toFork = (row: ForkRow): Fork => ({
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   archivedAt: row.archived_at,
+  collapsed: row.collapsed === 1,
 });
 
 export const toMessage = (row: MessageRow): Message => ({

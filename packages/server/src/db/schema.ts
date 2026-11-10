@@ -250,4 +250,7 @@ export const migrations = [
   -- A released lease used to leave the fork marked as answering.
   UPDATE fork_runs SET status = 'idle' WHERE status = 'answering' AND lease_id IS NULL;
   `,
+  `
+  ALTER TABLE forks ADD COLUMN collapsed INTEGER NOT NULL DEFAULT 0;
+  `,
 ];

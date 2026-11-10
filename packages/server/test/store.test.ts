@@ -731,6 +731,31 @@ describe('archiving a fork', () => {
     store.submit(explorationId, child.id, 'Still waiting', { newFork: true });
     expect(() => store.archiveFork(child.id)).toThrow(expect.objectContaining({ code: 'invalid' }));
   });
+
+  it('collapses a fork out of the map, and its parent brings back its collapsed children', () => {
+    const { store, events, explorationId, mainForkId } = setup();
+    const child = forkFrom(store, explorationId, mainForkId, 'Child');
+    const other = forkFrom(store, explorationId, mainForkId, 'Other');
+    const grandchild = forkFrom(store, explorationId, child.id, 'Grandchild');
+    expect(() => store.collapseFork(mainForkId)).toThrow(
+      expect.objectContaining({ code: 'invalid' }),
+    );
+
+    expect(store.collapseFork(child.id).collapsed).toBe(true);
+    store.collapseFork(other.id);
+    store.collapseFork(grandchild.id);
+    expect(events.at(-1)).toMatchObject({ type: 'fork.updated', fork: { id: grandchild.id } });
+    store.submit(explorationId, child.id, 'Still usable');
+
+    expect(store.expandCollapsedChildren(mainForkId).map((fork) => fork.id).sort()).toEqual(
+      [child.id, other.id].sort(),
+    );
+    const collapsed = store
+      .snapshot(explorationId)
+      .forks.filter((fork) => fork.collapsed)
+      .map((fork) => fork.id);
+    expect(collapsed).toEqual([grandchild.id]);
+  });
 });
 
 describe('changes the page queued while offline', () => {

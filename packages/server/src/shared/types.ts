@@ -44,6 +44,8 @@ export interface Fork {
   updatedAt: number;
   // Set on the fork the reader archived; the forks below it count as archived too.
   archivedAt: number | null;
+  // Hidden from the map with the forks below it; the fork stays usable.
+  collapsed: boolean;
 }
 
 export interface Message {

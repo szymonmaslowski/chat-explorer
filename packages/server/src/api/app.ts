@@ -464,6 +464,14 @@ export function createApp(options: AppOptions) {
     context.json(store.unarchiveFork(context.req.param('id'))),
   );
 
+  app.post('/api/forks/:id/collapse', (context) =>
+    context.json(store.collapseFork(context.req.param('id'))),
+  );
+
+  app.post('/api/forks/:id/expand-children', (context) =>
+    context.json(store.expandCollapsedChildren(context.req.param('id'))),
+  );
+
   app.get('/api/forks/:id/reply-draft', (context) =>
     context.json(store.replyDraft(context.req.param('id'))),
   );

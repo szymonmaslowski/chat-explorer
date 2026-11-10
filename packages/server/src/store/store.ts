@@ -2214,11 +2214,34 @@ export class ChatStore {
     return row;
   }
 
-  private setForkArchivedAt(forkId: string, archivedAt: number | null) {
-    this.db.run('UPDATE forks SET archived_at = ? WHERE id = ?', archivedAt, forkId);
+  collapseFork(forkId: string) {
+    const row = this.requireForkRow(forkId);
+    if (row.parent_fork_id === null) {
+      throw new StoreError('invalid', 'The main fork cannot be collapsed.');
+    }
+    this.db.run('UPDATE forks SET collapsed = 1 WHERE id = ?', forkId);
+    return this.publishForkUpdate(forkId);
+  }
+
+  expandCollapsedChildren(forkId: string) {
+    const row = this.requireForkRow(forkId);
+    const collapsed = this.db.all<{ id: string }>(
+      'SELECT id FROM forks WHERE parent_fork_id = ? AND collapsed = 1',
+      row.id,
+    );
+    this.db.run('UPDATE forks SET collapsed = 0 WHERE parent_fork_id = ?', row.id);
+    return collapsed.map((child) => this.publishForkUpdate(child.id));
+  }
+
+  private publishForkUpdate(forkId: string) {
     const fork = toFork(this.requireForkRow(forkId));
     this.publish([[fork.explorationId, { type: 'fork.updated', fork }]]);
     return fork;
+  }
+
+  private setForkArchivedAt(forkId: string, archivedAt: number | null) {
+    this.db.run('UPDATE forks SET archived_at = ? WHERE id = ?', archivedAt, forkId);
+    return this.publishForkUpdate(forkId);
   }
 
   private publishExplorationUpdate(explorationId: string) {
