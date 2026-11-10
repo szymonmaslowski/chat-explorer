@@ -21,11 +21,21 @@ export function groupBy<Item>(items: Iterable<Item>, keyOf: (item: Item) => stri
   return groups;
 }
 
+export const keepSameMap = <Value>(
+  previous: Map<string, Value> | undefined,
+  next: Map<string, Value>,
+) =>
+  previous &&
+  previous.size === next.size &&
+  [...next].every(([key, value]) => previous.get(key) === value)
+    ? previous
+    : next;
+
 export function keepSameGroups<Item>(
   previous: Map<string, Item[]> | undefined,
   next: Map<string, Item[]>,
 ) {
   if (!previous) return next;
   for (const [key, items] of next) next.set(key, keepSameList(previous.get(key), items));
-  return next;
+  return keepSameMap(previous, next);
 }

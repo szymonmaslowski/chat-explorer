@@ -27,6 +27,12 @@ describe('keepSameGroups', () => {
     expect(next.get('y')).not.toBe(previous.get('y'));
   });
 
+  it('keeps the previous map when no group changed', () => {
+    const item = { key: 'x' };
+    const previous = groupBy([item], (each) => each.key);
+    expect(keepSameGroups(previous, groupBy([item], (each) => each.key))).toBe(previous);
+  });
+
   it('leaves out items without a key', () => {
     expect([...groupBy([{ key: null }], (item) => item.key).keys()]).toEqual([]);
   });

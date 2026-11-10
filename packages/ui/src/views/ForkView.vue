@@ -29,7 +29,7 @@ import {
   mainFork,
 } from '../lib/conversation';
 import { scrollToAndFlash } from '../lib/flash';
-import { keepSameList, noItems } from '../lib/stable';
+import { keepSameList, keepSameMap, noItems } from '../lib/stable';
 import { awaitsAnswer, isUnread } from '../lib/read-state';
 import { applyEvent, openExploration } from '../stores/exploration';
 import { explorationIndex } from '../stores/exploration-index';
@@ -85,7 +85,7 @@ const activityGroups = computed<Map<string, Activity[][]>>((previous) => {
     attempts.set(activity.attempt, [...(attempts.get(activity.attempt) ?? []), activity]);
     groups.set(activity.afterMessageId, attempts);
   }
-  return new Map(
+  const next = new Map(
     [...groups].map(([messageId, attempts]) => {
       const before = previous?.get(messageId);
       const kept = [...attempts.values()].map((group) =>
@@ -97,6 +97,7 @@ const activityGroups = computed<Map<string, Activity[][]>>((previous) => {
       return [messageId, keepSameList(before, kept)];
     }),
   );
+  return keepSameMap(previous, next);
 });
 const isWorking = (group: Activity[]) =>
   forkRun.value?.status === 'answering' &&

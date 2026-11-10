@@ -1,8 +1,8 @@
 import type { Activity, Comment, Fork, Message, MessageFile } from '@shared/types';
 import { computed, effectScope } from 'vue';
 import { taggedCommentIds } from '@shared/answer-tags';
-import { forkAttention } from '../lib/read-state';
-import { groupBy, keepSameGroups } from '../lib/stable';
+import { forkAttention, type Attention } from '../lib/read-state';
+import { groupBy, keepSameGroups, keepSameMap } from '../lib/stable';
 import type { ExplorationState } from './exploration';
 
 const byCreation = (left: { createdAt: number }, right: { createdAt: number }) =>
@@ -39,7 +39,9 @@ function buildIndex(state: ExplorationState) {
       () => state.activities.values(),
       (activity) => activity.forkId,
     ),
-    attentionByFork: computed(() => forkAttention(state)),
+    attentionByFork: computed<Map<string, Attention>>((previous) =>
+      keepSameMap(previous, forkAttention(state)),
+    ),
     // Claude's answer to a sent comment: the first answer with the comment's tag.
     answersByComment: computed(() => {
       const answers = new Map<string, Message>();
