@@ -6,8 +6,9 @@ import { api, ApiError } from '../api';
 import AttentionDot from '../components/AttentionDot.vue';
 import ExplorationHeader from '../components/ExplorationHeader.vue';
 import { archivingFork, forkLineage, forkTitle } from '../lib/conversation';
-import { awaitsAnswer, forkAttention, type Attention } from '../lib/read-state';
+import { awaitsAnswer, type Attention } from '../lib/read-state';
 import { openExploration } from '../stores/exploration';
+import { explorationIndex } from '../stores/exploration-index';
 
 const props = defineProps<{ explorationId: string; currentForkId?: string; side?: boolean }>();
 
@@ -112,7 +113,7 @@ const layout = computed(() => {
   for (const message of state.value.messages.values()) {
     messageCounts.set(message.forkId, (messageCounts.get(message.forkId) ?? 0) + 1);
   }
-  const attention = forkAttention(state.value);
+  const attention = explorationIndex(state.value).attentionByFork.value;
   const awaiting = (fork: Fork) =>
     awaitsAnswer(fork, state.value.messages, state.value.forkRuns.get(fork.id));
   const boxes = nodes.map((node) => {

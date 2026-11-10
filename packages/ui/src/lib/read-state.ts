@@ -1,5 +1,4 @@
 import type { Fork, ForkRun, Message } from '@shared/types';
-import { forkPath } from './conversation';
 
 export type Attention = 'unread' | 'failed';
 
@@ -8,7 +7,8 @@ export const isUnread = (message: Message) =>
 
 // A stopped turn handled the fork's last message without answering it.
 export function awaitsAnswer(fork: Fork, messages: Map<string, Message>, run: ForkRun | undefined) {
-  const last = forkPath(fork, messages).at(-1);
+  const lastId = fork.tipMessageId ?? fork.baseMessageId;
+  const last = lastId ? messages.get(lastId) : undefined;
   return last?.role === 'user' && last.id !== run?.handledUpTo;
 }
 

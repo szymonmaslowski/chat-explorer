@@ -1,6 +1,10 @@
 import { parseHTML } from 'linkedom';
 import { describe, expect, it } from 'vitest';
-import { withoutTagLines, type AnsweredPartLookup } from '../src/shared/answer-tags.js';
+import {
+  taggedCommentIds,
+  withoutTagLines,
+  type AnsweredPartLookup,
+} from '../src/shared/answer-tags.js';
 import { renderMarkdown } from '../src/shared/markdown.js';
 import { createTestStore, draft, seedConversation } from './helpers.js';
 
@@ -81,6 +85,14 @@ describe('answer tags', () => {
   it('drops tag lines from a copied answer', () => {
     expect(withoutTagLines('[c:aaaaaaaaaa]\nFirst.\n\n[m:bbbbbbbbbb]\n\nSecond.')).toBe(
       'First.\n\nSecond.',
+    );
+  });
+});
+
+describe('taggedCommentIds', () => {
+  it('lists the comments an answer answers, leaving out message tags', () => {
+    expect(taggedCommentIds('[c:aaaaaaaaaa] [m:bbbbbbbbbb]\nText\n\n[c:cccccccccc]\nMore')).toEqual(
+      ['aaaaaaaaaa', 'cccccccccc'],
     );
   });
 });

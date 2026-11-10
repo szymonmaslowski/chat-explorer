@@ -10,6 +10,9 @@ export const commentTag = (commentId: string) => `[c:${commentId}]`;
 export const messageTag = (messageId: string) => `[m:${messageId}]`;
 
 const tag = /\[([cm]):([0-9a-z]{10})\]/g;
+export const taggedCommentIds = (markdown: string) =>
+  [...markdown.matchAll(tag)].flatMap(([, kind, id]) => (kind === 'c' ? [id!] : []));
+
 const tagLine = /^[ \t]*(?:\[[cm]:[0-9a-z]{10}\][ \t]*)+$/;
 
 export interface AnsweredPart {

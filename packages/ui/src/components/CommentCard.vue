@@ -4,11 +4,11 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useAutosave } from '../composables/useAutosave';
 import { useExpandedArea } from '../composables/useExpandedArea';
 import { useRouter } from 'vue-router';
-import { answerToComment } from '../lib/conversation';
 import { scrollToAndFlash } from '../lib/flash';
 import { insertAtCursor } from '../lib/insert-text';
 import { sortedGroups } from '../lib/notes';
 import { openExploration } from '../stores/exploration';
+import { explorationIndex } from '../stores/exploration-index';
 import {
   confirmJoining,
   forkJoining,
@@ -48,7 +48,9 @@ const isDraft = computed(() => props.comment.status === 'draft');
 const router = useRouter();
 const answer = computed(() =>
   props.comment.status === 'submitted'
-    ? answerToComment(props.comment.id, openExploration(props.comment.explorationId).messages)
+    ? (explorationIndex(openExploration(props.comment.explorationId)).answersByComment.value.get(
+        props.comment.id,
+      ) ?? null)
     : null,
 );
 

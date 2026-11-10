@@ -1,5 +1,7 @@
-import type { Activity, Comment, Fork, MessageFile } from '@shared/types';
+import type { Activity, Comment, Fork, Message, MessageFile } from '@shared/types';
 import { computed, effectScope } from 'vue';
+import { taggedCommentIds } from '@shared/answer-tags';
+import { forkAttention } from '../lib/read-state';
 import { groupBy, keepSameGroups } from '../lib/stable';
 import type { ExplorationState } from './exploration';
 
@@ -37,6 +39,18 @@ function buildIndex(state: ExplorationState) {
       () => state.activities.values(),
       (activity) => activity.forkId,
     ),
+    attentionByFork: computed(() => forkAttention(state)),
+    // Claude's answer to a sent comment: the first answer with the comment's tag.
+    answersByComment: computed(() => {
+      const answers = new Map<string, Message>();
+      for (const message of state.messages.values()) {
+        if (message.role !== 'assistant') continue;
+        for (const commentId of taggedCommentIds(message.content)) {
+          if (!answers.has(commentId)) answers.set(commentId, message);
+        }
+      }
+      return answers;
+    }),
     childForksByBaseMessage: groupedBy<Fork>(
       () => state.forks.values(),
       (fork) => (fork.parentForkId === null ? null : fork.baseMessageId),

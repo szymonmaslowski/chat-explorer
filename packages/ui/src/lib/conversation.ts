@@ -1,4 +1,4 @@
-import { commentTag, type AnsweredPartLookup } from '@shared/answer-tags';
+import type { AnsweredPartLookup } from '@shared/answer-tags';
 import type { Comment, ExplorationListItem, Fork, Message } from '@shared/types';
 import type { ExplorationState } from '../stores/exploration';
 
@@ -36,12 +36,6 @@ export function forkLineage(fork: Fork, forks: Map<string, Fork>) {
 export function archivingFork(fork: Fork, forks: Map<string, Fork>) {
   return forkLineage(fork, forks).findLast((each) => each.archivedAt !== null) ?? null;
 }
-
-// Claude's answer to a sent comment: the message with the comment's tag.
-export const answerToComment = (commentId: string, messages: Map<string, Message>) =>
-  [...messages.values()].find(
-    (message) => message.role === 'assistant' && message.content.includes(commentTag(commentId)),
-  ) ?? null;
 
 export const commentLink = (comment: Comment) =>
   `/e/${comment.explorationId}/f/${comment.viewForkId}#c-${comment.id}`;

@@ -30,7 +30,7 @@ import {
 } from '../lib/conversation';
 import { scrollToAndFlash } from '../lib/flash';
 import { keepSameList, noItems } from '../lib/stable';
-import { awaitsAnswer, forkAttention, isUnread } from '../lib/read-state';
+import { awaitsAnswer, isUnread } from '../lib/read-state';
 import { applyEvent, openExploration } from '../stores/exploration';
 import { explorationIndex } from '../stores/exploration-index';
 import { api } from '../api';
@@ -104,7 +104,7 @@ const isWorking = (group: Activity[]) =>
   !group.some((activity) => activity.interrupted);
 const lastAnswer = computed(() => path.value.findLast((message) => message.role === 'assistant'));
 const lastUnread = computed(() => path.value.findLast(isUnread));
-const attention = computed(() => forkAttention(state.value));
+const attention = computed(() => lookups.value.attentionByFork.value);
 const { newIds, markUnread, markReadUpTo } = useReadTracking({ state, fork, path });
 
 // The new fork opens at once, empty, with the answer as the last message of its history.
