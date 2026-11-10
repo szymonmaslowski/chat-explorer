@@ -747,14 +747,111 @@ describe('archiving a fork', () => {
     expect(events.at(-1)).toMatchObject({ type: 'fork.updated', fork: { id: grandchild.id } });
     store.submit(explorationId, child.id, 'Still usable');
 
-    expect(store.expandCollapsedChildren(mainForkId).map((fork) => fork.id).sort()).toEqual(
-      [child.id, other.id].sort(),
-    );
+    expect(
+      store
+        .expandCollapsedChildren(mainForkId)
+        .map((fork) => fork.id)
+        .sort(),
+    ).toEqual([child.id, other.id].sort());
     const collapsed = store
       .snapshot(explorationId)
       .forks.filter((fork) => fork.collapsed)
       .map((fork) => fork.id);
     expect(collapsed).toEqual([grandchild.id]);
+  });
+});
+
+describe('splitting a fork', () => {
+  function converse(
+    store: ReturnType<typeof setup>['store'],
+    explorationId: string,
+    forkId: string,
+    question: string,
+  ) {
+    store.submit(explorationId, forkId, question);
+    store.deliverQueued(explorationId);
+    const inReplyTo = store.readFork(forkId).messages.at(-1)!.id;
+    store.addAssistantMessage({
+      shimId: 'shim-a',
+      forkId,
+      inReplyTo,
+      content: `${question} answered`,
+    });
+    return inReplyTo;
+  }
+
+  it('moves a message and the ones after it into a new fork, with what hangs on them', () => {
+    const { store, events, explorationId, mainForkId, answer } = setup();
+    const second = converse(store, explorationId, mainForkId, 'Second question');
+    const secondAnswer = store.readFork(mainForkId).messages.at(-1)!.id;
+    const third = converse(store, explorationId, mainForkId, 'Third question');
+    const bookmark = store.createBookmark(explorationId, {
+      forkId: mainForkId,
+      messageId: secondAnswer,
+      quote: 'Second',
+      startOffset: 0,
+      endOffset: 6,
+    });
+    const kept = store.createBookmark(explorationId, {
+      forkId: mainForkId,
+      messageId: answer.id,
+      quote: 'Answer',
+      startOffset: 0,
+      endOffset: 6,
+    });
+    store.submit(explorationId, mainForkId, 'A child', { newFork: true });
+    store.deliverQueued(explorationId);
+    const child = store.snapshot(explorationId).forks.find((fork) => fork.summary === 'A child')!;
+
+    const { fork: split } = store.splitFork(second, { forkId: 'splitfork1' });
+
+    expect(split).toMatchObject({
+      id: 'splitfork1',
+      parentForkId: mainForkId,
+      baseMessageId: answer.id,
+      summary: 'Second question',
+      needsSummary: true,
+    });
+    expect(store.readFork(mainForkId).messages.map((message) => message.id)).toEqual([
+      store.readFork(mainForkId).messages[0]!.id,
+      answer.id,
+    ]);
+    const moved = store
+      .readFork(split.id)
+      .messages.filter((message) => message.forkId === split.id);
+    expect(moved.map((message) => message.id)).toEqual([second, secondAnswer, third, moved[3]!.id]);
+    const snapshot = store.snapshot(explorationId);
+    expect(snapshot.forks.find((fork) => fork.id === child.id)!.parentForkId).toBe(split.id);
+    expect(snapshot.bookmarks.find((row) => row.id === bookmark.id)!.forkId).toBe(split.id);
+    expect(snapshot.bookmarks.find((row) => row.id === kept.id)!.forkId).toBe(mainForkId);
+    expect(events.at(-1)).toMatchObject({
+      type: 'fork.split',
+      fork: { id: split.id },
+      bookmarks: [{ id: bookmark.id }],
+    });
+    expect(store.splitFork(second, { forkId: 'splitfork1' }).fork).toEqual(split);
+
+    const pendingSplit = () =>
+      store.pendingForks(explorationId).find((fork) => fork.forkId === split.id);
+    expect(pendingSplit()).toBeUndefined();
+    store.submit(explorationId, split.id, 'Go on');
+    store.deliverQueued(explorationId);
+    expect(pendingSplit()).toMatchObject({ isNewFork: true });
+    store.updateForkSummary({ forkId: split.id, summary: 'Named' });
+    expect(pendingSplit()).toMatchObject({ isNewFork: false });
+  });
+
+  it("refuses Claude's answers, a fork's first message and a fork awaiting an answer", () => {
+    const { store, explorationId, mainForkId, question, answer } = setup();
+    expect(() => store.splitFork(question.id)).toThrow(
+      expect.objectContaining({ code: 'invalid' }),
+    );
+    expect(() => store.splitFork(answer.id)).toThrow(expect.objectContaining({ code: 'invalid' }));
+
+    const second = converse(store, explorationId, mainForkId, 'Second question');
+    store.submit(explorationId, mainForkId, 'Waiting');
+    store.deliverQueued(explorationId);
+    expect(() => store.splitFork(second)).toThrow(expect.objectContaining({ code: 'invalid' }));
   });
 });
 

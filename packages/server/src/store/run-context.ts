@@ -77,9 +77,9 @@ export function buildRunContext(
   }
   const omitted = answered.length - kept.length;
   const digest = othersDigest(store, forkId);
-  const isNewFork = !fork.messages.some(
-    (message) => message.forkId === forkId && message.role === 'assistant',
-  );
+  const isNewFork =
+    store.fork(forkId).needsSummary ||
+    !fork.messages.some((message) => message.forkId === forkId && message.role === 'assistant');
   const intro = [
     `This is fork ${forkId} of chat ${explorationId}. Its conversation so far follows; the messages after it are new.`,
     ...(omitted > 0

@@ -253,4 +253,8 @@ export const migrations = [
   `
   ALTER TABLE forks ADD COLUMN collapsed INTEGER NOT NULL DEFAULT 0;
   `,
+  `
+  -- A fork split off another is named after its first message until Claude names it.
+  ALTER TABLE forks ADD COLUMN needs_summary INTEGER NOT NULL DEFAULT 0;
+  `,
 ];

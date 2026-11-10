@@ -30,6 +30,19 @@ export interface ExplorationListItem extends Exploration {
   sessionError: string | null;
 }
 
+// What a split changed: the new fork, the old one and the forks moved under the new one, and
+// everything that moved with the messages.
+export interface ForkSplit {
+  fork: Fork;
+  forks: Fork[];
+  messages: Message[];
+  comments: Comment[];
+  bookmarks: Bookmark[];
+  activities: Activity[];
+  notes: Note[];
+  forkRuns: ForkRun[];
+}
+
 export interface Fork {
   id: string;
   explorationId: string;
@@ -46,6 +59,8 @@ export interface Fork {
   archivedAt: number | null;
   // Hidden from the map with the forks below it; the fork stays usable.
   collapsed: boolean;
+  // Split off another fork and named after its first message until Claude names it.
+  needsSummary: boolean;
 }
 
 export interface Message {
@@ -223,6 +238,7 @@ export type ExplorationEvent =
   | ({ type: 'messages.read' } & ReadChange)
   | { type: 'fork.created'; fork: Fork }
   | { type: 'fork.updated'; fork: Fork }
+  | ({ type: 'fork.split' } & ForkSplit)
   | { type: 'comment.created'; comment: Comment }
   | { type: 'comment.updated'; comment: Comment }
   | { type: 'comment.deleted'; commentId: string }

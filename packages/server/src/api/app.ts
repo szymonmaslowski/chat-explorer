@@ -543,6 +543,11 @@ export function createApp(options: AppOptions) {
     return context.json(store.forkAtAnswer(context.req.param('id'), { forkId }), 201);
   });
 
+  app.post('/api/messages/:id/split', async (context) => {
+    const { forkId } = answerForkBody.parse(await context.req.json());
+    return context.json(store.splitFork(context.req.param('id'), { forkId }), 201);
+  });
+
   app.post('/api/notes/:id/fork', async (context) => {
     const { id, forkId, message } = noteForkBody.parse(await context.req.json());
     return context.json(store.forkFromNote(context.req.param('id'), message, { id, forkId }), 201);

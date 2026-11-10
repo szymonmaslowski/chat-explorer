@@ -35,6 +35,7 @@ import type {
   ForkAwareness,
   ForkKind,
   ForkRun,
+  ForkSplit,
   MessageSource,
   NewBookmark,
   NewComment,
@@ -377,11 +378,7 @@ export class ChatStore {
 
   archiveExploration(explorationId: string) {
     this.requireExplorationRow(explorationId);
-    this.db.run(
-      'UPDATE explorations SET archived_at = ? WHERE id = ?',
-      this.now(),
-      explorationId,
-    );
+    this.db.run('UPDATE explorations SET archived_at = ? WHERE id = ?', this.now(), explorationId);
     return this.publishExplorationUpdate(explorationId);
   }
 
@@ -455,7 +452,7 @@ export class ChatStore {
   updateForkSummary(input: { forkId: string; summary: string }) {
     const row = this.requireForkRow(input.forkId);
     this.db.run(
-      'UPDATE forks SET summary = ?, updated_at = ? WHERE id = ?',
+      'UPDATE forks SET summary = ?, needs_summary = 0, updated_at = ? WHERE id = ?',
       input.summary,
       this.now(),
       input.forkId,
@@ -1015,6 +1012,180 @@ export class ChatStore {
     return toFork(fork);
   }
 
+  // The message and every one after it move into a new fork under the old one, which then ends
+  // at the answer before it. What hangs on those messages moves with them.
+  splitFork(messageId: string, options: { forkId?: string } = {}) {
+    const message = this.requireMessageRow(messageId);
+    const explorationId = message.exploration_id;
+    const existing = options.forkId
+      ? this.db.get<ForkRow>('SELECT * FROM forks WHERE id = ?', options.forkId)
+      : undefined;
+    if (existing) {
+      if (existing.exploration_id !== explorationId) {
+        throw new StoreError('invalid', `Id ${options.forkId} is already taken.`);
+      }
+      return this.forkSplit(existing.id);
+    }
+    const fork = this.requireWritableFork(message.fork_id, explorationId);
+    const previous = message.parent_id === null ? null : this.requireMessageRow(message.parent_id);
+    if (message.role !== 'user' || previous?.role !== 'assistant' || previous.fork_id !== fork.id) {
+      throw new StoreError(
+        'invalid',
+        "Only a message of yours that follows one of Claude's answers in the same fork can move into a new fork.",
+      );
+    }
+    if (this.isBusy(fork.id)) {
+      throw new StoreError(
+        'invalid',
+        'Claude is answering in this fork. Wait for the answer or stop it first.',
+      );
+    }
+    const path = this.pathTo(fork.tip_message_id);
+    const movedIds = JSON.stringify(
+      path.slice(path.findIndex((row) => row.id === messageId)).map((row) => row.id),
+    );
+    const moved = `(SELECT value FROM json_each(?))`;
+    const firstComment = this.db.get<{ body: string }>(
+      'SELECT body FROM comments WHERE reply_message_id = ? ORDER BY created_at, rowid',
+      messageId,
+    );
+    const split = this.db.transaction(() => {
+      const created = this.insertFork({
+        id: options.forkId,
+        explorationId,
+        parentForkId: fork.id,
+        baseMessageId: previous.id,
+        originCommentId: null,
+        summary: summaryFrom(message.content.trim() || (firstComment?.body ?? '')),
+      });
+      const now = this.now();
+      this.db.run(
+        'UPDATE forks SET tip_message_id = ?, needs_summary = 1 WHERE id = ?',
+        fork.tip_message_id,
+        created.id,
+      );
+      this.db.run(
+        'UPDATE forks SET tip_message_id = ?, updated_at = ? WHERE id = ?',
+        previous.id,
+        now,
+        fork.id,
+      );
+      this.db.run(`UPDATE messages SET fork_id = ? WHERE id IN ${moved}`, created.id, movedIds);
+      this.db.run(
+        `UPDATE forks SET parent_fork_id = ? WHERE parent_fork_id = ? AND base_message_id IN ${moved}`,
+        created.id,
+        fork.id,
+        movedIds,
+      );
+      this.db.run(
+        `UPDATE comments SET view_fork_id = ?
+         WHERE view_fork_id = ? AND (message_id IN ${moved} OR reply_message_id IN ${moved})`,
+        created.id,
+        fork.id,
+        movedIds,
+        movedIds,
+      );
+      this.db.run(
+        `UPDATE bookmarks SET fork_id = ? WHERE fork_id = ? AND message_id IN ${moved}`,
+        created.id,
+        fork.id,
+        movedIds,
+      );
+      this.db.run(
+        `UPDATE activities SET fork_id = ? WHERE fork_id = ? AND after_message_id IN ${moved}`,
+        created.id,
+        fork.id,
+        movedIds,
+      );
+      this.db.run(
+        `UPDATE notes SET source_fork_id = ? WHERE source_fork_id = ? AND source_message_id IN ${moved}`,
+        created.id,
+        fork.id,
+        movedIds,
+      );
+      // The runner must not take the moved messages it already answered for new ones.
+      this.db.run(
+        `INSERT INTO fork_runs (fork_id, exploration_id, input_cursor, updated_at)
+         SELECT ?, exploration_id, input_cursor, ? FROM fork_runs
+         WHERE fork_id = ? AND input_cursor IN ${moved}`,
+        created.id,
+        now,
+        fork.id,
+        movedIds,
+      );
+      return this.forkSplit(created.id);
+    });
+    this.publish([[explorationId, { type: 'fork.split', ...split }]]);
+    return split;
+  }
+
+  private forkSplit(forkId: string): ForkSplit {
+    const forks = this.db
+      .all<ForkRow>(
+        `SELECT * FROM forks
+         WHERE id = ? OR parent_fork_id = ? OR id = (SELECT parent_fork_id FROM forks WHERE id = ?)
+         ORDER BY created_at, rowid`,
+        forkId,
+        forkId,
+        forkId,
+      )
+      .map(toFork);
+    return {
+      fork: forks.find((fork) => fork.id === forkId)!,
+      forks,
+      messages: this.db
+        .all<MessageRow>(
+          'SELECT * FROM messages WHERE fork_id = ? ORDER BY created_at, rowid',
+          forkId,
+        )
+        .map(toMessage),
+      comments: this.db
+        .all<CommentRow>(
+          'SELECT * FROM comments WHERE view_fork_id = ? ORDER BY created_at, rowid',
+          forkId,
+        )
+        .map(toComment),
+      bookmarks: this.db
+        .all<BookmarkRow>(
+          'SELECT * FROM bookmarks WHERE fork_id = ? ORDER BY created_at, rowid',
+          forkId,
+        )
+        .map(toBookmark),
+      activities: this.db
+        .all<ActivityRow>(
+          'SELECT * FROM activities WHERE fork_id = ? ORDER BY created_at, rowid',
+          forkId,
+        )
+        .map(toActivity),
+      notes: this.db
+        .all<NoteRow>(
+          'SELECT * FROM notes WHERE source_fork_id = ? ORDER BY position, rowid',
+          forkId,
+        )
+        .map(toNote),
+      forkRuns: this.db
+        .all<ForkRunRow>('SELECT * FROM fork_runs WHERE fork_id = ?', forkId)
+        .map(toForkRun),
+    };
+  }
+
+  private isBusy(forkId: string) {
+    return (
+      this.db.get<{ id: string }>(
+        `SELECT id FROM forks WHERE id = ? AND (
+           ${awaitingAnswer}
+           OR EXISTS (SELECT 1 FROM submissions WHERE fork_id = forks.id AND status = 'queued')
+           OR EXISTS (
+             SELECT 1 FROM fork_runs WHERE fork_id = forks.id
+               AND (status = 'answering' OR (lease_id IS NOT NULL AND lease_expires_at > ?))
+           )
+         )`,
+        forkId,
+        this.now(),
+      ) !== undefined
+    );
+  }
+
   forkFromNote(noteId: string, message: string, options: { id?: string; forkId?: string } = {}) {
     const note = toNote(this.requireNoteRow(noteId));
     const { explorationId } = note;
@@ -1241,8 +1412,9 @@ export class ChatStore {
           trailingUserMessages.unshift(row);
         }
         const isNewFork =
-          fork.parent_fork_id !== null &&
-          trailingUserMessages[0]?.parent_id === fork.base_message_id;
+          fork.needs_summary === 1 ||
+          (fork.parent_fork_id !== null &&
+            trailingUserMessages[0]?.parent_id === fork.base_message_id);
         const answered = path.at(-trailingUserMessages.length - 1);
         return {
           forkId: fork.id,
