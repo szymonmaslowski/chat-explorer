@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import type { Activity, Message } from '@shared/types';
+import type { Activity, Bookmark, Comment, Message } from '@shared/types';
 import { useRoute, useRouter } from 'vue-router';
 import BookmarkList from '../components/BookmarkList.vue';
 import CommentLayer from '../components/CommentLayer.vue';
@@ -29,7 +29,7 @@ import {
   mainFork,
 } from '../lib/conversation';
 import { scrollToAndFlash } from '../lib/flash';
-import { noItems } from '../lib/stable';
+import { keepSameList, noItems } from '../lib/stable';
 import { awaitsAnswer, forkAttention, isUnread } from '../lib/read-state';
 import { applyEvent, openExploration } from '../stores/exploration';
 import { explorationIndex } from '../stores/exploration-index';
@@ -62,7 +62,10 @@ const archived = computed(() => archivedBy.value !== null);
 const parentFork = computed(() =>
   fork.value?.parentForkId ? (state.value.forks.get(fork.value.parentForkId) ?? null) : null,
 );
-const path = computed(() => (fork.value ? forkPath(fork.value, state.value.messages) : []));
+const lookups = computed(() => explorationIndex(state.value));
+const path = computed<Message[]>((previous) =>
+  keepSameList(previous, fork.value ? forkPath(fork.value, state.value.messages) : []),
+);
 const pathIds = computed(() => new Set(path.value.map((message) => message.id)));
 const ownStart = computed(() =>
   path.value.findIndex((message) => message.forkId === fork.value?.id),
@@ -74,17 +77,26 @@ const awaitingAnswer = computed(
   () => !!fork.value && awaitsAnswer(fork.value, state.value.messages, forkRun.value ?? undefined),
 );
 // By the user message a turn answered, each attempt's activity in order.
-const activityGroups = computed(() => {
+const activityGroups = computed<Map<string, Activity[][]>>((previous) => {
   const groups = new Map<string, Map<number, Activity[]>>();
-  const ordered = [...state.value.activities.values()]
-    .filter((activity) => activity.forkId === fork.value?.id)
-    .sort((left, right) => left.createdAt - right.createdAt);
+  const ordered = (fork.value && lookups.value.activitiesByFork.value.get(fork.value.id)) ?? [];
   for (const activity of ordered) {
     const attempts = groups.get(activity.afterMessageId) ?? new Map<number, Activity[]>();
     attempts.set(activity.attempt, [...(attempts.get(activity.attempt) ?? []), activity]);
     groups.set(activity.afterMessageId, attempts);
   }
-  return new Map([...groups].map(([messageId, attempts]) => [messageId, [...attempts.values()]]));
+  return new Map(
+    [...groups].map(([messageId, attempts]) => {
+      const before = previous?.get(messageId);
+      const kept = [...attempts.values()].map((group) =>
+        keepSameList(
+          before?.find((each) => each[0]?.attempt === group[0]?.attempt),
+          group,
+        ),
+      );
+      return [messageId, keepSameList(before, kept)];
+    }),
+  );
 });
 const isWorking = (group: Activity[]) =>
   forkRun.value?.status === 'answering' &&
@@ -137,47 +149,50 @@ async function splitAt(message: Message) {
     };
   }
 }
-const lookups = computed(() => explorationIndex(state.value));
 const answeredPart = computed(() => answeredPartLookup(state.value));
-const viewComments = computed(() =>
-  [...state.value.comments.values()].filter(
-    (comment) => comment.viewForkId === fork.value?.id && pathIds.value.has(comment.messageId),
-  ),
-);
-const viewBookmarks = computed(() => {
+const viewComments = computed<Comment[]>((previous) => {
+  const forkComments =
+    (fork.value && lookups.value.commentsByViewFork.value.get(fork.value.id)) ?? [];
+  return keepSameList(
+    previous,
+    forkComments.filter((comment) => pathIds.value.has(comment.messageId)),
+  );
+});
+const viewBookmarks = computed<Bookmark[]>((previous) => {
   const order = new Map(path.value.map((message, index) => [message.id, index]));
-  return [...state.value.bookmarks.values()]
+  const bookmarks = [...state.value.bookmarks.values()]
     .filter((bookmark) => bookmark.forkId === fork.value?.id && order.has(bookmark.messageId))
     .sort(
       (first, second) =>
         order.get(first.messageId)! - order.get(second.messageId)! ||
         first.startOffset - second.startOffset,
     );
+  return keepSameList(previous, bookmarks);
 });
 const bookmarksOpen = ref(false);
 watch(
   () => [fork.value?.id, viewBookmarks.value.length === 0],
   () => (bookmarksOpen.value = false),
 );
-const drafts = computed(() => viewComments.value.filter((comment) => comment.status === 'draft'));
+const drafts = computed<Comment[]>((previous) =>
+  keepSameList(
+    previous,
+    viewComments.value.filter((comment) => comment.status === 'draft'),
+  ),
+);
 const queuedSubmissions = computed(() =>
   [...state.value.queuedSubmissions.values()].filter(
     (submission) => submission.forkId === fork.value?.id,
   ),
 );
 const replyForksAt = (messageId: string) =>
-  [...state.value.forks.values()].filter(
-    (child) =>
-      child.baseMessageId === messageId &&
-      child.parentForkId !== null &&
-      child.archivedAt === null &&
-      child.id !== fork.value?.id,
+  (lookups.value.childForksByBaseMessage.value.get(messageId) ?? []).filter(
+    (child) => child.archivedAt === null && child.id !== fork.value?.id,
   );
 const filesOfSubmission = (submissionId: string) =>
-  [...state.value.files.values()].filter((file) => file.submissionId === submissionId);
+  lookups.value.filesBySubmission.value.get(submissionId) ?? noItems;
 const commentCountOf = (submissionId: string) =>
-  [...state.value.comments.values()].filter((comment) => comment.submissionId === submissionId)
-    .length;
+  lookups.value.commentsBySubmission.value.get(submissionId)?.length ?? 0;
 
 let nearBottom = true;
 const trackScroll = () => {

@@ -9,7 +9,7 @@ import MediaIcon from './MediaIcon.vue';
 const props = defineProps<{
   submission: QueuedSubmission;
   commentCount: number;
-  files: MessageFile[];
+  files: readonly MessageFile[];
 }>();
 
 const fileCount = computed(() => props.files.length);
