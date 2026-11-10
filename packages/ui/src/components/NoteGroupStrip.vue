@@ -77,7 +77,15 @@ const chooseGroup = (groupId: string) =>
       <div v-if="indicatorTop !== null" class="drop-line" :style="{ top: `${indicatorTop}px` }" />
     </div>
     <div class="strip-actions">
-      <button type="button" class="add" @click="emit('add')">+ Group</button>
+      <button
+        type="button"
+        class="icon-button"
+        aria-label="New group"
+        title="New group"
+        @click="emit('add')"
+      >
+        <MediaIcon name="plus" />
+      </button>
       <button
         v-if="groups.length > 1"
         type="button"
@@ -184,15 +192,8 @@ const chooseGroup = (groupId: string) =>
   gap: 0.4rem;
 }
 
-.add {
-  flex-shrink: 0;
-  border-style: dashed;
-  border-radius: 999px;
-}
-
 @media (pointer: coarse) {
-  .chip,
-  .add {
+  .chip {
     min-height: 2.25rem;
     font-size: 0.95rem;
   }

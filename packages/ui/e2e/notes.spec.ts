@@ -76,7 +76,7 @@ test('creates groups, moves notes between them and deletes a group', async ({ pa
   await addNote(page, 'Bread');
   await addNote(page, 'Eggs');
 
-  await page.getByRole('button', { name: '+ Group' }).click();
+  await page.getByRole('button', { name: 'New group' }).click();
   await expect(page.getByLabel('Name')).toHaveAttribute('placeholder', 'Group 2');
   await page.getByLabel('Name').fill('Shopping');
   await page.getByLabel('Checklist').check();

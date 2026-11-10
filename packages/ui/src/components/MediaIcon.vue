@@ -32,6 +32,7 @@ defineProps<{
     | 'to-comment'
     | 'to-answer'
     | 'chevron-up'
+    | 'plus'
     | 'eye';
 }>();
 </script>
@@ -88,6 +89,7 @@ defineProps<{
     <path v-else-if="name === 'to-comment'" d="M7 17L17 7M9 7h8v8" />
     <path v-else-if="name === 'to-answer'" d="M7 7l10 10M17 9v8H9" />
     <path v-else-if="name === 'chevron-up'" d="M6 15l6-6 6 6" />
+    <path v-else-if="name === 'plus'" d="M12 5v14M5 12h14" />
     <path
       v-else-if="name === 'eye'"
       d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 1 0 0-6z"
@@ -130,6 +132,7 @@ defineProps<{
 .media-icon.to-comment,
 .media-icon.to-answer,
 .media-icon.chevron-up,
+.media-icon.plus,
 .media-icon.eye {
   fill: none;
   stroke: currentColor;
