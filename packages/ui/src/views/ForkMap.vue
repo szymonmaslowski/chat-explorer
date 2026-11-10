@@ -20,7 +20,7 @@ const depthGap = 32;
 const toggleSize = 20;
 const chipHeight = 20;
 // How far the collapse button reaches into its box, from the top left corner.
-const toggleOverlap = 7;
+const toggleOverlap = 10;
 const siblingGap = 14;
 const padding = 16;
 
