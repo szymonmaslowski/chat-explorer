@@ -329,7 +329,7 @@ const layout = computed(() => {
 }
 
 .awaiting {
-  color: var(--warning);
+  color: var(--accent);
 }
 
 .collapse-toggle,
@@ -360,7 +360,7 @@ const layout = computed(() => {
 }
 
 .hidden-chip.awaiting {
-  color: var(--warning);
+  color: var(--accent);
 }
 
 .error {
