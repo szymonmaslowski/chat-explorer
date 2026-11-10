@@ -27,3 +27,27 @@ test('bookmarks a selection, lists it in the header and removes it', async ({ pa
   await expect(page.locator('.message.assistant')).toBeVisible();
   await expect(headerButton).toHaveCount(0);
 });
+
+test('counts the bookmarks of each fork on the map', async ({ page, request }) => {
+  const explorationId = await answeredChat(request);
+  const snapshot = await (await request.get(`/api/explorations/${explorationId}`)).json();
+  const answer = snapshot.messages.find(
+    (message: { role: string }) => message.role === 'assistant',
+  );
+  for (const [startOffset, endOffset] of [
+    [0, 7],
+    [8, 13],
+  ]) {
+    await request.post(`/api/explorations/${explorationId}/bookmarks`, {
+      data: {
+        forkId: answer.forkId,
+        messageId: answer.id,
+        quote: answer.content.slice(startOffset, endOffset),
+        startOffset,
+        endOffset,
+      },
+    });
+  }
+  await page.goto(`/e/${explorationId}/map`);
+  await expect(page.locator('.fork-box .bookmarks')).toHaveText('2 bookmarks');
+});

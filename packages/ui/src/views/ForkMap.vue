@@ -13,6 +13,8 @@ const props = defineProps<{ explorationId: string; currentForkId?: string; side?
 // Narrow enough that the main fork and its children fit side by side on a phone.
 const boxWidth = 160;
 const boxHeight = 86;
+// Boxes grow by a line once any fork of the chat has bookmarks, so all stay the same height.
+const bookmarksLineHeight = 16;
 const depthGap = 32;
 const siblingGap = 14;
 const padding = 16;
@@ -43,10 +45,15 @@ const layout = computed(() => {
     (fork) => showArchived.value || !archivedForks.value.has(fork.id),
   );
   if (forks.length === 0) return null;
+  const bookmarkCounts = new Map<string, number>();
+  for (const bookmark of state.value.bookmarks.values()) {
+    bookmarkCounts.set(bookmark.forkId, (bookmarkCounts.get(bookmark.forkId) ?? 0) + 1);
+  }
+  const height = boxHeight + (bookmarkCounts.size > 0 ? bookmarksLineHeight : 0);
   const root = stratify<Fork>()
     .id((fork) => fork.id)
     .parentId((fork) => fork.parentForkId)(forks);
-  tree<Fork>().nodeSize([boxHeight + siblingGap, boxWidth + depthGap])(root);
+  tree<Fork>().nodeSize([height + siblingGap, boxWidth + depthGap])(root);
   const nodes = root.descendants();
   const minBreadth = Math.min(...nodes.map((node) => node.x ?? 0));
   const position = (breadth = 0, depth = 0) => ({
@@ -64,6 +71,7 @@ const layout = computed(() => {
       fork,
       ...position(node.x, node.y),
       messageCount: messageCounts.get(fork.id) ?? 0,
+      bookmarkCount: bookmarkCounts.get(fork.id) ?? 0,
       awaitingAnswer: awaitsAnswer(fork, state.value.messages, state.value.forkRuns.get(fork.id)),
       attention: attention.get(fork.id),
       archived: archivedForks.value.has(fork.id),
@@ -73,9 +81,9 @@ const layout = computed(() => {
     const from = position(source.x, source.y);
     const to = position(target.x, target.y);
     const startX = from.left + boxWidth;
-    const startY = from.top + boxHeight / 2;
+    const startY = from.top + height / 2;
     const endX = to.left;
-    const endY = to.top + boxHeight / 2;
+    const endY = to.top + height / 2;
     const middleX = (startX + endX) / 2;
     return {
       id: target.data.id,
@@ -85,8 +93,9 @@ const layout = computed(() => {
   return {
     boxes,
     edges,
+    boxHeight: height,
     width: Math.max(...boxes.map((box) => box.left)) + boxWidth + padding,
-    height: Math.max(...boxes.map((box) => box.top)) + boxHeight + padding,
+    height: Math.max(...boxes.map((box) => box.top)) + height + padding,
   };
 });
 </script>
@@ -118,7 +127,7 @@ const layout = computed(() => {
             left: `${box.left}px`,
             top: `${box.top}px`,
             width: `${boxWidth}px`,
-            height: `${boxHeight}px`,
+            height: `${layout.boxHeight}px`,
           }"
         >
           <AttentionDot v-if="box.attention" :attention="box.attention" class="dot" />
@@ -127,6 +136,9 @@ const layout = computed(() => {
             {{ box.messageCount }} message{{ box.messageCount === 1 ? '' : 's' }}
             <span v-if="box.awaitingAnswer" class="awaiting">· awaiting answer</span>
             <span v-if="box.archived">· archived</span>
+            <span v-if="box.bookmarkCount" class="bookmarks">
+              {{ box.bookmarkCount }} bookmark{{ box.bookmarkCount === 1 ? '' : 's' }}
+            </span>
           </span>
         </RouterLink>
       </div>
@@ -226,5 +238,10 @@ const layout = computed(() => {
 
 .awaiting {
   color: var(--warning);
+}
+
+.bookmarks {
+  display: block;
+  color: var(--bookmark);
 }
 </style>
