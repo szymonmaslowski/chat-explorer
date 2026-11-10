@@ -19,8 +19,8 @@ import MediaIcon from './MediaIcon.vue';
 
 const props = defineProps<{
   message: Message;
-  quotedComments: Comment[];
-  files: MessageFile[];
+  quotedComments: readonly Comment[];
+  files: readonly MessageFile[];
   shared: boolean;
   isNew: boolean;
   answeredPart: AnsweredPartLookup;

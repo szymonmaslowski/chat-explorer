@@ -27,11 +27,12 @@ import {
   forkPath,
   forkTitle,
   mainFork,
-  quotedCommentsOf,
 } from '../lib/conversation';
 import { scrollToAndFlash } from '../lib/flash';
+import { noItems } from '../lib/stable';
 import { awaitsAnswer, forkAttention, isUnread } from '../lib/read-state';
 import { applyEvent, openExploration } from '../stores/exploration';
+import { explorationIndex } from '../stores/exploration-index';
 import { api } from '../api';
 import { newId, outbox } from '../stores/outbox';
 import { stopSpeech } from '../stores/speech';
@@ -136,7 +137,8 @@ async function splitAt(message: Message) {
     };
   }
 }
-const answeredPart = computed(() => answeredPartLookup(state.value.comments, state.value.messages));
+const lookups = computed(() => explorationIndex(state.value));
+const answeredPart = computed(() => answeredPartLookup(state.value));
 const viewComments = computed(() =>
   [...state.value.comments.values()].filter(
     (comment) => comment.viewForkId === fork.value?.id && pathIds.value.has(comment.messageId),
@@ -171,8 +173,6 @@ const replyForksAt = (messageId: string) =>
       child.archivedAt === null &&
       child.id !== fork.value?.id,
   );
-const filesOfMessage = (messageId: string) =>
-  [...state.value.files.values()].filter((file) => file.messageId === messageId);
 const filesOfSubmission = (submissionId: string) =>
   [...state.value.files.values()].filter((file) => file.submissionId === submissionId);
 const commentCountOf = (submissionId: string) =>
@@ -338,8 +338,8 @@ watch(
           </div>
           <ConversationMessage
             :message="message"
-            :quoted-comments="quotedCommentsOf(message.id, state.comments)"
-            :files="filesOfMessage(message.id)"
+            :quoted-comments="lookups.quotedCommentsByMessage.value.get(message.id) ?? noItems"
+            :files="lookups.filesByMessage.value.get(message.id) ?? noItems"
             :shared="ownStart !== -1 && index < ownStart"
             :is-new="newIds.has(message.id)"
             :answered-part="answeredPart"

@@ -1,5 +1,6 @@
 import { commentTag, type AnsweredPartLookup } from '@shared/answer-tags';
 import type { Comment, ExplorationListItem, Fork, Message } from '@shared/types';
+import type { ExplorationState } from '../stores/exploration';
 
 export function pathTo(messageId: string | null, messages: Map<string, Message>) {
   const path: Message[] = [];
@@ -36,12 +37,6 @@ export function archivingFork(fork: Fork, forks: Map<string, Fork>) {
   return forkLineage(fork, forks).findLast((each) => each.archivedAt !== null) ?? null;
 }
 
-export function quotedCommentsOf(messageId: string, comments: Map<string, Comment>) {
-  return [...comments.values()]
-    .filter((comment) => comment.replyMessageId === messageId)
-    .sort((left, right) => left.createdAt - right.createdAt);
-}
-
 // Claude's answer to a sent comment: the message with the comment's tag.
 export const answerToComment = (commentId: string, messages: Map<string, Message>) =>
   [...messages.values()].find(
@@ -52,17 +47,17 @@ export const commentLink = (comment: Comment) =>
   `/e/${comment.explorationId}/f/${comment.viewForkId}#c-${comment.id}`;
 
 // What the tags in an answer point at: a comment, linking to the text it quotes, or the text of
-// a message.
+// a message. It reads the chat when called, so an answer's markdown depends only on what its own
+// tags name, and the lookup stays the same function while the chat changes.
 export function answeredPartLookup(
-  comments: Map<string, Comment>,
-  messages: Map<string, Message>,
+  state: Pick<ExplorationState, 'comments' | 'messages'>,
 ): AnsweredPartLookup {
   return (kind, id) => {
     if (kind === 'message') {
-      const message = messages.get(id);
+      const message = state.messages.get(id);
       return message ? { quote: '', text: message.content, href: null } : null;
     }
-    const comment = comments.get(id);
+    const comment = state.comments.get(id);
     if (!comment) return null;
     return {
       quote: comment.quote,
