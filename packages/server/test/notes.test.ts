@@ -130,12 +130,12 @@ describe('notes', () => {
     );
   });
 
-  it('refuses changes in an archived chat', () => {
+  it('takes changes in an archived chat', () => {
     const { store, explorationId, group } = seedNotes([]);
     store.archiveExploration(explorationId);
-    expect(() => store.createNote(explorationId, { groupId: group.id, topic: 'A' })).toThrow(
-      expect.objectContaining({ code: 'archived' }),
-    );
+    expect(store.createNote(explorationId, { groupId: group.id, topic: 'A' })).toMatchObject({
+      topic: 'A',
+    });
   });
 });
 

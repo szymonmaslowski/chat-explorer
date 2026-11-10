@@ -55,10 +55,12 @@ describe('claiming forks', () => {
     expect(runs.claimable()).toHaveLength(1);
   });
 
-  it('skips archived chats and forks', () => {
+  it('answers archived chats, and skips deleted ones', () => {
     const { runs, ask, store, explorationId } = setup();
-    ask('Anyone?');
     store.archiveExploration(explorationId);
+    ask('Anyone?');
+    expect(runs.claimable()).toHaveLength(1);
+    store.deleteExploration(explorationId);
     expect(runs.claimable()).toEqual([]);
   });
 });

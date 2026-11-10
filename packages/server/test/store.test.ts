@@ -615,36 +615,34 @@ describe('archive and delete', () => {
     deleted: store.listExplorations('deleted').map((exploration) => exploration.id),
   });
 
-  it('archives an exploration read-only and detaches its session', () => {
+  it('takes an archived exploration out of the list and keeps it usable', () => {
     const { store, clock, explorationId, mainForkId, answer } = setup();
     clock.now += 1000;
     expect(store.archiveExploration(explorationId).archivedAt).toBe(clock.now);
     expect(listed(store)).toEqual({ active: [], archived: [explorationId], deleted: [] });
-    expect(store.attachment(explorationId)).toBeNull();
+    expect(store.attachment(explorationId)).toMatchObject({ shimId: 'shim-a' });
     expect(store.snapshot(explorationId).exploration.archivedAt).toBe(clock.now);
-    expect(() => store.submit(explorationId, mainForkId, 'more')).toThrow(
-      expect.objectContaining({ code: 'archived' }),
-    );
-    expect(() =>
-      draft(store, explorationId, { messageId: answer.id, viewForkId: mainForkId, body: 'x' }),
-    ).toThrow(expect.objectContaining({ code: 'archived' }));
-    expect(() =>
-      store.attach({ explorationId, shimId: 'shim-b', sessionId: 'session-b', takeover: false }),
-    ).toThrow(expect.objectContaining({ code: 'archived' }));
+    store.submit(explorationId, mainForkId, 'more');
+    draft(store, explorationId, { messageId: answer.id, viewForkId: mainForkId, body: 'x' });
+    expect(store.snapshot(explorationId).exploration.archivedAt).toBe(clock.now);
 
     store.unarchiveExploration(explorationId);
     expect(listed(store).active).toEqual([explorationId]);
-    store.submit(explorationId, mainForkId, 'more');
   });
 
-  it('keeps queued feedback of an archived exploration for after it is restored', () => {
+  it('leaves the queued feedback of an archived exploration to Claude', () => {
     const { store, explorationId, mainForkId } = setup();
     store.detach('shim-a');
-    store.submit(explorationId, mainForkId, 'later');
     store.archiveExploration(explorationId);
-    expect(store.explorationsAwaitingClaude()).toEqual([]);
-    store.unarchiveExploration(explorationId);
+    store.submit(explorationId, mainForkId, 'later');
     expect(store.explorationsAwaitingClaude()).toEqual([explorationId]);
+  });
+
+  it('creates an exploration already archived', () => {
+    const { store, clock } = setup();
+    const { exploration } = store.createExploration({ archived: true });
+    expect(exploration.archivedAt).toBe(clock.now);
+    expect(listed(store).archived).toContain(exploration.id);
   });
 
   it('hides a deleted exploration and restores it as archived', () => {

@@ -74,9 +74,6 @@ export class FeedbackHub {
         this.handedNotes.delete(explorationId);
         return;
       }
-      if (event.type === 'exploration.updated' && event.exploration.archivedAt !== null) {
-        this.settleAll(explorationId, { status: 'detached' });
-      }
       this.refreshStatus(explorationId);
     });
     this.statusTimer = setInterval(() => {

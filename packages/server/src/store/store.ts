@@ -192,19 +192,26 @@ export class ChatStore {
   ) {}
 
   createExploration(
-    options: { title?: string; messages?: NewMessage[]; model?: ClaudeModel } = {},
+    options: {
+      title?: string;
+      messages?: NewMessage[];
+      model?: ClaudeModel;
+      archived?: boolean;
+    } = {},
   ) {
     const createdAt = this.now();
     const explorationId = newId();
     const mainForkId = newId();
     this.db.transaction(() => {
       this.db.run(
-        'INSERT INTO explorations (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+        `INSERT INTO explorations (id, title, model, created_at, updated_at, archived_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
         explorationId,
         options.title ?? '',
         options.model ?? defaultClaudeModel,
         createdAt,
         createdAt,
+        options.archived ? createdAt : null,
       );
       this.db.run(
         'INSERT INTO forks (id, exploration_id, created_at, updated_at) VALUES (?, ?, ?, ?)',
@@ -371,7 +378,7 @@ export class ChatStore {
   archiveExploration(explorationId: string) {
     this.requireExplorationRow(explorationId);
     this.db.run(
-      `UPDATE explorations SET archived_at = ?, ${clearAttachment} WHERE id = ?`,
+      'UPDATE explorations SET archived_at = ? WHERE id = ?',
       this.now(),
       explorationId,
     );
@@ -386,7 +393,7 @@ export class ChatStore {
 
   archiveFork(forkId: string) {
     const row = this.requireForkRow(forkId);
-    this.requireWritable(row.exploration_id);
+    this.requireExplorationRow(row.exploration_id);
     if (row.parent_fork_id === null) {
       throw new StoreError(
         'invalid',
@@ -414,12 +421,8 @@ export class ChatStore {
 
   unarchiveFork(forkId: string) {
     const row = this.requireForkRow(forkId);
-    this.requireWritable(row.exploration_id);
+    this.requireExplorationRow(row.exploration_id);
     return this.setForkArchivedAt(forkId, null);
-  }
-
-  isArchived(explorationId: string) {
-    return this.requireExplorationRow(explorationId).archived_at !== null;
   }
 
   deleteExploration(explorationId: string) {
@@ -752,7 +755,7 @@ export class ChatStore {
 
   updateComment(commentId: string, changes: CommentChanges) {
     const row = this.requireDraft(commentId);
-    this.requireWritable(row.exploration_id);
+    this.requireExplorationRow(row.exploration_id);
     if (changes.body !== undefined && !changes.body.trim()) {
       throw new StoreError('invalid', 'A comment body cannot be empty.');
     }
@@ -781,7 +784,7 @@ export class ChatStore {
 
   deleteComment(commentId: string) {
     const row = this.requireDraft(commentId);
-    this.requireWritable(row.exploration_id);
+    this.requireExplorationRow(row.exploration_id);
     const groupChanges = this.forkGroupChangesWithout(row);
     groupChanges.delete(commentId);
     this.db.transaction(() => {
@@ -846,7 +849,7 @@ export class ChatStore {
   // were in. A group is one fork: its comments go there on Submit, whatever their own type.
   joinForkGroup(commentId: string, input: { memberIds: string[]; groupId?: string }) {
     const start = this.requireDraft(commentId);
-    this.requireWritable(start.exploration_id);
+    this.requireExplorationRow(start.exploration_id);
     const joinableComments = this.draftJoinableComments(start.view_fork_id);
     const joinable = new Set(joinableComments.map((comment) => comment.id));
     if (![commentId, ...input.memberIds].every((id) => joinable.has(id))) {
@@ -870,7 +873,7 @@ export class ChatStore {
     );
     const first = rows[0];
     if (!first) throw new StoreError('not_found', `Fork group ${groupId} not found.`);
-    this.requireWritable(first.exploration_id);
+    this.requireExplorationRow(first.exploration_id);
     const changes = new Map(rows.map((row) => [row.id, null]));
     this.db.transaction(() => this.saveForkGroups(changes));
     return this.publishCommentUpdates(first.exploration_id, [...changes.keys()]);
@@ -878,7 +881,7 @@ export class ChatStore {
 
   leaveForkGroup(commentId: string) {
     const row = this.requireDraft(commentId);
-    this.requireWritable(row.exploration_id);
+    this.requireExplorationRow(row.exploration_id);
     const changes = this.forkGroupChangesWithout(row);
     this.db.transaction(() => this.saveForkGroups(changes));
     return this.publishCommentUpdates(row.exploration_id, [...changes.keys()]);
@@ -1099,7 +1102,7 @@ export class ChatStore {
            SELECT exploration_id FROM notes WHERE topic IS NULL
          ) AS waiting
          JOIN explorations ON explorations.id = waiting.exploration_id
-         WHERE archived_at IS NULL AND deleted_at IS NULL`,
+         WHERE deleted_at IS NULL`,
       )
       .map((row) => row.exploration_id);
   }
@@ -1259,7 +1262,7 @@ export class ChatStore {
   }
 
   attach(input: { explorationId: string; shimId: string; sessionId: string; takeover: boolean }) {
-    const row = this.requireWritable(input.explorationId);
+    const row = this.requireExplorationRow(input.explorationId);
     const heldByOther =
       row.attached_shim_id !== null && row.attached_shim_id !== input.shimId && this.isLive(row);
     if (heldByOther && !input.takeover) {
@@ -1440,7 +1443,7 @@ export class ChatStore {
   // An empty draft is no draft: its row goes, so a fork never keeps a blank one around.
   saveReplyDraft(forkId: string, input: { text: string; newFork: boolean; fileIds: string[] }) {
     const fork = this.requireForkRow(forkId);
-    this.requireWritable(fork.exploration_id);
+    this.requireExplorationRow(fork.exploration_id);
     const files = input.fileIds.map((fileId) => this.requireDraftFile(fileId));
     this.db.transaction(() => {
       this.db.run('UPDATE files SET draft_fork_id = NULL WHERE draft_fork_id = ?', forkId);
@@ -1479,7 +1482,7 @@ export class ChatStore {
       ? this.existingRow<NoteGroupRow>('note_groups', input.id, explorationId)
       : null;
     if (existing) return toNoteGroup(existing);
-    this.requireWritable(explorationId);
+    this.requireExplorationRow(explorationId);
     const group = toNoteGroup(this.insertNoteGroup(explorationId, input));
     this.publish([[explorationId, { type: 'note-group.created', group }]]);
     return group;
@@ -1487,7 +1490,7 @@ export class ChatStore {
 
   updateNoteGroup(groupId: string, changes: NoteGroupChanges) {
     const row = this.requireNoteGroupRow(groupId);
-    this.requireWritable(row.exploration_id);
+    this.requireExplorationRow(row.exploration_id);
     const name =
       changes.name === undefined
         ? row.name
@@ -1508,7 +1511,7 @@ export class ChatStore {
   // Its notes go with it.
   deleteNoteGroup(groupId: string) {
     const row = this.requireNoteGroupRow(groupId);
-    this.requireWritable(row.exploration_id);
+    this.requireExplorationRow(row.exploration_id);
     this.db.run('DELETE FROM note_groups WHERE id = ?', groupId);
     this.publish([[row.exploration_id, { type: 'note-group.deleted', groupId }]]);
   }
@@ -1517,7 +1520,7 @@ export class ChatStore {
   createNote(explorationId: string, input: NewNote) {
     const existing = input.id ? this.existingRow<NoteRow>('notes', input.id, explorationId) : null;
     if (existing) return toNote(existing);
-    this.requireWritable(explorationId);
+    this.requireExplorationRow(explorationId);
     const group = this.requireNoteGroupRow(input.groupId, explorationId);
     const topic = input.topic?.trim() ?? '';
     const description = input.description?.trim() ?? '';
@@ -1540,7 +1543,7 @@ export class ChatStore {
 
   updateNote(noteId: string, changes: NoteChanges) {
     const row = this.requireNoteRow(noteId);
-    this.requireWritable(row.exploration_id);
+    this.requireExplorationRow(row.exploration_id);
     const topic = changes.topic === undefined ? row.topic : changes.topic.trim() || null;
     const description = changes.description?.trim() ?? row.description;
     if (!topic && !description) {
@@ -1562,7 +1565,7 @@ export class ChatStore {
 
   deleteNote(noteId: string) {
     const row = this.requireNoteRow(noteId);
-    this.requireWritable(row.exploration_id);
+    this.requireExplorationRow(row.exploration_id);
     this.db.run('DELETE FROM notes WHERE id = ?', noteId);
     this.publish([[row.exploration_id, { type: 'note.deleted', noteId }]]);
   }
@@ -1570,7 +1573,7 @@ export class ChatStore {
   // Applied to the order as it is now, so moves made elsewhere since the page loaded are kept.
   reorderNote(noteId: string, afterNoteId: string | null) {
     const row = this.requireNoteRow(noteId);
-    this.requireWritable(row.exploration_id);
+    this.requireExplorationRow(row.exploration_id);
     const noteIds = this.db.transaction(() => {
       const noteIds = reorderedIds(this.noteIdsIn(row.group_id), noteId, afterNoteId);
       this.writeNoteOrder(noteIds);
@@ -1585,7 +1588,7 @@ export class ChatStore {
   // The note goes first in its new group.
   changeNoteGroup(noteId: string, groupId: string) {
     const row = this.requireNoteRow(noteId);
-    this.requireWritable(row.exploration_id);
+    this.requireExplorationRow(row.exploration_id);
     const group = this.requireNoteGroupRow(groupId, row.exploration_id);
     const noteIds = this.db.transaction(() => {
       if (group.id === row.group_id) return this.noteIdsIn(group.id);
@@ -1611,7 +1614,7 @@ export class ChatStore {
     sourceMessageId?: string | undefined;
   }) {
     const { explorationId } = input;
-    this.requireWritable(explorationId);
+    this.requireExplorationRow(explorationId);
     const group = this.requireNoteGroupRow(input.groupId, explorationId);
     const notes = input.notes.map((note) => ({
       id: newId(),
@@ -1720,7 +1723,7 @@ export class ChatStore {
 
   private setDeletionRequestedAt(noteId: string, requestedAt: number | null) {
     const row = this.requireNoteRow(noteId);
-    this.requireWritable(row.exploration_id);
+    this.requireExplorationRow(row.exploration_id);
     this.db.run(
       'UPDATE notes SET deletion_requested_at = ?, updated_at = ? WHERE id = ?',
       requestedAt,
@@ -2190,22 +2193,11 @@ export class ChatStore {
     return row;
   }
 
-  private requireWritable(explorationId: string) {
-    const row = this.requireExplorationRow(explorationId);
-    if (row.archived_at !== null) {
-      throw new StoreError(
-        'archived',
-        `Exploration ${explorationId} is archived. Restore it to continue.`,
-      );
-    }
-    return row;
-  }
-
   // A fork is read only while it or a fork above it is archived. Drafts can still be saved, so
   // text typed just before archiving is kept for when the fork is restored.
   requireWritableFork(forkId: string, explorationId?: string) {
     const row = this.requireForkRow(forkId, explorationId);
-    this.requireWritable(row.exploration_id);
+    this.requireExplorationRow(row.exploration_id);
     const archived = this.db.get<{ id: string }>(
       `WITH RECURSIVE lineage(id, parent_fork_id, archived_at) AS (
          SELECT id, parent_fork_id, archived_at FROM forks WHERE id = ?

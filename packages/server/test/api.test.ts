@@ -105,6 +105,19 @@ describe('public API', () => {
     expect(await ids()).toEqual([]);
   });
 
+  it('starts a chat already archived', async () => {
+    const { request, store } = createTestApp();
+    const response = await request('/api/explorations', {
+      method: 'POST',
+      json: { message: 'Quick question', archived: true },
+    });
+    const { explorationId } = await response.json();
+    expect(store.listExplorations('archived').map((exploration) => exploration.id)).toEqual([
+      explorationId,
+    ]);
+    expect(store.queuedSubmissions(explorationId)).toHaveLength(1);
+  });
+
   it('validates request bodies', async () => {
     const { request, store } = createTestApp();
     const { explorationId } = seedConversation(store);

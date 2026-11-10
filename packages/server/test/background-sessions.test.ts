@@ -167,19 +167,15 @@ describe('background sessions', () => {
     expect(store.attachment(explorationId)).toBeNull();
   });
 
-  it('stops the session of an archived exploration and starts none for it', () => {
+  it('starts a session for an archived exploration and keeps it running', () => {
     const context = setup();
-    const { store, sessions, launches, explorationId, mainForkId } = context;
+    const { store, launches, explorationId, mainForkId } = context;
+    store.archiveExploration(explorationId);
     store.submit(explorationId, mainForkId, 'hello');
+    expect(launches).toHaveLength(1);
     attachLaunched(context, 0);
     store.archiveExploration(explorationId);
-    expect(launches[0]!.stopped).toBe(true);
-    launches[0]!.exit(0);
-    expect(launches).toHaveLength(1);
-    expect(sessions.error(explorationId)).toBeNull();
-    expect(() => sessions.start(explorationId)).toThrow(
-      expect.objectContaining({ code: 'archived' }),
-    );
+    expect(launches[0]!.stopped).toBe(false);
   });
 
   it('makes room by stopping the session idle longest', () => {

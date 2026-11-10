@@ -51,7 +51,12 @@ const commentType = z.enum(['inline', 'fork', 'note']);
 const model = z.enum(claudeModels);
 const fileIds = z.array(z.string()).default([]);
 const newExplorationBody = z
-  .object({ message: z.string().trim().default(''), model: model.optional(), fileIds })
+  .object({
+    message: z.string().trim().default(''),
+    model: model.optional(),
+    fileIds,
+    archived: z.boolean().default(false),
+  })
   .refine((body) => body.message || body.fileIds.length > 0, 'Write a message or attach a file.');
 const explorationSettingsBody = z.object({ model });
 const clientId = z.string().regex(idPattern).optional();
@@ -310,6 +315,7 @@ export function createApp(options: AppOptions) {
     const body = newExplorationBody.parse(await context.req.json());
     const { exploration, mainFork } = store.createExploration({
       model: body.model ?? options.defaultModel,
+      archived: body.archived,
     });
     store.submit(exploration.id, mainFork.id, body.message, { fileIds: body.fileIds });
     return context.json({ explorationId: exploration.id }, 201);

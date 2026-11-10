@@ -85,7 +85,7 @@ export class RunStore {
         `SELECT forks.id AS fork_id, forks.exploration_id FROM forks
          JOIN explorations ON explorations.id = forks.exploration_id
          LEFT JOIN fork_runs ON fork_runs.fork_id = forks.id
-         WHERE explorations.archived_at IS NULL AND explorations.deleted_at IS NULL
+         WHERE explorations.deleted_at IS NULL
            AND (fork_runs.lease_id IS NULL OR fork_runs.lease_expires_at <= ?)
            AND (fork_runs.status IS NULL OR fork_runs.status != 'failed')
            AND (
@@ -377,7 +377,7 @@ export class RunStore {
         `SELECT notes.id, notes.exploration_id, notes.description FROM notes
          JOIN explorations ON explorations.id = notes.exploration_id
          WHERE notes.topic IS NULL
-           AND explorations.archived_at IS NULL AND explorations.deleted_at IS NULL
+           AND explorations.deleted_at IS NULL
          ORDER BY notes.created_at, notes.rowid`,
       )
       .filter((row) => !this.chats.attachment(row.exploration_id)?.live)
