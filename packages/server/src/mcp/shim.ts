@@ -440,6 +440,23 @@ export function createShim(options: ShimOptions) {
   );
 
   server.registerTool(
+    'reorder_note_group',
+    {
+      description:
+        'Move a note group: after another group of the same chat, or to the start with afterGroupId null.',
+      inputSchema: { groupId: z.string(), afterGroupId: z.string().nullable() },
+    },
+    tool(async ({ groupId, afterGroupId }: { groupId: string; afterGroupId: string | null }) => {
+      requireAttachment();
+      return json(
+        await request(`/api/internal/note-groups/${groupId}/reorder`, {
+          json: { shimId, afterGroupId },
+        }),
+      );
+    }),
+  );
+
+  server.registerTool(
     'change_note_group',
     {
       description: 'Move a note to another group of the same exploration. It goes first there.',

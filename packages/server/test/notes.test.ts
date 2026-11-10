@@ -139,6 +139,22 @@ describe('notes', () => {
   });
 });
 
+describe('reordering note groups', () => {
+  it('moves a group after another one or to the start, and tells the open pages', () => {
+    const { store, explorationId, events } = setup();
+    const [a, b, c] = ['A', 'B', 'C'].map((name) => store.createNoteGroup(explorationId, { name }));
+    const order = () => store.snapshot(explorationId).noteGroups.map((group) => group.name);
+    store.reorderNoteGroup(a!.id, c!.id);
+    expect(order()).toEqual(['B', 'C', 'A']);
+    store.reorderNoteGroup(c!.id, null);
+    expect(order()).toEqual(['C', 'B', 'A']);
+    expect(events.at(-1)).toEqual({
+      type: 'note-groups.reordered',
+      groupIds: [c!.id, b!.id, a!.id],
+    });
+  });
+});
+
 describe('reordering notes', () => {
   it('moves a note after another one or to the top', () => {
     const { store, notes, order } = seedNotes(['A', 'B', 'C', 'D']);

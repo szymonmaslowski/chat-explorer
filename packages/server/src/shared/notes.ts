@@ -8,14 +8,15 @@ export function defaultGroupName(takenNames: string[]) {
   return `Group ${number}`;
 }
 
-// A null `afterNoteId` puts the note first. An anchor that is gone leaves the order as it was.
-export function reorderedIds(noteIds: string[], noteId: string, afterNoteId: string | null) {
-  const others = noteIds.filter((id) => id !== noteId);
-  if (!noteIds.includes(noteId)) return noteIds;
-  if (afterNoteId === null) return [noteId, ...others];
-  const anchor = others.indexOf(afterNoteId);
-  if (anchor === -1) return noteIds;
-  return [...others.slice(0, anchor + 1), noteId, ...others.slice(anchor + 1)];
+// Moves a note or a group. A null `afterId` puts it first. An anchor that is gone leaves the
+// order as it was.
+export function reorderedIds(ids: string[], movedId: string, afterId: string | null) {
+  const others = ids.filter((id) => id !== movedId);
+  if (!ids.includes(movedId)) return ids;
+  if (afterId === null) return [movedId, ...others];
+  const anchor = others.indexOf(afterId);
+  if (anchor === -1) return ids;
+  return [...others.slice(0, anchor + 1), movedId, ...others.slice(anchor + 1)];
 }
 
 // A fork started from a note opens with this line: the id lets Claude look the note up, and the

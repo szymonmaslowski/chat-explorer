@@ -165,12 +165,13 @@ describe('MCP shim', () => {
     await call('reorder_note', { noteId: milk, afterNoteId: null });
     const { value: other } = await call('add_note_group', {});
     await call('change_note_group', { noteId: lemon, groupId: other.id });
+    await call('reorder_note_group', { groupId: other.id, afterGroupId: null });
     await call('request_note_deletion', { noteId: milk });
 
     const { value: notes } = await call('list_notes');
     expect(notes.groups).toMatchObject([
-      { name: 'Shopping', notes: [{ topic: 'Milk', deletionRequested: true }] },
       { name: 'Group 2', notes: [{ topic: 'Lemon', checked: true, createdBy: 'claude' }] },
+      { name: 'Shopping', notes: [{ topic: 'Milk', deletionRequested: true }] },
     ]);
 
     const userNote = await daemonRequest(`/api/explorations/${explorationId}/notes`, {

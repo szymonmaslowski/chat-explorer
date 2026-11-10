@@ -231,6 +231,7 @@ export type ExplorationEvent =
   | { type: 'submission.delivered'; submissionId: string }
   | { type: 'note-group.created'; group: NoteGroup }
   | { type: 'note-group.updated'; group: NoteGroup }
+  | { type: 'note-groups.reordered'; groupIds: string[] }
   | { type: 'note-group.deleted'; groupId: string }
   | { type: 'note.created'; note: Note }
   | { type: 'note.updated'; note: Note }

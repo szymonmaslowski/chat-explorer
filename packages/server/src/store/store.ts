@@ -1488,6 +1488,38 @@ export class ChatStore {
     return group;
   }
 
+  reorderNoteGroup(groupId: string, afterGroupId: string | null) {
+    const row = this.requireNoteGroupRow(groupId);
+    this.requireExplorationRow(row.exploration_id);
+    const groupIds = this.db.transaction(() => {
+      const groupIds = reorderedIds(this.noteGroupIdsIn(row.exploration_id), groupId, afterGroupId);
+      groupIds.forEach((id, index) => {
+        this.db.run(
+          'UPDATE note_groups SET position = ? WHERE id = ? AND position != ?',
+          index + 1,
+          id,
+          index + 1,
+        );
+      });
+      return groupIds;
+    });
+    this.publish([[row.exploration_id, { type: 'note-groups.reordered', groupIds }]]);
+    return { groupIds };
+  }
+
+  noteGroupExplorationId(groupId: string) {
+    return this.requireNoteGroupRow(groupId).exploration_id;
+  }
+
+  private noteGroupIdsIn(explorationId: string) {
+    return this.db
+      .all<{ id: string }>(
+        'SELECT id FROM note_groups WHERE exploration_id = ? ORDER BY position, rowid',
+        explorationId,
+      )
+      .map(({ id }) => id);
+  }
+
   updateNoteGroup(groupId: string, changes: NoteGroupChanges) {
     const row = this.requireNoteGroupRow(groupId);
     this.requireExplorationRow(row.exploration_id);

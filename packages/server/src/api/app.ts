@@ -122,6 +122,7 @@ const noteChangesBody = z.object({
   checked: z.boolean().optional(),
 });
 const noteReorderBody = z.object({ afterNoteId: z.string().nullable() });
+const noteGroupReorderBody = z.object({ afterGroupId: z.string().nullable() });
 const noteGroupBody = z.object({ groupId: z.string() });
 const uploadBody = z.object({ file: z.instanceof(File) });
 // Multipart framing around a file at the size limit.
@@ -183,6 +184,7 @@ const claudeNotesBody = shimBody.extend({
 });
 const claudeNoteChangesBody = shimBody.extend(noteChangesBody.shape);
 const claudeNoteReorderBody = shimBody.extend(noteReorderBody.shape);
+const claudeNoteGroupReorderBody = shimBody.extend(noteGroupReorderBody.shape);
 const claudeNoteGroupChangeBody = shimBody.extend(noteGroupBody.shape);
 const feedbackBody = shimBody.extend({
   waitMs: z.number().int().positive().max(maxFeedbackWaitMs),
@@ -521,6 +523,11 @@ export function createApp(options: AppOptions) {
     return context.json({ ok: true });
   });
 
+  app.post('/api/note-groups/:id/reorder', async (context) => {
+    const { afterGroupId } = noteGroupReorderBody.parse(await context.req.json());
+    return context.json(store.reorderNoteGroup(context.req.param('id'), afterGroupId));
+  });
+
   app.post('/api/notes/:id/reorder', async (context) => {
     const { afterNoteId } = noteReorderBody.parse(await context.req.json());
     return context.json(store.reorderNote(context.req.param('id'), afterNoteId));
@@ -718,6 +725,13 @@ export function createApp(options: AppOptions) {
   internal.patch('/notes/:id', async (context) => {
     const { shimId, ...changes } = claudeNoteChangesBody.parse(await context.req.json());
     return context.json(store.updateNote(attachedNoteId(context.req.param('id'), shimId), changes));
+  });
+
+  internal.post('/note-groups/:id/reorder', async (context) => {
+    const { shimId, afterGroupId } = claudeNoteGroupReorderBody.parse(await context.req.json());
+    const groupId = context.req.param('id');
+    store.requireAttachedShim(store.noteGroupExplorationId(groupId), shimId);
+    return context.json(store.reorderNoteGroup(groupId, afterGroupId));
   });
 
   internal.post('/notes/:id/reorder', async (context) => {

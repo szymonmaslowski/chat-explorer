@@ -203,6 +203,19 @@ function toolsFor(job: Job, { store, runs }: JobToolsOptions) {
   );
 
   server.registerTool(
+    'reorder_note_group',
+    {
+      description:
+        'Move a note group: after another group of the same chat, or to the start with afterGroupId null.',
+      inputSchema: { groupId: z.string(), afterGroupId: z.string().nullable() },
+    },
+    tool(({ groupId, afterGroupId }: { groupId: string; afterGroupId: string | null }) => {
+      sameChat(job, store.noteGroupExplorationId(groupId), `Note group ${groupId}`);
+      return store.reorderNoteGroup(groupId, afterGroupId);
+    }),
+  );
+
+  server.registerTool(
     'change_note_group',
     {
       description: 'Move a note to another group of this chat. It goes first there.',
