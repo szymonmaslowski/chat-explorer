@@ -115,6 +115,18 @@ test('copies a link to a message that opens the fork scrolled to it', async ({
   const messageId = await question.getAttribute('data-message-id');
   expect(link).toBe(`${new URL(page.url()).origin}/e/${explorationId}#m-${messageId}`);
 
+  const answer = page.locator('.message.assistant');
+  await expect(
+    answer.locator('header').getByRole('button', { name: 'Copy a link to this message' }),
+  ).toHaveCount(0);
+  const actions = answer.locator('.message-actions button');
+  await expect(actions.last()).toHaveAccessibleName(
+    /Copy a link to this message|Mark unread from here/,
+  );
+  await expect(
+    answer.locator('.message-actions').getByRole('button', { name: 'Copy a link to this message' }),
+  ).toBeVisible();
+
   const opened = await context.newPage();
   await opened.goto(link);
   await expect(opened.locator('.message.user')).toBeInViewport();

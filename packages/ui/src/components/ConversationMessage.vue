@@ -153,8 +153,9 @@ onMounted(findBlocks);
           >
         </ConfirmButton>
         <button
+          v-if="!jumpable"
           type="button"
-          class="icon-button header-button copy-link"
+          class="icon-button header-button"
           :aria-label="linkCopied ? 'Link copied' : 'Copy a link to this message'"
           title="Copy a link that opens this fork at this message"
           @click="copyLink"
@@ -184,16 +185,6 @@ onMounted(findBlocks);
         <MediaIcon :name="copied ? 'check' : 'copy'" />
       </button>
       <button
-        v-if="!isUnread(message)"
-        type="button"
-        class="icon-button"
-        aria-label="Mark unread from here"
-        title="Mark this answer and the later ones unread"
-        @click="emit('markUnread')"
-      >
-        <MediaIcon name="unread" />
-      </button>
-      <button
         v-if="speakable"
         type="button"
         class="icon-button"
@@ -211,6 +202,25 @@ onMounted(findBlocks);
         @click="jumpTo('end')"
       >
         <MediaIcon name="to-end" />
+      </button>
+      <button
+        type="button"
+        class="icon-button"
+        :aria-label="linkCopied ? 'Link copied' : 'Copy a link to this message'"
+        title="Copy a link that opens this fork at this message"
+        @click="copyLink"
+      >
+        <MediaIcon :name="linkCopied ? 'check' : 'chain'" />
+      </button>
+      <button
+        v-if="!isUnread(message)"
+        type="button"
+        class="icon-button"
+        aria-label="Mark unread from here"
+        title="Mark this answer and the later ones unread"
+        @click="emit('markUnread')"
+      >
+        <MediaIcon name="unread" />
       </button>
     </div>
     <div v-for="comment in quotedComments" :key="comment.id" class="quoted-comment">
