@@ -1,3 +1,4 @@
+import type { Note } from '@shared/types';
 import { insertedAttribute } from '@shared/speech-blocks';
 import { blockTextRange } from './speech-blocks';
 
@@ -36,4 +37,15 @@ export function blockClipboardText(element: HTMLElement): ClipboardText {
   html.append(blockTextRange(element).cloneContents());
   for (const inserted of html.querySelectorAll(`[${insertedAttribute}]`)) inserted.remove();
   return { plain: (html.textContent ?? '').trim(), html: html.innerHTML };
+}
+
+// Pasted into a chat, the quote says which note it came from, so Claude can look the note up.
+export function noteQuote(note: Pick<Note, 'id' | 'topic'>, text: string): ClipboardText {
+  const quoted = text
+    .trim()
+    .split('\n')
+    .map((line) => (line.trim() ? `> ${line}` : '>'))
+    .join('\n');
+  const name = note.topic ? `the note "${note.topic}"` : 'the note';
+  return { plain: `From ${name} (id ${note.id}):\n\n${quoted}` };
 }

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { renderMarkdown } from '@shared/markdown';
 import type { Note, NoteGroup } from '@shared/types';
-import { computed, ref, shallowRef, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { useCopied } from '../composables/useCopied';
+import { blockClipboardText, noteQuote } from '../lib/clipboard';
 import { bringToReadingLine } from '../lib/reading-line';
 import { blockIndexAt, speechBlocks, type SpokenElement } from '../lib/speech-blocks';
 import { outbox } from '../stores/outbox';
@@ -50,9 +51,8 @@ const blocks = shallowRef<SpokenElement[]>([]);
 const pickedIndex = ref<number | null>(null);
 const pickedTop = ref(0);
 const speechSource = computed(() => ({ text: props.note.description }));
-const listenable = computed(
-  () => speech.available && props.selected && expanded.value && blocks.value.length > 0,
-);
+const pickable = computed(() => props.selected && expanded.value && blocks.value.length > 0);
+const listenable = computed(() => speech.available && pickable.value);
 const speakingIndex = computed(() =>
   speech.playback?.id === speechSourceId(speechSource.value) ? speech.playback.index : -1,
 );
@@ -80,8 +80,8 @@ watch(
   { flush: 'post' },
 );
 
-watch(listenable, (canListen) => {
-  if (!canListen) pickBlock(null);
+watch(pickable, (canPick) => {
+  if (!canPick) pickBlock(null);
 });
 
 watch(
@@ -106,9 +106,9 @@ function pickBlock(index: number | null) {
   pickedTop.value = element.getBoundingClientRect().top - article.value.getBoundingClientRect().top;
 }
 
-// In an expanded note, a tap on a block of the description picks it to read aloud from there.
+// In an expanded note, a tap on a block of the description picks it to copy or read aloud.
 function pickBlockAt(target: EventTarget | null) {
-  if (!listenable.value || !(target instanceof Element) || target.closest('a')) return false;
+  if (!pickable.value || !(target instanceof Element) || target.closest('a')) return false;
   if (!descriptionElement.value?.contains(target)) return false;
   const index = blockIndexAt(blocks.value, target);
   if (index === -1) return false;
@@ -135,6 +135,38 @@ function playPicked() {
   playBlock(speechSource.value, spokenBlocks(), pickedIndex.value);
   pickBlock(null);
 }
+
+const { copied: quoteCopied, copy: copyQuote } = useCopied();
+
+function copyPicked() {
+  const element = pickedIndex.value === null ? undefined : blocks.value[pickedIndex.value]?.element;
+  if (element) void copyQuote(noteQuote(props.note, blockClipboardText(element).plain));
+}
+
+const selection = ref<{ text: string; top: number } | null>(null);
+
+function onSelectionChange() {
+  const current = window.getSelection();
+  const range = current && !current.isCollapsed && current.rangeCount > 0 && current.getRangeAt(0);
+  if (
+    !range ||
+    !article.value ||
+    !descriptionElement.value?.contains(range.commonAncestorContainer)
+  ) {
+    selection.value = null;
+    return;
+  }
+  selection.value = {
+    text: current.toString(),
+    top: range.getBoundingClientRect().top - article.value.getBoundingClientRect().top,
+  };
+}
+
+const copySelection = () =>
+  selection.value && copyQuote(noteQuote(props.note, selection.value.text));
+
+onMounted(() => document.addEventListener('selectionchange', onSelectionChange));
+onBeforeUnmount(() => document.removeEventListener('selectionchange', onSelectionChange));
 
 function createFork(message: string) {
   forking.value = false;
@@ -263,17 +295,44 @@ function changeGroup(groupId: string | null) {
       <button type="button" role="menuitem" @click="changeGroup(null)">New group…</button>
     </div>
     <div v-if="html" ref="descriptionElement" class="description" v-html="html" />
-    <button
-      v-if="pickedIndex !== null"
-      type="button"
-      class="block-play"
+    <div v-if="selection" class="block-actions" :style="{ top: `${selection.top}px` }" @click.stop>
+      <button
+        type="button"
+        :aria-label="quoteCopied ? 'Copied' : 'Copy the selection as a quote'"
+        :title="quoteCopied ? 'Copied' : 'Copy the selection as a quote from this note'"
+        @pointerdown.prevent
+        @mousedown.prevent
+        @touchstart.prevent
+        @pointerup="copySelection"
+        @click="copySelection"
+      >
+        <MediaIcon :name="quoteCopied ? 'check' : 'copy'" />
+      </button>
+    </div>
+    <div
+      v-else-if="pickedIndex !== null"
+      class="block-actions"
       :style="{ top: `${pickedTop}px` }"
-      :aria-label="pickedPlaying ? 'Pause' : 'Read aloud from here'"
-      :title="pickedPlaying ? 'Pause' : 'Read aloud from here'"
-      @click.stop="playPicked"
+      @click.stop
     >
-      <MediaIcon :name="pickedPlaying ? 'pause' : 'play'" />
-    </button>
+      <button
+        type="button"
+        :aria-label="quoteCopied ? 'Copied' : 'Copy this block as a quote'"
+        :title="quoteCopied ? 'Copied' : 'Copy this block as a quote from this note'"
+        @click="copyPicked"
+      >
+        <MediaIcon :name="quoteCopied ? 'check' : 'copy'" />
+      </button>
+      <button
+        v-if="listenable"
+        type="button"
+        :aria-label="pickedPlaying ? 'Pause' : 'Read aloud from here'"
+        :title="pickedPlaying ? 'Pause' : 'Read aloud from here'"
+        @click="playPicked"
+      >
+        <MediaIcon :name="pickedPlaying ? 'pause' : 'play'" />
+      </button>
+    </div>
     <div v-if="note.deletionRequestedAt !== null" class="deletion-request" @click.stop>
       <span>Claude asks to delete this note.</span>
       <ConfirmButton label="Delete" danger @confirm="emit('delete')" />
@@ -336,9 +395,14 @@ function changeGroup(groupId: string | null) {
   border-color: var(--danger);
 }
 
-.block-play {
+.block-actions {
   position: absolute;
   right: 0.5rem;
+  display: flex;
+  gap: 0.3rem;
+}
+
+.block-actions button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -450,7 +514,7 @@ function changeGroup(groupId: string | null) {
 @media (pointer: coarse) {
   .actions button,
   .note-meta button,
-  .block-play {
+  .block-actions button {
     min-width: 2.75rem;
     min-height: 2.25rem;
   }

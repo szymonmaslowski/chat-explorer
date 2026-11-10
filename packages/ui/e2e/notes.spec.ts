@@ -399,6 +399,48 @@ test('reads an expanded note aloud, from the start or from a tapped block', asyn
   await expect(player).toHaveCount(0);
 });
 
+test('copies a tapped block or a selection of a note as a quote naming the note', async ({
+  page,
+  context,
+  request,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const explorationId = await newChat(request);
+  const group = await (
+    await request.post(`/api/explorations/${explorationId}/note-groups`, { data: {} })
+  ).json();
+  const note = await (
+    await request.post(`/api/explorations/${explorationId}/notes`, {
+      data: {
+        groupId: group.id,
+        topic: 'Quote me',
+        description: 'First paragraph.\n\nSecond paragraph with **bold** words.',
+      },
+    })
+  ).json();
+  await page.goto(`/e/${explorationId}/notes`);
+  const item = page.locator(`#n-${note.id}`);
+  const clipboard = () => page.evaluate(() => navigator.clipboard.readText());
+
+  await item.click();
+  await item.locator('.description p', { hasText: 'Second' }).click();
+  await item.getByRole('button', { name: 'Copy this block as a quote' }).click();
+  await expect(item.getByRole('button', { name: 'Copied' })).toBeVisible();
+  await expect
+    .poll(clipboard)
+    .toBe(`From the note "Quote me" (id ${note.id}):\n\n> Second paragraph with bold words.`);
+
+  await item.locator('.description p', { hasText: 'First' }).evaluate((paragraph) => {
+    const range = document.createRange();
+    range.setStart(paragraph.firstChild!, 6);
+    range.setEnd(paragraph.firstChild!, 15);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+  });
+  await item.getByRole('button', { name: 'Copy the selection as a quote' }).click();
+  await expect.poll(clipboard).toBe(`From the note "Quote me" (id ${note.id}):\n\n> paragraph`);
+});
+
 test('starts a fork about a note from the note', async ({ page, request }) => {
   const explorationId = await answeredChat(request);
   const group = await (
@@ -445,10 +487,7 @@ test('starts a fork about a note from the note', async ({ page, request }) => {
   await expect(page.locator('.fork-box')).toHaveCount(2);
 });
 
-test('shows every group in expanded mode and drags one to the start', async ({
-  page,
-  request,
-}) => {
+test('shows every group in expanded mode and drags one to the start', async ({ page, request }) => {
   const explorationId = await newChat(request);
   for (const name of ['Shopping', 'Work', 'Ideas']) {
     await request.post(`/api/explorations/${explorationId}/note-groups`, { data: { name } });
