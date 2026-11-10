@@ -257,4 +257,9 @@ export const migrations = [
   -- A fork split off another is named after its first message until Claude names it.
   ALTER TABLE forks ADD COLUMN needs_summary INTEGER NOT NULL DEFAULT 0;
   `,
+  `
+  -- The page a chat opens on: its map (or its one fork's conversation), or its notes.
+  ALTER TABLE explorations ADD COLUMN default_page TEXT NOT NULL DEFAULT 'map'
+    CHECK (default_page IN ('map', 'notes'));
+  `,
 ];

@@ -25,6 +25,7 @@ import {
   type SubmissionRow,
 } from '../db/rows.js';
 import type {
+  ChatDefaultPage,
   Comment,
   CommentChanges,
   Exploration,
@@ -357,6 +358,17 @@ export class ChatStore {
     this.db.run(
       'UPDATE explorations SET model = ?, updated_at = ? WHERE id = ?',
       model,
+      this.now(),
+      explorationId,
+    );
+    return this.publishExplorationUpdate(explorationId);
+  }
+
+  setDefaultPage(explorationId: string, defaultPage: ChatDefaultPage) {
+    this.requireExplorationRow(explorationId);
+    this.db.run(
+      'UPDATE explorations SET default_page = ?, updated_at = ? WHERE id = ?',
+      defaultPage,
       this.now(),
       explorationId,
     );

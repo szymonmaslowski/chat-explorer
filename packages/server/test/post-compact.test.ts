@@ -8,6 +8,7 @@ describe('postCompactOutput', () => {
       title: 'Caching',
       summary: '',
       model: 'sonnet',
+      defaultPage: 'map',
       createdAt: 0,
       updatedAt: 0,
       archivedAt: null,

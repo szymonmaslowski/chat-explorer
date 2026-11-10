@@ -3,6 +3,7 @@ import type {
   Activity,
   ActivityKind,
   Bookmark,
+  ChatDefaultPage,
   Comment,
   CommentStatus,
   CommentType,
@@ -33,6 +34,7 @@ export interface ExplorationRow {
   attached_shim_id: string | null;
   attached_seen_at: number | null;
   model: ClaudeModel;
+  default_page: ChatDefaultPage;
   background_session_id: string | null;
   archived_at: number | null;
   deleted_at: number | null;
@@ -202,6 +204,7 @@ export const toExploration = (row: ExplorationRow): Exploration => ({
   title: row.title,
   summary: row.summary,
   model: row.model,
+  defaultPage: row.default_page,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   archivedAt: row.archived_at,

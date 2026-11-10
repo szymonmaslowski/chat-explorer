@@ -238,6 +238,26 @@ describe('internal API', () => {
   });
 });
 
+describe('a chat setting', () => {
+  it('sets the page a chat opens on, which starts as the map', async () => {
+    const { request, store } = createTestApp();
+    const { explorationId } = seedConversation(store);
+    expect(
+      (await (await request(`/api/explorations/${explorationId}`)).json()).exploration,
+    ).toMatchObject({ defaultPage: 'map' });
+    const response = await request(`/api/explorations/${explorationId}`, {
+      method: 'PATCH',
+      json: { defaultPage: 'notes' },
+    });
+    expect(await response.json()).toMatchObject({ defaultPage: 'notes' });
+    const empty = await request(`/api/explorations/${explorationId}`, {
+      method: 'PATCH',
+      json: {},
+    });
+    expect(empty.status).toBe(400);
+  });
+});
+
 describe('the main fork overseeing the other forks', () => {
   it('lets only the attached session message, stop or retry another fork', async () => {
     const { request, store } = createTestApp();

@@ -14,11 +14,15 @@ export interface Exploration {
   title: string;
   summary: string;
   model: ClaudeModel;
+  defaultPage: ChatDefaultPage;
   createdAt: number;
   updatedAt: number;
   archivedAt: number | null;
   deletedAt: number | null;
 }
+
+export const chatDefaultPages = ['map', 'notes'] as const;
+export type ChatDefaultPage = (typeof chatDefaultPages)[number];
 
 export type ExplorationView = 'active' | 'archived' | 'deleted';
 

@@ -13,7 +13,12 @@ import type { BackgroundSessions } from '../sessions/background-sessions.js';
 import type { Speaker } from '../speech/speaker.js';
 import { idPattern } from '../shared/ids.js';
 import { claudeModels, type ClaudeModel } from '../shared/models.js';
-import type { ExplorationListItem, ExplorationView, Snapshot } from '../shared/types.js';
+import {
+  chatDefaultPages,
+  type ExplorationListItem,
+  type ExplorationView,
+  type Snapshot,
+} from '../shared/types.js';
 import { StoreError } from '../store/errors.js';
 import type { EventBus } from '../store/event-bus.js';
 import type { FeedbackHub } from '../store/feedback-hub.js';
@@ -58,7 +63,9 @@ const newExplorationBody = z
     archived: z.boolean().default(false),
   })
   .refine((body) => body.message || body.fileIds.length > 0, 'Write a message or attach a file.');
-const explorationSettingsBody = z.object({ model });
+const explorationSettingsBody = z
+  .object({ model: model.optional(), defaultPage: z.enum(chatDefaultPages).optional() })
+  .refine((settings) => settings.model || settings.defaultPage, 'Nothing to change');
 const clientId = z.string().regex(idPattern).optional();
 const newCommentBody = z.object({
   id: clientId,
@@ -370,9 +377,14 @@ export function createApp(options: AppOptions) {
 
   app.patch('/api/explorations/:id', async (context) => {
     const explorationId = context.req.param('id');
-    const { model } = explorationSettingsBody.parse(await context.req.json());
-    const exploration = store.setModel(explorationId, model);
-    sessions.restart(explorationId);
+    const settings = explorationSettingsBody.parse(await context.req.json());
+    let exploration = settings.defaultPage
+      ? store.setDefaultPage(explorationId, settings.defaultPage)
+      : undefined;
+    if (settings.model) {
+      exploration = store.setModel(explorationId, settings.model);
+      sessions.restart(explorationId);
+    }
     return context.json(exploration);
   });
 
