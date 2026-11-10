@@ -187,23 +187,6 @@ function changeGroup(groupId: string | null) {
         <MediaIcon :name="copied ? 'check' : 'copy'" />
       </button>
     </div>
-    <div v-if="html" ref="descriptionElement" class="description" v-html="html" />
-    <button
-      v-if="pickedIndex !== null"
-      type="button"
-      class="block-play"
-      :style="{ top: `${pickedTop}px` }"
-      :aria-label="pickedPlaying ? 'Pause' : 'Read aloud from here'"
-      :title="pickedPlaying ? 'Pause' : 'Read aloud from here'"
-      @click.stop="playPicked"
-    >
-      <MediaIcon :name="pickedPlaying ? 'pause' : 'play'" />
-    </button>
-    <div v-if="note.deletionRequestedAt !== null" class="deletion-request" @click.stop>
-      <span>Claude asks to delete this note.</span>
-      <ConfirmButton label="Delete" danger @confirm="emit('delete')" />
-      <button type="button" @click="emit('keep')">Keep</button>
-    </div>
     <div v-if="selected" class="actions" @click.stop>
       <button
         type="button"
@@ -247,9 +230,8 @@ function changeGroup(groupId: string | null) {
       <ConfirmButton label="Delete" danger title="Delete" @confirm="emit('delete')">
         <MediaIcon name="trash" /><span class="visually-hidden">Delete</span>
       </ConfirmButton>
-    </div>
-    <div v-if="selected && checklist" class="check-row" @click.stop>
       <button
+        v-if="checklist"
         type="button"
         class="check-button"
         :class="{ on: note.checked }"
@@ -279,6 +261,23 @@ function changeGroup(groupId: string | null) {
         {{ group.name }}
       </button>
       <button type="button" role="menuitem" @click="changeGroup(null)">New group…</button>
+    </div>
+    <div v-if="html" ref="descriptionElement" class="description" v-html="html" />
+    <button
+      v-if="pickedIndex !== null"
+      type="button"
+      class="block-play"
+      :style="{ top: `${pickedTop}px` }"
+      :aria-label="pickedPlaying ? 'Pause' : 'Read aloud from here'"
+      :title="pickedPlaying ? 'Pause' : 'Read aloud from here'"
+      @click.stop="playPicked"
+    >
+      <MediaIcon :name="pickedPlaying ? 'pause' : 'play'" />
+    </button>
+    <div v-if="note.deletionRequestedAt !== null" class="deletion-request" @click.stop>
+      <span>Claude asks to delete this note.</span>
+      <ConfirmButton label="Delete" danger @confirm="emit('delete')" />
+      <button type="button" @click="emit('keep')">Keep</button>
     </div>
   </article>
 </template>
@@ -402,8 +401,7 @@ function changeGroup(groupId: string | null) {
 
 .actions,
 .group-choices,
-.note-meta,
-.check-row {
+.note-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -412,8 +410,7 @@ function changeGroup(groupId: string | null) {
 }
 
 .actions button,
-.note-meta button,
-.check-row button {
+.note-meta button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -422,11 +419,11 @@ function changeGroup(groupId: string | null) {
   padding: 0.2rem 0.45rem;
 }
 
-.check-row .check-button {
+.actions .check-button {
   margin-left: auto;
 }
 
-.check-row button.on {
+.actions button.on {
   color: var(--accent);
   border-color: var(--accent);
   background: var(--accent-soft);
@@ -453,7 +450,6 @@ function changeGroup(groupId: string | null) {
 @media (pointer: coarse) {
   .actions button,
   .note-meta button,
-  .check-row button,
   .block-play {
     min-width: 2.75rem;
     min-height: 2.25rem;
