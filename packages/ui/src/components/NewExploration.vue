@@ -10,10 +10,12 @@ import { newChatFilesOwner, useFileDrafts } from '../stores/file-drafts';
 import AttachButton from './AttachButton.vue';
 import DictationButton from './DictationButton.vue';
 import FileDraftList from './FileDraftList.vue';
+import MediaIcon from './MediaIcon.vue';
 
 const router = useRouter();
 const message = ref('');
 const model = ref<ClaudeModel>(defaultClaudeModel);
+const archived = ref(false);
 const starting = ref(false);
 const error = ref('');
 const textarea = ref<HTMLTextAreaElement | null>(null);
@@ -39,11 +41,12 @@ async function start() {
   starting.value = true;
   error.value = '';
   try {
-    const { explorationId } = await api.createExploration(
-      message.value,
-      model.value,
-      files.readyIds.value,
-    );
+    const { explorationId } = await api.createExploration({
+      message: message.value,
+      model: model.value,
+      fileIds: files.readyIds.value,
+      archived: archived.value,
+    });
     files.clear();
     await router.push(`/e/${explorationId}`);
   } catch {
@@ -91,6 +94,16 @@ function onKeydown(event: KeyboardEvent) {
       </select>
       <AttachButton @files="files.add" />
       <DictationButton @text="insertDictation" />
+      <button
+        type="button"
+        class="icon-button archive-toggle"
+        :aria-pressed="archived"
+        aria-label="Archive right away"
+        :title="archived ? 'Show the chat in the list' : 'Start the chat archived, out of the list'"
+        @click="archived = !archived"
+      >
+        <MediaIcon name="archive" />
+      </button>
       <span class="spacer" />
       <span v-if="error" class="error">{{ error }}</span>
       <button type="submit" class="primary" :disabled="!canStart">Start</button>
@@ -110,6 +123,12 @@ function onKeydown(event: KeyboardEvent) {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
+}
+
+.archive-toggle[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .spacer {

@@ -50,14 +50,13 @@ const commentTyping = useCommentTyping();
 // rest of the page counts on no dock.
 const dockHidden = computed(() => compact.value && commentTyping.value);
 const state = computed(() => openExploration(props.explorationId));
-const chatArchived = computed(() => Boolean(state.value.exploration?.archivedAt));
 const fork = computed(() =>
   props.forkId ? (state.value.forks.get(props.forkId) ?? null) : mainFork(state.value.forks),
 );
 const archivedBy = computed(() =>
   fork.value ? archivingFork(fork.value, state.value.forks) : null,
 );
-const archived = computed(() => chatArchived.value || archivedBy.value !== null);
+const archived = computed(() => archivedBy.value !== null);
 const parentFork = computed(() =>
   fork.value?.parentForkId ? (state.value.forks.get(fork.value.parentForkId) ?? null) : null,
 );
@@ -205,7 +204,7 @@ watch(
       class="top"
       data-sticky-header
     >
-      <template v-if="fork && archivedBy && !chatArchived" #title-badge>
+      <template v-if="fork && archivedBy" #title-badge>
         <span class="archived-label">
           <template v-if="archivedBy.id === fork.id">Archived</template>
           <template v-else>
@@ -241,7 +240,7 @@ watch(
           <MediaIcon name="unread" />
         </button>
         <ForkArchiveControl
-          v-if="fork.parentForkId && !chatArchived"
+          v-if="fork.parentForkId"
           :exploration-id="explorationId"
           :fork="fork"
           :archived-by="archivedBy"

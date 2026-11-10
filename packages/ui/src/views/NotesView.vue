@@ -33,7 +33,6 @@ const props = defineProps<{ explorationId: string }>();
 const route = useRoute();
 const router = useRouter();
 const state = computed(() => openExploration(props.explorationId));
-const readOnly = computed(() => Boolean(state.value.exploration?.archivedAt));
 const groups = computed(() => sortedGroups(state.value.noteGroups));
 const activeGroup = computed(() => {
   const chosen = typeof route.query.group === 'string' ? route.query.group : null;
@@ -253,10 +252,8 @@ watch(
       <NoteDeletionNotice :exploration-id="explorationId" :notes="state.notes" />
       <section class="groups">
         <NoteGroupStrip
-          v-if="groups.length > 0 || !readOnly"
           :groups="groups"
           :active-group-id="activeGroup?.id ?? null"
-          :read-only="readOnly"
           @select="selectGroup"
           @toggle-actions="groupActionsShown = !groupActionsShown"
           @add="groupForm = groupForm === 'new' ? null : 'new'"
@@ -303,12 +300,10 @@ watch(
 
       <section ref="notesList" class="notes">
         <p v-if="notes.length === 0 && !creatingNote" class="muted empty">No notes yet.</p>
-        <template v-if="!readOnly">
-          <NoteEditor v-if="creatingNote" @save="createNote" @cancel="creatingNote = false" />
-          <button v-else type="button" class="new-note" @click="creatingNote = true">
-            + New note
-          </button>
-        </template>
+        <NoteEditor v-if="creatingNote" @save="createNote" @cancel="creatingNote = false" />
+        <button v-else type="button" class="new-note" @click="creatingNote = true">
+          + New note
+        </button>
         <template v-for="note in shownNotes" :key="note.id">
           <NoteEditor
             v-if="editingNoteId === note.id"
@@ -321,7 +316,6 @@ watch(
             v-else
             :note="note"
             :selected="selectedNoteId === note.id"
-            :read-only="readOnly"
             :checklist="activeGroup?.checklist ?? false"
             :other-groups="otherGroups"
             :data-drag-id="note.id"

@@ -51,7 +51,6 @@ const forksBetween = computed(() =>
       </nav>
       <div v-if="!side" class="controls">
         <SessionStatusBar
-          v-if="!state.exploration?.archivedAt"
           :status="state.sessionStatus"
           :connected="state.connected"
           :exploration-id="state.explorationId"
@@ -87,7 +86,7 @@ const forksBetween = computed(() =>
       </div>
     </template>
     <p v-if="state.exploration?.archivedAt" class="archived">
-      Archived, read only.
+      Archived.
       <ConfirmButton label="Restore" @confirm="api.unarchive(state.explorationId)" />
     </p>
     <OutboxFailures :exploration-id="state.explorationId" />

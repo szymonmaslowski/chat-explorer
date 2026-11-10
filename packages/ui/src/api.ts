@@ -85,8 +85,12 @@ export const api = {
   deleteExploration: (explorationId: string) =>
     call<{ ok: true }>(`/api/explorations/${explorationId}`, { method: 'DELETE' }),
   snapshot: (explorationId: string) => call<Snapshot>(`/api/explorations/${explorationId}`),
-  createExploration: (message: string, model: ClaudeModel, fileIds: string[]) =>
-    call<{ explorationId: string }>('/api/explorations', { json: { message, model, fileIds } }),
+  createExploration: (input: {
+    message: string;
+    model: ClaudeModel;
+    fileIds: string[];
+    archived: boolean;
+  }) => call<{ explorationId: string }>('/api/explorations', { json: input }),
   uploadFile: (file: File) => {
     const form = new FormData();
     form.append('file', file);

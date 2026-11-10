@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { NoteGroup } from '@shared/types';
 
-defineProps<{ groups: NoteGroup[]; activeGroupId: string | null; readOnly: boolean }>();
+defineProps<{ groups: NoteGroup[]; activeGroupId: string | null }>();
 const emit = defineEmits<{ select: [groupId: string]; toggleActions: []; add: [] }>();
 </script>
 
@@ -16,15 +16,13 @@ const emit = defineEmits<{ select: [groupId: string]; toggleActions: []; add: []
         class="chip"
         :class="{ active: group.id === activeGroupId }"
         :aria-selected="group.id === activeGroupId"
-        @click="
-          group.id === activeGroupId ? !readOnly && emit('toggleActions') : emit('select', group.id)
-        "
+        @click="group.id === activeGroupId ? emit('toggleActions') : emit('select', group.id)"
       >
         {{ group.name
         }}<span v-if="group.checklist" class="checklist-mark" aria-label="checklist"> ✓</span>
       </button>
     </div>
-    <button v-if="!readOnly" type="button" class="add" @click="emit('add')">+ Group</button>
+    <button type="button" class="add" @click="emit('add')">+ Group</button>
   </div>
 </template>
 

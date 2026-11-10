@@ -21,7 +21,6 @@ import NoteForkComposer from './NoteForkComposer.vue';
 const props = defineProps<{
   note: Note;
   selected: boolean;
-  readOnly: boolean;
   checklist: boolean;
   otherGroups: NoteGroup[];
 }>();
@@ -186,14 +185,13 @@ function changeGroup(groupId: string | null) {
     >
       <MediaIcon :name="pickedPlaying ? 'pause' : 'play'" />
     </button>
-    <div v-if="note.deletionRequestedAt !== null && !readOnly" class="deletion-request" @click.stop>
+    <div v-if="note.deletionRequestedAt !== null" class="deletion-request" @click.stop>
       <span>Claude asks to delete this note.</span>
       <ConfirmButton label="Delete" danger @confirm="emit('delete')" />
       <button type="button" @click="emit('keep')">Keep</button>
     </div>
     <div v-if="selected" class="actions" @click.stop>
       <button
-        v-if="!readOnly"
         type="button"
         class="handle"
         aria-label="Drag to reorder"
@@ -211,32 +209,30 @@ function changeGroup(groupId: string | null) {
       >
         <MediaIcon :name="expanded ? 'shrink' : 'expand'" />
       </button>
-      <template v-if="!readOnly">
-        <button type="button" aria-label="Edit" title="Edit" @click="emit('edit')">
-          <MediaIcon name="edit" />
-        </button>
-        <button
-          type="button"
-          :aria-expanded="forking"
-          aria-label="New fork"
-          title="New fork about this note"
-          @click="forking = !forking"
-        >
-          <MediaIcon name="fork" />
-        </button>
-        <button
-          type="button"
-          :aria-expanded="choosingGroup"
-          aria-label="Move"
-          title="Move to another group"
-          @click="choosingGroup = !choosingGroup"
-        >
-          <MediaIcon name="move" />
-        </button>
-        <ConfirmButton label="Delete" danger title="Delete" @confirm="emit('delete')">
-          <MediaIcon name="trash" /><span class="visually-hidden">Delete</span>
-        </ConfirmButton>
-      </template>
+      <button type="button" aria-label="Edit" title="Edit" @click="emit('edit')">
+        <MediaIcon name="edit" />
+      </button>
+      <button
+        type="button"
+        :aria-expanded="forking"
+        aria-label="New fork"
+        title="New fork about this note"
+        @click="forking = !forking"
+      >
+        <MediaIcon name="fork" />
+      </button>
+      <button
+        type="button"
+        :aria-expanded="choosingGroup"
+        aria-label="Move"
+        title="Move to another group"
+        @click="choosingGroup = !choosingGroup"
+      >
+        <MediaIcon name="move" />
+      </button>
+      <ConfirmButton label="Delete" danger title="Delete" @confirm="emit('delete')">
+        <MediaIcon name="trash" /><span class="visually-hidden">Delete</span>
+      </ConfirmButton>
     </div>
     <div v-if="selected" class="note-id" @click.stop>
       <span class="muted">ID</span>
@@ -250,7 +246,7 @@ function changeGroup(groupId: string | null) {
         <MediaIcon :name="copied ? 'check' : 'copy'" />
       </button>
       <button
-        v-if="checklist && !readOnly"
+        v-if="checklist"
         type="button"
         class="check-button"
         :class="{ on: note.checked }"
@@ -262,7 +258,7 @@ function changeGroup(groupId: string | null) {
       </button>
     </div>
     <NoteForkComposer
-      v-if="forking && !readOnly"
+      v-if="forking"
       :topic="note.topic"
       @click.stop
       @create="createFork"
