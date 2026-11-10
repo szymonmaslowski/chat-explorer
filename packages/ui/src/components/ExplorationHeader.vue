@@ -152,14 +152,14 @@ const forksBetween = computed(() =>
     gap: 0.2rem;
   }
 
-  .links :deep(a) {
+  .links :deep(a:not(.icon-button)) {
     display: inline-flex;
     align-items: center;
     min-height: 2.5rem;
     padding: 0 0.4rem;
   }
 
-  .links :deep(a:first-child) {
+  .links :deep(a:not(.icon-button):first-child) {
     padding-left: 0;
   }
 }

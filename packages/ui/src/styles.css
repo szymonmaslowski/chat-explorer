@@ -51,15 +51,19 @@ a {
   color: var(--accent);
 }
 
-button {
+button,
+a.icon-button {
   font: inherit;
   font-size: 0.875rem;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
   border-radius: 6px;
-  padding: 0.3rem 0.75rem;
   cursor: pointer;
+}
+
+button {
+  padding: 0.3rem 0.75rem;
 }
 
 button:disabled {
@@ -266,7 +270,8 @@ html.image-viewer-open {
   }
 
   button,
-  select {
+  select,
+  a.icon-button {
     min-height: 2.5rem;
   }
 

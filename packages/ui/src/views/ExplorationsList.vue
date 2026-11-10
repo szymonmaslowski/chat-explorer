@@ -75,10 +75,13 @@ async function removeFromList(explorationId: string, change: (id: string) => Pro
 <template>
   <main class="page">
     <div class="heading">
-      <h1 v-if="archived">Archived</h1>
-      <RouterLink :to="archived ? '/' : '/archived'" class="view-link">
-        {{ archived ? 'Chats' : 'Archived' }}
-      </RouterLink>
+      <template v-if="archived">
+        <RouterLink to="/" class="icon-button" aria-label="Chats" title="Chats">
+          <MediaIcon name="home" />
+        </RouterLink>
+        <h1>Archived</h1>
+      </template>
+      <RouterLink v-else to="/archived" class="view-link">Archived</RouterLink>
       <ThemeSwitch v-if="!sidebar" />
     </div>
     <NewExploration v-if="!archived" />
@@ -141,10 +144,13 @@ async function removeFromList(explorationId: string, change: (id: string) => Pro
   display: flex;
   align-items: center;
   gap: 1rem;
+  padding: 0.6rem 0;
 }
 
 .heading h1 {
   flex: 1;
+  margin: 0;
+  font-size: 1.1rem;
 }
 
 .view-link {
@@ -157,7 +163,7 @@ async function removeFromList(explorationId: string, change: (id: string) => Pro
     display: inline-flex;
     align-items: center;
     min-height: 2.5rem;
-    padding: 0 0.4rem;
+    padding: 0 0.4rem 0 0;
     font-size: 1rem;
   }
 }
