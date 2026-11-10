@@ -17,7 +17,10 @@ const boxHeight = 86;
 // Boxes grow by a line once any fork of the chat has bookmarks, so all stay the same height.
 const bookmarksLineHeight = 16;
 const depthGap = 32;
-const toggleSize = 22;
+const toggleSize = 16;
+const chipHeight = 20;
+// How far the collapse button reaches into its box, from the top left corner.
+const toggleOverlap = 3;
 const siblingGap = 14;
 const padding = 16;
 
@@ -206,8 +209,8 @@ const layout = computed(() => {
             :aria-label="`Collapse ${forkTitle(box.fork)}`"
             title="Hide this fork and the forks below it from the map"
             :style="{
-              left: `${box.left - toggleSize / 2}px`,
-              top: `${box.top - toggleSize / 2}px`,
+              left: `${box.left - toggleSize + toggleOverlap}px`,
+              top: `${box.top - toggleSize + toggleOverlap}px`,
               width: `${toggleSize}px`,
               height: `${toggleSize}px`,
             }"
@@ -223,9 +226,9 @@ const layout = computed(() => {
             :aria-label="`Show ${box.hidden.count} collapsed fork${box.hidden.count === 1 ? '' : 's'}`"
             title="Show the collapsed forks below"
             :style="{
-              left: `${box.left + boxWidth - toggleSize / 2}px`,
-              top: `${box.top + (layout.boxHeight - toggleSize) / 2}px`,
-              height: `${toggleSize}px`,
+              left: `${box.left + boxWidth - chipHeight / 2}px`,
+              top: `${box.top + (layout.boxHeight - chipHeight) / 2}px`,
+              height: `${chipHeight}px`,
             }"
             @click="expandChildren(box.fork)"
           >
@@ -335,6 +338,8 @@ const layout = computed(() => {
 .collapse-toggle,
 .hidden-chip {
   position: absolute;
+  min-width: 0;
+  min-height: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -346,6 +351,17 @@ const layout = computed(() => {
   color: var(--text-muted);
   font-size: 0.75rem;
   line-height: 1;
+}
+
+.collapse-toggle {
+  font-size: 0.7rem;
+}
+
+/* A bigger target than the small circle, reaching only the box's corner padding. */
+.collapse-toggle::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
 }
 
 .collapse-toggle:hover,
