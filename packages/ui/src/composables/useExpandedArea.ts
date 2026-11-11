@@ -26,7 +26,7 @@ export function useExpandedArea(
       top: Math.max(header?.bottom ?? 0, visibleTop),
       bottom: Math.min(bottom, visibleBottom),
       left: dock?.left ?? 0,
-      width: dock?.width ?? window.innerWidth,
+      width: dock?.width ?? document.documentElement.clientWidth,
     };
   }
 
