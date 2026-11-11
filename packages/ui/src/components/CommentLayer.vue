@@ -141,14 +141,12 @@ const anchorRootOf = (node: Node) =>
   ) ?? null;
 const firstLineRect = (range: Range) => range.getClientRects()[0] ?? range.getBoundingClientRect();
 
-const relative = (rect: DOMRect, base = layer.value!.getBoundingClientRect()) => {
-  return {
-    top: rect.top - base.top,
-    left: rect.left - base.left,
-    right: rect.right - base.left,
-    bottom: rect.bottom - base.top,
-  };
-};
+const relative = (rect: DOMRect, base = layer.value!.getBoundingClientRect()) => ({
+  top: rect.top - base.top,
+  left: rect.left - base.left,
+  right: rect.right - base.left,
+  bottom: rect.bottom - base.top,
+});
 
 type AnchoredItem = TextAnchor & { id: string; messageId: string };
 
