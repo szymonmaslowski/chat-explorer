@@ -30,8 +30,7 @@ function cancel() {
   <div class="queued-submission">
     <div>
       <strong>Queued</strong><template v-if="submission.newFork"> as a new fork</template>,
-      <template v-if="unsent">waits for the connection.</template>
-      <template v-else>sent when Claude is free.</template>
+      {{ unsent ? 'waits for the connection.' : 'sent when Claude is free.' }}
       <span class="muted">
         <template v-if="commentCount">
           {{ commentCount }} comment{{ commentCount === 1 ? '' : 's' }}
