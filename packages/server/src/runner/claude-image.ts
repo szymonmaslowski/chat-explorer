@@ -18,14 +18,27 @@ LABEL ${versionLabel}="${version}"
 
 export const imageTag = (version: string) => `${imageRepository}:${version}`;
 
-function docker(args: string[], stdin?: string) {
+// A build once hung for hours inside `npm install`, so it gets a limit.
+const buildTimeoutMs = 15 * 60_000;
+
+function docker(args: string[], stdin?: string, timeoutMs?: number) {
   return new Promise<{ code: number | null; output: string }>((resolve) => {
     const child = spawn('docker', args, { stdio: ['pipe', 'pipe', 'pipe'] });
     let output = '';
+    const timer =
+      timeoutMs === undefined
+        ? undefined
+        : setTimeout(() => {
+            output += `\nStopped after ${timeoutMs / 60_000} minutes.`;
+            child.kill('SIGKILL');
+          }, timeoutMs);
     child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()));
     child.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()));
     child.on('error', (error) => resolve({ code: null, output: error.message }));
-    child.on('exit', (code) => resolve({ code, output }));
+    child.on('exit', (code) => {
+      clearTimeout(timer);
+      resolve({ code, output });
+    });
     child.stdin.end(stdin);
   });
 }
@@ -39,6 +52,7 @@ export async function buildImage(version: string) {
   const result = await docker(
     ['build', '--tag', imageTag(version), '-'],
     claudeDockerfile(version),
+    buildTimeoutMs,
   );
   if (result.code !== 0) {
     throw new Error(`Could not build the Claude Code image: ${result.output.trim().slice(-2_000)}`);
@@ -46,8 +60,23 @@ export async function buildImage(version: string) {
   return imageTag(version);
 }
 
-export async function ensureImage(version: string) {
-  return (await hasImage(version)) ? imageTag(version) : buildImage(version);
+const versionParts = (version: string) => version.split('.').map(Number);
+
+export function newerVersion(left: string, right: string) {
+  const [leftParts, rightParts] = [versionParts(left), versionParts(right)];
+  for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index++) {
+    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
+    if (difference !== 0) return difference > 0 ? left : right;
+  }
+  return left;
+}
+
+// The newest image built earlier, to run with while the image of a new version builds.
+export async function newestBuiltImage() {
+  const result = await docker(['image', 'ls', imageRepository, '--format', '{{.Tag}}']);
+  if (result.code !== 0) return null;
+  const versions = result.output.split('\n').filter((tag) => /^\d+\.\d+\.\d+$/.test(tag));
+  return versions.length === 0 ? null : imageTag(versions.reduce(newerVersion));
 }
 
 // The version of Claude Code installed on this machine, which the image follows.

@@ -14,7 +14,8 @@ export interface ClaudeEnginePaths {
 }
 
 export interface ClaudeEngineOptions extends ClaudeEnginePaths {
-  image: string;
+  // Read for each container, so runs move to a newer image once it is built.
+  image: () => string;
   // The daemon's port, which names the egress proxy the engine goes out through.
   port: number;
   oauthToken: () => string;
@@ -77,7 +78,7 @@ export function claudeDockerArguments(
     `${folders.sessions}:${containerHome}/.claude/projects`,
     '--volume',
     `${options.filesPath}:${options.filesPath}:ro`,
-    options.image,
+    options.image(),
     'claude',
     '-p',
     '--input-format',
@@ -136,7 +137,7 @@ export function claudeCodeEngine(options: ClaudeEngineOptions): Engine {
       return new Promise((resolve, reject) => {
         const child = spawn(
           'docker',
-          claudeCompletionArguments(prompt, options.image, options.port),
+          claudeCompletionArguments(prompt, options.image(), options.port),
           {
             stdio: ['ignore', 'pipe', 'pipe'],
             env: { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: options.oauthToken() },

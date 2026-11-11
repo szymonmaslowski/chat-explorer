@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { claudeDockerArguments } from '../src/runner/claude-engine.js';
-import { claudeDockerfile } from '../src/runner/claude-image.js';
+import { claudeDockerfile, newerVersion } from '../src/runner/claude-image.js';
 import {
   parseClaudeStreamLine,
   streamUserMessage,
@@ -77,7 +77,7 @@ describe('starting Claude Code in Docker', () => {
     toolsToken: 'job-token',
   };
   const args = claudeDockerArguments(spec, {
-    image: 'chat-explorer-claude:2.1.319',
+    image: () => 'chat-explorer-claude:2.1.319',
     port: 4517,
     forksPath: '/home/me/.chat-explorer/runner/forks',
     filesPath: '/home/me/.chat-explorer/files',
@@ -115,5 +115,13 @@ describe('starting Claude Code in Docker', () => {
     expect(dockerfile).toMatch(/^FROM node:22-slim@sha256:/);
     expect(dockerfile).toContain('@anthropic-ai/claude-code@2.1.319');
     expect(dockerfile).toContain('DISABLE_AUTOUPDATER=1');
+  });
+});
+
+describe('picking the newest Claude Code image', () => {
+  it('compares versions by number, not as text', () => {
+    expect(newerVersion('2.1.9', '2.1.10')).toBe('2.1.10');
+    expect(newerVersion('2.1.321', '2.1.319')).toBe('2.1.321');
+    expect(['2.1.317', '2.1.321', '2.1.319'].reduce(newerVersion)).toBe('2.1.321');
   });
 });
