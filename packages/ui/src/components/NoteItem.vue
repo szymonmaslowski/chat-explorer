@@ -240,11 +240,18 @@ function changeGroup(groupId: string | null) {
       @click.stop
     />
     <div v-if="selected" class="actions" @click.stop>
-      <ConfirmButton label="Delete" danger title="Delete" @confirm="emit('delete')">
+      <ConfirmButton
+        label="Delete"
+        class="icon-button"
+        danger
+        title="Delete"
+        @confirm="emit('delete')"
+      >
         <MediaIcon name="trash" /><span class="visually-hidden">Delete</span>
       </ConfirmButton>
       <button
         type="button"
+        class="icon-button"
         :aria-expanded="choosingGroup"
         aria-label="Move"
         title="Move to another group"
@@ -254,6 +261,7 @@ function changeGroup(groupId: string | null) {
       </button>
       <button
         type="button"
+        class="icon-button"
         :aria-expanded="forking"
         aria-label="New fork"
         title="New fork about this note"
@@ -261,12 +269,19 @@ function changeGroup(groupId: string | null) {
       >
         <MediaIcon name="fork" />
       </button>
-      <button type="button" aria-label="Edit" title="Edit" @click="emit('edit')">
+      <button
+        type="button"
+        class="icon-button"
+        aria-label="Edit"
+        title="Edit"
+        @click="emit('edit')"
+      >
         <MediaIcon name="edit" />
       </button>
       <button
         v-if="html && checklist"
         type="button"
+        class="icon-button"
         :aria-label="expanded ? 'Collapse' : 'Expand'"
         :title="expanded ? 'Collapse' : 'Expand'"
         @click="expandedByButton = !expandedByButton"
@@ -276,6 +291,7 @@ function changeGroup(groupId: string | null) {
       <button
         v-if="listenable"
         type="button"
+        class="icon-button"
         :aria-label="listenLabel"
         :title="listenLabel"
         @click="listen"
@@ -284,7 +300,7 @@ function changeGroup(groupId: string | null) {
       </button>
       <button
         type="button"
-        class="handle"
+        class="icon-button handle"
         aria-label="Drag to reorder"
         title="Drag to reorder"
         @pointerdown="emit('dragStart', $event)"
@@ -294,7 +310,7 @@ function changeGroup(groupId: string | null) {
       <button
         v-if="checklist"
         type="button"
-        class="check-button"
+        class="icon-button check-button"
         :class="{ on: note.checked }"
         :aria-label="note.checked ? 'Uncheck' : 'Check'"
         :title="note.checked ? 'Uncheck' : 'Check'"
@@ -491,13 +507,10 @@ function changeGroup(groupId: string | null) {
   margin-top: 0.4rem;
 }
 
-.actions button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 2rem;
-  min-height: 1.75rem;
-  padding: 0.2rem 0.45rem;
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }
 
 .actions .check-button {
@@ -529,8 +542,6 @@ function changeGroup(groupId: string | null) {
 }
 
 @media (pointer: coarse) {
-  .actions button,
-  .note-meta button,
   .block-actions button {
     width: 2.75rem;
     height: 2.75rem;

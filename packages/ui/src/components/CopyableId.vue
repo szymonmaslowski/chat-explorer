@@ -12,6 +12,7 @@ const { copied, copy } = useCopied();
     <code>{{ props.id }}</code>
     <button
       type="button"
+      class="icon-button"
       :aria-label="copied ? 'Copied' : `Copy ${props.label}`"
       :title="copied ? 'Copied' : `Copy ${props.label}`"
       @click="copy({ plain: props.id })"
@@ -27,14 +28,5 @@ const { copied, copy } = useCopied();
   flex-wrap: wrap;
   align-items: center;
   gap: 0.3rem;
-}
-
-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 2rem;
-  min-height: 1.75rem;
-  padding: 0.2rem 0.45rem;
 }
 </style>
