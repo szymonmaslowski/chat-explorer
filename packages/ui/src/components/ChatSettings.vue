@@ -2,6 +2,7 @@
 import type { ChatDefaultPage, Exploration, Fork, ForkRun } from '@shared/types';
 import { ref } from 'vue';
 import { api } from '../api';
+import CopyableId from './CopyableId.vue';
 import ForkModelInfo from './ForkModelInfo.vue';
 
 defineProps<{ exploration: Exploration; fork?: Fork; run?: ForkRun }>();
@@ -20,6 +21,7 @@ async function setDefaultPage(explorationId: string, defaultPage: ChatDefaultPag
 
 <template>
   <section class="chat-settings" aria-label="Chat settings">
+    <CopyableId label="Chat ID" :id="exploration.id" />
     <label class="setting">
       Opens on
       <select

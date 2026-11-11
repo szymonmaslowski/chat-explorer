@@ -23,6 +23,7 @@ import {
   togglePause,
 } from '../stores/speech';
 import ConfirmButton from './ConfirmButton.vue';
+import CopyableId from './CopyableId.vue';
 import MediaIcon from './MediaIcon.vue';
 import NoteForkComposer from './NoteForkComposer.vue';
 
@@ -49,7 +50,6 @@ const expandedByButton = ref(false);
 const expanded = computed(() => (props.checklist ? expandedByButton.value : props.selected));
 const choosingGroup = ref(false);
 const forking = ref(false);
-const { copied, copy } = useCopied();
 const html = computed(() => (props.note.description ? renderMarkdown(props.note.description) : ''));
 
 const article = ref<HTMLElement | null>(null);
@@ -232,18 +232,13 @@ function changeGroup(groupId: string | null) {
         · not sent yet
       </span>
     </h3>
-    <div v-if="selected && expanded" class="note-meta" @click.stop>
-      <span class="muted">ID</span>
-      <code>{{ note.id }}</code>
-      <button
-        type="button"
-        :aria-label="copied ? 'Copied' : 'Copy ID'"
-        :title="copied ? 'Copied' : 'Copy ID'"
-        @click="copy({ plain: note.id })"
-      >
-        <MediaIcon :name="copied ? 'check' : 'copy'" />
-      </button>
-    </div>
+    <CopyableId
+      v-if="selected && expanded"
+      class="note-meta"
+      label="ID"
+      :id="note.id"
+      @click.stop
+    />
     <div v-if="selected" class="actions" @click.stop>
       <ConfirmButton label="Delete" danger title="Delete" @confirm="emit('delete')">
         <MediaIcon name="trash" /><span class="visually-hidden">Delete</span>
@@ -493,15 +488,10 @@ function changeGroup(groupId: string | null) {
 .actions,
 .group-choices,
 .note-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.3rem;
   margin-top: 0.4rem;
 }
 
-.actions button,
-.note-meta button {
+.actions button {
   display: inline-flex;
   align-items: center;
   justify-content: center;

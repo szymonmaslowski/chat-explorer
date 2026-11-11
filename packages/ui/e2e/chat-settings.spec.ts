@@ -3,8 +3,10 @@ import { attachFakeSession, deliverAndAnswer, detachFakeSession, test } from './
 
 test('opens a chat on the page its settings name, and shows the fork model there', async ({
   page,
+  context,
   request,
 }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const { explorationId } = await (
     await request.post('/api/explorations', { data: { message: 'How do I cache?' } })
   ).json();
@@ -21,6 +23,10 @@ test('opens a chat on the page its settings name, and shows the fork model there
   const settings = page.getByRole('region', { name: 'Chat settings' });
   await expect(settings).toHaveCount(0);
   await page.getByRole('button', { name: 'Chat settings' }).click();
+  await expect(settings.locator('code').first()).toHaveText(explorationId);
+  await settings.getByRole('button', { name: 'Copy Chat ID' }).click();
+  await expect(settings.getByRole('button', { name: 'Copied' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(explorationId);
   await expect(settings.getByRole('region', { name: 'This fork' })).toContainText('Model:');
   await expect(settings.getByLabel("Hears about the chat's other forks")).toBeChecked();
   await settings.getByLabel('Opens on').selectOption('notes');
