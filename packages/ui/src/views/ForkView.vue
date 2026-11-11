@@ -278,6 +278,16 @@ watch(
           <MediaIcon name="bookmark" />
           {{ viewBookmarks.length }}
         </button>
+        <button
+          v-if="path.length > 0"
+          type="button"
+          class="icon-button"
+          aria-label="Scroll to the bottom"
+          title="Scroll to the bottom of the fork"
+          @click="scrollToBottom"
+        >
+          <MediaIcon name="to-end" />
+        </button>
         <ConfirmButton
           v-if="lastUnread"
           label="Mark read"

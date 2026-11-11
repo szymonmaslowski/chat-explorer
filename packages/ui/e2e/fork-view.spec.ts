@@ -171,3 +171,19 @@ test('jumps to the end of a long answer and back to its start', async ({ page, r
   await expect(answer.getByText('Paragraph 1.', { exact: true })).toBeInViewport();
   await expect(answer.getByText('Paragraph 40.')).not.toBeInViewport();
 });
+
+test('scrolls to the bottom of the fork from its header', async ({ page, request }) => {
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'Tell me a lot' } })
+  ).json();
+  await attachFakeSession(request, explorationId);
+  const answer = Array.from({ length: 60 }, (_, index) => `Paragraph ${index + 1}.`).join('\n\n');
+  await deliverAndAnswer(request, explorationId, answer);
+  await detachFakeSession(request);
+
+  await page.goto(`/e/${explorationId}`);
+  await expect(page.getByText('Paragraph 60.')).toBeAttached();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.getByRole('button', { name: 'Scroll to the bottom' }).click();
+  await expect(page.getByText('Paragraph 60.')).toBeInViewport();
+});
