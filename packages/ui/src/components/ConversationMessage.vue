@@ -309,14 +309,6 @@ onMounted(findBlocks);
   padding: 0.25rem 0 1rem;
 }
 
-/* A long chat holds hundreds of messages; the browser lays out and paints only those near the
-   screen, keeping the last measured height of the others. Not around opened comments: the
-   containment would pin an expanded editor to the message instead of the screen. */
-.message:not(:has(.opened-comments)) {
-  content-visibility: auto;
-  contain-intrinsic-block-size: auto 300px;
-}
-
 .message.user {
   background: var(--surface-muted);
   border-radius: var(--radius);

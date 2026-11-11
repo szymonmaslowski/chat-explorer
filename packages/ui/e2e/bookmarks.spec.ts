@@ -1,5 +1,12 @@
 import { expect } from '@playwright/test';
-import { answeredChat, selectAnswer, test } from './helpers';
+import {
+  answeredChat,
+  attachFakeSession,
+  deliverAndAnswer,
+  detachFakeSession,
+  selectAnswer,
+  test,
+} from './helpers';
 
 test('bookmarks a selection, lists it in the header and removes it', async ({ page, request }) => {
   const explorationId = await answeredChat(request);
@@ -50,4 +57,53 @@ test('counts the bookmarks of each fork on the map', async ({ page, request }) =
   }
   await page.goto(`/e/${explorationId}/map`);
   await expect(page.locator('.fork-box .bookmarks')).toHaveText('2 bookmarks');
+});
+
+test.describe('on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
+
+  test('scrolls to a bookmark far up a long fork', async ({ page, request }) => {
+    const { explorationId } = await (
+      await request.post('/api/explorations', { data: { message: 'Start' } })
+    ).json();
+    await attachFakeSession(request, explorationId);
+    await deliverAndAnswer(request, explorationId, 'The bookmarked words are here.');
+    const long = Array.from({ length: 12 }, (_, index) => `Line ${index + 1} of the answer.`).join(
+      '\n\n',
+    );
+    for (let turn = 0; turn < 15; turn++) {
+      const snapshot = await (await request.get(`/api/explorations/${explorationId}`)).json();
+      await request.post(`/api/explorations/${explorationId}/submit`, {
+        data: {
+          forkId: snapshot.forks[0].id,
+          globalMessage: `Question ${turn}`,
+          id: `turn${String(turn).padStart(6, '0')}`,
+          newFork: false,
+          fileIds: [],
+        },
+      });
+      await deliverAndAnswer(request, explorationId, long);
+    }
+    await detachFakeSession(request);
+    const snapshot = await (await request.get(`/api/explorations/${explorationId}`)).json();
+    const first = snapshot.messages.find(
+      (message: { role: string }) => message.role === 'assistant',
+    );
+    await request.post(`/api/explorations/${explorationId}/bookmarks`, {
+      data: {
+        forkId: first.forkId,
+        messageId: first.id,
+        quote: 'bookmarked',
+        startOffset: 4,
+        endOffset: 14,
+      },
+    });
+
+    await page.goto(`/e/${explorationId}`);
+    await expect(page.getByText('The bookmarked words are here.')).toBeAttached();
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await page.getByRole('button', { name: /^Bookmarks/ }).click();
+    await page.getByRole('list', { name: 'Bookmarks' }).getByRole('link').click();
+    await expect(page.getByText('The bookmarked words are here.')).toBeInViewport();
+  });
 });
