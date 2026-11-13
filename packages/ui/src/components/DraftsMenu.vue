@@ -2,13 +2,14 @@
 import { usePopover } from '../composables/usePopover';
 import MediaIcon from './MediaIcon.vue';
 
-const emit = defineEmits<{ show: []; hide: [] }>();
+const emit = defineEmits<{ show: []; hide: []; showOnly: [] }>();
 const { open, closeOnEscape } = usePopover('root');
 
-function choose(action: 'show' | 'hide') {
+function choose(action: 'show' | 'hide' | 'showOnly') {
   open.value = false;
   if (action === 'show') emit('show');
-  else emit('hide');
+  else if (action === 'hide') emit('hide');
+  else emit('showOnly');
 }
 </script>
 
@@ -17,6 +18,14 @@ function choose(action: 'show' | 'hide') {
     <div v-if="open" class="drop-up-menu from-right" role="menu" aria-label="Drafts">
       <button type="button" role="menuitem" @click="choose('show')">Show all drafts</button>
       <button type="button" role="menuitem" @click="choose('hide')">Hide all drafts</button>
+      <button
+        type="button"
+        role="menuitem"
+        title="Only the drafts, one under another, without the text between them"
+        @click="choose('showOnly')"
+      >
+        Display all
+      </button>
     </div>
     <button
       type="button"

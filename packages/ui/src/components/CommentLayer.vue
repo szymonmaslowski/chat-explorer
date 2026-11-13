@@ -37,7 +37,10 @@ const props = defineProps<{
   bookmarks: Bookmark[];
   layoutKey: string;
   readOnly: boolean;
+  // Only the drafts show, one under another, in place of the conversation.
+  draftsOnly: boolean;
 }>();
+const emit = defineEmits<{ showText: [] }>();
 
 const flashMs = 1_400;
 // Each comment around another sits this much further out, up to the room between lines.
@@ -237,6 +240,7 @@ function measure() {
   if (!layer.value) return;
   layerWidth.value = layer.value.clientWidth;
   for (const place of openedPlaces.value) fitToMessageWidth(place.mount);
+  if (props.draftsOnly) markDraftPaths();
   measureOutlines();
 }
 
@@ -729,6 +733,107 @@ function hideDrafts() {
 
 defineExpose({ showDrafts, hideDrafts });
 
+const draftsOnlyClass = 'drafts-only';
+const keptAttribute = 'data-drafts-kept';
+const pathAttribute = 'data-drafts-path';
+
+function clearDraftPaths(root: HTMLElement) {
+  for (const element of root.querySelectorAll(`[${keptAttribute}], [${pathAttribute}]`)) {
+    element.removeAttribute(keptAttribute);
+    element.removeAttribute(pathAttribute);
+  }
+}
+
+// What stays in drafts-only view: the open cards, the general drafts under their messages, and
+// the layer itself. Their ancestors are marked so they stay too, but with no size of their own.
+function markDraftPaths() {
+  const root = container();
+  if (!root || !layer.value) return;
+  clearDraftPaths(root);
+  const listedDrafts = listedComments.value.filter(({ entries }) =>
+    entries.some(({ comments }) => comments.some((comment) => comment.status === 'draft')),
+  );
+  const kept = [
+    layer.value,
+    ...openedPlaces.value.map((place) => place.mount),
+    ...listedDrafts.flatMap(
+      ({ messageId }) => root.querySelector<HTMLElement>(`#comments-${messageId}`) ?? [],
+    ),
+  ];
+  for (const element of kept) {
+    element.setAttribute(keptAttribute, '');
+    for (let parent = element.parentElement; parent && parent !== root;) {
+      parent.setAttribute(pathAttribute, '');
+      parent = parent.parentElement;
+    }
+  }
+}
+
+const stickyHeaderBottom = () =>
+  document.querySelector('[data-sticky-header]')?.getBoundingClientRect().bottom ?? 0;
+
+// The first card at or below the header, to keep where it is on screen when the text comes back.
+function cardOnScreen(root: HTMLElement) {
+  const headerBottom = stickyHeaderBottom();
+  const cards = root.querySelectorAll<HTMLElement>(`[${keptAttribute}]:not(.comment-layer)`);
+  return [...cards].find((card) => card.getBoundingClientRect().bottom > headerBottom) ?? null;
+}
+
+let jumpAfterShowingText: string | null = null;
+
+// From a card's quote in drafts-only view, the text comes back first, then the quote shows.
+function jumpToText(commentId: string) {
+  if (!props.draftsOnly) return scrollToComment(commentId);
+  jumpAfterShowingText = commentId;
+  emit('showText');
+}
+
+async function showOnlyDrafts(root: HTMLElement) {
+  showDrafts();
+  root.classList.add(draftsOnlyClass);
+  markDraftPaths();
+  await nextTick();
+  markDraftPaths();
+  window.scrollTo({ top: 0 });
+  measure();
+}
+
+async function showText(root: HTMLElement) {
+  const card = cardOnScreen(root);
+  const cardTop = card?.getBoundingClientRect().top ?? 0;
+  root.classList.remove(draftsOnlyClass);
+  clearDraftPaths(root);
+  measure();
+  const jumpTo = jumpAfterShowingText;
+  jumpAfterShowingText = null;
+  if (jumpTo) {
+    await nextTick();
+    scrollToComment(jumpTo);
+  } else if (card?.isConnected) {
+    window.scrollBy({ top: card.getBoundingClientRect().top - cardTop });
+  }
+}
+
+watch(
+  () => props.draftsOnly,
+  (draftsOnly) => {
+    const root = container();
+    if (!root) return;
+    if (draftsOnly) void showOnlyDrafts(root);
+    else void showText(root);
+  },
+);
+
+watch([openedPlaces, listedComments], () => props.draftsOnly && markDraftPaths(), {
+  flush: 'post',
+});
+
+// Once no draft is left, after a submit or the last delete, the text comes back.
+watch(
+  () => props.draftsOnly && !props.comments.some((comment) => comment.status === 'draft'),
+  (nothingLeft) => nothingLeft && emit('showText'),
+);
+
 let resizeObserver: ResizeObserver | null = null;
 onMounted(() => {
   const root = container();
@@ -756,6 +861,11 @@ onBeforeUnmount(() => {
   visibilityObserver?.disconnect();
   cancelAnimationFrame(measureFrame);
   if ('highlights' in CSS) CSS.highlights.clear();
+  const root = container();
+  if (root) {
+    root.classList.remove(draftsOnlyClass);
+    clearDraftPaths(root);
+  }
 });
 
 watch(
@@ -804,14 +914,16 @@ watch(
           :comments="entry.comments"
           closable
           @open="openSubmitted"
-          @jump="(comment) => scrollToComment(comment.id)"
+          @jump="(comment) => jumpToText(comment.id)"
           @close="closeCards(place, entry.comments)"
         />
         <CommentCard
           v-else
           :comment="entry.first"
           closable
+          :show-quote="draftsOnly"
           @open="openSubmitted"
+          @jump="(comment) => jumpToText(comment.id)"
           @close="closeCards(place, entry.comments)"
         />
       </template>

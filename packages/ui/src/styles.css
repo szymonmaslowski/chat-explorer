@@ -256,6 +256,39 @@ html.image-viewer-open {
   display: block;
 }
 
+/* Drafts-only view of a fork, see CommentLayer: everything in the conversation but the drafts is
+   hidden, and the elements around a draft keep no size, text or decoration of their own. Hiding
+   with display: none also spares the browser laying out the long text. */
+/* Only children of the conversation or of a marked element are matched, so a page without the
+   view pays one attribute check per element. */
+.drafts-only > :not([data-drafts-path], [data-drafts-kept]),
+.drafts-only [data-drafts-path] > :not([data-drafts-path], [data-drafts-kept]) {
+  display: none !important;
+}
+
+.drafts-only [data-drafts-path] {
+  display: block !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  color: transparent;
+  font-size: 0;
+  line-height: 0;
+}
+
+.drafts-only [data-drafts-kept] {
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.drafts-only .comment-outlines {
+  display: none !important;
+}
+
 ::highlight(comment-flash) {
   background-color: var(--accent-soft);
   text-decoration: underline solid var(--accent) 2px;

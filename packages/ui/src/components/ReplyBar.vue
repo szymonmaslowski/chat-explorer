@@ -27,8 +27,15 @@ const props = defineProps<{
   hint: string;
   // The message a general comment is written after; null while the fork has none.
   lastMessageId: string | null;
+  draftsOnly: boolean;
 }>();
-const emit = defineEmits<{ submitted: []; showDrafts: []; hideDrafts: [] }>();
+const emit = defineEmits<{
+  submitted: [];
+  showDrafts: [];
+  hideDrafts: [];
+  showOnlyDrafts: [];
+  showText: [];
+}>();
 
 const textarea = ref<HTMLTextAreaElement | null>(null);
 const expanded = ref(false);
@@ -256,7 +263,21 @@ function onKeydown(event: KeyboardEvent) {
           >{{ plural(editingCount, 'comment') }} being edited</RouterLink
         ><template v-if="editingCount && summary">, </template>{{ summary }}
       </p>
-      <DraftsMenu v-if="hasQuotedDrafts" @show="emit('showDrafts')" @hide="emit('hideDrafts')" />
+      <button
+        v-if="draftsOnly"
+        type="button"
+        class="show-text"
+        title="Show the text between the drafts again"
+        @click="emit('showText')"
+      >
+        <MediaIcon name="eye" /> Show text
+      </button>
+      <DraftsMenu
+        v-else-if="hasQuotedDrafts"
+        @show="emit('showDrafts')"
+        @hide="emit('hideDrafts')"
+        @show-only="emit('showOnlyDrafts')"
+      />
     </div>
     <textarea
       ref="textarea"
@@ -389,6 +410,14 @@ function onKeydown(event: KeyboardEvent) {
   display: flex;
   align-items: flex-end;
   gap: 0.75rem;
+}
+
+.show-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex: none;
+  padding: 0.15rem 0.5rem;
 }
 
 .attachments {

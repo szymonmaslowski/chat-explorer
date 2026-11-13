@@ -26,6 +26,8 @@ import MediaIcon from './MediaIcon.vue';
 const props = defineProps<{
   comment: Comment;
   closable?: boolean;
+  // Away from the text, in drafts-only view, the card shows what it quotes.
+  showQuote?: boolean;
 }>();
 const emit = defineEmits<{
   open: [comment: Comment];
@@ -226,7 +228,7 @@ function onEditorKeydown(event: KeyboardEvent) {
         </button>
       </div>
       <button
-        v-if="grouped"
+        v-if="grouped || showQuote"
         type="button"
         class="quote"
         title="Show in the text"

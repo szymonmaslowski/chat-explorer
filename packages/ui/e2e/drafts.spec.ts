@@ -287,6 +287,59 @@ test('shows and hides every draft in the text from the menu above the reply box'
   await expect(page.locator('[data-inserted]')).toHaveCount(0);
 });
 
+test('displays only the drafts, one under another, until the text is shown again', async ({
+  page,
+  request,
+}) => {
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'Explain caching' } })
+  ).json();
+  await attachFakeSession(request, explorationId);
+  const answer = 'Alpha paragraph here.\n\nMiddle paragraph here.\n\nBravo paragraph here.';
+  await deliverAndAnswer(request, explorationId, answer);
+  await detachFakeSession(request);
+  const snapshot = await (await request.get(`/api/explorations/${explorationId}`)).json();
+  const message = snapshot.messages.at(-1);
+  for (const quote of ['Alpha', 'Bravo']) {
+    const startOffset = answer.replace(/\n\n/g, '').indexOf(quote);
+    await request.post(`/api/explorations/${explorationId}/comments`, {
+      data: {
+        messageId: message.id,
+        viewForkId: message.forkId,
+        quote,
+        startOffset,
+        endOffset: startOffset + quote.length,
+        body: `About ${quote}`,
+      },
+    });
+  }
+  await page.goto(`/e/${explorationId}`);
+  await expect(page.locator('.comment-outlines path')).toHaveCount(2);
+  const cards = page.locator('.opened-comments .comment-card');
+  const middle = page.getByText('Middle paragraph here.');
+
+  await page.getByRole('button', { name: 'Drafts' }).click();
+  await page.getByRole('menuitem', { name: 'Display all' }).click();
+  await expect(cards).toHaveText([/About Alpha/, /About Bravo/]);
+  await expect(cards.locator('.quoted')).toHaveText(['Alpha', 'Bravo']);
+  await expect(middle).toBeHidden();
+  await expect(page.getByText('Explain caching', { exact: true })).toBeHidden();
+  const [first, second] = [await cards.nth(0).boundingBox(), await cards.nth(1).boundingBox()];
+  expect(second!.y - (first!.y + first!.height)).toBeLessThan(30);
+
+  await page.getByRole('button', { name: 'Show text' }).click();
+  await expect(middle).toBeVisible();
+  await expect(cards).toHaveCount(2);
+  await expect(page.getByRole('button', { name: 'Drafts' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Drafts' }).click();
+  await page.getByRole('menuitem', { name: 'Display all' }).click();
+  await expect(middle).toBeHidden();
+  await cards.nth(1).locator('.quote').click();
+  await expect(middle).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Show text' })).toHaveCount(0);
+});
+
 test('opens every comment on the clicked text after its own quote', async ({ page, request }) => {
   const { explorationId } = await (
     await request.post('/api/explorations', { data: { message: 'Explain caching' } })

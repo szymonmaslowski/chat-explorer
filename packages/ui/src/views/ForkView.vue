@@ -173,6 +173,11 @@ const viewBookmarks = computed<Bookmark[]>((previous) => {
   return keepSameList(previous, bookmarks);
 });
 const bookmarksOpen = ref(false);
+const draftsOnly = ref(false);
+watch(
+  () => fork.value?.id,
+  () => (draftsOnly.value = false),
+);
 watch(
   () => [fork.value?.id, viewBookmarks.value.length === 0],
   () => (bookmarksOpen.value = false),
@@ -408,6 +413,8 @@ watch(
           :bookmarks="viewBookmarks"
           :layout-key="`${[...pathIds].join()} ${renderedCount}`"
           :read-only="archived"
+          :drafts-only="draftsOnly"
+          @show-text="draftsOnly = false"
         />
       </div>
 
@@ -432,8 +439,11 @@ watch(
           :hint="state.exploration?.title ?? ''"
           :last-message-id="path.at(-1)?.id ?? null"
           @submitted="onSubmitted"
+          :drafts-only="draftsOnly"
           @show-drafts="commentLayer?.showDrafts()"
           @hide-drafts="commentLayer?.hideDrafts()"
+          @show-only-drafts="draftsOnly = true"
+          @show-text="draftsOnly = false"
         />
       </div>
     </template>
