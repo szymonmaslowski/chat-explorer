@@ -27,9 +27,13 @@ test('opens a chat on the page its settings name, and shows the fork model there
   await settings.getByRole('button', { name: 'Copy Chat ID' }).click();
   await expect(settings.getByRole('button', { name: 'Copied' })).toBeVisible();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(explorationId);
-  await expect(settings.getByRole('region', { name: 'This fork' })).toContainText('Model:');
+  const forkSettings = settings.getByRole('region', { name: 'This fork' });
+  await expect(forkSettings).toContainText('Model:');
+  const { forks } = await (await request.get(`/api/explorations/${explorationId}`)).json();
+  await expect(forkSettings.locator('code')).toHaveText(forks[0].id);
+  await expect(forkSettings.getByRole('button', { name: 'Copy Fork ID' })).toBeVisible();
   await expect(settings.getByLabel("Hears about the chat's other forks")).toBeChecked();
-  await settings.getByLabel('Opens on').selectOption('notes');
+  await settings.getByLabel('Default page').selectOption('notes');
 
   await page.getByRole('link', { name: 'Chats' }).click();
   await expect(page).toHaveURL('/');
@@ -37,7 +41,7 @@ test('opens a chat on the page its settings name, and shows the fork model there
   await expect(page).toHaveURL(`/e/${explorationId}/notes`);
 
   await page.getByRole('button', { name: 'Chat settings' }).click();
-  await expect(settings.getByLabel('Opens on')).toHaveValue('notes');
+  await expect(settings.getByLabel('Default page')).toHaveValue('notes');
   await expect(settings.getByRole('region', { name: 'This fork' })).toHaveCount(0);
   await page.getByRole('link', { name: 'Chat', exact: true }).click();
   await expect(page).toHaveURL(`/e/${explorationId}/map`);

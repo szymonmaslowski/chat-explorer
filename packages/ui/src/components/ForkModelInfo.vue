@@ -2,6 +2,7 @@
 import type { Fork, ForkRun } from '@shared/types';
 import { computed, ref } from 'vue';
 import { api } from '../api';
+import CopyableId from './CopyableId.vue';
 
 // The fork's model and how full its context is, from the runner's last turn, and whether the
 // fork hears about the chat's other forks.
@@ -28,6 +29,7 @@ async function setAware(aware: boolean) {
 <template>
   <section class="fork-model" aria-label="This fork">
     <h2>This fork</h2>
+    <CopyableId class="fork-id" label="Fork ID" :id="fork.id" />
     <p>Model: {{ run?.model ?? 'not known yet' }}</p>
     <p v-if="run && run.contextTokens !== null">
       Context: {{ run.contextTokens.toLocaleString() }} tokens<template v-if="run.contextWindow">
@@ -54,6 +56,10 @@ h2 {
   margin: 0 0 0.3rem;
   font-size: inherit;
   font-weight: 600;
+}
+
+.fork-id {
+  margin: 0 0 0.4rem;
 }
 
 p {

@@ -23,7 +23,7 @@ async function setDefaultPage(explorationId: string, defaultPage: ChatDefaultPag
   <section class="chat-settings" aria-label="Chat settings">
     <CopyableId label="Chat ID" :id="exploration.id" />
     <label class="setting">
-      Opens on
+      Default page
       <select
         :value="exploration.defaultPage"
         @change="
@@ -37,7 +37,6 @@ async function setDefaultPage(explorationId: string, defaultPage: ChatDefaultPag
         <option value="notes">Notes</option>
       </select>
     </label>
-    <p class="hint">Chat opens the map, or the conversation when the chat has one fork.</p>
     <p v-if="failed" class="error" role="alert">Could not save the setting.</p>
     <ForkModelInfo v-if="fork" :fork="fork" :run="run" />
   </section>
@@ -59,12 +58,6 @@ async function setDefaultPage(explorationId: string, defaultPage: ChatDefaultPag
   display: flex;
   align-items: center;
   gap: 0.5rem;
-}
-
-.hint {
-  margin: -0.3rem 0 0;
-  font-size: 0.75rem;
-  color: var(--text-muted);
 }
 
 .error {
