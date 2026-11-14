@@ -26,6 +26,8 @@ const props = defineProps<{
   answeredPart: AnsweredPartLookup;
   forkable: boolean;
   splittable: boolean;
+  // Counted back from the fork's newest answer, which is 0; null for the user's messages.
+  answerIndex: number | null;
 }>();
 const emit = defineEmits<{
   markUnread: [];
@@ -150,6 +152,7 @@ onMounted(findBlocks);
   >
     <header class="role">
       {{ message.role === 'user' ? 'You' : 'Claude' }}
+      <span v-if="answerIndex !== null" class="answer-index">[{{ answerIndex }}]</span>
       <time class="time" :datetime="new Date(message.createdAt).toISOString()">
         {{ formatDateTime(message.createdAt) }}
       </time>
@@ -355,6 +358,7 @@ onMounted(findBlocks);
   margin-left: auto;
 }
 
+.answer-index,
 .time {
   font-weight: 400;
   text-transform: none;

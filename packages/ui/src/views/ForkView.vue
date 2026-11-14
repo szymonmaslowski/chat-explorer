@@ -67,6 +67,11 @@ const path = computed<Message[]>((previous) =>
   keepSameList(previous, fork.value ? forkPath(fork.value, state.value.messages) : []),
 );
 const pathIds = computed(() => new Set(path.value.map((message) => message.id)));
+// Claude's answers counted back from the newest, [0], so the user can refer to one as [-2].
+const answerIndexes = computed(() => {
+  const answers = path.value.filter((message) => message.role === 'assistant');
+  return new Map(answers.map((message, index) => [message.id, index - (answers.length - 1)]));
+});
 const ownStart = computed(() =>
   path.value.findIndex((message) => message.forkId === fork.value?.id),
 );
@@ -378,6 +383,7 @@ watch(
             :answered-part="answeredPart"
             :forkable="!archived"
             :splittable="splittable(message, index)"
+            :answer-index="answerIndexes.get(message.id) ?? null"
             @mark-unread="markUnread(message.id)"
             @mark-read="markReadUpTo(message.id)"
             @fork="forkAtAnswer(message)"

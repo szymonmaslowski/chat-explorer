@@ -187,3 +187,33 @@ test('scrolls to the bottom of the fork from its header', async ({ page, request
   await page.getByRole('button', { name: 'Scroll to the bottom' }).click();
   await expect(page.getByText('Paragraph 60.')).toBeInViewport();
 });
+
+test("numbers Claude's answers back from the newest, which is [0]", async ({ page, request }) => {
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'First question' } })
+  ).json();
+  await attachFakeSession(request, explorationId);
+  await deliverAndAnswer(request, explorationId, 'First answer.');
+  for (const turn of [1, 2]) {
+    const snapshot = await (await request.get(`/api/explorations/${explorationId}`)).json();
+    await request.post(`/api/explorations/${explorationId}/submit`, {
+      data: {
+        forkId: snapshot.forks[0].id,
+        globalMessage: `Question ${turn}`,
+        id: `answerxd0${turn}`,
+        newFork: false,
+        fileIds: [],
+      },
+    });
+    await deliverAndAnswer(request, explorationId, `Answer ${turn}.`);
+  }
+  await detachFakeSession(request);
+
+  await page.goto(`/e/${explorationId}`);
+  await expect(page.locator('.message.assistant .answer-index')).toHaveText([
+    '[-2]',
+    '[-1]',
+    '[0]',
+  ]);
+  await expect(page.locator('.message.user .answer-index')).toHaveCount(0);
+});
