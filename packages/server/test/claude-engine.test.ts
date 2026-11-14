@@ -1,7 +1,13 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { claudeDockerArguments } from '../src/runner/claude-engine.js';
-import { claudeDockerfile, newerVersion } from '../src/runner/claude-image.js';
+import {
+  claudeDockerfile,
+  isolatedDockerConfig,
+  newerVersion,
+} from '../src/runner/claude-image.js';
 import {
   parseClaudeStreamLine,
   streamUserMessage,
@@ -123,5 +129,16 @@ describe('picking the newest Claude Code image', () => {
     expect(newerVersion('2.1.9', '2.1.10')).toBe('2.1.10');
     expect(newerVersion('2.1.321', '2.1.319')).toBe('2.1.321');
     expect(['2.1.317', '2.1.321', '2.1.319'].reduce(newerVersion)).toBe('2.1.321');
+  });
+});
+
+describe('building the Claude Code image', () => {
+  it('uses a Docker config with no credential helper, keeping the CLI plugins', async () => {
+    const directory = await isolatedDockerConfig();
+    const config = JSON.parse(readFileSync(join(directory, 'config.json'), 'utf8'));
+    expect(config).not.toHaveProperty('credsStore');
+    expect(config).not.toHaveProperty('credHelpers');
+    expect(config.cliPluginsExtraDirs).toEqual([join(homedir(), '.docker', 'cli-plugins')]);
+    rmSync(directory, { recursive: true });
   });
 });

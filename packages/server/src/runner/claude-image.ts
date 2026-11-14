@@ -1,4 +1,7 @@
 import { spawn } from 'node:child_process';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 // Pinned by digest, so a rebuild gets the same base unless this line changes.
 const baseImage =
@@ -21,9 +24,15 @@ export const imageTag = (version: string) => `${imageRepository}:${version}`;
 // A build once hung for hours inside `npm install`, so it gets a limit.
 const buildTimeoutMs = 15 * 60_000;
 
-function docker(args: string[], stdin?: string, timeoutMs?: number) {
+interface DockerOptions {
+  stdin?: string;
+  timeoutMs?: number;
+  env?: NodeJS.ProcessEnv;
+}
+
+function docker(args: string[], { stdin, timeoutMs, env }: DockerOptions = {}) {
   return new Promise<{ code: number | null; output: string }>((resolve) => {
-    const child = spawn('docker', args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn('docker', args, { stdio: ['pipe', 'pipe', 'pipe'], env });
     let output = '';
     const timer =
       timeoutMs === undefined
@@ -47,13 +56,37 @@ export async function hasImage(version: string) {
   return (await docker(['image', 'inspect', imageTag(version)])).code === 0;
 }
 
+// Docker Desktop's credential helper asks macOS for access to the keychain, and a build waited on
+// that prompt until its time ran out. The base image is public, so the build gets a Docker config
+// of its own without the helper: the base image is pulled anonymously, from the same Docker engine
+// and with the same CLI plugins.
+export async function isolatedDockerConfig() {
+  const directory = await mkdtemp(join(tmpdir(), 'chat-explorer-docker-'));
+  const config = { cliPluginsExtraDirs: [join(homedir(), '.docker', 'cli-plugins')] };
+  await writeFile(join(directory, 'config.json'), JSON.stringify(config));
+  return directory;
+}
+
+// The new config has no contexts, so the build is pointed at the engine the current context uses.
+async function dockerHost() {
+  const result = await docker(['context', 'inspect', '--format', '{{.Endpoints.docker.Host}}']);
+  const host = result.output.trim();
+  return result.code === 0 && host ? host : null;
+}
+
 // Builds from a Dockerfile on stdin, so no build context ships with the package.
 export async function buildImage(version: string) {
-  const result = await docker(
-    ['build', '--tag', imageTag(version), '-'],
-    claudeDockerfile(version),
-    buildTimeoutMs,
-  );
+  const [configDirectory, host] = await Promise.all([isolatedDockerConfig(), dockerHost()]);
+  const env = {
+    ...process.env,
+    DOCKER_CONFIG: configDirectory,
+    ...(host ? { DOCKER_HOST: host } : {}),
+  };
+  const result = await docker(['build', '--tag', imageTag(version), '-'], {
+    stdin: claudeDockerfile(version),
+    timeoutMs: buildTimeoutMs,
+    env,
+  }).finally(() => rm(configDirectory, { recursive: true, force: true }));
   if (result.code !== 0) {
     throw new Error(`Could not build the Claude Code image: ${result.output.trim().slice(-2_000)}`);
   }
