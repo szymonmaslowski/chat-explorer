@@ -239,27 +239,27 @@ describe('notes API', () => {
     ).json();
 
     const created = await json(`/api/explorations/${explorationId}/notes`, 'POST', {
-      id: 'nte0000001',
+      id: 'note_nte0000001',
       groupId: group.id,
       topic: 'First',
     });
     expect(created.status).toBe(201);
     await json(`/api/explorations/${explorationId}/notes`, 'POST', {
-      id: 'nte0000002',
+      id: 'note_nte0000002',
       groupId: group.id,
       description: 'Second',
     });
     expect(
-      (await json('/api/notes/nte0000001', 'PATCH', { checked: true, topic: 'One' })).status,
+      (await json('/api/notes/note_nte0000001', 'PATCH', { checked: true, topic: 'One' })).status,
     ).toBe(200);
     expect(
       await (
-        await json('/api/notes/nte0000002/reorder', 'POST', { afterNoteId: 'nte0000001' })
+        await json('/api/notes/note_nte0000002/reorder', 'POST', { afterNoteId: 'note_nte0000001' })
       ).json(),
-    ).toEqual({ groupId: group.id, noteIds: ['nte0000001', 'nte0000002'] });
+    ).toEqual({ groupId: group.id, noteIds: ['note_nte0000001', 'note_nte0000002'] });
     expect(
-      await (await json('/api/notes/nte0000002/group', 'PUT', { groupId: backlog.id })).json(),
-    ).toMatchObject({ note: { groupId: backlog.id }, noteIds: ['nte0000002'] });
+      await (await json('/api/notes/note_nte0000002/group', 'PUT', { groupId: backlog.id })).json(),
+    ).toMatchObject({ note: { groupId: backlog.id }, noteIds: ['note_nte0000002'] });
     expect((await json('/api/note-groups/grp0000001', 'PATCH', { checklist: true })).status).toBe(
       200,
     );
@@ -271,8 +271,8 @@ describe('notes API', () => {
     ]);
     expect(snapshot.notes).toHaveLength(2);
 
-    expect((await json('/api/notes/nte0000001', 'DELETE')).status).toBe(200);
-    expect((await json('/api/notes/nte0000001', 'DELETE')).status).toBe(404);
+    expect((await json('/api/notes/note_nte0000001', 'DELETE')).status).toBe(200);
+    expect((await json('/api/notes/note_nte0000001', 'DELETE')).status).toBe(404);
     expect((await json('/api/note-groups/grp0000001', 'DELETE')).status).toBe(200);
   });
 
@@ -301,12 +301,12 @@ describe('forking from a note', () => {
 
     const submission = store.forkFromNote(note.id, '  How do we invalidate it?  ', {
       id: 'sbm0000001',
-      forkId: 'frk0000001',
+      forkId: 'fork_frk0000001',
     });
 
-    expect(submission).toMatchObject({ forkId: 'frk0000001', newFork: false });
+    expect(submission).toMatchObject({ forkId: 'fork_frk0000001', newFork: false });
     expect(
-      store.snapshot(explorationId).forks.find((fork) => fork.id === 'frk0000001'),
+      store.snapshot(explorationId).forks.find((fork) => fork.id === 'fork_frk0000001'),
     ).toMatchObject({
       parentForkId: mainForkId,
       baseMessageId: answer.id,
@@ -326,7 +326,7 @@ describe('forking from a note', () => {
     store.deliverQueued(explorationId);
     const [pending] = store.pendingForks(explorationId);
     expect(pending).toMatchObject({
-      forkId: 'frk0000001',
+      forkId: 'fork_frk0000001',
       isNewFork: true,
       baseMessageId: answer.id,
       userMessages: [{ text: submission.globalMessage }],
@@ -348,10 +348,10 @@ describe('forking from a note', () => {
     const note = store.createNote(explorationId, { groupId: group.id, topic: 'Topic' });
     const created = await request(`/api/notes/${note.id}/fork`, {
       method: 'POST',
-      json: { id: 'sbm0000001', forkId: 'frk0000001', message: 'Tell me more' },
+      json: { id: 'sbm0000001', forkId: 'fork_frk0000001', message: 'Tell me more' },
     });
     expect(created.status).toBe(201);
-    expect(await created.json()).toMatchObject({ id: 'sbm0000001', forkId: 'frk0000001' });
+    expect(await created.json()).toMatchObject({ id: 'sbm0000001', forkId: 'fork_frk0000001' });
     const empty = await request(`/api/notes/${note.id}/fork`, {
       method: 'POST',
       json: { message: '' },

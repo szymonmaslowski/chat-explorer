@@ -376,15 +376,15 @@ describe('submission queue', () => {
 
   it("starts an empty fork after one of Claude's answers, where the first message replies to it", () => {
     const { store, explorationId, mainForkId, question, answer } = setup();
-    const fork = store.forkAtAnswer(answer.id, { forkId: 'frk0000001' });
+    const fork = store.forkAtAnswer(answer.id, { forkId: 'fork_frk0000001' });
     expect(fork).toMatchObject({
-      id: 'frk0000001',
+      id: 'fork_frk0000001',
       parentForkId: mainForkId,
       baseMessageId: answer.id,
       tipMessageId: null,
       summary: 'Answer one with some text to quote',
     });
-    expect(store.forkAtAnswer(answer.id, { forkId: 'frk0000001' })).toEqual(fork);
+    expect(store.forkAtAnswer(answer.id, { forkId: 'fork_frk0000001' })).toEqual(fork);
     expect(() => store.forkAtAnswer(question.id)).toThrow("Only one of Claude's answers");
 
     store.submit(explorationId, fork.id, 'Go on from here');

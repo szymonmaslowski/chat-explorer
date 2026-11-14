@@ -12,7 +12,8 @@ import { maxFileBytes } from '../files/kinds.js';
 import { findTranscript, readTranscript } from '../import/transcript.js';
 import type { BackgroundSessions } from '../sessions/background-sessions.js';
 import type { Speaker } from '../speech/speaker.js';
-import { idPattern } from '../shared/ids.js';
+import { prefixedIdPattern } from '../shared/ids.js';
+import { withLegacyIdsPrefixed } from './legacy-ids.js';
 import { claudeModels, type ClaudeModel } from '../shared/models.js';
 import {
   chatDefaultPages,
@@ -67,7 +68,7 @@ const newExplorationBody = z
 const explorationSettingsBody = z
   .object({ model: model.optional(), defaultPage: z.enum(chatDefaultPages).optional() })
   .refine((settings) => settings.model || settings.defaultPage, 'Nothing to change');
-const clientId = z.string().regex(idPattern).optional();
+const clientId = z.string().regex(prefixedIdPattern).optional();
 const newCommentBody = z.object({
   id: clientId,
   messageId: z.string(),
@@ -808,5 +809,10 @@ export function createApp(options: AppOptions) {
   );
   app.get('*', serveUi(options.uiDirectory));
 
-  return app;
+  // Old ids are prefixed before routing, which a middleware would be too late for.
+  const withLegacyIds = new Hono();
+  withLegacyIds.all('*', async (context) =>
+    app.fetch(await withLegacyIdsPrefixed(context.req.raw), context.env),
+  );
+  return withLegacyIds;
 }

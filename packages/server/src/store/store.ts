@@ -60,9 +60,9 @@ import {
 } from '../shared/fork-groups.js';
 import { defaultGroupName, noteForkMessage, reorderedIds } from '../shared/notes.js';
 import { StoreError } from './errors.js';
-import { idAlphabet, idLength } from '../shared/ids.js';
+import { idAlphabet, idLength, withPrefix } from '../shared/ids.js';
 import type { EventBus } from './event-bus.js';
-import { newId } from './ids.js';
+import { newId, newPrefixedId } from './ids.js';
 import { repairMarkdown } from './repair-markdown.js';
 
 export const attachmentLivenessMs = 45_000;
@@ -202,8 +202,8 @@ export class ChatStore {
     } = {},
   ) {
     const createdAt = this.now();
-    const explorationId = newId();
-    const mainForkId = newId();
+    const explorationId = newPrefixedId('chat');
+    const mainForkId = newPrefixedId('fork');
     this.db.transaction(() => {
       this.db.run(
         `INSERT INTO explorations (id, title, model, created_at, updated_at, archived_at)
@@ -1734,7 +1734,8 @@ export class ChatStore {
 
   // A new note goes first in its group.
   createNote(explorationId: string, input: NewNote) {
-    const existing = input.id ? this.existingRow<NoteRow>('notes', input.id, explorationId) : null;
+    const id = input.id ? withPrefix('note', input.id) : newPrefixedId('note');
+    const existing = input.id ? this.existingRow<NoteRow>('notes', id, explorationId) : null;
     if (existing) return toNote(existing);
     this.requireExplorationRow(explorationId);
     const group = this.requireNoteGroupRow(input.groupId, explorationId);
@@ -1743,7 +1744,6 @@ export class ChatStore {
     if (!topic && !description) {
       throw new StoreError('invalid', 'A note needs a topic or a description.');
     }
-    const id = input.id ?? newId();
     const events = this.db.transaction(() =>
       this.insertNote({
         id,
@@ -1833,7 +1833,7 @@ export class ChatStore {
     this.requireExplorationRow(explorationId);
     const group = this.requireNoteGroupRow(input.groupId, explorationId);
     const notes = input.notes.map((note) => ({
-      id: newId(),
+      id: newPrefixedId('note'),
       topic: note.topic?.trim() ?? '',
       description: note.description?.trim() ?? '',
     }));
@@ -2042,7 +2042,7 @@ export class ChatStore {
         group = newGroup = this.insertNoteGroup(explorationId, {});
         events.push([explorationId, { type: 'note-group.created', group: toNoteGroup(group) }]);
       }
-      const noteId = newId();
+      const noteId = newPrefixedId('note');
       events.push(
         ...this.insertNote({
           id: noteId,
@@ -2134,7 +2134,7 @@ export class ChatStore {
     originCommentId: string | null;
     summary: string;
   }) {
-    const forkId = input.id ?? newId();
+    const forkId = input.id ? withPrefix('fork', input.id) : newPrefixedId('fork');
     const createdAt = this.now();
     this.db.run(
       `INSERT INTO forks (id, exploration_id, parent_fork_id, base_message_id, origin_comment_id,

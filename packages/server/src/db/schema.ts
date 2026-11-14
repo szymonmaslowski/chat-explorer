@@ -262,4 +262,36 @@ export const migrations = [
   ALTER TABLE explorations ADD COLUMN default_page TEXT NOT NULL DEFAULT 'map'
     CHECK (default_page IN ('map', 'notes'));
   `,
+  `
+  -- The ids people see and copy name their kind: chat_…, fork_…, note_…. Every column pointing to
+  -- one changes with it, so the foreign keys are checked once, at the end.
+  PRAGMA defer_foreign_keys = ON;
+  UPDATE explorations SET id = 'chat_' || id;
+  UPDATE activities SET exploration_id = 'chat_' || exploration_id;
+  UPDATE bookmarks SET exploration_id = 'chat_' || exploration_id;
+  UPDATE comments SET exploration_id = 'chat_' || exploration_id;
+  UPDATE files SET exploration_id = 'chat_' || exploration_id;
+  UPDATE fork_runs SET exploration_id = 'chat_' || exploration_id;
+  UPDATE forks SET exploration_id = 'chat_' || exploration_id;
+  UPDATE messages SET exploration_id = 'chat_' || exploration_id;
+  UPDATE note_groups SET exploration_id = 'chat_' || exploration_id;
+  UPDATE notes SET exploration_id = 'chat_' || exploration_id;
+  UPDATE reply_drafts SET exploration_id = 'chat_' || exploration_id;
+  UPDATE submissions SET exploration_id = 'chat_' || exploration_id;
+
+  UPDATE forks SET id = 'fork_' || id, parent_fork_id = 'fork_' || parent_fork_id;
+  UPDATE activities SET fork_id = 'fork_' || fork_id;
+  UPDATE bookmarks SET fork_id = 'fork_' || fork_id;
+  UPDATE comments SET view_fork_id = 'fork_' || view_fork_id,
+    created_fork_id = 'fork_' || created_fork_id;
+  UPDATE files SET draft_fork_id = 'fork_' || draft_fork_id;
+  UPDATE fork_runs SET fork_id = 'fork_' || fork_id;
+  UPDATE messages SET fork_id = 'fork_' || fork_id;
+  UPDATE notes SET source_fork_id = 'fork_' || source_fork_id;
+  UPDATE reply_drafts SET fork_id = 'fork_' || fork_id;
+  UPDATE submissions SET fork_id = 'fork_' || fork_id;
+
+  UPDATE notes SET id = 'note_' || id;
+  UPDATE comments SET created_note_id = 'note_' || created_note_id;
+  `,
 ];

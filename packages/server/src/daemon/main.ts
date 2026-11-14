@@ -1,6 +1,7 @@
 import '../suppress-warnings.js';
 import { mkdirSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getRequestListener } from '@hono/node-server';
 import { createApp } from '../api/app.js';
@@ -27,6 +28,7 @@ import { ensureMachineToken } from '../runner/machine-token.js';
 import { superviseRunner } from '../runner/supervisor.js';
 import { packageVersion } from '../version.js';
 import { probe } from './control.js';
+import { prefixLegacyNames } from './legacy-names.js';
 
 export const portInUseExitCode = 3;
 
@@ -35,6 +37,8 @@ mkdirSync(config.home, { recursive: true });
 const settings = loadSettingsOrExit();
 
 const database = new Database(config.databasePath);
+prefixLegacyNames(join(config.runnerPath, 'forks'), 'fork');
+prefixLegacyNames(config.sessionsPath, 'chat', '.log');
 const bus = new EventBus();
 const store = new ChatStore(database, bus);
 const runs = new RunStore(database, bus, store);
