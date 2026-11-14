@@ -470,7 +470,7 @@ test('starts a fork about a note from the note', async ({ page, request }) => {
   await expect(item.getByRole('button', { name: 'Listen' })).toBeVisible();
   await expect(item).toHaveClass(/selected/);
   await item.getByRole('button', { name: 'Create fork' }).click();
-  await expect(page).toHaveURL(new RegExp(`/e/${explorationId}/f/[a-z0-9]+$`));
+  await expect(page).toHaveURL(new RegExp(`/e/${explorationId}/f/fork_[a-z0-9]+$`));
   const forkId = page.url().split('/').at(-1);
   await expect(page.locator('.queued-submission')).toContainText('Queued');
   await expect(page.locator('.queued-submission')).not.toContainText('as a new fork');

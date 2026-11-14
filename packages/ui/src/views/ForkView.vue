@@ -115,7 +115,7 @@ const { newIds, markUnread, markReadUpTo } = useReadTracking({ state, fork, path
 
 // The new fork opens at once, empty, with the answer as the last message of its history.
 function forkAtAnswer(message: Message) {
-  const forkId = newId();
+  const forkId = newId('fork');
   outbox.add({
     type: 'fork.create',
     explorationId: props.explorationId,
@@ -147,7 +147,7 @@ const splitError = ref<{ messageId: string; text: string } | null>(null);
 async function splitAt(message: Message) {
   splitError.value = null;
   try {
-    const split = await api.splitFork(message.id, newId());
+    const split = await api.splitFork(message.id, newId('fork'));
     applyEvent(state.value, { type: 'fork.split', ...split });
     void router.push(`/e/${props.explorationId}/f/${split.fork.id}#m-${message.id}`);
   } catch (error) {

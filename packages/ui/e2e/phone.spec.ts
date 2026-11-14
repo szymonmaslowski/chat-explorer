@@ -15,7 +15,7 @@ test('starts a new exploration and reports a Claude that cannot start', async ({
   await page.getByTitle('Model').selectOption('opus');
   await page.getByRole('button', { name: 'Start' }).click();
 
-  await expect(page).toHaveURL(/\/e\/[a-z0-9]+$/);
+  await expect(page).toHaveURL(/\/e\/chat_[a-z0-9]+$/);
   await expect(page.locator('.queued-submission')).toContainText('Why is the sky blue?');
   await expect(page.getByRole('alert')).toContainText('Claude could not be started');
   const explorationId = page.url().split('/').at(-1);

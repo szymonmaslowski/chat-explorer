@@ -1,3 +1,4 @@
+import { withPrefix } from '@shared/ids';
 import { createRouter, createWebHistory } from 'vue-router';
 import { scrollTopAtStartOf } from './lib/reading-line';
 import { whenActiveExplorationLoaded } from './stores/exploration';
@@ -44,6 +45,25 @@ export const router = createRouter({
     holdScroll(target);
     return { top: target() };
   },
+});
+
+// Links from before chat, fork and note ids had prefixes, in notes, messages and bookmarks, open
+// the same page under the new ids.
+router.beforeEach((to) => {
+  const prefixed = {
+    path: to.path
+      .replace(/^\/e\/([^/]+)/, (_, id: string) => `/e/${withPrefix('chat', id)}`)
+      .replace(/\/f\/([^/]+)$/, (_, id: string) => `/f/${withPrefix('fork', id)}`),
+    hash: to.hash.replace(/^#n-(.+)$/, (_, id: string) => `#n-${withPrefix('note', id)}`),
+    query:
+      typeof to.query.from === 'string'
+        ? { ...to.query, from: withPrefix('fork', to.query.from) }
+        : to.query,
+  };
+  const unchanged =
+    prefixed.path === to.path && prefixed.hash === to.hash && prefixed.query.from === to.query.from;
+  if (unchanged) return;
+  return { ...prefixed, replace: true };
 });
 
 const settleMs = 1_500;

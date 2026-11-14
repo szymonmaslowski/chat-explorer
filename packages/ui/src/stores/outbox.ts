@@ -1,4 +1,4 @@
-import { idAlphabet, idLength } from '@shared/ids';
+import { idAlphabet, idLength, idPrefixes, type PrefixedKind } from '@shared/ids';
 import type {
   CommentChanges,
   MessageFile,
@@ -117,10 +117,11 @@ const maxRetryMs = 30_000;
 // A proxy answers these while the daemon restarts; the change is sent again later.
 const unavailableStatuses = new Set([502, 503, 504]);
 
-export function newId() {
-  return [...crypto.getRandomValues(new Uint8Array(idLength))]
+export function newId(kind?: PrefixedKind) {
+  const id = [...crypto.getRandomValues(new Uint8Array(idLength))]
     .map((byte) => idAlphabet[byte % idAlphabet.length])
     .join('');
+  return kind ? `${idPrefixes[kind]}${id}` : id;
 }
 
 // Changes are kept in the browser until the daemon has them, so they survive a lost connection

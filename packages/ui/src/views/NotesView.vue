@@ -137,7 +137,7 @@ function createNote(note: { topic: string; description: string }) {
   outbox.add({
     type: 'note.create',
     explorationId: props.explorationId,
-    note: { id: newId(), groupId, ...note },
+    note: { id: newId('note'), groupId, ...note },
   });
   creatingNote.value = false;
 }
@@ -200,7 +200,7 @@ function changeNoteGroup(noteId: string, groupId: string | null) {
 function forkFromNote(noteId: string, message: string) {
   const parent = mainFork(state.value.forks);
   if (!parent) return;
-  const forkId = newId();
+  const forkId = newId('fork');
   outbox.add({
     type: 'note.fork',
     explorationId: props.explorationId,

@@ -10,7 +10,7 @@ test("starts an empty fork after one of Claude's answers and replies there", asy
   const answer = page.locator('.message.assistant').last();
   await answer.getByRole('button', { name: 'Fork from here' }).click();
 
-  await expect(page).toHaveURL(new RegExp(`/e/${explorationId}/f/[a-z0-9]+$`));
+  await expect(page).toHaveURL(new RegExp(`/e/${explorationId}/f/fork_[a-z0-9]+$`));
   const forkId = page.url().split('/').at(-1)!;
   await expect(page.locator('.message').last()).toContainText(
     'Caching keeps a copy of a response nearby.',
