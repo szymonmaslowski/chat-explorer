@@ -83,6 +83,19 @@ function holdScroll(target: () => number) {
   observer.observe(document.body);
 }
 
+// Links in answers and notes are plain anchors. One into the app opens in place: loading the page
+// again would build the whole chat a second time, while Safari keeps the first for going back.
+document.addEventListener('click', (event) => {
+  if (event.defaultPrevented || event.button !== 0) return;
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  const anchor = event.target instanceof Element ? event.target.closest('a') : null;
+  if (!anchor || anchor.target || anchor.hasAttribute('download')) return;
+  const url = new URL(anchor.href, location.href);
+  if (url.origin !== location.origin || url.pathname.startsWith('/api/')) return;
+  event.preventDefault();
+  void router.push(`${url.pathname}${url.search}${url.hash}`);
+});
+
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));

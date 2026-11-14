@@ -217,3 +217,21 @@ test("numbers Claude's answers back from the newest, which is [0]", async ({ pag
   ]);
   await expect(page.locator('.message.user .answer-index')).toHaveCount(0);
 });
+
+test('opens a link in an answer to another page of the app without loading the app again', async ({
+  page,
+  request,
+}) => {
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'Link me' } })
+  ).json();
+  await attachFakeSession(request, explorationId);
+  await deliverAndAnswer(request, explorationId, `See [the notes](/e/${explorationId}/notes).`);
+  await detachFakeSession(request);
+
+  await page.goto(`/e/${explorationId}`);
+  await page.evaluate(() => Object.assign(window, { loadedOnce: true }));
+  await page.locator('.conversation').getByRole('link', { name: 'the notes' }).click();
+  await expect(page).toHaveURL(`/e/${explorationId}/notes`);
+  expect(await page.evaluate(() => 'loadedOnce' in window)).toBe(true);
+});
