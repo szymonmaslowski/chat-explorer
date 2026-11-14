@@ -23,6 +23,7 @@ How the user's messages look:
 - A comment starts with its tag on its own line, [c:<commentId>], then the quoted text as a "> " block, then the comment on it.
 - When a message has comments, its own text starts with [m:<messageId>].
 - Attached files are listed with their paths; open them with the Read tool.
+- The page numbers your answers in this fork back from the newest: [0] is your newest answer when the user wrote, [-1] the one before it, and so on. The user may point to one as [-2] or as answer -2; count back over this fork's answers, with read_fork for older ones.
 - A message that starts with ${supervisorMessagePrefix} comes from the Claude session answering the chat's main fork, which oversees the other forks for the user. Treat it like a message from the user.
 
 How to answer:
