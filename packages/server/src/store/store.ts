@@ -49,10 +49,15 @@ import type {
   ReplyDraft,
   Role,
   Snapshot,
+  ActivitySummary,
+  LightSnapshot,
+  MessageBody,
+  MessageHead,
 } from '../shared/types.js';
 import {
   commentTag,
   messageTag,
+  taggedIds,
   withoutTagLines,
   type AnsweredPartLookup,
 } from '../shared/answer-tags.js';
@@ -347,6 +352,83 @@ export class ChatStore {
         )
         .map(toActivity),
     };
+  }
+
+  // The chat with its messages as heads, without their texts, and with only the runner steps of
+  // attempts still running; the rest is counted.
+  lightSnapshot(explorationId: string): Omit<LightSnapshot, 'sessionStatus' | 'sessionError'> {
+    const { messages, activities: _activities, ...rest } = this.snapshot(explorationId);
+    return {
+      ...rest,
+      messages: messages.map(({ content, ...head }): MessageHead => ({
+        ...head,
+        answers: head.role === 'assistant' ? taggedIds(content) : [],
+      })),
+      activities: this.db
+        .all<ActivityRow>(
+          `SELECT activities.* FROM activities
+             JOIN fork_runs ON fork_runs.fork_id = activities.fork_id
+               AND fork_runs.attempt = activities.attempt AND fork_runs.status = 'answering'
+           WHERE activities.exploration_id = ?
+           ORDER BY activities.created_at, activities.rowid`,
+          explorationId,
+        )
+        .map(toActivity),
+      activitySummaries: this.db
+        .all<{
+          fork_id: string;
+          after_message_id: string;
+          attempt: number;
+          count: number;
+          interrupted: number;
+          first_at: number;
+          last_at: number;
+        }>(
+          `SELECT fork_id, after_message_id, attempt, COUNT(*) AS count,
+             MAX(interrupted) AS interrupted, MIN(created_at) AS first_at, MAX(created_at) AS last_at
+           FROM activities WHERE exploration_id = ?
+           GROUP BY fork_id, after_message_id, attempt`,
+          explorationId,
+        )
+        .map((row): ActivitySummary => ({
+          forkId: row.fork_id,
+          afterMessageId: row.after_message_id,
+          attempt: row.attempt,
+          count: row.count,
+          interrupted: row.interrupted === 1,
+          firstAt: row.first_at,
+          lastAt: row.last_at,
+        })),
+    };
+  }
+
+  messageBodies(explorationId: string, messageIds: string[]): MessageBody[] {
+    this.requireExplorationRow(explorationId);
+    return messageIds.flatMap((id) => {
+      const row = this.db.get<MessageRow>(
+        'SELECT * FROM messages WHERE id = ? AND exploration_id = ?',
+        id,
+        explorationId,
+      );
+      return row ? [{ id: row.id, content: row.content }] : [];
+    });
+  }
+
+  attemptActivities(
+    explorationId: string,
+    attempt: { forkId: string; afterMessageId: string; attempt: number },
+  ) {
+    return this.db
+      .all<ActivityRow>(
+        `SELECT * FROM activities
+         WHERE exploration_id = ? AND fork_id = ? AND after_message_id = ? AND attempt = ?
+         ORDER BY created_at, rowid`,
+        explorationId,
+        attempt.forkId,
+        attempt.afterMessageId,
+        attempt.attempt,
+      )
+      .map(toActivity);
   }
 
   updateExploration(input: {
@@ -1659,19 +1741,35 @@ export class ChatStore {
     mediaType: string;
     size: number;
     path: string;
+    dimensions?: { width: number; height: number } | null;
   }) {
     this.db.run(
-      `INSERT INTO files (id, name, kind, media_type, size, path, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO files (id, name, kind, media_type, size, path, width, height, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       input.id,
       input.name,
       input.kind,
       input.mediaType,
       input.size,
       input.path,
+      input.dimensions?.width ?? null,
+      input.dimensions?.height ?? null,
       this.now(),
     );
     return toMessageFile(this.requireFileRow(input.id));
+  }
+
+  imagesWithoutSize() {
+    return this.db.all<FileRow>("SELECT * FROM files WHERE kind = 'image' AND width IS NULL");
+  }
+
+  setImageSize(fileId: string, dimensions: { width: number; height: number }) {
+    this.db.run(
+      'UPDATE files SET width = ?, height = ? WHERE id = ?',
+      dimensions.width,
+      dimensions.height,
+      fileId,
+    );
   }
 
   fileRow(fileId: string) {

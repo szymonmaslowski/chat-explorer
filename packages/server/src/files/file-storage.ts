@@ -1,8 +1,9 @@
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { StoreError } from '../store/errors.js';
 import { newId } from '../store/ids.js';
 import type { ChatStore } from '../store/store.js';
+import { imageSize } from './image-size.js';
 import { classifyFile, maxFileBytes, storedFileName } from './kinds.js';
 
 const draftLifetimeMs = 24 * 60 * 60 * 1000;
@@ -38,7 +39,17 @@ export class FileStorage {
       mediaType: fileClass.mediaType,
       size: input.bytes.length,
       path,
+      dimensions: fileClass.kind === 'image' ? imageSize(input.bytes) : null,
     });
+  }
+
+  // Images uploaded before sizes were kept get them read from their files.
+  async addMissingImageSizes() {
+    for (const file of this.store.imagesWithoutSize()) {
+      const bytes = await readFile(file.path).catch(() => null);
+      const dimensions = bytes ? imageSize(bytes) : null;
+      if (dimensions) this.store.setImageSize(file.id, dimensions);
+    }
   }
 
   async removeDraft(fileId: string) {

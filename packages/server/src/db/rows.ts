@@ -103,6 +103,8 @@ export interface FileRow {
   path: string;
   draft_fork_id: string | null;
   comment_id: string | null;
+  width: number | null;
+  height: number | null;
   created_at: number;
 }
 
@@ -272,6 +274,8 @@ export const toMessageFile = (row: FileRow): MessageFile => ({
   submissionId: row.submission_id,
   messageId: row.message_id,
   commentId: row.comment_id,
+  width: row.width,
+  height: row.height,
   createdAt: row.created_at,
 });
 

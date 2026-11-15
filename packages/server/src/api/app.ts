@@ -19,6 +19,7 @@ import {
   chatDefaultPages,
   type ExplorationListItem,
   type ExplorationView,
+  type LightSnapshot,
   type Snapshot,
 } from '../shared/types.js';
 import { StoreError } from '../store/errors.js';
@@ -99,6 +100,18 @@ const submitBody = z.object({
   fileIds,
 });
 const forkNowBody = z.object({ id: clientId });
+const maxBodiesPerRequest = 200;
+const messageBodiesQuery = z.object({
+  ids: z
+    .string()
+    .transform((ids) => ids.split(',').filter(Boolean))
+    .pipe(z.array(z.string()).min(1).max(maxBodiesPerRequest)),
+});
+const attemptQuery = z.object({
+  forkId: z.string(),
+  afterMessageId: z.string(),
+  attempt: z.coerce.number().int(),
+});
 const readMessagesBody = z.object({ messageIds: z.array(z.string()).min(1) });
 const unreadFromBody = z.object({ viewForkId: z.string() });
 const noteForkBody = z.object({ id: clientId, forkId: clientId, message: z.string() });
@@ -374,12 +387,30 @@ export function createApp(options: AppOptions) {
 
   app.get('/api/explorations/:id', (context) => {
     const explorationId = context.req.param('id');
+    if (context.req.query('light') !== undefined) {
+      const light: LightSnapshot = {
+        ...store.lightSnapshot(explorationId),
+        sessionStatus: hub.status(explorationId),
+        sessionError: sessions.error(explorationId),
+      };
+      return context.json(light);
+    }
     const snapshot: Snapshot = {
       ...store.snapshot(explorationId),
       sessionStatus: hub.status(explorationId),
       sessionError: sessions.error(explorationId),
     };
     return context.json(snapshot);
+  });
+
+  app.get('/api/explorations/:id/message-bodies', (context) => {
+    const { ids } = messageBodiesQuery.parse(context.req.query());
+    return context.json(store.messageBodies(context.req.param('id'), ids));
+  });
+
+  app.get('/api/explorations/:id/activities', (context) => {
+    const attempt = attemptQuery.parse(context.req.query());
+    return context.json(store.attemptActivities(context.req.param('id'), attempt));
   });
 
   app.patch('/api/explorations/:id', async (context) => {

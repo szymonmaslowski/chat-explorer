@@ -80,6 +80,17 @@ export interface Message {
   readAt: number | null;
 }
 
+// A message without its text, for a light load of a chat. The text comes on request.
+export interface MessageHead extends Omit<Message, 'content'> {
+  // What an answer of Claude's answers, from its tags: comment and message ids.
+  answers: string[];
+}
+
+export interface MessageBody {
+  id: string;
+  content: string;
+}
+
 export interface ReadChange {
   messageIds: string[];
   readAt: number | null;
@@ -175,6 +186,9 @@ export interface MessageFile {
   messageId: string | null;
   // A file on a comment stays with it, as a draft and once sent.
   commentId: string | null;
+  // In pixels, for an image whose size could be read, so the page keeps room for it.
+  width: number | null;
+  height: number | null;
   createdAt: number;
 }
 
@@ -222,6 +236,17 @@ export interface Activity {
   createdAt: number;
 }
 
+// One attempt at a turn, counted: its steps come on request.
+export interface ActivitySummary {
+  forkId: string;
+  afterMessageId: string;
+  attempt: number;
+  count: number;
+  interrupted: boolean;
+  firstAt: number;
+  lastAt: number;
+}
+
 export interface Snapshot {
   exploration: Exploration;
   forks: Fork[];
@@ -237,6 +262,13 @@ export interface Snapshot {
   activities: Activity[];
   sessionStatus: SessionStatus;
   sessionError: string | null;
+}
+
+// The chat without message texts and with runner steps only counted, except for the attempts
+// still running.
+export interface LightSnapshot extends Omit<Snapshot, 'messages'> {
+  messages: MessageHead[];
+  activitySummaries: ActivitySummary[];
 }
 
 export type ExplorationEvent =

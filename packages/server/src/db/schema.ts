@@ -298,4 +298,8 @@ export const migrations = [
   ALTER TABLE files ADD COLUMN comment_id TEXT;
   CREATE INDEX files_by_comment ON files (comment_id);
   `,
+  `
+  ALTER TABLE files ADD COLUMN width INTEGER;
+  ALTER TABLE files ADD COLUMN height INTEGER;
+  `,
 ];

@@ -64,6 +64,7 @@ const transcriber = new Transcriber({
 const fileStorage = new FileStorage(store, config.filesPath);
 const staleDraftSweepMs = 60 * 60 * 1000;
 void fileStorage.removeStaleDrafts();
+void fileStorage.addMissingImageSizes();
 setInterval(() => void fileStorage.removeStaleDrafts(), staleDraftSweepMs).unref();
 const chatterbox = chatterboxEngine(config.speechPath);
 const speaker = new Speaker({
