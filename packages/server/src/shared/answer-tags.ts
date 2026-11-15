@@ -58,9 +58,10 @@ export function answerTags(markdown: MarkdownIt) {
     if (!part) return `<span class="answer-card unknown"${attribute('data-tag', written)}></span>`;
     const quote = part.quote ? attribute('data-quote', part.quote) : '';
     const text = attribute('data-text', part.text);
-    const jump = part.href
-      ? `<a class="answer-jump"${attribute('href', part.href)}${attribute('title', 'Show the comment')}${attribute('aria-label', 'Show the comment')}></a>`
-      : '';
+    const jump =
+      part.href && markdown.validateLink(part.href)
+        ? `<a class="answer-jump"${attribute('href', part.href)}${attribute('title', 'Show the comment')}${attribute('aria-label', 'Show the comment')}></a>`
+        : '';
     const actions = `<span class="answer-card-actions">${jump}${button('answer-play', 'Read the comment aloud')}${button('answer-copy', 'Copy the comment')}</span>`;
     return `<span class="answer-card"${attribute('data-answered-id', id)}${quote}${text}>${actions}</span>`;
   }
