@@ -26,6 +26,7 @@ import { defaultGroupName, noteForkMessage, reorderedIds } from '@shared/notes';
 import { nextTick, reactive, toRaw, watch } from 'vue';
 import { api, ApiError } from '../api';
 import { openEventStream } from '../lib/event-stream';
+import { keepImagesOffline } from '../lib/service-worker';
 import {
   askForPersistentStorage,
   forgetChat,
@@ -853,7 +854,13 @@ function createExplorationStore(explorationId: string) {
       save();
       if (!filled) {
         filled = true;
-        void fillBodies(state);
+        void fillBodies(state).then(() =>
+          keepImagesOffline(
+            [...state.files.values()]
+              .filter((file) => file.kind === 'image')
+              .map((file) => file.id),
+          ),
+        );
       }
     } catch (error) {
       if (error instanceof ApiError && error.code === 'not_found') {

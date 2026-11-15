@@ -1,5 +1,6 @@
 import type { ExplorationListItem } from '@shared/types';
 import { readChat, writeChat } from '../lib/local-store';
+import { keepImagesOffline } from '../lib/service-worker';
 import {
   activeExplorationId,
   applyStoredChat,
@@ -45,6 +46,9 @@ async function sync(chat: ExplorationListItem) {
     if (record) await writeChat(record);
     saveBodies(chat.id);
     await fillBodies(state);
+    await keepImagesOffline(
+      [...state.files.values()].filter((file) => file.kind === 'image').map((file) => file.id),
+    );
     return true;
   } catch {
     // Offline, or the chat went: the next list load tries again.

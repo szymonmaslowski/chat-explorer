@@ -40,6 +40,9 @@ export default defineConfig({
   use: {
     baseURL: `http://127.0.0.1:${port}`,
     channel: 'chrome',
+    // Page routes do not reach requests a service worker makes, so tests run without one, except
+    // those about it.
+    serviceWorkers: 'block',
     viewport: { width: 1100, height: 700 },
     permissions: ['microphone'],
     launchOptions: {

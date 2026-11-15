@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import ImageViewer from './components/ImageViewer.vue';
+import UpdatePrompt from './components/UpdatePrompt.vue';
 import { useLayout } from './composables/useLayout';
 import { openExploration } from './stores/exploration';
 import ExplorationsList from './views/ExplorationsList.vue';
@@ -31,6 +32,7 @@ const currentForkId = computed(() => {
     </div>
   </div>
   <ImageViewer />
+  <UpdatePrompt />
 </template>
 
 <style scoped>
