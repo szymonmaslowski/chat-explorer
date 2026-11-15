@@ -384,14 +384,16 @@ function placeActions(
   const firstLine = relative(firstLineRect(range));
   const height = coarsePointer.value ? actionButtonHeight.touch : actionButtonHeight.mouse;
   const below = lastLine.bottom + 4 + (clearHandles && coarsePointer.value ? touchButtonOffset : 0);
-  // The reply box covers what is below it, so at the end of the page the buttons go above the text.
+  // The reply box covers what is below it. With a mouse the buttons then go above the text. On a
+  // touch screen the system's own menu is above it, so they stay below and the page scrolls up.
   const dockTop = document.querySelector('[data-dock]')?.getBoundingClientRect().top ?? Infinity;
   const layerTop = layer.value!.getBoundingClientRect().top;
-  const underDock = layerTop + below + height > dockTop;
+  const coveredBy = layerTop + below + height + 8 - dockTop;
+  if (coveredBy > 0 && coarsePointer.value) window.scrollBy({ top: coveredBy, behavior: 'smooth' });
   return {
     messageId: root.dataset.anchorRoot!,
     anchor,
-    buttonTop: underDock ? firstLine.top - 4 - height : below,
+    buttonTop: coveredBy > 0 && !coarsePointer.value ? firstLine.top - 4 - height : below,
     buttonLeft: Math.max(0, Math.min(lastLine.right + 6, layerWidth.value - width)),
   };
 }

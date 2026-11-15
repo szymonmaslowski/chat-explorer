@@ -475,6 +475,8 @@ watch(
 
 .conversation {
   position: relative;
+  /* Room under the last line for the buttons on a selection, which stay below it on a phone. */
+  padding-bottom: 1.5rem;
   -webkit-tap-highlight-color: transparent;
 }
 

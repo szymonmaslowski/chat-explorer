@@ -164,6 +164,35 @@ test.describe('on a phone', () => {
     await expect(replyBox).toBeVisible();
   });
 
+  test('keeps the buttons on a selection at the end of the chat below it, clear of the reply box', async ({
+    page,
+    request,
+  }) => {
+    const paragraphs = Array.from({ length: 30 }, (_, index) => `Paragraph ${index + 1} here.`);
+    const explorationId = await startAnsweredChat(request, paragraphs.join('\n\n'));
+    await page.goto(`/e/${explorationId}`);
+    await expect(page.getByText('Paragraph 30 here.')).toBeAttached();
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await page.evaluate(() => {
+      const paragraph = [...document.querySelectorAll('.content p')].at(-1)!;
+      const range = document.createRange();
+      range.setStart(paragraph.firstChild!, 0);
+      range.setEnd(paragraph.firstChild!, 9);
+      window.getSelection()!.removeAllRanges();
+      window.getSelection()!.addRange(range);
+    });
+    const comment = page.getByRole('button', { name: 'Comment', exact: true });
+    await expect(comment).toBeVisible();
+    await expect
+      .poll(async () => {
+        const line = (await page.getByText('Paragraph 30 here.').boundingBox())!;
+        const button = (await comment.boundingBox())!;
+        const dock = (await page.locator('[data-dock]').boundingBox())!;
+        return button.y > line.y + line.height && button.y + button.height <= dock.y;
+      })
+      .toBe(true);
+  });
+
   test('puts the block buttons between the text and full-width comments', async ({
     page,
     request,
