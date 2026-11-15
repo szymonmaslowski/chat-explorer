@@ -50,6 +50,8 @@ import type {
   Role,
   Snapshot,
   ActivitySummary,
+  ChangeKind,
+  ChangeSet,
   LightSnapshot,
   MessageBody,
   MessageHead,
@@ -195,6 +197,11 @@ const quoteBlock = (quote: string) =>
 // A general comment quotes nothing, so it is only its text.
 const quotedText = (quote: string, text: string, separator: string) =>
   quote ? `${quoteBlock(quote)}${separator}${text}` : text;
+
+const push = <Row, Item>(items: Item[], row: Row | undefined, map: (row: Row) => Item) => {
+  if (row) items.push(map(row));
+  return row !== undefined;
+};
 
 const attachedFiles = (files: FileRow[]) =>
   files.length > 0
@@ -357,9 +364,11 @@ export class ChatStore {
   // The chat with its messages as heads, without their texts, and with only the runner steps of
   // attempts still running; the rest is counted.
   lightSnapshot(explorationId: string): Omit<LightSnapshot, 'sessionStatus' | 'sessionError'> {
+    const seq = this.latestChangeSeq();
     const { messages, activities: _activities, ...rest } = this.snapshot(explorationId);
     return {
       ...rest,
+      seq,
       messages: messages.map(({ content, ...head }): MessageHead => ({
         ...head,
         answers: head.role === 'assistant' ? taggedIds(content) : [],
@@ -400,6 +409,113 @@ export class ChatStore {
           lastAt: row.last_at,
         })),
     };
+  }
+
+  // The change log's newest number, also once old rows were deleted.
+  latestChangeSeq() {
+    return (
+      this.db.get<{ seq: number }>("SELECT seq FROM sqlite_sequence WHERE name = 'changes'")?.seq ??
+      0
+    );
+  }
+
+  changesSince(explorationId: string, after: number): ChangeSet {
+    this.requireExplorationRow(explorationId);
+    const seq = this.latestChangeSeq();
+    const { floor } = this.db.get<{ floor: number }>('SELECT floor FROM change_log')!;
+    const empty: ChangeSet = {
+      seq,
+      reset: after < floor,
+      exploration: null,
+      forks: [],
+      messages: [],
+      comments: [],
+      queuedSubmissions: [],
+      files: [],
+      replyDrafts: [],
+      noteGroups: [],
+      notes: [],
+      bookmarks: [],
+      forkRuns: [],
+      activities: [],
+      deleted: [],
+    };
+    if (empty.reset) return empty;
+    const changed = this.db.all<{ kind: ChangeKind; entity_id: string }>(
+      `SELECT kind, entity_id FROM changes WHERE exploration_id = ? AND seq > ? AND seq <= ?
+       GROUP BY kind, entity_id ORDER BY max(seq)`,
+      explorationId,
+      after,
+      seq,
+    );
+    const set = empty;
+    for (const { kind, entity_id: id } of changed) {
+      if (!this.addCurrent(set, explorationId, kind, id)) set.deleted.push({ kind, id });
+    }
+    return set;
+  }
+
+  // Adds what a change log row names, as it is now; false when it is gone from the chat.
+  private addCurrent(set: ChangeSet, explorationId: string, kind: ChangeKind, id: string) {
+    const row = <Row>(table: string, key = 'id') =>
+      this.db.get<Row>(
+        `SELECT * FROM ${table} WHERE ${key} = ? AND exploration_id = ?`,
+        id,
+        explorationId,
+      );
+    switch (kind) {
+      case 'exploration': {
+        const found = this.db.get<ExplorationRow>(
+          'SELECT * FROM explorations WHERE id = ? AND deleted_at IS NULL',
+          id,
+        );
+        if (found) set.exploration = toExploration(found);
+        return found !== undefined;
+      }
+      case 'fork':
+        return push(set.forks, row<ForkRow>('forks'), toFork);
+      case 'message':
+        return push(set.messages, row<MessageRow>('messages'), toMessage);
+      case 'comment':
+        return push(set.comments, row<CommentRow>('comments'), toComment);
+      case 'submission': {
+        const found = row<SubmissionRow>('submissions');
+        return push(
+          set.queuedSubmissions,
+          found?.status === 'queued' ? found : undefined,
+          toQueuedSubmission,
+        );
+      }
+      case 'file':
+        return push(set.files, row<FileRow>('files'), toMessageFile);
+      case 'reply_draft':
+        return push(set.replyDrafts, row<ReplyDraftRow>('reply_drafts', 'fork_id'), (found) =>
+          this.toReplyDraft(found),
+        );
+      case 'note_group':
+        return push(set.noteGroups, row<NoteGroupRow>('note_groups'), toNoteGroup);
+      case 'note':
+        return push(set.notes, row<NoteRow>('notes'), toNote);
+      case 'bookmark':
+        return push(set.bookmarks, row<BookmarkRow>('bookmarks'), toBookmark);
+      case 'fork_run':
+        return push(set.forkRuns, row<ForkRunRow>('fork_runs', 'fork_id'), toForkRun);
+      case 'activity':
+        return push(set.activities, row<ActivityRow>('activities'), toActivity);
+    }
+  }
+
+  // Old rows go after a while; a device that knew only those loads its chats fresh.
+  pruneChanges(before: number) {
+    this.db.transaction(() => {
+      const last = this.db.get<{ seq: number | null }>(
+        'SELECT max(seq) AS seq FROM changes WHERE created_at < ?',
+        before,
+      )?.seq;
+      if (last === null || last === undefined) return;
+      this.db.run('DELETE FROM changes WHERE seq <= ?', last);
+      this.db.run('UPDATE change_log SET floor = ?', last);
+    });
   }
 
   messageBodies(explorationId: string, messageIds: string[]): MessageBody[] {

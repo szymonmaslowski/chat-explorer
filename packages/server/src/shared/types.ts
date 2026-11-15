@@ -269,6 +269,43 @@ export interface Snapshot {
 export interface LightSnapshot extends Omit<Snapshot, 'messages'> {
   messages: MessageHead[];
   activitySummaries: ActivitySummary[];
+  // The change log's number when this was read: the changes after it come from `changes`.
+  seq: number;
+}
+
+export type ChangeKind =
+  | 'exploration'
+  | 'fork'
+  | 'message'
+  | 'comment'
+  | 'submission'
+  | 'file'
+  | 'reply_draft'
+  | 'note_group'
+  | 'note'
+  | 'bookmark'
+  | 'fork_run'
+  | 'activity';
+
+// What changed in a chat after a number of the change log, as it is now. A reply draft and a
+// fork run are named by their fork's id.
+export interface ChangeSet {
+  seq: number;
+  // The log no longer reaches back that far, so the chat has to be loaded fresh.
+  reset: boolean;
+  exploration: Exploration | null;
+  forks: Fork[];
+  messages: Message[];
+  comments: Comment[];
+  queuedSubmissions: QueuedSubmission[];
+  files: MessageFile[];
+  replyDrafts: ReplyDraft[];
+  noteGroups: NoteGroup[];
+  notes: Note[];
+  bookmarks: Bookmark[];
+  forkRuns: ForkRun[];
+  activities: Activity[];
+  deleted: { kind: ChangeKind; id: string }[];
 }
 
 export type ExplorationEvent =

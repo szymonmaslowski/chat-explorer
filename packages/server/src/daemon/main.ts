@@ -65,6 +65,11 @@ const fileStorage = new FileStorage(store, config.filesPath);
 const staleDraftSweepMs = 60 * 60 * 1000;
 void fileStorage.removeStaleDrafts();
 void fileStorage.addMissingImageSizes();
+// The change log keeps about three months; a device that was away longer loads its chats fresh.
+const changeLogMs = 90 * 24 * 60 * 60 * 1000;
+const pruneChanges = () => store.pruneChanges(Date.now() - changeLogMs);
+pruneChanges();
+setInterval(pruneChanges, staleDraftSweepMs).unref();
 setInterval(() => void fileStorage.removeStaleDrafts(), staleDraftSweepMs).unref();
 const chatterbox = chatterboxEngine(config.speechPath);
 const speaker = new Speaker({

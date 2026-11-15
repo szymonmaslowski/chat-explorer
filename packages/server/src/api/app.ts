@@ -107,6 +107,7 @@ const messageBodiesQuery = z.object({
     .transform((ids) => ids.split(',').filter(Boolean))
     .pipe(z.array(z.string()).min(1).max(maxBodiesPerRequest)),
 });
+const changesQuery = z.object({ after: z.coerce.number().int().min(0) });
 const attemptQuery = z.object({
   forkId: z.string(),
   afterMessageId: z.string(),
@@ -403,6 +404,11 @@ export function createApp(options: AppOptions) {
     return context.json(snapshot);
   });
 
+  app.get('/api/explorations/:id/changes', (context) => {
+    const { after } = changesQuery.parse(context.req.query());
+    return context.json(store.changesSince(context.req.param('id'), after));
+  });
+
   app.get('/api/explorations/:id/message-bodies', (context) => {
     const { ids } = messageBodiesQuery.parse(context.req.query());
     return context.json(store.messageBodies(context.req.param('id'), ids));
@@ -625,8 +631,11 @@ export function createApp(options: AppOptions) {
     if (!store.hasExploration(explorationId)) {
       throw new StoreError('not_found', `Exploration ${explorationId} does not exist.`);
     }
+    // Each event carries the change log's number after it, so a page knows where it is.
     return eventStream(context, (send) =>
-      bus.subscribeTo(explorationId, (event) => send(event.type, event)),
+      bus.subscribeTo(explorationId, (event) =>
+        send(event.type, { ...event, seq: store.latestChangeSeq() }),
+      ),
     );
   });
 

@@ -1,3 +1,65 @@
+// The tables a chat's data lives in, each with the kind of thing a change log row names and the
+// column that identifies one.
+const loggedTables = [
+  { table: 'explorations', kind: 'exploration', key: 'id', chat: 'id' },
+  { table: 'forks', kind: 'fork', key: 'id', chat: 'exploration_id' },
+  { table: 'messages', kind: 'message', key: 'id', chat: 'exploration_id' },
+  { table: 'comments', kind: 'comment', key: 'id', chat: 'exploration_id' },
+  { table: 'submissions', kind: 'submission', key: 'id', chat: 'exploration_id' },
+  { table: 'files', kind: 'file', key: 'id', chat: 'exploration_id' },
+  { table: 'reply_drafts', kind: 'reply_draft', key: 'fork_id', chat: 'exploration_id' },
+  { table: 'note_groups', kind: 'note_group', key: 'id', chat: 'exploration_id' },
+  { table: 'notes', kind: 'note', key: 'id', chat: 'exploration_id' },
+  { table: 'bookmarks', kind: 'bookmark', key: 'id', chat: 'exploration_id' },
+  { table: 'fork_runs', kind: 'fork_run', key: 'fork_id', chat: 'exploration_id' },
+  { table: 'activities', kind: 'activity', key: 'id', chat: 'exploration_id' },
+] as const;
+
+const nowMs = "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)";
+
+// Every write to a chat's data records a row in the same transaction, by trigger, so no write
+// path can miss one. A row only names what changed; the current state is read when asked. A
+// file that leaves a chat, or joins one, counts as deleted there and created in the other.
+function changeLog() {
+  const log = (row: 'NEW' | 'OLD', kind: string, key: string, chat: string, action: string) =>
+    `INSERT INTO changes (exploration_id, kind, entity_id, action, created_at)
+       SELECT ${row}.${chat}, '${kind}', ${row}.${key}, '${action}', ${nowMs}
+       WHERE ${row}.${chat} IS NOT NULL;`;
+  const triggers = loggedTables.map(
+    ({ table, kind, key, chat }) => `
+  CREATE TRIGGER ${table}_logged_insert AFTER INSERT ON ${table} BEGIN
+    ${log('NEW', kind, key, chat, 'created')}
+  END;
+  CREATE TRIGGER ${table}_logged_update AFTER UPDATE ON ${table} BEGIN
+    ${log('OLD', kind, key, chat, 'deleted').replace('WHERE', `WHERE OLD.${chat} IS NOT NEW.${chat} AND`)}
+    ${log('NEW', kind, key, chat, 'updated').replace('WHERE', `WHERE OLD.${chat} IS NEW.${chat} AND`)}
+    ${log('NEW', kind, key, chat, 'created').replace('WHERE', `WHERE OLD.${chat} IS NOT NEW.${chat} AND`)}
+  END;
+  CREATE TRIGGER ${table}_logged_delete AFTER DELETE ON ${table} BEGIN
+    ${log('OLD', kind, key, chat, 'deleted')}
+  END;`,
+  );
+  return `
+  CREATE TABLE changes (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    exploration_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    action TEXT NOT NULL CHECK (action IN ('created', 'updated', 'deleted')),
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX changes_by_exploration ON changes (exploration_id, seq);
+  CREATE INDEX changes_by_time ON changes (created_at);
+  -- Rows up to the floor were deleted: a device that knows less loads the chat fresh.
+  CREATE TABLE change_log (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    floor INTEGER NOT NULL
+  );
+  INSERT INTO change_log (id, floor) VALUES (1, 0);
+  ${triggers.join('\n')}
+  `;
+}
+
 export const migrations = [
   `
   CREATE TABLE explorations (
@@ -302,4 +364,5 @@ export const migrations = [
   ALTER TABLE files ADD COLUMN width INTEGER;
   ALTER TABLE files ADD COLUMN height INTEGER;
   `,
+  changeLog(),
 ];
