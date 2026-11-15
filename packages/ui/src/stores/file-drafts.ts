@@ -19,6 +19,7 @@ const previewableImage = /^image\/(png|jpeg|gif|webp)$/;
 
 export const replyFilesOwner = (forkId: string) => `fork:${forkId}`;
 export const newChatFilesOwner = 'new-chat';
+export const commentFilesOwner = (commentId: string) => `comment:${commentId}`;
 
 function draftsOf(owner: string) {
   if (!draftsByOwner.has(owner)) draftsByOwner.set(owner, []);
@@ -77,11 +78,17 @@ export function useFileDrafts(owner: () => string) {
     }
   }
 
+  // A file already on a comment stays on the server until the comment is saved without it.
+  const deleteUpload = (draft: DraftFile) => {
+    if (draft.file && draft.file.commentId === null)
+      void api.deleteFile(draft.file.id).catch(() => {});
+  };
+
   function remove(draft: DraftFile) {
     const list = draftsOf(owner());
     list.splice(list.indexOf(draft), 1);
     forget(draft);
-    if (draft.file) void api.deleteFile(draft.file.id).catch(() => {});
+    deleteUpload(draft);
   }
 
   // After a send: the files now belong to the message, so they stay on the server.
@@ -90,5 +97,11 @@ export function useFileDrafts(owner: () => string) {
     draftsByOwner.set(owner(), []);
   }
 
-  return { drafts, readyIds, uploading, add, remove, clear };
+  // After a Cancel: what was uploaded meanwhile goes.
+  function discard() {
+    for (const draft of draftsOf(owner())) deleteUpload(draft);
+    clear();
+  }
+
+  return { drafts, readyIds, uploading, add, remove, clear, discard };
 }

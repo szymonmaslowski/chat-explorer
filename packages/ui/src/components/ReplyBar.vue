@@ -215,25 +215,30 @@ function onPaste(event: ClipboardEvent) {
   files.add(pasted);
 }
 
-// The text becomes a comment on the whole conversation, waiting for Submit with the others.
-const canSaveAsComment = computed(() => text.value.trim() !== '' && props.lastMessageId !== null);
+// The text becomes a comment on the whole conversation, waiting for Submit with the others, and
+// the files go with it.
+const canSaveAsComment = computed(
+  () => text.value.trim() !== '' && props.lastMessageId !== null && !files.uploading.value,
+);
 function saveAsComment() {
   const messageId = props.lastMessageId;
-  if (!text.value.trim() || messageId === null) return;
-  outbox.add({
-    type: 'comment.create',
-    explorationId: props.explorationId,
-    comment: {
-      id: newId(),
-      messageId,
-      viewForkId: props.forkId,
-      quote: '',
-      startOffset: 0,
-      endOffset: 0,
-      body: text.value.trim(),
-    },
-  });
+  if (!canSaveAsComment.value || messageId === null) return;
+  const comment = {
+    id: newId(),
+    messageId,
+    viewForkId: props.forkId,
+    quote: '',
+    startOffset: 0,
+    endOffset: 0,
+    body: text.value.trim(),
+    fileIds: files.readyIds.value,
+  };
+  // A box save still waiting would claim the files back for the box.
+  autosave.finish(() =>
+    outbox.add({ type: 'comment.create', explorationId: props.explorationId, comment }),
+  );
   text.value = '';
+  files.clear();
 }
 
 function onKeydown(event: KeyboardEvent) {

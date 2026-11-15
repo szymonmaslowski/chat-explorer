@@ -7,11 +7,15 @@ import { useExpandedArea } from '../composables/useExpandedArea';
 import type { TextAnchor } from '../lib/anchoring';
 import { insertAtCursor } from '../lib/insert-text';
 import { sortedGroups } from '../lib/notes';
+import { transferredFiles } from '../lib/transferred-files';
 import { openExploration } from '../stores/exploration';
+import { commentFilesOwner, useFileDrafts } from '../stores/file-drafts';
 import { newId, outbox } from '../stores/outbox';
+import AttachButton from './AttachButton.vue';
 import CommentTypePicker from './CommentTypePicker.vue';
 import DictationButton from './DictationButton.vue';
 import ExpandButton from './ExpandButton.vue';
+import FileDraftList from './FileDraftList.vue';
 import ListenButton from './ListenButton.vue';
 
 const props = defineProps<{
@@ -57,6 +61,15 @@ const target = () => ({
 // closed page brings it back in its editor.
 const commentId = newId();
 let created = false;
+const files = useFileDrafts(() => commentFilesOwner(commentId));
+const canSave = computed(() => body.value.trim() !== '' && !files.uploading.value);
+
+function onPaste(event: ClipboardEvent) {
+  const pasted = transferredFiles(event.clipboardData);
+  if (pasted.length === 0) return;
+  event.preventDefault();
+  files.add(pasted);
+}
 const autosave = useAutosave(() => {
   const { explorationId } = props;
   if (created) {
@@ -106,6 +119,7 @@ function addSaved() {
             editBody: null,
             type: type.value,
             noteGroupId: noteGroupId.value,
+            fileIds: files.readyIds.value,
           },
         }
       : {
@@ -117,17 +131,20 @@ function addSaved() {
             body: body.value,
             type: type.value,
             noteGroupId: noteGroupId.value,
+            fileIds: files.readyIds.value,
           },
         },
   );
+  files.clear();
 }
 
 function save() {
-  if (!body.value.trim()) return;
+  if (!canSave.value) return;
   close(addSaved, true);
 }
 
 function cancel() {
+  files.discard();
   close(() => {
     if (created)
       outbox.add({ type: 'comment.delete', explorationId: props.explorationId, commentId });
@@ -141,7 +158,13 @@ function onKeydown(event: KeyboardEvent) {
 </script>
 
 <template>
-  <div class="comment-editor" :class="[type, { expanded }]" :style="expandedStyle ?? undefined">
+  <div
+    class="comment-editor"
+    :class="[type, { expanded }]"
+    :style="expandedStyle ?? undefined"
+    @dragover.prevent
+    @drop.prevent="files.add(transferredFiles($event.dataTransfer))"
+  >
     <p class="quote">{{ anchor.quote }}</p>
     <textarea
       ref="textarea"
@@ -149,15 +172,18 @@ function onKeydown(event: KeyboardEvent) {
       rows="3"
       placeholder="Your comment (⌘↵ to save)"
       @keydown="onKeydown"
+      @paste="onPaste"
     />
+    <FileDraftList class="attachments" :drafts="files.drafts.value" @remove="files.remove" />
     <div class="actions">
       <CommentTypePicker v-model="type" />
+      <AttachButton @files="files.add" />
       <DictationButton :hint="anchor.quote" @text="insertDictation" />
       <ListenButton :text="body" />
       <ExpandButton v-model="expanded" />
       <span class="spacer" />
       <button type="button" @click="cancel">Cancel</button>
-      <button type="button" class="primary" :disabled="!body.trim()" @click="save">Save</button>
+      <button type="button" class="primary" :disabled="!canSave" @click="save">Save</button>
     </div>
     <div v-if="type === 'note'" class="note-group">
       <select v-model="pickedGroup" aria-label="Note group">
@@ -215,6 +241,10 @@ function onKeydown(event: KeyboardEvent) {
 
 .spacer {
   flex: 1;
+}
+
+.attachments {
+  margin-top: 0.4rem;
 }
 
 .note-group {

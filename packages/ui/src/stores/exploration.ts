@@ -333,7 +333,7 @@ export function applyChange(state: ExplorationState, change: Change) {
   const now = Date.now();
   switch (change.type) {
     case 'comment.create': {
-      const { id, editBody, type, ...comment } = change.comment;
+      const { id, editBody, type, fileIds, ...comment } = change.comment;
       const existing = state.comments.get(id);
       put(state.comments, id, {
         ...comment,

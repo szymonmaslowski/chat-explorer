@@ -7,8 +7,10 @@ import { useRouter } from 'vue-router';
 import { scrollToAndFlash } from '../lib/flash';
 import { insertAtCursor } from '../lib/insert-text';
 import { sortedGroups } from '../lib/notes';
+import { transferredFiles } from '../lib/transferred-files';
 import { openExploration } from '../stores/exploration';
 import { explorationIndex } from '../stores/exploration-index';
+import { commentFilesOwner, restoreFileDrafts, useFileDrafts } from '../stores/file-drafts';
 import {
   confirmJoining,
   forkJoining,
@@ -17,9 +19,12 @@ import {
   togglePicked,
 } from '../stores/fork-joining';
 import { newId, outbox } from '../stores/outbox';
+import AttachButton from './AttachButton.vue';
 import ConfirmButton from './ConfirmButton.vue';
 import DictationButton from './DictationButton.vue';
 import ExpandButton from './ExpandButton.vue';
+import FileDraftList from './FileDraftList.vue';
+import FileLinks from './FileLinks.vue';
 import ListenButton from './ListenButton.vue';
 import MediaIcon from './MediaIcon.vue';
 
@@ -36,8 +41,26 @@ const emit = defineEmits<{
 }>();
 
 const card = ref<HTMLElement | null>(null);
+const savedFiles = computed(() =>
+  [...openExploration(props.comment.explorationId).files.values()].filter(
+    (file) => file.commentId === props.comment.id,
+  ),
+);
+// While editing, the files are a draft list of their own: added and removed ones count on Save.
+const editedFiles = useFileDrafts(() => commentFilesOwner(props.comment.id));
+function openEditedFiles() {
+  editedFiles.clear();
+  restoreFileDrafts(commentFilesOwner(props.comment.id), savedFiles.value);
+}
+function onEditorPaste(event: ClipboardEvent) {
+  const pasted = transferredFiles(event.clipboardData);
+  if (pasted.length === 0) return;
+  event.preventDefault();
+  editedFiles.add(pasted);
+}
 // An editor left open, on this device or another, reopens with its text.
 const editing = ref(props.comment.editBody !== null);
+if (editing.value) openEditedFiles();
 const draftBody = ref(props.comment.editBody ?? '');
 const editor = ref<HTMLTextAreaElement | null>(null);
 const insertDictation = (text: string) => insertAtCursor(editor.value, draftBody, text);
@@ -112,6 +135,7 @@ watch(
   (editBody) => {
     if (editBody !== null && !editing.value) {
       draftBody.value = editBody;
+      openEditedFiles();
       editing.value = true;
     } else if (editBody === null && editing.value && !autosave.isDirty()) {
       editing.value = false;
@@ -121,20 +145,25 @@ watch(
 
 async function startEditing() {
   draftBody.value = props.comment.body;
+  openEditedFiles();
   editing.value = true;
   autosave.finish(() => update({ editBody: props.comment.body }));
   await nextTick();
   editor.value?.focus();
 }
 
+const canSave = computed(() => draftBody.value.trim() !== '' && !editedFiles.uploading.value);
 function save() {
-  if (!draftBody.value.trim()) return;
-  autosave.finish(() => update({ body: draftBody.value, editBody: null }));
+  if (!canSave.value) return;
+  const fileIds = editedFiles.readyIds.value;
+  autosave.finish(() => update({ body: draftBody.value, editBody: null, fileIds }));
+  editedFiles.clear();
   editing.value = false;
 }
 
 // A comment that was never saved has nothing to go back to, so cancelling deletes it.
 function cancelEditing() {
+  editedFiles.discard();
   autosave.finish(() => (props.comment.body ? update({ editBody: null }) : remove()));
   editing.value = false;
 }
@@ -193,16 +222,28 @@ function onEditorKeydown(event: KeyboardEvent) {
     @click="comment.status === 'submitted' && emit('open', comment)"
   >
     <template v-if="editing">
-      <textarea ref="editor" v-model="draftBody" rows="3" @keydown="onEditorKeydown" />
+      <textarea
+        ref="editor"
+        v-model="draftBody"
+        rows="3"
+        @keydown="onEditorKeydown"
+        @paste="onEditorPaste"
+        @dragover.prevent
+        @drop.prevent="editedFiles.add(transferredFiles($event.dataTransfer))"
+      />
+      <FileDraftList
+        class="attachments"
+        :drafts="editedFiles.drafts.value"
+        @remove="editedFiles.remove"
+      />
       <div class="actions">
+        <AttachButton @files="editedFiles.add" />
         <DictationButton :hint="comment.quote" @text="insertDictation" />
         <ListenButton :text="draftBody" />
         <ExpandButton v-model="expanded" />
         <span class="spacer" />
         <button type="button" @click="cancelEditing">Cancel</button>
-        <button type="button" class="primary" :disabled="!draftBody.trim()" @click="save">
-          Save
-        </button>
+        <button type="button" class="primary" :disabled="!canSave" @click="save">Save</button>
       </div>
     </template>
     <template v-else>
@@ -239,6 +280,7 @@ function onEditorKeydown(event: KeyboardEvent) {
         <span class="quoted">{{ comment.quote }}</span>
       </button>
       <p ref="bodyElement" class="body">{{ comment.body }}</p>
+      <FileLinks :files="savedFiles" />
       <div v-if="joinRole === 'start'" class="actions">
         <span class="join-hint">Pick the comments to join</span>
         <button type="button" @click="stopJoining">Cancel</button>
@@ -467,6 +509,10 @@ function onEditorKeydown(event: KeyboardEvent) {
 
 .submitted .body {
   -webkit-line-clamp: 1;
+}
+
+.attachments {
+  margin-top: 0.4rem;
 }
 
 .actions {
