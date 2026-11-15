@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import type { ChatDefaultPage, Exploration, Fork, ForkRun } from '@shared/types';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { api } from '../api';
+import { removeOfflineData } from '../lib/offline-data';
+import { offline } from '../lib/online';
+import { outbox } from '../stores/outbox';
+import ConfirmButton from './ConfirmButton.vue';
 import CopyableId from './CopyableId.vue';
 import ForkModelInfo from './ForkModelInfo.vue';
-import { offline } from '../lib/online';
+
+const unsent = computed(() => outbox.changes.value.length);
 
 defineProps<{ exploration: Exploration; fork?: Fork; run?: ForkRun }>();
 
@@ -41,6 +46,17 @@ async function setDefaultPage(explorationId: string, defaultPage: ChatDefaultPag
     </label>
     <p v-if="failed" class="error" role="alert">Could not save the setting.</p>
     <ForkModelInfo v-if="fork" :fork="fork" :run="run" />
+    <section class="device" aria-label="This device">
+      <h2>This device</h2>
+      <p class="muted">
+        Every chat, its images and the app are kept here for offline use. Removing them leaves
+        nothing on this device; used online again, the app keeps them anew.
+      </p>
+      <p v-if="unsent > 0" class="error" role="alert">
+        {{ unsent }} change{{ unsent === 1 ? '' : 's' }} not sent yet would be lost.
+      </p>
+      <ConfirmButton label="Remove offline data" danger @confirm="removeOfflineData" />
+    </section>
   </section>
 </template>
 
@@ -65,5 +81,24 @@ async function setDefaultPage(explorationId: string, defaultPage: ChatDefaultPag
 .error {
   margin: 0;
   color: var(--danger);
+}
+
+.device {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.device h2 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.device p {
+  margin: 0;
+  font-size: 0.85rem;
 }
 </style>

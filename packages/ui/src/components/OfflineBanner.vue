@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { markStoreSetUp, storeWasSetUp } from '../lib/local-store';
+import { takeRemovalNotice } from '../lib/offline-data';
 import { offline } from '../lib/online';
 import { outbox } from '../stores/outbox';
 
@@ -20,7 +21,9 @@ const mayBeCleared = isSafari && !fromHomeScreen;
 const cleared = ref(false);
 const firstVisitMs = 60 * 60 * 1000;
 onMounted(async () => {
+  const removedOnPurpose = takeRemovalNotice();
   if (await storeWasSetUp()) return;
+  if (removedOnPurpose) return void markStoreSetUp();
   const device = /(?:^|; )ce_device=[^.;]+\.(\d+)/.exec(document.cookie);
   const cookieAge = device ? Date.now() - Number(device[1]) : 0;
   cleared.value = cookieAge > firstVisitMs;
@@ -50,10 +53,9 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+/* Above the page, scrolling away with it: the chat's header, which stays, shows the unsent count
+   too. */
 .banner {
-  position: sticky;
-  z-index: 15;
-  top: 0;
   display: flex;
   align-items: center;
   gap: 0.75rem;

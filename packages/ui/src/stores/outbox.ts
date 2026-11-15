@@ -444,6 +444,11 @@ export const outbox = {
     const index = failures.findIndex((failure) => failure.key === key);
     if (index !== -1) failures.splice(index, 1);
   },
+  // Drops every change not sent yet, when the reader removes the device's offline data.
+  clear: () => {
+    writeStored({ nextKey: 0, sendingKey: null, queue: [] });
+    failures.splice(0);
+  },
   onChange: (listener: (change: Change) => void) => changeListeners.add(listener),
   onFailure: (listener: (explorationId: string) => void) => failureListeners.add(listener),
 };

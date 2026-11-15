@@ -53,3 +53,37 @@ test('opens with no network, with the chats and their images kept on the device'
     .toBe(1);
   await context.setOffline(false);
 });
+
+test('removes the offline data from settings, warning first of changes not sent', async ({
+  page,
+  context,
+  request,
+}) => {
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'Keep me offline' } })
+  ).json();
+  await page.goto(`/e/${explorationId}`);
+  await expect(page.locator('.queued-submission')).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => caches.keys().then((keys) => keys.length)))
+    .toBeGreaterThan(0);
+
+  await context.setOffline(true);
+  await page.getByPlaceholder('Reply to Claude').fill('Not sent yet');
+  await page.getByRole('button', { name: 'Submit' }).click();
+  await page.getByRole('button', { name: 'Chat settings' }).click();
+  const device = page.getByRole('region', { name: 'This device' });
+  await expect(device).toContainText('1 change not sent yet would be lost.');
+  await context.setOffline(false);
+  await expect(device).not.toContainText('not sent yet');
+
+  await device.getByRole('button', { name: 'Remove offline data' }).click();
+  await device.getByRole('button', { name: 'Confirm' }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.locator('.exploration').first()).toBeVisible();
+  // Removed on purpose, so not reported as cleared by the browser.
+  await expect(page.getByText('offline copy was cleared')).toHaveCount(0);
+  expect(
+    await page.evaluate(() => JSON.parse(localStorage.getItem('chat-explorer.outbox')!).queue),
+  ).toEqual([]);
+});
