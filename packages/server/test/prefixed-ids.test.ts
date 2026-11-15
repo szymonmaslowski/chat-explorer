@@ -46,7 +46,9 @@ describe('prefixed ids', () => {
   it('migrates the ids in the database, with every column that points to them', () => {
     const path = join(mkdtempSync(join(tmpdir(), 'chat-explorer-migration-')), 'test.db');
     const old = new DatabaseSync(path);
-    const before = migrations.length - 1;
+    const before = migrations.findIndex((migration) =>
+      migration.includes("UPDATE explorations SET id = 'chat_' || id"),
+    );
     for (const migration of migrations.slice(0, before)) old.exec(migration);
     old.exec(`PRAGMA user_version = ${before};
       INSERT INTO explorations (id, created_at, updated_at) VALUES ('chat000001', 1, 1);

@@ -294,4 +294,8 @@ export const migrations = [
   UPDATE notes SET id = 'note_' || id;
   UPDATE comments SET created_note_id = 'note_' || created_note_id;
   `,
+  `
+  ALTER TABLE files ADD COLUMN comment_id TEXT;
+  CREATE INDEX files_by_comment ON files (comment_id);
+  `,
 ];

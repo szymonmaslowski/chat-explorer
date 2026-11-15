@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { classifyFile, storedFileName } from '../src/files/kinds.js';
 import type { MessageFile } from '../src/shared/types.js';
-import { createTestApp, seedConversation } from './helpers.js';
+import { createTestApp, draft, seedConversation } from './helpers.js';
 
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const text = (content: string) => new TextEncoder().encode(content);
@@ -187,5 +187,139 @@ describe('files API', () => {
     expect(created.status).toBe(201);
     const { explorationId } = await created.json();
     expect(store.snapshot(explorationId).files).toHaveLength(1);
+  });
+});
+
+describe('files on comments', () => {
+  async function upload(request: ReturnType<typeof createTestApp>['request'], name: string) {
+    const form = new FormData();
+    form.append('file', new File([name], name));
+    const file: MessageFile = await (
+      await request('/api/files', { method: 'POST', body: form })
+    ).json();
+    return file;
+  }
+
+  it("lists a comment's files under it for Claude, and keeps them once sent", async () => {
+    const { request, store } = createTestApp();
+    const { explorationId, mainForkId, answer } = seedConversation(store);
+    const file = await upload(request, 'log.txt');
+    const comment = await (
+      await request(`/api/explorations/${explorationId}/comments`, {
+        method: 'POST',
+        json: {
+          messageId: answer.id,
+          viewForkId: mainForkId,
+          quote: 'some text',
+          startOffset: 16,
+          endOffset: 25,
+          body: 'See the log',
+          fileIds: [file.id],
+        },
+      })
+    ).json();
+    expect(store.snapshot(explorationId).files).toMatchObject([
+      { id: file.id, commentId: comment.id, messageId: null },
+    ]);
+
+    store.submit(explorationId, mainForkId, 'And one more thing');
+    store.deliverQueued(explorationId);
+    const [main] = store.pendingForks(explorationId);
+    const path = store.fileRow(file.id).path;
+    expect(main!.userMessages[0]!.text).toBe(
+      [
+        `[c:${comment.id}]\n> some text\nSee the log\nAttached files (open them with the Read tool):\n- ${path}`,
+        `[m:${main!.userMessages[0]!.id}]\nAnd one more thing`,
+      ].join('\n\n'),
+    );
+    expect(store.snapshot(explorationId).files).toMatchObject([
+      { id: file.id, commentId: comment.id },
+    ]);
+  });
+
+  it('moves the files of the reply box to a comment made from it', async () => {
+    const { request, store } = createTestApp();
+    const { explorationId, mainForkId, answer } = seedConversation(store);
+    const file = await upload(request, 'notes.md');
+    store.saveReplyDraft(mainForkId, { text: 'General', newFork: false, fileIds: [file.id] });
+    const comment = store.createComment(explorationId, {
+      messageId: answer.id,
+      viewForkId: mainForkId,
+      quote: '',
+      startOffset: 0,
+      endOffset: 0,
+      body: 'General',
+      fileIds: [file.id],
+    });
+    expect(store.fileRow(file.id)).toMatchObject({ comment_id: comment.id, draft_fork_id: null });
+    expect(store.replyDraft(mainForkId).files).toEqual([]);
+  });
+
+  it('adds and lets go of files when a comment is saved, and deletes those let go later', async () => {
+    const { request, store, clock, fileStorage } = createTestApp();
+    const { explorationId, mainForkId, answer } = seedConversation(store);
+    const first = await upload(request, 'first.txt');
+    const second = await upload(request, 'second.txt');
+    const comment = draft(store, explorationId, {
+      messageId: answer.id,
+      viewForkId: mainForkId,
+      body: 'Look',
+    });
+    store.updateComment(comment.id, { fileIds: [first.id] });
+    store.updateComment(comment.id, { body: 'Look again', fileIds: [second.id] });
+    expect(store.snapshot(explorationId).files.map((file) => file.id)).toEqual([second.id]);
+
+    const firstPath = store.fileRow(first.id).path;
+    clock.now += 25 * 60 * 60 * 1000;
+    await fileStorage.removeStaleDrafts();
+    expect(existsSync(firstPath)).toBe(false);
+    expect(existsSync(store.fileRow(second.id).path)).toBe(true);
+  });
+
+  it("lets go of a deleted comment's files, and changes no files once it is sent", async () => {
+    const { request, store } = createTestApp();
+    const { explorationId, mainForkId, answer } = seedConversation(store);
+    const file = await upload(request, 'a.txt');
+    const deleted = draft(store, explorationId, {
+      messageId: answer.id,
+      viewForkId: mainForkId,
+      body: 'Gone',
+    });
+    store.updateComment(deleted.id, { fileIds: [file.id] });
+    store.deleteComment(deleted.id);
+    expect(store.fileRow(file.id)).toMatchObject({ exploration_id: null, comment_id: null });
+
+    const sent = draft(store, explorationId, {
+      messageId: answer.id,
+      viewForkId: mainForkId,
+      body: 'Sent',
+    });
+    store.submit(explorationId, mainForkId, '');
+    expect(() => store.updateComment(sent.id, { fileIds: [file.id] })).toThrow();
+  });
+
+  it("links a note comment's files in the note it becomes", async () => {
+    const { request, store } = createTestApp();
+    const { explorationId, mainForkId, answer } = seedConversation(store);
+    const form = new FormData();
+    form.append('file', new File([png], 'chart.png', { type: 'image/png' }));
+    const image: MessageFile = await (
+      await request('/api/files', { method: 'POST', body: form })
+    ).json();
+    const text = await upload(request, 'data.csv');
+    store.createComment(explorationId, {
+      messageId: answer.id,
+      viewForkId: mainForkId,
+      quote: '',
+      startOffset: 0,
+      endOffset: 0,
+      body: 'Keep these',
+      type: 'note',
+      fileIds: [image.id, text.id],
+    });
+    store.submit(explorationId, mainForkId, '');
+    expect(store.snapshot(explorationId).notes[0]!.description).toBe(
+      `Keep these\n\n![chart.png](/api/files/${image.id})\n\n[data.csv](/api/files/${text.id})`,
+    );
   });
 });

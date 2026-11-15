@@ -173,6 +173,8 @@ export interface MessageFile {
   size: number;
   submissionId: string | null;
   messageId: string | null;
+  // A file on a comment stays with it, as a draft and once sent.
+  commentId: string | null;
   createdAt: number;
 }
 
@@ -284,6 +286,7 @@ export interface NewComment {
   editBody?: string;
   type?: CommentType;
   noteGroupId?: string | null;
+  fileIds?: string[];
 }
 
 export interface CommentChanges {
@@ -291,6 +294,8 @@ export interface CommentChanges {
   editBody?: string | null;
   type?: CommentType;
   noteGroupId?: string | null;
+  // All the comment's files: new uploads join it, files left out are let go.
+  fileIds?: string[];
 }
 
 export interface NewBookmark {

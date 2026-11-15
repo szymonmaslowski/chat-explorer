@@ -191,6 +191,14 @@ const quoteBlock = (quote: string) =>
 const quotedText = (quote: string, text: string, separator: string) =>
   quote ? `${quoteBlock(quote)}${separator}${text}` : text;
 
+const attachedFiles = (files: FileRow[]) =>
+  files.length > 0
+    ? `Attached files (open them with the Read tool):\n${files.map((file) => `- ${file.path}`).join('\n')}`
+    : '';
+
+const fileLink = (file: FileRow) =>
+  `${file.kind === 'image' ? '!' : ''}[${file.name.replace(/[[\]]/g, '')}](/api/files/${file.id})`;
+
 export class ChatStore {
   constructor(
     private readonly db: Database,
@@ -742,8 +750,20 @@ export class ChatStore {
       throw new StoreError('invalid', 'The comment anchor offsets are out of order.');
     }
     if (input.noteGroupId) this.requireNoteGroupRow(input.noteGroupId, explorationId);
+    const files = (input.fileIds ?? []).map((fileId) => this.requireDraftFile(fileId));
     const id = input.id ?? newId();
     const createdAt = this.now();
+    this.db.transaction(() => {
+      this.insertComment(id, explorationId, input, createdAt);
+      for (const file of files) this.attachFileToComment(file.id, id, explorationId);
+    });
+    const comment = toComment(this.requireCommentRow(id));
+    this.publish([[explorationId, { type: 'comment.created', comment }]]);
+    if (files.length > 0) this.publishCommentFiles(explorationId, id);
+    return comment;
+  }
+
+  private insertComment(id: string, explorationId: string, input: NewComment, createdAt: number) {
     this.db.run(
       `INSERT INTO comments (id, exploration_id, message_id, view_fork_id, quote, start_offset,
          end_offset, body, edit_body, type, note_group_id, status, created_at, updated_at)
@@ -762,9 +782,37 @@ export class ChatStore {
       createdAt,
       createdAt,
     );
-    const comment = toComment(this.requireCommentRow(id));
-    this.publish([[explorationId, { type: 'comment.created', comment }]]);
-    return comment;
+  }
+
+  private attachFileToComment(fileId: string, commentId: string, explorationId: string) {
+    this.db.run(
+      'UPDATE files SET exploration_id = ?, comment_id = ?, draft_fork_id = NULL WHERE id = ?',
+      explorationId,
+      commentId,
+      fileId,
+    );
+  }
+
+  private commentFiles(commentId: string) {
+    return this.db.all<FileRow>(
+      'SELECT * FROM files WHERE comment_id = ? ORDER BY created_at, rowid',
+      commentId,
+    );
+  }
+
+  private publishCommentFiles(explorationId: string, commentId: string) {
+    const files = this.commentFiles(commentId).map(toMessageFile);
+    this.publish([[explorationId, { type: 'files.updated', files }]]);
+  }
+
+  // A file let go of becomes a draft again, belonging to nothing, and the cleanup of old drafts
+  // deletes it.
+  private releaseFiles(explorationId: string, fileIds: string[]) {
+    if (fileIds.length === 0) return;
+    for (const fileId of fileIds) {
+      this.db.run('UPDATE files SET exploration_id = NULL, comment_id = NULL WHERE id = ?', fileId);
+    }
+    this.publish([[explorationId, { type: 'files.released', fileIds }]]);
   }
 
   updateComment(commentId: string, changes: CommentChanges) {
@@ -776,7 +824,15 @@ export class ChatStore {
     if (changes.noteGroupId) this.requireNoteGroupRow(changes.noteGroupId, row.exploration_id);
     const leavesGroup = changes.type === 'note';
     const groupChanges = leavesGroup ? this.forkGroupChangesWithout(row) : new Map();
+    const currentFileIds = this.commentFiles(commentId).map((file) => file.id);
+    const keptFileIds = changes.fileIds ?? currentFileIds;
+    const addedFiles = keptFileIds
+      .filter((fileId) => !currentFileIds.includes(fileId))
+      .map((fileId) => this.requireDraftFile(fileId));
+    const releasedFileIds = currentFileIds.filter((fileId) => !keptFileIds.includes(fileId));
     this.db.transaction(() => {
+      for (const file of addedFiles)
+        this.attachFileToComment(file.id, commentId, row.exploration_id);
       this.db.run(
         `UPDATE comments SET body = ?, edit_body = ?, type = ?, note_group_id = ?, updated_at = ?
          WHERE id = ?`,
@@ -793,6 +849,8 @@ export class ChatStore {
     const comment = toComment(this.requireCommentRow(commentId));
     this.publish([[row.exploration_id, { type: 'comment.updated', comment }]]);
     this.publishCommentUpdates(row.exploration_id, [...groupChanges.keys()]);
+    if (addedFiles.length > 0) this.publishCommentFiles(row.exploration_id, commentId);
+    this.releaseFiles(row.exploration_id, releasedFileIds);
     return comment;
   }
 
@@ -807,6 +865,10 @@ export class ChatStore {
     });
     this.publish([[row.exploration_id, { type: 'comment.deleted', commentId }]]);
     this.publishCommentUpdates(row.exploration_id, [...groupChanges.keys()]);
+    this.releaseFiles(
+      row.exploration_id,
+      this.commentFiles(commentId).map((file) => file.id),
+    );
   }
 
   // Bookmarking the same passage again finds the bookmark it already has.
@@ -1571,16 +1633,22 @@ export class ChatStore {
       row.id,
     );
     const taggedComments = (comments.length > 1 ? this.inTextOrder(comments) : comments).map(
-      (comment) => `${commentTag(comment.id)}\n${quotedText(comment.quote, comment.body, '\n')}`,
+      (comment) =>
+        [
+          `${commentTag(comment.id)}\n${quotedText(comment.quote, comment.body, '\n')}`,
+          attachedFiles(this.commentFiles(comment.id)),
+        ]
+          .filter(Boolean)
+          .join('\n'),
     );
     const content =
       row.content && comments.length > 0 ? `${messageTag(row.id)}\n${row.content}` : row.content;
-    const paths = this.db
-      .all<FileRow>('SELECT * FROM files WHERE message_id = ? ORDER BY created_at, rowid', row.id)
-      .map((file) => `- ${file.path}`);
-    const files = paths.length
-      ? `Attached files (open them with the Read tool):\n${paths.join('\n')}`
-      : '';
+    const files = attachedFiles(
+      this.db.all<FileRow>(
+        'SELECT * FROM files WHERE message_id = ? ORDER BY created_at, rowid',
+        row.id,
+      ),
+    );
     return [...taggedComments, content, files].filter(Boolean).join('\n\n');
   }
 
@@ -2064,7 +2132,10 @@ export class ChatStore {
           id: noteId,
           groupId: group.id,
           topic: null,
-          description: quotedText(comment.quote, comment.body, '\n\n'),
+          description: [
+            quotedText(comment.quote, comment.body, '\n\n'),
+            ...this.commentFiles(comment.id).map(fileLink),
+          ].join('\n\n'),
           createdBy: 'user',
           source: {
             forkId: comment.view_fork_id,
