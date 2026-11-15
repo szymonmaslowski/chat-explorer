@@ -20,6 +20,7 @@ import {
 } from '../stores/fork-joining';
 import { newId, outbox } from '../stores/outbox';
 import AttachButton from './AttachButton.vue';
+import CommentTypePicker from './CommentTypePicker.vue';
 import ConfirmButton from './ConfirmButton.vue';
 import DictationButton from './DictationButton.vue';
 import ExpandButton from './ExpandButton.vue';
@@ -48,15 +49,18 @@ const savedFiles = computed(() =>
 );
 // While editing, the files are a draft list of their own: added and removed ones count on Save.
 const editedFiles = useFileDrafts(() => commentFilesOwner(props.comment.id));
-function openEditedFiles() {
-  editedFiles.clear();
-  restoreFileDrafts(commentFilesOwner(props.comment.id), savedFiles.value);
-}
 function onEditorPaste(event: ClipboardEvent) {
   const pasted = transferredFiles(event.clipboardData);
   if (pasted.length === 0) return;
   event.preventDefault();
   editedFiles.add(pasted);
+}
+// Like the files, a type picked while editing counts on Save.
+const editedType = ref<CommentType>(props.comment.type);
+function openEditedFiles() {
+  editedType.value = props.comment.type;
+  editedFiles.clear();
+  restoreFileDrafts(commentFilesOwner(props.comment.id), savedFiles.value);
 }
 // An editor left open, on this device or another, reopens with its text.
 const editing = ref(props.comment.editBody !== null);
@@ -156,7 +160,14 @@ const canSave = computed(() => draftBody.value.trim() !== '' && !editedFiles.upl
 function save() {
   if (!canSave.value) return;
   const fileIds = editedFiles.readyIds.value;
-  autosave.finish(() => update({ body: draftBody.value, editBody: null, fileIds }));
+  const changes: CommentChanges = { body: draftBody.value, editBody: null, fileIds };
+  if (editedType.value !== props.comment.type) {
+    changes.type = editedType.value;
+    if (editedType.value === 'note') {
+      changes.noteGroupId = props.comment.noteGroupId ?? firstNoteGroupId();
+    }
+  }
+  autosave.finish(() => update(changes));
   editedFiles.clear();
   editing.value = false;
 }
@@ -236,14 +247,18 @@ function onEditorKeydown(event: KeyboardEvent) {
         :drafts="editedFiles.drafts.value"
         @remove="editedFiles.remove"
       />
-      <div class="actions">
-        <AttachButton @files="editedFiles.add" />
-        <DictationButton :hint="comment.quote" @text="insertDictation" />
-        <ListenButton :text="draftBody" />
-        <ExpandButton v-model="expanded" />
-        <span class="spacer" />
-        <button type="button" @click="cancelEditing">Cancel</button>
-        <button type="button" class="primary" :disabled="!canSave" @click="save">Save</button>
+      <div class="edit-actions">
+        <div class="tools">
+          <CommentTypePicker v-if="!grouped" v-model="editedType" />
+          <AttachButton @files="editedFiles.add" />
+          <DictationButton :hint="comment.quote" @text="insertDictation" />
+          <ExpandButton v-model="expanded" />
+          <ListenButton :text="draftBody" />
+        </div>
+        <div class="final">
+          <button type="button" @click="cancelEditing">Cancel</button>
+          <button type="button" class="primary" :disabled="!canSave" @click="save">Save</button>
+        </div>
       </div>
     </template>
     <template v-else>
@@ -515,6 +530,27 @@ function onEditorKeydown(event: KeyboardEvent) {
   margin-top: 0.4rem;
 }
 
+/* The tools wrap on the left; Cancel and Save stay together on the first line. */
+.edit-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.3rem;
+  margin-top: 0.35rem;
+}
+
+.edit-actions .tools {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.edit-actions .final {
+  display: flex;
+  gap: 0.3rem;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;
@@ -526,10 +562,6 @@ function onEditorKeydown(event: KeyboardEvent) {
 
 .to-answer {
   margin-right: auto;
-}
-
-.spacer {
-  flex: 1;
 }
 
 .actions button {

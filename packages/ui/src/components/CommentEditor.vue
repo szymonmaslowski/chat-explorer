@@ -176,14 +176,17 @@ function onKeydown(event: KeyboardEvent) {
     />
     <FileDraftList class="attachments" :drafts="files.drafts.value" @remove="files.remove" />
     <div class="actions">
-      <CommentTypePicker v-model="type" />
-      <AttachButton @files="files.add" />
-      <DictationButton :hint="anchor.quote" @text="insertDictation" />
-      <ListenButton :text="body" />
-      <ExpandButton v-model="expanded" />
-      <span class="spacer" />
-      <button type="button" @click="cancel">Cancel</button>
-      <button type="button" class="primary" :disabled="!canSave" @click="save">Save</button>
+      <div class="tools">
+        <CommentTypePicker v-model="type" />
+        <AttachButton @files="files.add" />
+        <DictationButton :hint="anchor.quote" @text="insertDictation" />
+        <ExpandButton v-model="expanded" />
+        <ListenButton :text="body" />
+      </div>
+      <div class="final">
+        <button type="button" @click="cancel">Cancel</button>
+        <button type="button" class="primary" :disabled="!canSave" @click="save">Save</button>
+      </div>
     </div>
     <div v-if="type === 'note'" class="note-group">
       <select v-model="pickedGroup" aria-label="Note group">
@@ -231,16 +234,25 @@ function onKeydown(event: KeyboardEvent) {
   overflow: hidden;
 }
 
+/* The tools wrap on the left; Cancel and Save stay together on the first line. */
 .actions {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.4rem;
   margin-top: 0.4rem;
 }
 
-.spacer {
+.tools {
   flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.final {
+  display: flex;
+  gap: 0.4rem;
 }
 
 .attachments {
