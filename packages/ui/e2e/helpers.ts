@@ -8,7 +8,19 @@ import {
 
 // The page shows a change before the daemon has it. Each test waits until its changes are sent,
 // so the next one starts from what the daemon really holds.
-export const test = base.extend<{ sentChanges: void }>({
+export const test = base.extend<{ sentChanges: void; allowedByPolicy: void }>({
+  // Whatever a test does, the Content-Security-Policy must not have to block anything.
+  allowedByPolicy: [
+    async ({ page }, use) => {
+      const blocked: string[] = [];
+      page.on('console', (message) => {
+        if (message.text().includes('Content Security Policy')) blocked.push(message.text());
+      });
+      await use();
+      expect(blocked).toEqual([]);
+    },
+    { auto: true },
+  ],
   sentChanges: [
     async ({ page }, use) => {
       await use();

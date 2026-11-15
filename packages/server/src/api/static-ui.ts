@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
 import type { Context } from 'hono';
+import { contentSecurityPolicy } from './content-security-policy.js';
 
 const contentTypes: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -31,6 +32,7 @@ export function serveUi(uiDirectory: string | null) {
     return context.body(readFileSync(file), 200, {
       'content-type': contentType,
       'cache-control': cacheControl,
+      'content-security-policy': contentSecurityPolicy,
     });
   };
 }
