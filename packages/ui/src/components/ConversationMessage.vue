@@ -14,7 +14,7 @@ import { bringToReadingLine, scrollToEdge } from '../lib/reading-line';
 import { speechBlocks, type SpokenElement } from '../lib/speech-blocks';
 import { checkSpeechAvailable, playBlock, playFrom, speech, togglePause } from '../stores/speech';
 import ConfirmButton from './ConfirmButton.vue';
-import FileIcon from './FileIcon.vue';
+import FileLinks from './FileLinks.vue';
 import MediaIcon from './MediaIcon.vue';
 
 const props = defineProps<{
@@ -88,12 +88,6 @@ watch(
 
 const { copied: linkCopied, copy: copyText } = useCopied();
 const copyLink = () => copyText({ plain: `${location.origin}${route.path}#m-${props.message.id}` });
-
-function openImage(event: MouseEvent, file: MessageFile) {
-  if (file.kind !== 'image') return;
-  event.preventDefault();
-  imageViewer.open(file.id);
-}
 
 function openContentImage(event: MouseEvent) {
   if (!(event.target instanceof HTMLImageElement)) return;
@@ -315,29 +309,7 @@ onMounted(findBlocks);
         </RouterLink>
         <p>{{ comment.body }}</p>
       </div>
-      <div v-if="listedFiles.length" class="files">
-        <a
-          v-for="file in listedFiles"
-          :key="file.id"
-          :href="`/api/files/${file.id}`"
-          target="_blank"
-          rel="noopener"
-          :class="file.kind"
-          :title="file.name"
-          @click="openImage($event, file)"
-        >
-          <img
-            v-if="file.kind === 'image'"
-            :src="`/api/files/${file.id}`"
-            :alt="file.name"
-            decoding="async"
-          />
-          <template v-else>
-            <FileIcon />
-            <span class="name">{{ file.name }}</span>
-          </template>
-        </a>
-      </div>
+      <FileLinks :files="listedFiles" />
       <div
         v-if="html"
         ref="content"
@@ -435,44 +407,6 @@ onMounted(findBlocks);
 .message-end {
   display: flex;
   margin-top: 0.5rem;
-}
-
-.files {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin: 0.4rem 0;
-}
-
-.files a {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  max-width: 100%;
-  color: inherit;
-  text-decoration: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
-
-.files a:not(.image) {
-  padding: 0.3rem 0.6rem 0.3rem 0.45rem;
-  font-size: 0.85rem;
-}
-
-.files img {
-  display: block;
-  max-width: 10rem;
-  max-height: 8rem;
-  border-radius: var(--radius);
-}
-
-.files .name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .quote-link {
