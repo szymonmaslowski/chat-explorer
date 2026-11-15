@@ -340,6 +340,52 @@ test('displays only the drafts, one under another, until the text is shown again
   await expect(page.getByRole('button', { name: 'Show text' })).toHaveCount(0);
 });
 
+test('leaves sent comments out of the drafts-only view, even when opened', async ({
+  page,
+  request,
+}) => {
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'Explain caching' } })
+  ).json();
+  await attachFakeSession(request, explorationId);
+  const answer = 'Alpha paragraph here.\n\nBravo paragraph here.';
+  await deliverAndAnswer(request, explorationId, answer);
+  const snapshot = await (await request.get(`/api/explorations/${explorationId}`)).json();
+  const message = snapshot.messages.at(-1);
+  const comment = (quote: string, body: string) => {
+    const startOffset = answer.replace(/\n\n/g, '').indexOf(quote);
+    return request.post(`/api/explorations/${explorationId}/comments`, {
+      data: {
+        messageId: message.id,
+        viewForkId: message.forkId,
+        quote,
+        startOffset,
+        endOffset: startOffset + quote.length,
+        body,
+      },
+    });
+  };
+  await comment('Alpha', 'Sent about Alpha');
+  await request.post(`/api/explorations/${explorationId}/submit`, {
+    data: { forkId: message.forkId, globalMessage: '', newFork: false, fileIds: [] },
+  });
+  await deliverAndAnswer(request, explorationId, 'Answered.');
+  await detachFakeSession(request);
+  await comment('Bravo', 'Draft about Bravo');
+
+  await page.goto(`/e/${explorationId}`);
+  await clickQuotedText(page, 'Alpha');
+  const cards = page.locator('.comment-card');
+  await expect(cards.filter({ hasText: 'Sent about Alpha' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Drafts' }).click();
+  await page.getByRole('menuitem', { name: 'Display all' }).click();
+  await expect(cards.filter({ visible: true })).toHaveText([/Draft about Bravo/]);
+
+  await page.getByRole('button', { name: 'Show text' }).click();
+  await expect(cards.filter({ hasText: 'Sent about Alpha' })).toBeVisible();
+});
+
 test('opens every comment on the clicked text after its own quote', async ({ page, request }) => {
   const { explorationId } = await (
     await request.post('/api/explorations', { data: { message: 'Explain caching' } })

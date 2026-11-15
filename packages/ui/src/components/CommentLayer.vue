@@ -130,12 +130,14 @@ const placeOfEditor = (editor: OpenEditor) =>
 // A comment open in an editor shows there, not also as a card. A sent comment that quotes text
 // shows in the reply it went with, and its fork as a link under the message, so it needs no card.
 // A saved note keeps its card, which is the way to the note, and a sent general comment keeps its
-// card under its message, where an answer's card of it leads.
+// card under its message, where an answer's card of it leads. Drafts-only view shows only drafts.
 const shownComments = computed(() =>
   props.comments.filter(
     (comment) =>
       !editedIds.value.has(comment.id) &&
-      (comment.status !== 'submitted' || comment.type === 'note' || comment.quote === ''),
+      (props.draftsOnly
+        ? comment.status === 'draft'
+        : comment.status !== 'submitted' || comment.type === 'note' || comment.quote === ''),
   ),
 );
 
@@ -336,6 +338,7 @@ function placeEntries(place: OpenedPlace) {
   return cardEntriesOf(
     props.comments.filter((comment) => {
       if (editedIds.value.has(comment.id)) return false;
+      if (props.draftsOnly && comment.status !== 'draft') return false;
       if (comment.forkGroupId) return groupPlaces.value.get(comment.forkGroupId) === place.key;
       return place.ids.has(comment.id);
     }),
@@ -746,7 +749,7 @@ function clearDraftPaths(root: HTMLElement) {
   }
 }
 
-// What stays in drafts-only view: the open cards, the general drafts under their messages, and
+// What stays in drafts-only view: the open draft cards and editors, the general drafts under their messages, and
 // the layer itself. Their ancestors are marked so they stay too, but with no size of their own.
 function markDraftPaths() {
   const root = container();
@@ -757,7 +760,13 @@ function markDraftPaths() {
   );
   const kept = [
     layer.value,
-    ...openedPlaces.value.map((place) => place.mount),
+    ...openedPlaces.value
+      .filter(
+        (place) =>
+          placeEntries(place).length > 0 ||
+          editors.value.some((editor) => editor.placeKey === place.key),
+      )
+      .map((place) => place.mount),
     ...listedDrafts.flatMap(
       ({ messageId }) => root.querySelector<HTMLElement>(`#comments-${messageId}`) ?? [],
     ),
