@@ -185,3 +185,21 @@ test.describe('on a phone', () => {
     await expect(card).toBeInViewport();
   });
 });
+
+test('shows a remote image in an answer as a link to it, and loads nothing', async ({
+  page,
+  request,
+}) => {
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'Draw it' } })
+  ).json();
+  await attachFakeSession(request, explorationId);
+  await deliverAndAnswer(request, explorationId, '![A chart](https://example.com/chart.png)');
+  await detachFakeSession(request);
+  const remote = page.waitForRequest(/example\.com/, { timeout: 1000 }).catch(() => null);
+  await page.goto(`/e/${explorationId}`);
+  const link = page.getByRole('link', { name: 'Image from example.com: A chart' });
+  await expect(link).toHaveAttribute('href', 'https://example.com/chart.png');
+  await expect(page.locator('.message.assistant img')).toHaveCount(0);
+  expect(await remote).toBeNull();
+});
