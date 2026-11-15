@@ -3,6 +3,7 @@ import { Readable } from 'node:stream';
 import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { compress } from 'hono/compress';
+import { getCookie, setCookie } from 'hono/cookie';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 import { apiVersion } from '../config.js';
@@ -23,6 +24,7 @@ import {
   type Snapshot,
 } from '../shared/types.js';
 import { StoreError } from '../store/errors.js';
+import { newId } from '../store/ids.js';
 import type { EventBus } from '../store/event-bus.js';
 import type { FeedbackHub } from '../store/feedback-hub.js';
 import type { RunStore } from '../store/runs.js';
@@ -113,8 +115,11 @@ const attemptQuery = z.object({
   afterMessageId: z.string(),
   attempt: z.coerce.number().int(),
 });
-const readMessagesBody = z.object({ messageIds: z.array(z.string()).min(1) });
-const unreadFromBody = z.object({ viewForkId: z.string() });
+const deviceCookie = 'ce_device';
+const deviceOf = (context: Context) => getCookie(context, deviceCookie)?.split('.')[0] ?? null;
+const markedAt = z.number().int().positive().optional();
+const readMessagesBody = z.object({ messageIds: z.array(z.string()).min(1), at: markedAt });
+const unreadFromBody = z.object({ viewForkId: z.string(), at: markedAt });
 const noteForkBody = z.object({ id: clientId, forkId: clientId, message: z.string() });
 const answerForkBody = z.object({ forkId: clientId });
 const forkAwarenessBody = z.object({ awareness: z.enum(['aware', 'separate']) });
@@ -145,6 +150,8 @@ const noteChangesBody = z.object({
   topic: z.string().optional(),
   description: z.string().optional(),
   checked: z.boolean().optional(),
+  baseUpdatedAt: z.number().int().optional(),
+  editedAt: z.number().int().optional(),
 });
 const noteReorderBody = z.object({ afterNoteId: z.string().nullable() });
 const noteGroupReorderBody = z.object({ afterGroupId: z.string().nullable() });
@@ -245,6 +252,19 @@ export function createApp(options: AppOptions) {
   // A long chat's snapshot is megabytes of JSON, loaded again on every reconnect over the
   // tailnet. Event streams are left as they are, so each event arrives at once.
   app.use('*', compress());
+  // Each browser gets an id that outlives what the page keeps: set by the server, so Safari's
+  // seven-day limit on what pages store does not clear it, and renewed on each visit, as browsers
+  // keep a cookie for 400 days at most. It tells the page its offline copy was cleared, and the
+  // daemon which device made an edit.
+  app.use('*', async (context, next) => {
+    const device = getCookie(context, deviceCookie) ?? `${newId()}.${Date.now()}`;
+    setCookie(context, deviceCookie, device, {
+      path: '/',
+      maxAge: 400 * 24 * 60 * 60,
+      sameSite: 'Strict',
+    });
+    await next();
+  });
 
   app.onError((error, context) => {
     if (error instanceof StoreError) {
@@ -463,12 +483,12 @@ export function createApp(options: AppOptions) {
 
   app.post('/api/explorations/:id/read', async (context) => {
     const body = readMessagesBody.parse(await context.req.json());
-    return context.json(store.markRead(context.req.param('id'), body.messageIds));
+    return context.json(store.markRead(context.req.param('id'), body.messageIds, body.at));
   });
 
   app.post('/api/messages/:id/unread', async (context) => {
     const body = unreadFromBody.parse(await context.req.json());
-    return context.json(store.markUnreadFrom(context.req.param('id'), body.viewForkId));
+    return context.json(store.markUnreadFrom(context.req.param('id'), body.viewForkId, body.at));
   });
 
   app.post('/api/explorations/:id/comments', async (context) => {
@@ -571,7 +591,7 @@ export function createApp(options: AppOptions) {
 
   app.patch('/api/notes/:id', async (context) => {
     const body = noteChangesBody.parse(await context.req.json());
-    return context.json(store.updateNote(context.req.param('id'), body));
+    return context.json(store.updateNote(context.req.param('id'), body, deviceOf(context)));
   });
 
   app.delete('/api/notes/:id', (context) => {
@@ -788,7 +808,9 @@ export function createApp(options: AppOptions) {
 
   internal.patch('/notes/:id', async (context) => {
     const { shimId, ...changes } = claudeNoteChangesBody.parse(await context.req.json());
-    return context.json(store.updateNote(attachedNoteId(context.req.param('id'), shimId), changes));
+    return context.json(
+      store.updateNote(attachedNoteId(context.req.param('id'), shimId), changes, 'claude'),
+    );
   });
 
   internal.post('/note-groups/:id/reorder', async (context) => {

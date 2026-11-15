@@ -67,6 +67,7 @@ export interface MessageRow {
   source: MessageSource;
   created_at: number;
   read_at: number | null;
+  read_marked_at: number | null;
 }
 
 export interface CommentRow {
@@ -144,6 +145,7 @@ export interface NoteRow {
   deletion_requested_at: number | null;
   created_at: number;
   updated_at: number;
+  updated_device: string | null;
 }
 
 export interface ForkRunRow {

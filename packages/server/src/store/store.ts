@@ -766,24 +766,36 @@ export class ChatStore {
   }
 
   // Reading is allowed in archived chats and forks too, so their unread marks can be cleared.
-  markRead(explorationId: string, messageIds: string[]) {
+  // A mark made offline arrives late: it changes only answers no newer mark has touched since.
+  // A mark that changes nothing still counts as the newest, so an older one cannot undo it.
+  markRead(explorationId: string, messageIds: string[], at = this.now()) {
     this.requireExplorationRow(explorationId);
-    const readAt = this.now();
-    const changedIds = messageIds.filter(
-      (messageId) =>
-        this.db.run(
-          'UPDATE messages SET read_at = ? WHERE id = ? AND exploration_id = ? AND read_at IS NULL',
-          readAt,
+    const readAt = at;
+    const changedIds = this.db.transaction(() =>
+      messageIds.filter((messageId) => {
+        const row = this.db.get<MessageRow>(
+          `SELECT * FROM messages WHERE id = ? AND exploration_id = ? AND role = 'assistant'
+             AND (read_marked_at IS NULL OR read_marked_at <= ?)`,
           messageId,
           explorationId,
-        ).changes > 0,
+          at,
+        );
+        if (!row) return false;
+        this.db.run(
+          'UPDATE messages SET read_at = coalesce(read_at, ?), read_marked_at = ? WHERE id = ?',
+          readAt,
+          at,
+          messageId,
+        );
+        return row.read_at === null;
+      }),
     );
     this.publishReadChange(explorationId, changedIds, readAt);
     return { messageIds: changedIds, readAt };
   }
 
   // The answer and every later answer of Claude's on the path of the fork being read.
-  markUnreadFrom(messageId: string, viewForkId: string) {
+  markUnreadFrom(messageId: string, viewForkId: string, at = this.now()) {
     const message = this.requireMessageRow(messageId);
     const viewFork = this.requireForkRow(viewForkId, message.exploration_id);
     if (message.role !== 'assistant') {
@@ -794,13 +806,19 @@ export class ChatStore {
     if (start === -1) {
       throw new StoreError('invalid', `Message ${messageId} is not in fork ${viewForkId}.`);
     }
-    const changedIds = path
+    const marked = path
       .slice(start)
-      .filter((row) => row.role === 'assistant' && row.read_at !== null)
-      .map((row) => row.id);
-    for (const changedId of changedIds) {
-      this.db.run('UPDATE messages SET read_at = NULL WHERE id = ?', changedId);
-    }
+      .filter((row) => row.role === 'assistant' && (row.read_marked_at ?? 0) <= at);
+    this.db.transaction(() => {
+      for (const row of marked) {
+        this.db.run(
+          'UPDATE messages SET read_at = NULL, read_marked_at = ? WHERE id = ?',
+          at,
+          row.id,
+        );
+      }
+    });
+    const changedIds = marked.filter((row) => row.read_at !== null).map((row) => row.id);
     this.publishReadChange(message.exploration_id, changedIds, null);
     return { messageIds: changedIds, readAt: null };
   }
@@ -2055,25 +2073,56 @@ export class ChatStore {
     return toNote(this.requireNoteRow(id));
   }
 
-  updateNote(noteId: string, changes: NoteChanges) {
+  // An edit that another device's edit overtook while it waited, as one made offline, keeps both:
+  // the newer edit in the note, the older one as a copy beside it.
+  updateNote(noteId: string, changes: NoteChanges, device: string | null = null) {
     const row = this.requireNoteRow(noteId);
     this.requireExplorationRow(row.exploration_id);
-    const topic = changes.topic === undefined ? row.topic : changes.topic.trim() || null;
-    const description = changes.description?.trim() ?? row.description;
+    let topic = changes.topic === undefined ? row.topic : changes.topic.trim() || null;
+    let description = changes.description?.trim() ?? row.description;
     if (!topic && !description) {
       throw new StoreError('invalid', 'A note needs a topic or a description.');
     }
+    const editsText = changes.topic !== undefined || changes.description !== undefined;
+    const overtaken =
+      editsText &&
+      changes.baseUpdatedAt !== undefined &&
+      row.updated_at > changes.baseUpdatedAt &&
+      row.updated_device !== device &&
+      (topic !== row.topic || description !== row.description);
+    const incomingIsNewer = (changes.editedAt ?? this.now()) >= row.updated_at;
+    const copy = overtaken
+      ? incomingIsNewer
+        ? { topic: row.topic, description: row.description }
+        : { topic, description }
+      : null;
+    if (copy && !incomingIsNewer) {
+      topic = row.topic;
+      description = row.description;
+    }
     const checked = changes.checked === undefined ? row.checked : changes.checked ? 1 : 0;
-    this.db.run(
-      'UPDATE notes SET topic = ?, description = ?, checked = ?, updated_at = ? WHERE id = ?',
-      topic,
-      description,
-      checked,
-      this.now(),
-      noteId,
-    );
+    const events = this.db.transaction(() => {
+      this.db.run(
+        `UPDATE notes SET topic = ?, description = ?, checked = ?, updated_at = ?,
+           updated_device = ? WHERE id = ?`,
+        topic,
+        description,
+        checked,
+        this.now(),
+        device,
+        noteId,
+      );
+      if (!copy) return [];
+      return this.insertNote({
+        id: newPrefixedId('note'),
+        groupId: row.group_id,
+        topic: `${copy.topic ?? 'Note'} (other version)`,
+        description: copy.description,
+        createdBy: 'user',
+      });
+    });
     const note = toNote(this.requireNoteRow(noteId));
-    this.publish([[row.exploration_id, { type: 'note.updated', note }]]);
+    this.publish([[row.exploration_id, { type: 'note.updated', note }], ...events]);
     return note;
   }
 

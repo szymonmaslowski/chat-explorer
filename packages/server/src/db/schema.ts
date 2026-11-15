@@ -365,4 +365,10 @@ export const migrations = [
   ALTER TABLE files ADD COLUMN height INTEGER;
   `,
   changeLog(),
+  `
+  -- When a read mark was last set on the device that set it, so the newest of two marks wins.
+  ALTER TABLE messages ADD COLUMN read_marked_at INTEGER;
+  -- Which device made a note's last edit, so an edit from another device made meanwhile is seen.
+  ALTER TABLE notes ADD COLUMN updated_device TEXT;
+  `,
 ];

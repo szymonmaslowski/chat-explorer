@@ -400,6 +400,10 @@ export interface NoteChanges {
   topic?: string;
   description?: string;
   checked?: boolean;
+  // When the editing device last saw the note, and when its edit was made: an edit from another
+  // device in between is a conflict, and the older edit is kept as a copy.
+  baseUpdatedAt?: number;
+  editedAt?: number;
 }
 
 export type SpeechBlock =
