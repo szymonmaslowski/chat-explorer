@@ -79,8 +79,10 @@ export function useMessageWindow(input: {
     ready.value = windowReady.value = true;
   }
 
+  // Two sources, compared one by one: a getter returning a new array would open the fork again,
+  // emptying the page for a moment, on every change of the fork, such as a message sent in it.
   watch(
-    () => [input.fork.value?.id, input.state.value.status === 'ready'] as const,
+    [() => input.fork.value?.id, () => input.state.value.status === 'ready'],
     ([forkId, loaded]) => {
       if (forkId && loaded) void open(forkId);
     },

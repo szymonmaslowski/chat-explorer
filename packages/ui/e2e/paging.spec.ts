@@ -74,3 +74,19 @@ test('shows everything down from an old message a link points at', async ({ page
   await expect(page.locator(`#m-${oldAnswer.id}`)).toBeInViewport();
   await expect(page.getByText('Answer 40.')).toBeAttached();
 });
+
+test('stays at the end of a long fork when a sent message arrives', async ({ page, request }) => {
+  const { explorationId } = await longChat(request, 30);
+  await page.goto(`/e/${explorationId}`);
+  await expect(page.getByText('Answer 30.')).toBeVisible();
+  await page.mouse.wheel(0, 100);
+  await page.getByPlaceholder('Reply to Claude').fill('Question 31');
+  await page.getByRole('button', { name: 'Submit' }).click();
+  await expect(page.locator('.queued-submission')).toBeInViewport();
+
+  await attachFakeSession(request, explorationId);
+  await deliverAndAnswer(request, explorationId, 'Answer 31.');
+  await detachFakeSession(request);
+  await expect(page.getByText('Answer 31.')).toBeInViewport();
+  expect(await shownCount(page)).toBeLessThanOrEqual(44);
+});
