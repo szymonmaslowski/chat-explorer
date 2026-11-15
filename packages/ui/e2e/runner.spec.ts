@@ -52,6 +52,8 @@ test('shows what the runner does in a fork, its usage, and stops it on request',
   });
 
   await page.goto(`/e/${explorationId}`);
+  const status = page.locator('.exploration-header .status');
+  await expect(status).toHaveText('working');
   const activity = page.locator('.activity-group');
   await expect(activity).toContainText('Working · 2 steps');
   await expect(activity.locator('li')).toHaveText([
@@ -74,6 +76,12 @@ test('shows what the runner does in a fork, its usage, and stops it on request',
   await expect(page.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
   await expect(activity).toContainText('Worked');
   await expect(activity.locator('li')).toHaveCount(0);
+  await expect(status).toHaveText('done');
+
+  // The map is about the whole chat, where one fork's state would mislead.
+  await page.goto(`/e/${explorationId}/map`);
+  await expect(page.locator('.fork-box')).toHaveCount(1);
+  await expect(status).toHaveCount(0);
 });
 
 test('offers Retry on a fork whose runner failed too often', async ({ page, request }) => {

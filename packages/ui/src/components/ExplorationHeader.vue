@@ -4,6 +4,7 @@ import { computed, ref } from 'vue';
 import { api } from '../api';
 import { useLayout, type LayoutPage } from '../composables/useLayout';
 import { forkLineage, forkTitle } from '../lib/conversation';
+import { awaitsAnswer } from '../lib/read-state';
 import type { ExplorationState } from '../stores/exploration';
 import ChatSettings from './ChatSettings.vue';
 import ConfirmButton from './ConfirmButton.vue';
@@ -37,6 +38,16 @@ const links = computed(() => {
 
 const settingsOpen = ref(false);
 const forkRun = computed(() => (props.fork ? props.state.forkRuns.get(props.fork.id) : undefined));
+// A fork the runner answers shows its own state; a fork the terminal holds shows the terminal
+// session's.
+const runnerFork = computed(() => {
+  const run = forkRun.value;
+  if (!props.fork || !run || run.heldByTerminal) return undefined;
+  return {
+    status: run.status,
+    awaitingAnswer: awaitsAnswer(props.fork, props.state.messages, run),
+  };
+});
 
 const chatTitle = computed(() => props.state.exploration?.title || 'Untitled chat');
 const forksBetween = computed(() =>
@@ -65,6 +76,8 @@ const forksBetween = computed(() =>
       </nav>
       <div v-if="!side" class="controls">
         <SessionStatusBar
+          v-if="page !== 'map'"
+          :run="runnerFork"
           :status="state.sessionStatus"
           :connected="state.connected"
           :exploration-id="state.explorationId"

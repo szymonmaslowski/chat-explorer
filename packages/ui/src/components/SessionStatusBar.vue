@@ -1,14 +1,36 @@
 <script setup lang="ts">
-import type { SessionStatus } from '@shared/types';
+import type { RunStatus, SessionStatus } from '@shared/types';
 import { computed } from 'vue';
 import { outbox } from '../stores/outbox';
 
+// The terminal session's state, or, on a fork the runner answers, that fork's own.
 const props = defineProps<{
   status: SessionStatus;
   connected: boolean;
   explorationId: string;
   hasQueued: boolean;
+  run?: { status: RunStatus; awaitingAnswer: boolean };
 }>();
+
+type RunState = RunStatus | 'waiting';
+const runLabels: Record<RunState, string> = {
+  idle: 'done',
+  waiting: 'waiting',
+  answering: 'working',
+  waiting_limit: 'waiting for the limit',
+  failed: 'failed',
+};
+const runExplanations: Record<RunState, string> = {
+  idle: 'Claude has answered in this fork',
+  waiting: 'This fork waits for Claude to start',
+  answering: 'Claude is answering in this fork',
+  waiting_limit: 'Claude waits for the usage limit in this fork',
+  failed: 'Claude could not answer in this fork',
+};
+const runState = computed<RunState | null>(() => {
+  if (!props.run) return null;
+  return props.run.status === 'idle' && props.run.awaitingAnswer ? 'waiting' : props.run.status;
+});
 
 const labels: Record<SessionStatus, string> = {
   starting: 'starting',
@@ -31,11 +53,13 @@ const waiting = computed(
     outbox.changes.value.filter((change) => change.explorationId === props.explorationId).length,
 );
 const label = computed(() => {
-  const state = props.connected ? labels[props.status] : 'reconnecting…';
+  const shown = runState.value ? runLabels[runState.value] : labels[props.status];
+  const state = props.connected ? shown : 'reconnecting…';
   if (!waiting.value || (props.connected && !outbox.stalled.value)) return state;
   return `${state} · ${waiting.value} waiting`;
 });
 const title = computed(() => {
+  if (props.connected && runState.value) return runExplanations[runState.value];
   const explanation = props.connected ? explanations[props.status] : 'Reconnecting to the daemon';
   const command = `run /explore-chat ${props.explorationId} in Claude Code`;
   return props.status === 'listening' || props.status === 'answering'
@@ -45,11 +69,11 @@ const title = computed(() => {
 </script>
 
 <template>
-  <div class="status" :class="connected ? status : 'offline'" :title="title">
+  <div class="status" :class="connected ? (runState ?? status) : 'offline'" :title="title">
     <span class="dot" />
     <span class="label">
       {{ label }}
-      <span v-if="connected && status === 'attached' && hasQueued" class="stopped">
+      <span v-if="connected && !runState && status === 'attached' && hasQueued" class="stopped">
         · messages wait: tell Claude in its terminal to continue
       </span>
     </span>
@@ -73,11 +97,17 @@ const title = computed(() => {
   background: var(--text-muted);
 }
 
-.listening .dot {
+.listening .dot,
+.idle .dot {
   background: var(--success);
 }
 
+.waiting_limit .dot {
+  background: var(--warning);
+}
+
 .answering .dot,
+.waiting .dot,
 .starting .dot {
   background: var(--warning);
   animation: pulse 1.2s ease-in-out infinite;
@@ -87,7 +117,8 @@ const title = computed(() => {
   color: var(--warning);
 }
 
-.offline .dot {
+.offline .dot,
+.failed .dot {
   background: var(--danger);
 }
 
