@@ -2,6 +2,8 @@ import type {
   Activity,
   ActivitySummary,
   Bookmark,
+  ChangeKind,
+  ChangeSet,
   Comment,
   Exploration,
   ExplorationEvent,
@@ -24,6 +26,16 @@ import { defaultGroupName, noteForkMessage, reorderedIds } from '@shared/notes';
 import { nextTick, reactive, toRaw, watch } from 'vue';
 import { api, ApiError } from '../api';
 import { openEventStream } from '../lib/event-stream';
+import {
+  askForPersistentStorage,
+  forgetChat,
+  readBodies,
+  readChat,
+  storedBodyIds,
+  writeBodies,
+  writeChat,
+  type StoredChat,
+} from '../lib/local-store';
 import { applyOrder, notesInGroup, renumberGroup, sortedGroups } from '../lib/notes';
 import { outbox, subjectOf, type Change } from './outbox';
 
@@ -31,6 +43,8 @@ export interface ExplorationState {
   explorationId: string;
   status: 'loading' | 'ready' | 'missing' | 'deleted' | 'error';
   exploration: Exploration | null;
+  // The change log's number this chat is up to date with; 0 when not known.
+  seq: number;
   forks: Map<string, Fork>;
   // Every message of the chat, without its text.
   messages: Map<string, MessageHead>;
@@ -141,6 +155,7 @@ const headOf = ({ content, ...message }: Message): MessageHead => ({
 function putMessage(state: ExplorationState, message: Message) {
   put(state.messages, message.id, headOf(message));
   state.bodies.set(message.id, message.content);
+  keepBody(state.explorationId, message.id, message.content);
 }
 
 function countActivity(state: ExplorationState, activity: Activity) {
@@ -639,8 +654,16 @@ export function applyChange(state: ExplorationState, change: Change) {
 const isFull = (snapshot: LightSnapshot | Snapshot): snapshot is Snapshot =>
   !('activitySummaries' in snapshot);
 
+const applyPending = (state: ExplorationState) => {
+  for (const change of outbox.changes.value) applyChange(state, change);
+};
+
 // A daemon from before the light load sends the whole chat, texts and all steps included.
-function applySnapshot(state: ExplorationState, snapshot: LightSnapshot | Snapshot) {
+export function applySnapshot(
+  state: ExplorationState,
+  snapshot: LightSnapshot | Snapshot,
+  options = { withPending: true },
+) {
   if (!state.exploration || !sameContent(state.exploration, snapshot.exploration)) {
     state.exploration = snapshot.exploration;
   }
@@ -653,6 +676,7 @@ function applySnapshot(state: ExplorationState, snapshot: LightSnapshot | Snapsh
   } else {
     syncItems(state.messages, snapshot.messages, byId);
     syncItems(state.activitySummaries, snapshot.activitySummaries, attemptKey);
+    state.seq = snapshot.seq;
   }
   syncItems(state.comments, snapshot.comments, byId);
   syncItems(state.queuedSubmissions, snapshot.queuedSubmissions, byId);
@@ -667,37 +691,179 @@ function applySnapshot(state: ExplorationState, snapshot: LightSnapshot | Snapsh
   state.sessionStatus = snapshot.sessionStatus;
   state.sessionError = snapshot.sessionError;
   state.status = 'ready';
-  for (const change of outbox.changes.value) applyChange(state, change);
+  if (options.withPending) applyPending(state);
 }
 
+// The device's copy of a chat, shown before the daemon answers, or instead of it offline.
+export function applyStoredChat(
+  state: ExplorationState,
+  stored: StoredChat,
+  options = { withPending: true },
+) {
+  state.exploration = stored.exploration;
+  syncItems(state.forks, stored.forks, byId);
+  syncItems(state.messages, stored.messages, byId);
+  syncItems(state.comments, stored.comments, byId);
+  syncItems(state.queuedSubmissions, stored.queuedSubmissions, byId);
+  syncItems(state.files, stored.files, byId);
+  syncItems(state.replyDrafts, stored.replyDrafts, (draft) => draft.forkId);
+  syncItems(state.noteGroups, stored.noteGroups, byId);
+  syncItems(state.notes, stored.notes, byId);
+  syncItems(state.bookmarks, stored.bookmarks, byId);
+  syncItems(state.forkRuns, stored.forkRuns, (run) => run.forkId);
+  syncItems(state.activities, stored.activities, byId);
+  syncItems(state.activitySummaries, stored.activitySummaries, attemptKey);
+  state.seq = stored.seq;
+  state.status = 'ready';
+  if (options.withPending) applyPending(state);
+}
+
+export function toStoredChat(state: ExplorationState): StoredChat | null {
+  if (!state.exploration) return null;
+  const values = <Item>(items: Map<string, Item>) => [...items.values()].map((item) => toRaw(item));
+  return {
+    explorationId: state.explorationId,
+    seq: state.seq,
+    exploration: toRaw(state.exploration),
+    forks: values(state.forks),
+    messages: values(state.messages),
+    comments: values(state.comments),
+    queuedSubmissions: values(state.queuedSubmissions),
+    files: values(state.files),
+    replyDrafts: values(state.replyDrafts),
+    noteGroups: values(state.noteGroups),
+    notes: values(state.notes),
+    bookmarks: values(state.bookmarks),
+    forkRuns: values(state.forkRuns),
+    activities: values(state.activities),
+    activitySummaries: values(state.activitySummaries),
+  };
+}
+
+// What changed since the copy shown, as the daemon has it now.
+export function applyChangeSet(
+  state: ExplorationState,
+  changes: ChangeSet,
+  options = { withPending: true },
+) {
+  if (changes.exploration) state.exploration = changes.exploration;
+  for (const fork of changes.forks) put(state.forks, fork.id, fork);
+  for (const message of changes.messages) putMessage(state, message);
+  for (const comment of changes.comments) put(state.comments, comment.id, comment);
+  for (const submission of changes.queuedSubmissions) {
+    put(state.queuedSubmissions, submission.id, submission);
+  }
+  for (const file of changes.files) put(state.files, file.id, file);
+  for (const draft of changes.replyDrafts) put(state.replyDrafts, draft.forkId, draft);
+  for (const group of changes.noteGroups) put(state.noteGroups, group.id, group);
+  for (const note of changes.notes) put(state.notes, note.id, note);
+  for (const bookmark of changes.bookmarks) put(state.bookmarks, bookmark.id, bookmark);
+  for (const run of changes.forkRuns) put(state.forkRuns, run.forkId, run);
+  for (const activity of changes.activities) {
+    if (!state.activities.has(activity.id)) countActivity(state, activity);
+    put(state.activities, activity.id, activity);
+  }
+  for (const { kind, id } of changes.deleted) removeChanged(state, kind, id);
+  state.seq = changes.seq;
+  state.status = state.exploration ? 'ready' : state.status;
+  if (options.withPending) applyPending(state);
+}
+
+function removeChanged(state: ExplorationState, kind: ChangeKind, id: string) {
+  const maps: Partial<Record<ChangeKind, Map<string, unknown>>> = {
+    fork: state.forks,
+    message: state.messages,
+    comment: state.comments,
+    submission: state.queuedSubmissions,
+    file: state.files,
+    reply_draft: state.replyDrafts,
+    note_group: state.noteGroups,
+    note: state.notes,
+    bookmark: state.bookmarks,
+    fork_run: state.forkRuns,
+    activity: state.activities,
+  };
+  if (kind === 'exploration') state.status = 'deleted';
+  maps[kind]?.delete(id);
+}
+
+export const emptyState = (explorationId: string): ExplorationState => ({
+  explorationId,
+  status: 'loading',
+  exploration: null,
+  seq: 0,
+  forks: new Map(),
+  messages: new Map(),
+  bodies: new Map(),
+  comments: new Map(),
+  queuedSubmissions: new Map(),
+  files: new Map(),
+  replyDrafts: new Map(),
+  noteGroups: new Map(),
+  notes: new Map(),
+  bookmarks: new Map(),
+  forkRuns: new Map(),
+  activities: new Map(),
+  activitySummaries: new Map(),
+  sessionStatus: 'detached',
+  sessionError: null,
+  connected: false,
+});
+
+// Brings a chat up to date: from the change log after the copy's number when there is one, or
+// with a fresh light load.
+export async function catchUp(state: ExplorationState, options = { withPending: true }) {
+  if (state.seq > 0 && state.exploration) {
+    const changes = await api.changes(state.explorationId, state.seq);
+    if (!changes.reset) return applyChangeSet(state, changes, options);
+  }
+  applySnapshot(state, await api.snapshot(state.explorationId), options);
+}
+
+const saveDelayMs = 1_000;
+
 function createExplorationStore(explorationId: string) {
-  const state = reactive<ExplorationState>({
-    explorationId,
-    status: 'loading',
-    exploration: null,
-    forks: new Map(),
-    messages: new Map(),
-    bodies: new Map(),
-    comments: new Map(),
-    queuedSubmissions: new Map(),
-    files: new Map(),
-    replyDrafts: new Map(),
-    noteGroups: new Map(),
-    notes: new Map(),
-    bookmarks: new Map(),
-    forkRuns: new Map(),
-    activities: new Map(),
-    activitySummaries: new Map(),
-    sessionStatus: 'detached',
-    sessionError: null,
-    connected: false,
+  const state = reactive<ExplorationState>(emptyState(explorationId));
+  askForPersistentStorage();
+
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  const save = () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      const chat = toStoredChat(state);
+      if (chat) void writeChat(chat);
+      saveBodies(explorationId);
+    }, saveDelayMs);
+  };
+
+  const restored = readChat(explorationId).then((stored) => {
+    if (stored && state.status === 'loading') applyStoredChat(state, stored);
   });
 
+  // Live events move the copy's number on, except while it catches up from an older one.
+  let catchingUp = false;
+  let filled = false;
+  let caughtUp = false;
   const load = async () => {
+    await restored;
+    catchingUp = true;
     try {
-      applySnapshot(state, await api.snapshot(explorationId));
+      await catchUp(state);
+      caughtUp = true;
+      save();
+      if (!filled) {
+        filled = true;
+        void fillBodies(state);
+      }
     } catch (error) {
-      state.status = error instanceof ApiError && error.code === 'not_found' ? 'missing' : 'error';
+      if (error instanceof ApiError && error.code === 'not_found') {
+        state.status = 'missing';
+        void forgetChat(explorationId);
+      } else if (state.status !== 'ready') {
+        state.status = 'error';
+      }
+    } finally {
+      catchingUp = false;
     }
   };
 
@@ -709,10 +875,12 @@ function createExplorationStore(explorationId: string) {
       await outbox.flush();
       await load();
     },
-    // EventSource reports the 404 of a missing exploration only as an error.
+    // EventSource reports the 404 of a missing exploration only as an error. A copy shown from
+    // the device asks the daemon too, until it reaches it once, to learn of a deleted chat.
     onError: () => {
       state.connected = false;
-      if (state.status !== 'loading') return;
+      if (state.status !== 'loading' && caughtUp) return;
+      if (catchingUp) return;
       void load().then(() => {
         if (state.status === 'missing') stream.close();
       });
@@ -721,8 +889,13 @@ function createExplorationStore(explorationId: string) {
       eventTypes.map((type) => [
         type,
         (data: string) => {
-          const event: ExplorationEvent = JSON.parse(data);
+          const event: ExplorationEvent & { seq?: number } = JSON.parse(data);
           applyServerEvent(state, event);
+          // Without a copy loaded yet there is nothing the number could be the state of.
+          if (!catchingUp && state.exploration && event.seq !== undefined) {
+            state.seq = Math.max(state.seq, event.seq);
+          }
+          save();
           // A split moves messages and steps to a new fork, so the counted attempts come again.
           if (event.type === 'fork.split') void load();
         },
@@ -733,6 +906,7 @@ function createExplorationStore(explorationId: string) {
 }
 
 let active: ReturnType<typeof createExplorationStore> | null = null;
+export const activeExplorationId = () => active?.state.explorationId ?? null;
 
 export function whenActiveExplorationLoaded() {
   return new Promise<void>((resolve) => {
@@ -770,20 +944,72 @@ export function openExploration(explorationId: string) {
 const loadingBodies = new Map<string, Promise<void>>();
 const maxBodiesPerRequest = 200;
 
-// Loads the texts of these messages that are not loaded yet, a request per batch.
+// Texts loaded from the daemon or arrived live, not on the device yet, by chat.
+const unsavedBodies = new Map<string, Map<string, string>>();
+const keepBody = (explorationId: string, id: string, content: string) => {
+  const unsaved = unsavedBodies.get(explorationId) ?? new Map<string, string>();
+  unsaved.set(id, content);
+  unsavedBodies.set(explorationId, unsaved);
+};
+export function saveBodies(explorationId: string) {
+  const unsaved = unsavedBodies.get(explorationId);
+  if (!unsaved?.size) return;
+  unsavedBodies.delete(explorationId);
+  void writeBodies(explorationId, unsaved);
+}
+
+async function fetchBodies(state: ExplorationState, messageIds: string[]) {
+  const stored = await readBodies(messageIds);
+  for (const [id, content] of stored) state.bodies.set(id, content);
+  const missing = messageIds.filter((id) => !stored.has(id));
+  for (let start = 0; start < missing.length; start += maxBodiesPerRequest) {
+    const bodies = await api.messageBodies(
+      state.explorationId,
+      missing.slice(start, start + maxBodiesPerRequest),
+    );
+    for (const body of bodies) {
+      state.bodies.set(body.id, body.content);
+      keepBody(state.explorationId, body.id, body.content);
+    }
+  }
+  saveBodies(state.explorationId);
+}
+
+// Loads the texts of these messages that are not loaded yet: from the device, or else from the
+// daemon, a request per batch.
 export async function loadBodies(state: ExplorationState, messageIds: string[]) {
   const missing = messageIds.filter((id) => !state.bodies.has(id) && !loadingBodies.has(id));
-  for (let start = 0; start < missing.length; start += maxBodiesPerRequest) {
-    const batch = missing.slice(start, start + maxBodiesPerRequest);
-    const request = api.messageBodies(state.explorationId, batch).then((bodies) => {
-      for (const body of bodies) state.bodies.set(body.id, body.content);
+  if (missing.length > 0) {
+    const settled = fetchBodies(state, missing).finally(() => {
+      for (const id of missing) loadingBodies.delete(id);
     });
-    const settled = request.finally(() => {
-      for (const id of batch) loadingBodies.delete(id);
-    });
-    for (const id of batch) loadingBodies.set(id, settled);
+    for (const id of missing) loadingBodies.set(id, settled);
   }
   await Promise.all(messageIds.flatMap((id) => loadingBodies.get(id) ?? []));
+}
+
+const fillPauseMs = 200;
+
+// Puts the texts of every message of the chat on the device, a batch at a time, without keeping
+// them in memory, so the whole chat reads offline.
+export async function fillBodies(state: Pick<ExplorationState, 'explorationId' | 'messages'>) {
+  const stored = await storedBodyIds(state.explorationId);
+  const missing = [...state.messages.keys()].filter((id) => !stored.has(id));
+  for (let start = 0; start < missing.length; start += maxBodiesPerRequest) {
+    try {
+      const bodies = await api.messageBodies(
+        state.explorationId,
+        missing.slice(start, start + maxBodiesPerRequest),
+      );
+      await writeBodies(
+        state.explorationId,
+        bodies.map((body) => [body.id, body.content] as [string, string]),
+      );
+    } catch {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, fillPauseMs));
+  }
 }
 
 export async function loadAttemptActivities(state: ExplorationState, summary: ActivitySummary) {

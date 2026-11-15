@@ -3,6 +3,7 @@ import type {
   Activity,
   ActivitySummary,
   Bookmark,
+  ChangeSet,
   ChatDefaultPage,
   Comment,
   CommentChanges,
@@ -92,6 +93,8 @@ export const api = {
     call<{ ok: true }>(`/api/explorations/${explorationId}`, { method: 'DELETE' }),
   snapshot: (explorationId: string) =>
     call<LightSnapshot | Snapshot>(`/api/explorations/${explorationId}?light`),
+  changes: (explorationId: string, after: number) =>
+    call<ChangeSet>(`/api/explorations/${explorationId}/changes?after=${after}`),
   messageBodies: (explorationId: string, messageIds: string[]) =>
     call<MessageBody[]>(
       `/api/explorations/${explorationId}/message-bodies?ids=${messageIds.join(',')}`,

@@ -10,6 +10,8 @@ import ThemeSwitch from '../components/ThemeSwitch.vue';
 import { relativeTime } from '@shared/time';
 import { chatHomePath } from '../lib/conversation';
 import { openEventStream } from '../lib/event-stream';
+import { readList, writeList } from '../lib/local-store';
+import { syncChats } from '../stores/offline-sync';
 
 // As `sidebar`, the list sits beside the open chat, which it marks.
 const props = defineProps<{
@@ -24,10 +26,21 @@ const reloadDelayMs = 300;
 const explorations = ref<ExplorationListItem[] | null>(null);
 const failed = ref(false);
 
+// The list as last seen shows at once, and offline; the daemon's then replaces it.
+const listKey = () => (props.archived ? 'archived' : 'chats');
 async function load() {
+  const key = listKey();
+  if (explorations.value === null) {
+    const stored = await readList(key);
+    if (stored && explorations.value === null && key === listKey()) explorations.value = stored;
+  }
   try {
-    explorations.value = await api.listExplorations(props.archived);
+    const fresh = await api.listExplorations(props.archived);
+    if (key !== listKey()) return;
+    explorations.value = fresh;
     failed.value = false;
+    void writeList(key, fresh);
+    if (!props.archived) syncChats(fresh);
   } catch {
     failed.value = explorations.value === null;
   }
