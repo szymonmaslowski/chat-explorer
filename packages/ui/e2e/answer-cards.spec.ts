@@ -58,7 +58,6 @@ test('shows the comments an answer part answers as cards above it', async ({ pag
     'They repeat on every request. A minute is enough.',
   );
 
-  await expect(cards.last().locator('.answer-jump')).toHaveCount(0);
   await cards.first().getByRole('link', { name: 'Show the comment' }).click();
   await expect(page).toHaveURL(new RegExp(`/f/${answer.forkId}$`));
   const revealed = page.locator('.comment-card.submitted', { hasText: 'Why these?' });
@@ -70,6 +69,78 @@ test('shows the comments an answer part answers as cards above it', async ({ pag
 
   await revealed.getByRole('button', { name: 'Close' }).click();
   await expect(revealed).toHaveCount(0);
+});
+
+test('keeps general comments and the reply text as sent cards the answer leads back to', async ({
+  page,
+  request,
+}) => {
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'How do I cache responses?' } })
+  ).json();
+  await attachFakeSession(request, explorationId);
+  await deliverAndAnswer(request, explorationId, 'Use Redis for the cache keys.');
+  const answer = (
+    await (await request.get(`/api/explorations/${explorationId}`)).json()
+  ).messages.at(-1);
+  const general = await (
+    await request.post(`/api/explorations/${explorationId}/comments`, {
+      data: {
+        messageId: answer.id,
+        viewForkId: answer.forkId,
+        quote: '',
+        startOffset: 0,
+        endOffset: 0,
+        body: 'Mind the costs too.',
+      },
+    })
+  ).json();
+  await request.post(`/api/explorations/${explorationId}/submit`, {
+    data: { forkId: answer.forkId, globalMessage: 'And how long to keep them?' },
+  });
+  const feedback = await (
+    await request.post(`/api/internal/explorations/${explorationId}/feedback`, {
+      data: { shimId, waitMs: 1_000 },
+    })
+  ).json();
+  const [fork] = feedback.forks;
+  const [question] = fork.userMessages;
+  await request.post(`/api/internal/forks/${fork.forkId}/messages`, {
+    data: {
+      shimId,
+      inReplyTo: question.id,
+      content: `[c:${general.id}]\nThey are cheap.\n\n[m:${question.id}]\nA minute is enough.`,
+    },
+  });
+  await detachFakeSession(request);
+
+  await page.goto(`/e/${explorationId}`);
+  const sent = page.locator('.message-comments .comment-card.submitted');
+  await expect(sent).toHaveText([
+    /sent\s*Mind the costs too\.$/,
+    /sent\s*And how long to keep them\?$/,
+  ]);
+  const userMessage = page.locator('.message.user').last();
+  await expect(userMessage.locator('.quoted-comment')).toHaveCount(0);
+  await userMessage.getByRole('button', { name: 'Show the message' }).click();
+  await expect(userMessage.locator('.quoted-comment')).toHaveText('Mind the costs too.');
+  await expect(userMessage.locator('.content')).toHaveText('And how long to keep them?');
+  await userMessage.getByRole('button', { name: 'Hide the message' }).click();
+  await expect(userMessage.locator('.content')).toHaveCount(0);
+
+  const cards = page.locator('.message.assistant').last().locator('.answer-card');
+  await page.evaluate(() => window.scrollTo({ top: 0 }));
+  await cards.last().getByRole('link', { name: 'Show the comment' }).click();
+  await expect(sent.last()).toBeInViewport();
+  await sent.first().getByRole('button', { name: 'Show the answer' }).click();
+  await expect(cards.first()).toBeInViewport();
+
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await cards.first().getByRole('button', { name: 'Copy the comment' }).click();
+  await expect(cards.first().locator('.answer-copy.copied')).toHaveCount(1);
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe('Mind the costs too.');
 });
 
 test.describe('on a phone', () => {

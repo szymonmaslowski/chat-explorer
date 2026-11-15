@@ -19,8 +19,8 @@ test('moves a message and the ones after it into a new fork', async ({ page, req
   await page.goto(`/e/${explorationId}`);
 
   const messages = page.locator('.message');
-  const first = messages.filter({ hasText: 'How do I cache responses?' });
-  const second = messages.filter({ hasText: 'And the coding forks?' });
+  const first = page.locator('.message.user').first();
+  const second = page.locator('.message.user').last();
   const split = { name: 'Move from here into a new fork' };
   await expect(first.getByRole('button', split)).toHaveCount(0);
   await expect(

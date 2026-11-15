@@ -62,6 +62,7 @@ test('sends pasted and picked files with a reply, and Claude gets their paths', 
   );
 
   const message = page.locator('.message.user').last();
+  await message.getByRole('button', { name: 'Show the message' }).click();
   const thumbnail = message.locator('.files img');
   await expect(thumbnail).toHaveAttribute('alt', 'screenshot.png');
   await expect

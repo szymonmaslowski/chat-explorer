@@ -12,7 +12,7 @@ import { formatDateTime } from '../lib/date-time';
 import { isUnread } from '../lib/read-state';
 import { bringToReadingLine, scrollToEdge } from '../lib/reading-line';
 import { speechBlocks, type SpokenElement } from '../lib/speech-blocks';
-import { checkSpeechAvailable, playFrom, speech, togglePause } from '../stores/speech';
+import { checkSpeechAvailable, playBlock, playFrom, speech, togglePause } from '../stores/speech';
 import ConfirmButton from './ConfirmButton.vue';
 import FileIcon from './FileIcon.vue';
 import MediaIcon from './MediaIcon.vue';
@@ -73,6 +73,19 @@ const imageViewer = useImageViewer();
 const router = useRouter();
 const route = useRoute();
 
+// The user's messages start collapsed: what they sent shows as comments in the chat, and the
+// message is there to see what went to Claude as a whole.
+const collapsible = computed(() => props.message.role === 'user');
+const expanded = ref(false);
+const opened = computed(() => !collapsible.value || expanded.value);
+watch(
+  () => route.hash,
+  (hash) => {
+    if (hash === `#m-${props.message.id}`) expanded.value = true;
+  },
+  { immediate: true },
+);
+
 const { copied: linkCopied, copy: copyText } = useCopied();
 const copyLink = () => copyText({ plain: `${location.origin}${route.path}#m-${props.message.id}` });
 
@@ -94,9 +107,38 @@ function openAnsweredComment(event: MouseEvent) {
   void router.push(event.target.getAttribute('href')!);
 }
 
+const { copied: cardCopied, copy: copyCardText } = useCopied();
+let copiedCardButton: HTMLElement | null = null;
+watch(cardCopied, (copied) => copiedCardButton?.classList.toggle('copied', copied));
+
+function copyCard(button: HTMLElement, card: HTMLElement) {
+  copiedCardButton?.classList.remove('copied');
+  copiedCardButton = button;
+  void copyCardText({ plain: card.dataset.text ?? '' });
+}
+
+function playCard(card: HTMLElement) {
+  const index = blocks.value.findIndex(({ element }) => element === card);
+  if (index === -1) return;
+  playBlock(
+    { messageId: props.message.id },
+    blocks.value.map(({ block }) => block),
+    index,
+  );
+}
+
+function onCardAction(event: MouseEvent) {
+  if (!(event.target instanceof HTMLButtonElement)) return;
+  const card = event.target.closest<HTMLElement>('.answer-card');
+  if (!card) return;
+  if (event.target.matches('.answer-copy')) copyCard(event.target, card);
+  else if (event.target.matches('.answer-play')) playCard(card);
+}
+
 function onContentClick(event: MouseEvent) {
   openContentImage(event);
   openAnsweredComment(event);
+  onCardAction(event);
 }
 
 function findBlocks() {
@@ -158,6 +200,17 @@ onMounted(findBlocks);
       </time>
       <span v-if="isNew" class="new-label">New</span>
       <span class="header-actions">
+        <button
+          v-if="collapsible"
+          type="button"
+          class="icon-button header-button collapse-toggle"
+          :aria-expanded="expanded"
+          :aria-label="expanded ? 'Hide the message' : 'Show the message'"
+          :title="expanded ? 'Hide the message' : 'Show the whole message sent to Claude'"
+          @click="expanded = !expanded"
+        >
+          <MediaIcon name="chevron-up" />
+        </button>
         <ConfirmButton
           v-if="splittable"
           label="Move from here into a new fork"
@@ -250,49 +303,51 @@ onMounted(findBlocks);
         <MediaIcon name="read" />
       </button>
     </div>
-    <div v-for="comment in quotedComments" :key="comment.id" class="quoted-comment">
-      <RouterLink
-        v-if="comment.quote"
-        :to="commentLink(comment)"
-        class="quote-link"
-        title="Show where this was commented"
-      >
-        <blockquote>{{ comment.quote }}</blockquote>
-      </RouterLink>
-      <p>{{ comment.body }}</p>
-    </div>
-    <div v-if="listedFiles.length" class="files">
-      <a
-        v-for="file in listedFiles"
-        :key="file.id"
-        :href="`/api/files/${file.id}`"
-        target="_blank"
-        rel="noopener"
-        :class="file.kind"
-        :title="file.name"
-        @click="openImage($event, file)"
-      >
-        <img
-          v-if="file.kind === 'image'"
-          :src="`/api/files/${file.id}`"
-          :alt="file.name"
-          decoding="async"
-        />
-        <template v-else>
-          <FileIcon />
-          <span class="name">{{ file.name }}</span>
-        </template>
-      </a>
-    </div>
-    <div
-      v-if="html"
-      ref="content"
-      class="content"
-      :data-anchor-root="message.id"
-      :data-speakable="speakable || undefined"
-      @click="onContentClick"
-      v-html="html"
-    />
+    <template v-if="opened">
+      <div v-for="comment in quotedComments" :key="comment.id" class="quoted-comment">
+        <RouterLink
+          v-if="comment.quote"
+          :to="commentLink(comment)"
+          class="quote-link"
+          title="Show where this was commented"
+        >
+          <blockquote>{{ comment.quote }}</blockquote>
+        </RouterLink>
+        <p>{{ comment.body }}</p>
+      </div>
+      <div v-if="listedFiles.length" class="files">
+        <a
+          v-for="file in listedFiles"
+          :key="file.id"
+          :href="`/api/files/${file.id}`"
+          target="_blank"
+          rel="noopener"
+          :class="file.kind"
+          :title="file.name"
+          @click="openImage($event, file)"
+        >
+          <img
+            v-if="file.kind === 'image'"
+            :src="`/api/files/${file.id}`"
+            :alt="file.name"
+            decoding="async"
+          />
+          <template v-else>
+            <FileIcon />
+            <span class="name">{{ file.name }}</span>
+          </template>
+        </a>
+      </div>
+      <div
+        v-if="html"
+        ref="content"
+        class="content"
+        :data-anchor-root="message.id"
+        :data-speakable="speakable || undefined"
+        @click="onContentClick"
+        v-html="html"
+      />
+    </template>
     <footer v-if="jumpable" class="message-end">
       <button
         type="button"
@@ -350,6 +405,10 @@ onMounted(findBlocks);
   font-weight: 400;
   text-transform: none;
   letter-spacing: normal;
+}
+
+.collapse-toggle[aria-expanded='false'] :deep(svg) {
+  transform: rotate(180deg);
 }
 
 .header-actions {
@@ -475,22 +534,31 @@ onMounted(findBlocks);
 }
 
 /* After the card's text, which its ::after shows. */
-.content :deep(.answer-jump) {
+.content :deep(.answer-card-actions) {
   order: 1;
-  align-self: flex-start;
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+}
+
+.content :deep(.answer-jump),
+.content :deep(.answer-play),
+.content :deep(.answer-copy) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 1.9rem;
   min-height: 1.6rem;
-  margin-top: 0.3rem;
+  padding: 0;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--surface);
   color: var(--text);
 }
 
-.content :deep(.answer-jump::before) {
+.content :deep(.answer-jump::before),
+.content :deep(.answer-play::before),
+.content :deep(.answer-copy::before) {
   content: '';
   width: 1rem;
   height: 1rem;
@@ -499,8 +567,30 @@ onMounted(findBlocks);
     center / contain no-repeat;
 }
 
+.content :deep(.answer-play::before) {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M8 5v14l11-7z'/%3E%3C/svg%3E");
+}
+
+.content :deep(.answer-card.speaking .answer-play::before) {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 5h4v14H7zM13 5h4v14h-4z'/%3E%3C/svg%3E");
+}
+
+.content:not([data-speakable]) :deep(.answer-play) {
+  display: none;
+}
+
+.content :deep(.answer-copy::before) {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 9h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1zM5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1'/%3E%3C/svg%3E");
+}
+
+.content :deep(.answer-copy.copied::before) {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 12.5l5 5L20 6.5'/%3E%3C/svg%3E");
+}
+
 @media (pointer: coarse) {
-  .content :deep(.answer-jump) {
+  .content :deep(.answer-jump),
+  .content :deep(.answer-play),
+  .content :deep(.answer-copy) {
     min-width: 2.5rem;
     min-height: 2.5rem;
   }
