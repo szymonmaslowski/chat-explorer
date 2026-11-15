@@ -50,7 +50,12 @@ import type {
   Role,
   Snapshot,
 } from '../shared/types.js';
-import { commentTag, messageTag, withoutTagLines } from '../shared/answer-tags.js';
+import {
+  commentTag,
+  messageTag,
+  withoutTagLines,
+  type AnsweredPartLookup,
+} from '../shared/answer-tags.js';
 import { defaultClaudeModel, type ClaudeModel } from '../shared/models.js';
 import {
   inTextOrder,
@@ -1543,6 +1548,17 @@ export class ChatStore {
       ) !== undefined
     );
   }
+
+  // What the tags in an answer name, with the same text the page shows on their cards, so audio
+  // made ahead for the cards is what the page asks for. Links matter only on the page.
+  answeredPart: AnsweredPartLookup = (kind, id) => {
+    if (kind === 'message') {
+      const message = this.db.get<MessageRow>('SELECT * FROM messages WHERE id = ?', id);
+      return message ? { quote: '', text: message.content, href: null } : null;
+    }
+    const comment = this.db.get<CommentRow>('SELECT * FROM comments WHERE id = ?', id);
+    return comment ? { quote: comment.quote, text: comment.body, href: null } : null;
+  };
 
   messageContent(messageId: string) {
     return this.requireMessageRow(messageId).content;

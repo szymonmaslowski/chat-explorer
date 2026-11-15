@@ -1,3 +1,4 @@
+import type { AnsweredPartLookup } from '../shared/answer-tags.js';
 import { messageSpeechBlocks } from '../shared/message-speech-blocks.js';
 import type { SpeechBlock } from '../shared/types.js';
 import { StoreError } from '../store/errors.js';
@@ -71,10 +72,10 @@ export class Speaker {
 
   // Renders every block of a new answer in the background, so an engine too slow to wait for
   // plays at once later.
-  async prepare(messageId: string, content: string) {
+  async prepare(messageId: string, content: string, answeredPart?: AnsweredPartLookup) {
     const voice = await this.voiceFor(content).catch(() => null);
     if (!voice?.engine.rendersAhead) return;
-    for (const block of messageSpeechBlocks(content)) {
+    for (const block of messageSpeechBlocks(content, answeredPart)) {
       const text = speechText(block, voice.language);
       const key = speechCacheKey(voice.engine.name, voice.voice, text);
       if (this.renders.has(key) || (await this.options.cache.has(key))) continue;

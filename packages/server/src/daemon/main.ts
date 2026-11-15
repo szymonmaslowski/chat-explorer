@@ -75,7 +75,7 @@ bus.subscribe((_explorationId, event) => {
   if (event.type !== 'message.added') return;
   const { message } = event;
   if (message.role === 'assistant' && message.source === 'live') {
-    void speaker.prepare(message.id, message.content);
+    void speaker.prepare(message.id, message.content, store.answeredPart);
   }
 });
 

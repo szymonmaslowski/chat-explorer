@@ -161,6 +161,21 @@ describe('engines and the cache', () => {
     expect(chatterbox.spoken).toHaveLength(3);
   });
 
+  it("renders the user's comments on an answer's cards ahead too", async () => {
+    const chatterbox = createFakeEngine('chatterbox', { languages: ['en'] });
+    const { speaker } = createTestSpeaker(undefined, [chatterbox]);
+    await speaker.prepare('m', '[c:aaaaaaaaaa]\nThe answer.', (kind, id) =>
+      kind === 'comment' && id === 'aaaaaaaaaa'
+        ? { quote: 'quoted', text: 'Why?', href: null }
+        : null,
+    );
+    await vi.waitFor(() => expect(chatterbox.spoken).toHaveLength(2));
+    expect(chatterbox.spoken.map(({ text }) => text)).toEqual([
+      "User's comment. Why?",
+      'The answer.',
+    ]);
+  });
+
   it('does not render ahead for a fast engine', async () => {
     const { speaker, spoken } = createTestSpeaker();
     await speaker.prepare('m', 'One.\n\nTwo.');
