@@ -50,6 +50,7 @@ import { explorationIndex } from '../stores/exploration-index';
 import { api } from '../api';
 import { newId, outbox } from '../stores/outbox';
 import { stopSpeech } from '../stores/speech';
+import { offline } from '../lib/online';
 
 const props = defineProps<{ explorationId: string; forkId?: string }>();
 
@@ -169,6 +170,7 @@ function forkAtAnswer(message: Message) {
 function splittable(message: Message, index: number) {
   const previous = path.value[index - 1];
   return (
+    !offline.value &&
     !archived.value &&
     !awaitingAnswer.value &&
     forkRun.value?.status !== 'answering' &&

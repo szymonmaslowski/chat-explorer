@@ -90,7 +90,16 @@ export type Change =
   | { type: 'note.delete'; explorationId: string; noteId: string }
   | { type: 'note.keep'; explorationId: string; noteId: string }
   | { type: 'note.reorder'; explorationId: string; noteId: string; afterNoteId: string | null }
-  | { type: 'note.change-group'; explorationId: string; noteId: string; groupId: string };
+  | { type: 'note.change-group'; explorationId: string; noteId: string; groupId: string }
+  // When the reader saw or unmarked them, so a mark sent late loses to a newer one.
+  | { type: 'messages.read'; explorationId: string; messageIds: string[]; at: number }
+  | {
+      type: 'messages.unread';
+      explorationId: string;
+      messageId: string;
+      viewForkId: string;
+      at: number;
+    };
 
 interface QueuedChange {
   key: number;
@@ -153,6 +162,10 @@ let flushing: Promise<void> | null = null;
 
 export const subjectOf = (change: Change) => {
   switch (change.type) {
+    case 'messages.read':
+      return `read ${change.messageIds.join()}`;
+    case 'messages.unread':
+      return `unread ${change.messageId}`;
     case 'comment.create':
       return change.comment.id;
     case 'comment.update':
@@ -202,8 +215,10 @@ function merge(waiting: Change, next: Change): Change | null {
     return { ...waiting, comment: editBody === null ? rest : { ...rest, editBody } };
   }
   if (waiting.type === 'reply-draft.save' && next.type === 'reply-draft.save') return next;
+  // The merged edit was made from what the first one saw.
   if (waiting.type === 'note.update' && next.type === 'note.update') {
-    return { ...next, changes: { ...waiting.changes, ...next.changes } };
+    const baseUpdatedAt = waiting.changes.baseUpdatedAt ?? next.changes.baseUpdatedAt;
+    return { ...next, changes: { ...waiting.changes, ...next.changes, baseUpdatedAt } };
   }
   if (waiting.type === 'note.reorder' && next.type === 'note.reorder') return next;
   if (waiting.type === 'note-group.reorder' && next.type === 'note-group.reorder') return next;
@@ -317,6 +332,10 @@ function send(change: Change) {
       return api.reorderNote(change.noteId, change.afterNoteId, keepalive);
     case 'note.change-group':
       return api.changeNoteGroup(change.noteId, change.groupId, keepalive);
+    case 'messages.read':
+      return api.markRead(change.explorationId, change.messageIds, change.at, keepalive);
+    case 'messages.unread':
+      return api.markUnreadFrom(change.messageId, change.viewForkId, change.at, keepalive);
   }
 }
 

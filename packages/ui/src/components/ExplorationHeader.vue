@@ -12,6 +12,7 @@ import MediaIcon from './MediaIcon.vue';
 import OutboxFailures from './OutboxFailures.vue';
 import SessionStatusBar from './SessionStatusBar.vue';
 import ThemeSwitch from './ThemeSwitch.vue';
+import { notOffline, offline } from '../lib/online';
 
 // With a fork, the title is the fork's, under the path to it: the chat, then the forks above it.
 // Beside the main column, as `side`, the status and theme stay with the main column's header.
@@ -131,7 +132,12 @@ const forksBetween = computed(() =>
     </template>
     <p v-if="state.exploration?.archivedAt" class="archived">
       Archived.
-      <ConfirmButton label="Restore" @confirm="api.unarchive(state.explorationId)" />
+      <ConfirmButton
+        label="Restore"
+        :disabled="offline"
+        :title="offline ? notOffline : undefined"
+        @confirm="api.unarchive(state.explorationId)"
+      />
     </p>
     <OutboxFailures :exploration-id="state.explorationId" />
     <slot />

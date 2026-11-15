@@ -9,6 +9,7 @@ import { archivingFork, forkLineage, forkTitle } from '../lib/conversation';
 import { awaitsAnswer, type Attention } from '../lib/read-state';
 import { openExploration } from '../stores/exploration';
 import { explorationIndex } from '../stores/exploration-index';
+import { offline } from '../lib/online';
 
 const props = defineProps<{ explorationId: string; currentForkId?: string; side?: boolean }>();
 
@@ -215,6 +216,7 @@ const layout = computed(() => {
               width: `${toggleSize}px`,
               height: `${toggleSize}px`,
             }"
+            :disabled="offline"
             @click="collapse(box.fork)"
           >
             −
@@ -231,6 +233,7 @@ const layout = computed(() => {
               top: `${box.top + (layout.boxHeight - chipHeight) / 2}px`,
               height: `${chipHeight}px`,
             }"
+            :disabled="offline"
             @click="expandChildren(box.fork)"
           >
             +{{ box.hidden.count }}

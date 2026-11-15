@@ -24,7 +24,7 @@ test('keeps comments and a submit made offline and sends them when the connectio
 
   await page.getByPlaceholder('Reply to Claude').fill('And this too');
   await page.getByRole('button', { name: 'Submit' }).click();
-  await expect(page.locator('.queued-submission')).toContainText('waits for the connection');
+  await expect(page.locator('.queued-submission')).toContainText('will send when online');
   await expect(page.locator('.status')).toContainText(/\d waiting/);
   expect((await snapshotOf(request, explorationId)).comments).toEqual([]);
 
@@ -98,4 +98,65 @@ test('keeps an edit started offline open when the connection is back', async ({
   });
   await expect(card.locator('textarea')).toHaveValue('Second version, typed offline');
   await card.getByRole('button', { name: 'Cancel' }).click();
+});
+
+test('keeps both versions of a note edited offline here and online on another device', async ({
+  page,
+  context,
+  request,
+}) => {
+  const explorationId = await answeredChat(request);
+  const group = await (
+    await request.post(`/api/explorations/${explorationId}/note-groups`, { data: {} })
+  ).json();
+  const note = await (
+    await request.post(`/api/explorations/${explorationId}/notes`, {
+      data: { groupId: group.id, topic: 'Plan', description: 'First draft' },
+    })
+  ).json();
+  await page.goto(`/e/${explorationId}/notes`);
+  const shown = page.locator('.note', { hasText: 'Plan' });
+  await expect(shown).toBeVisible();
+
+  await context.setOffline(true);
+  await shown.click();
+  await page.getByRole('button', { name: 'Edit' }).click();
+  await page.getByLabel('Description').fill('Written offline on the phone');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(shown).toContainText('not sent yet');
+
+  // The test's own requests come from another device, with a cookie of their own.
+  await request.patch(`/api/notes/${note.id}`, {
+    data: { description: 'Written on the laptop', baseUpdatedAt: note.updatedAt },
+  });
+  await context.setOffline(false);
+
+  await expect(page.locator('.note', { hasText: 'Plan (other version)' })).toBeVisible({
+    timeout: 10_000,
+  });
+  const notes = (await snapshotOf(request, explorationId)).notes;
+  expect(notes.map((each) => each.description).sort()).toEqual([
+    'Written offline on the phone',
+    'Written on the laptop',
+  ]);
+});
+
+test('sends a read mark made offline once the connection is back', async ({
+  page,
+  context,
+  request,
+}) => {
+  const explorationId = await answeredChat(request);
+  await page.goto(`/e/${explorationId}`);
+  const answer = page.locator('.message.assistant');
+  await expect(answer).toHaveAttribute('data-unread', 'true');
+
+  await context.setOffline(true);
+  await page.getByRole('button', { name: 'Mark read', exact: true }).click();
+  await page.getByRole('button', { name: 'Confirm' }).click();
+  await expect(answer).not.toHaveAttribute('data-unread');
+  await context.setOffline(false);
+  await expect
+    .poll(async () => (await snapshotOf(request, explorationId)).messages.at(-1)!.readAt)
+    .not.toBeNull();
 });

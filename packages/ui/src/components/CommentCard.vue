@@ -28,6 +28,7 @@ import FileDraftList from './FileDraftList.vue';
 import FileLinks from './FileLinks.vue';
 import ListenButton from './ListenButton.vue';
 import MediaIcon from './MediaIcon.vue';
+import { offline } from '../lib/online';
 
 const props = defineProps<{
   comment: Comment;
@@ -269,7 +270,7 @@ function onEditorKeydown(event: KeyboardEvent) {
           <span v-if="comment.status === 'submitted'">
             · {{ comment.type === 'note' ? 'saved' : 'sent' }}
           </span>
-          <span v-if="outbox.stalled.value && outbox.isPending(comment.id)" class="unsent">
+          <span v-if="offline && outbox.isPending(comment.id)" class="unsent">
             · not sent yet
           </span>
         </div>

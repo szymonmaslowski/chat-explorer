@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import { notOffline, offline } from '../lib/online';
 
 const emit = defineEmits<{ files: [files: File[]] }>();
 const input = ref<HTMLInputElement | null>(null);
@@ -15,7 +16,8 @@ function onChange() {
   <button
     type="button"
     class="attach"
-    title="Attach images, PDFs or text files"
+    :title="offline ? notOffline : 'Attach images, PDFs or text files'"
+    :disabled="offline"
     aria-label="Attach files"
     @click="input?.click()"
   >

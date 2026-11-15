@@ -98,8 +98,7 @@ async function attempt<Result>(work: (db: IDBDatabase) => Promise<Result>, fallb
 
 export const readChat = (explorationId: string) =>
   attempt<StoredChat | null>(
-    async (db) =>
-      (await done(db.transaction(chats).objectStore(chats).get(explorationId))) ?? null,
+    async (db) => (await done(db.transaction(chats).objectStore(chats).get(explorationId))) ?? null,
     null,
   );
 
@@ -182,3 +181,20 @@ export function askForPersistentStorage() {
   persistenceAsked = true;
   void navigator.storage?.persist?.().catch(() => false);
 }
+
+const deviceMarker = 'device-seen';
+
+// Whether this device's store was set up before, so a store found empty can be told apart from a
+// first visit.
+export const storeWasSetUp = () =>
+  attempt(
+    async (db) => (await done(db.transaction(lists).objectStore(lists).get(deviceMarker))) === true,
+    true,
+  );
+
+export const markStoreSetUp = () =>
+  attempt(async (db) => {
+    const transaction = db.transaction(lists, 'readwrite');
+    transaction.objectStore(lists).put(true, deviceMarker);
+    await finished(transaction);
+  }, undefined);

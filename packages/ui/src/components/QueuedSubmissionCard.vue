@@ -5,6 +5,7 @@ import { replyFilesOwner, restoreFileDrafts } from '../stores/file-drafts';
 import { outbox } from '../stores/outbox';
 import { replyDrafts } from '../stores/reply-drafts';
 import MediaIcon from './MediaIcon.vue';
+import { offline } from '../lib/online';
 
 const props = defineProps<{
   submission: QueuedSubmission;
@@ -13,7 +14,7 @@ const props = defineProps<{
 }>();
 
 const fileCount = computed(() => props.files.length);
-const unsent = computed(() => outbox.stalled.value && outbox.isPending(props.submission.id));
+const unsent = computed(() => offline.value && outbox.isPending(props.submission.id));
 
 // The message and files go back into the reply box at once; the daemon gets the cancel when it
 // can be reached.
@@ -30,7 +31,7 @@ function cancel() {
   <div class="queued-submission">
     <div>
       <strong>Queued</strong><template v-if="submission.newFork"> as a new fork</template>,
-      {{ unsent ? 'waits for the connection.' : 'sent when Claude is free.' }}
+      {{ unsent ? 'will send when online.' : 'sent when Claude is free.' }}
       <span class="muted">
         <template v-if="commentCount">
           {{ commentCount }} comment{{ commentCount === 1 ? '' : 's' }}

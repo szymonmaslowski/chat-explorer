@@ -16,6 +16,7 @@ import ExpandButton from './ExpandButton.vue';
 import FileDraftList from './FileDraftList.vue';
 import ListenButton from './ListenButton.vue';
 import MediaIcon from './MediaIcon.vue';
+import { notOffline, offline } from '../lib/online';
 
 const props = defineProps<{
   explorationId: string;
@@ -319,8 +320,8 @@ function onKeydown(event: KeyboardEvent) {
       <button
         v-if="answering"
         type="button"
-        :disabled="!canSubmit"
-        title="Stop Claude's current answer and send this instead"
+        :disabled="!canSubmit || offline"
+        :title="offline ? notOffline : 'Stop Claude\'s current answer and send this instead'"
         @click="stopAndSubmit"
       >
         Stop and send

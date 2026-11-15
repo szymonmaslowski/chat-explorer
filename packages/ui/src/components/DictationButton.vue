@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useDictation } from '../composables/useDictation';
+import { notOffline, offline } from '../lib/online';
 
 const props = defineProps<{ hint?: string }>();
 const emit = defineEmits<{ text: [text: string] }>();
@@ -34,9 +35,9 @@ const clock = computed(() => {
       v-else
       type="button"
       class="mic"
-      title="Dictate"
+      :title="offline ? notOffline : 'Dictate'"
       aria-label="Dictate"
-      :disabled="state !== 'idle'"
+      :disabled="state !== 'idle' || offline"
       @click="start"
     >
       <svg viewBox="0 0 24 24" aria-hidden="true">

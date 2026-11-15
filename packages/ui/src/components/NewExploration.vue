@@ -11,6 +11,7 @@ import AttachButton from './AttachButton.vue';
 import DictationButton from './DictationButton.vue';
 import FileDraftList from './FileDraftList.vue';
 import MediaIcon from './MediaIcon.vue';
+import { notOffline, offline } from '../lib/online';
 
 const router = useRouter();
 const message = ref('');
@@ -106,7 +107,14 @@ function onKeydown(event: KeyboardEvent) {
       </button>
       <span class="spacer" />
       <span v-if="error" class="error">{{ error }}</span>
-      <button type="submit" class="primary" :disabled="!canStart">Start</button>
+      <button
+        type="submit"
+        class="primary"
+        :disabled="!canStart || offline"
+        :title="offline ? notOffline : undefined"
+      >
+        Start
+      </button>
     </div>
   </form>
 </template>

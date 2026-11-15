@@ -6,7 +6,11 @@ export const isUnread = (message: Pick<MessageHead, 'role' | 'readAt'>) =>
   message.role === 'assistant' && message.readAt === null;
 
 // A stopped turn handled the fork's last message without answering it.
-export function awaitsAnswer(fork: Fork, messages: Map<string, MessageHead>, run: ForkRun | undefined) {
+export function awaitsAnswer(
+  fork: Fork,
+  messages: Map<string, MessageHead>,
+  run: ForkRun | undefined,
+) {
   const lastId = fork.tipMessageId ?? fork.baseMessageId;
   const last = lastId ? messages.get(lastId) : undefined;
   return last?.role === 'user' && last.id !== run?.handledUpTo;

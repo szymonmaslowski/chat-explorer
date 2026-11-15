@@ -12,6 +12,7 @@ import { chatHomePath } from '../lib/conversation';
 import { openEventStream } from '../lib/event-stream';
 import { readList, writeList } from '../lib/local-store';
 import { syncChats } from '../stores/offline-sync';
+import { offline } from '../lib/online';
 
 // As `sidebar`, the list sits beside the open chat, which it marks.
 const props = defineProps<{
@@ -138,6 +139,7 @@ async function removeFromList(explorationId: string, change: (id: string) => Pro
           <template v-else>
             <ConfirmButton
               label="Restore"
+              :disabled="offline"
               @confirm="removeFromList(exploration.id, api.unarchive)"
             />
             <ConfirmButton

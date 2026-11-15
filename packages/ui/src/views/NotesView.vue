@@ -142,8 +142,20 @@ function createNote(note: { topic: string; description: string }) {
   creatingNote.value = false;
 }
 
+// What the note was when its editor opened, so an edit made meanwhile on another device is not
+// lost: the daemon keeps the older of the two as a copy.
+const editBase = new Map<string, number>();
+watch(editingNoteId, (noteId) => {
+  const note = noteId ? state.value.notes.get(noteId) : undefined;
+  if (note) editBase.set(note.id, note.updatedAt);
+});
 function updateNote(noteId: string, changes: { topic: string; description: string }) {
-  outbox.add({ type: 'note.update', explorationId: props.explorationId, noteId, changes });
+  outbox.add({
+    type: 'note.update',
+    explorationId: props.explorationId,
+    noteId,
+    changes: { ...changes, baseUpdatedAt: editBase.get(noteId), editedAt: Date.now() },
+  });
   editingNoteId.value = null;
 }
 

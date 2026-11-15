@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import ImageViewer from './components/ImageViewer.vue';
+import OfflineBanner from './components/OfflineBanner.vue';
 import UpdatePrompt from './components/UpdatePrompt.vue';
 import { useLayout } from './composables/useLayout';
 import { openExploration } from './stores/exploration';
@@ -20,6 +21,7 @@ const currentForkId = computed(() => {
 </script>
 
 <template>
+  <OfflineBanner />
   <div class="layout" :class="{ columns: chatsColumn || mapColumn }">
     <aside v-if="chatsColumn" class="side-column chats-column">
       <ExplorationsList sidebar :current-exploration-id="explorationId ?? undefined" />

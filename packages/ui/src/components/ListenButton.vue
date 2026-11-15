@@ -2,6 +2,7 @@
 import { renderMarkdown } from '@shared/markdown';
 import { computed } from 'vue';
 import { speechBlocks } from '../lib/speech-blocks';
+import { notOffline, offline } from '../lib/online';
 import {
   checkSpeechAvailable,
   playFrom,
@@ -37,7 +38,8 @@ function listen() {
     type="button"
     class="listen-button"
     :aria-label="current && speech.playing ? 'Pause' : 'Listen'"
-    :title="current && speech.playing ? 'Pause' : 'Listen to what you wrote'"
+    :title="offline ? notOffline : current && speech.playing ? 'Pause' : 'Listen to what you wrote'"
+    :disabled="offline && !(current && speech.playing)"
     @pointerdown.prevent
     @mousedown.prevent
     @click="listen"

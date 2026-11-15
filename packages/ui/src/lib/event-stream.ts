@@ -1,3 +1,5 @@
+import { reportDaemonReached } from './online';
+
 const firstRetryMs = 1_000;
 const maxRetryMs = 30_000;
 
@@ -31,9 +33,11 @@ export function openEventStream(input: {
     const next = new EventSource(input.url);
     next.addEventListener('ready', () => {
       retryMs = firstRetryMs;
+      reportDaemonReached(true);
       void input.onReady();
     });
     next.addEventListener('error', () => {
+      reportDaemonReached(false);
       input.onError();
       if (next.readyState !== EventSource.CLOSED) return;
       retryTimer = setTimeout(reconnect, retryMs);

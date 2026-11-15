@@ -37,6 +37,7 @@ import {
   writeChat,
   type StoredChat,
 } from '../lib/local-store';
+import { forkPath } from '../lib/conversation';
 import { applyOrder, notesInGroup, renumberGroup, sortedGroups } from '../lib/notes';
 import { outbox, subjectOf, type Change } from './outbox';
 
@@ -617,12 +618,12 @@ export function applyChange(state: ExplorationState, change: Change) {
       const note = state.notes.get(change.noteId);
       if (!note) break;
       const { topic, description, checked } = change.changes;
+      // The time stays the daemon's: the next edit is based on it.
       put(state.notes, note.id, {
         ...note,
         topic: topic === undefined ? note.topic : topic.trim() || null,
         description: description?.trim() ?? note.description,
         checked: checked ?? note.checked,
-        updatedAt: now,
       });
       break;
     }
@@ -647,6 +648,22 @@ export function applyChange(state: ExplorationState, change: Change) {
       put(state.notes, note.id, { ...note, groupId: change.groupId, position: 0, updatedAt: now });
       renumberGroup(state.notes, note.groupId);
       renumberGroup(state.notes, change.groupId);
+      break;
+    }
+    case 'messages.read':
+      applyReadChange(state, change.messageIds, change.at);
+      break;
+    case 'messages.unread': {
+      const fork = state.forks.get(change.viewForkId);
+      const path = fork ? forkPath(fork, state.messages) : [];
+      const start = path.findIndex((message) => message.id === change.messageId);
+      if (start === -1) break;
+      const answers = path.slice(start).filter((message) => message.role === 'assistant');
+      applyReadChange(
+        state,
+        answers.map((message) => message.id),
+        null,
+      );
       break;
     }
   }

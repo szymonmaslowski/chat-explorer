@@ -1,18 +1,23 @@
-import { api } from '../api';
+import { outbox } from './outbox';
 import { applyReadChange, type ExplorationState } from './exploration';
 
-// Shown read at once; if the daemon cannot be reached, the next load shows them unread again
-// and they are marked once more when seen.
+// Shown at once and sent through the outbox, offline too, with the time the reader acted.
 export function markRead(state: ExplorationState, messageIds: string[]) {
   applyReadChange(state, messageIds, Date.now());
-  void api.markRead(state.explorationId, messageIds).catch(() => undefined);
+  outbox.add({
+    type: 'messages.read',
+    explorationId: state.explorationId,
+    messageIds,
+    at: Date.now(),
+  });
 }
 
-export async function markUnreadFrom(
-  state: ExplorationState,
-  messageId: string,
-  viewForkId: string,
-) {
-  const change = await api.markUnreadFrom(messageId, viewForkId);
-  applyReadChange(state, change.messageIds, change.readAt);
+export function markUnreadFrom(state: ExplorationState, messageId: string, viewForkId: string) {
+  outbox.add({
+    type: 'messages.unread',
+    explorationId: state.explorationId,
+    messageId,
+    viewForkId,
+    at: Date.now(),
+  });
 }

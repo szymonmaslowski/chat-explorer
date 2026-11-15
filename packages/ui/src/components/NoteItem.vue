@@ -26,6 +26,7 @@ import ConfirmButton from './ConfirmButton.vue';
 import CopyableId from './CopyableId.vue';
 import MediaIcon from './MediaIcon.vue';
 import NoteForkComposer from './NoteForkComposer.vue';
+import { offline } from '../lib/online';
 
 const props = defineProps<{
   note: Note;
@@ -228,9 +229,7 @@ function changeGroup(groupId: string | null) {
   >
     <h3 class="topic" :class="{ preparing: note.topic === null }">
       {{ note.topic ?? 'Preparing topic…' }}
-      <span v-if="outbox.stalled.value && outbox.isPending(note.id)" class="unsent">
-        · not sent yet
-      </span>
+      <span v-if="offline && outbox.isPending(note.id)" class="unsent"> · not sent yet </span>
     </h3>
     <CopyableId
       v-if="selected && expanded"

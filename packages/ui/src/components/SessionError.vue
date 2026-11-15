@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { api, ApiError } from '../api';
+import { notOffline, offline } from '../lib/online';
 
 const props = defineProps<{ explorationId: string; message: string }>();
 
@@ -24,7 +25,14 @@ async function retry() {
   <div class="session-error" role="alert">
     <pre>{{ message }}</pre>
     <p v-if="retryError" class="retry-error">{{ retryError }}</p>
-    <button type="button" :disabled="retrying" @click="retry">Retry</button>
+    <button
+      type="button"
+      :disabled="retrying || offline"
+      :title="offline ? notOffline : undefined"
+      @click="retry"
+    >
+      Retry
+    </button>
   </div>
 </template>
 

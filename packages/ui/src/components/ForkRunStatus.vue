@@ -2,6 +2,7 @@
 import type { ForkRun } from '@shared/types';
 import { computed, ref } from 'vue';
 import { api } from '../api';
+import { notOffline, offline } from '../lib/online';
 
 // What Claude is doing in this fork, from the runner: working, waiting for the usage limit, or
 // failed with a way to try again.
@@ -30,7 +31,14 @@ async function act(action: (forkId: string) => Promise<unknown>) {
 <template>
   <div v-if="run?.status === 'failed'" class="run-failed" role="alert">
     <span>Claude could not answer: {{ run.statusDetail }}</span>
-    <button type="button" :disabled="busy" @click="act(api.retryFork)">Retry</button>
+    <button
+      type="button"
+      :disabled="busy || offline"
+      :title="offline ? notOffline : undefined"
+      @click="act(api.retryFork)"
+    >
+      Retry
+    </button>
   </div>
   <p v-else-if="run?.status === 'waiting_limit'" class="run-status muted">
     Waiting for the usage limit{{ until }}.
@@ -40,7 +48,14 @@ async function act(action: (forkId: string) => Promise<unknown>) {
   </p>
   <p v-else-if="run?.status === 'answering'" class="run-status muted">
     Claude is working…
-    <button type="button" :disabled="busy" @click="act(api.stopFork)">Stop</button>
+    <button
+      type="button"
+      :disabled="busy || offline"
+      :title="offline ? notOffline : undefined"
+      @click="act(api.stopFork)"
+    >
+      Stop
+    </button>
   </p>
   <p v-else-if="awaitingAnswer" class="run-status muted">Claude is answering…</p>
 </template>

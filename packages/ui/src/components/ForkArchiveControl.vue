@@ -5,6 +5,7 @@ import { api, ApiError } from '../api';
 import { forkTitle } from '../lib/conversation';
 import ConfirmButton from './ConfirmButton.vue';
 import MediaIcon from './MediaIcon.vue';
+import { notOffline, offline } from '../lib/online';
 
 const props = defineProps<{ explorationId: string; fork: Fork; archivedBy: Fork | null }>();
 
@@ -26,7 +27,8 @@ async function setArchived(archive: boolean) {
     <ConfirmButton
       v-if="!archivedBy"
       label="Archive fork"
-      title="Archive fork"
+      :title="offline ? notOffline : 'Archive fork'"
+      :disabled="offline"
       class="icon-button"
       @confirm="setArchived(true)"
     >
@@ -37,7 +39,14 @@ async function setArchived(archive: boolean) {
       type="button"
       class="icon-button"
       aria-label="Restore"
-      :title="archivedBy.id === fork.id ? 'Restore this fork' : `Restore ${forkTitle(archivedBy)}`"
+      :disabled="offline"
+      :title="
+        offline
+          ? notOffline
+          : archivedBy.id === fork.id
+            ? 'Restore this fork'
+            : `Restore ${forkTitle(archivedBy)}`
+      "
       @click="setArchived(false)"
     >
       <MediaIcon name="unarchive" />

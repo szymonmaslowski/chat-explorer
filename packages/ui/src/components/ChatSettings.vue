@@ -4,6 +4,7 @@ import { ref } from 'vue';
 import { api } from '../api';
 import CopyableId from './CopyableId.vue';
 import ForkModelInfo from './ForkModelInfo.vue';
+import { offline } from '../lib/online';
 
 defineProps<{ exploration: Exploration; fork?: Fork; run?: ForkRun }>();
 
@@ -25,6 +26,7 @@ async function setDefaultPage(explorationId: string, defaultPage: ChatDefaultPag
     <label class="setting">
       Default page
       <select
+        :disabled="offline"
         :value="exploration.defaultPage"
         @change="
           setDefaultPage(
