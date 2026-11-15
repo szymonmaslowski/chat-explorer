@@ -61,7 +61,7 @@ function goToAnswer() {
   const message = answer.value;
   if (!message) return;
   const card = document.querySelector<HTMLElement>(
-    `#m-${message.id} .answer-card[data-comment-id="${props.comment.id}"]`,
+    `#m-${message.id} .answer-card[data-answered-id="${props.comment.id}"]`,
   );
   if (!card) {
     void router.push(`/e/${props.comment.explorationId}/f/${message.forkId}#m-${message.id}`);
@@ -187,6 +187,7 @@ function onEditorKeydown(event: KeyboardEvent) {
   <div
     ref="card"
     class="comment-card"
+    :data-comment-id="comment.id"
     :class="[shownType, comment.status, joinRole, { expanded, 'picked-to-join': pickedToJoin }]"
     :style="expandedStyle ?? undefined"
     @click="comment.status === 'submitted' && emit('open', comment)"

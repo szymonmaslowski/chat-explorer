@@ -1,11 +1,8 @@
 import { parseHTML } from 'linkedom';
 import { describe, expect, it } from 'vitest';
-import {
-  taggedCommentIds,
-  withoutTagLines,
-  type AnsweredPartLookup,
-} from '../src/shared/answer-tags.js';
+import { taggedIds, withoutTagLines, type AnsweredPartLookup } from '../src/shared/answer-tags.js';
 import { renderMarkdown } from '../src/shared/markdown.js';
+import { speechBlocks } from '../src/shared/speech-blocks.js';
 import { createTestStore, draft, seedConversation } from './helpers.js';
 
 const rendered = (markdown: string, answeredPart?: AnsweredPartLookup) =>
@@ -58,7 +55,12 @@ describe('answer tags', () => {
       undefined,
       undefined,
     ]);
-    expect(cards[0]!.getAttribute('data-comment-id')).toBe('aaaaaaaaaa');
+    expect(cards.map((card) => card.getAttribute('data-answered-id'))).toEqual([
+      'aaaaaaaaaa',
+      'bbbbbbbbbb',
+      null,
+    ]);
+    expect(cards[0]!.querySelectorAll('button').length).toBe(2);
     expect(cards[0]!.getAttribute('data-quote')).toBe('cache keys');
     expect(cards[0]!.getAttribute('data-text')).toBe('Why "these"?');
     expect(cards[1]!.hasAttribute('data-quote')).toBe(false);
@@ -71,6 +73,19 @@ describe('answer tags', () => {
     const body = rendered('Intro\n[c:aaaaaaaaaa]\nPart');
     expect([...body.children].map((element) => element.tagName)).toEqual(['P', 'DIV', 'P']);
     expect(body.querySelector('.answer-card')!.getAttribute('data-tag')).toBe('[c:aaaaaaaaaa]');
+  });
+
+  it("reads the user's comments aloud before the part that answers them", () => {
+    const body = rendered(
+      '[c:aaaaaaaaaa] [m:bbbbbbbbbb]\nFirst part.\n\n[c:zzzzzzzzzz]\nMore.',
+      parts,
+    );
+    expect(speechBlocks(body).map(({ block }) => block)).toEqual([
+      { kind: 'text', text: 'User\'s comment. Why "these"?' },
+      { kind: 'text', text: "User's comment. And Redis?" },
+      { kind: 'text', text: 'First part.' },
+      { kind: 'text', text: 'More.' },
+    ]);
   });
 
   it('leaves tags in code and next to other text as they are', () => {
@@ -89,10 +104,12 @@ describe('answer tags', () => {
   });
 });
 
-describe('taggedCommentIds', () => {
-  it('lists the comments an answer answers, leaving out message tags', () => {
-    expect(taggedCommentIds('[c:aaaaaaaaaa] [m:bbbbbbbbbb]\nText\n\n[c:cccccccccc]\nMore')).toEqual(
-      ['aaaaaaaaaa', 'cccccccccc'],
-    );
+describe('taggedIds', () => {
+  it('lists the comments and messages an answer answers', () => {
+    expect(taggedIds('[c:aaaaaaaaaa] [m:bbbbbbbbbb]\nText\n\n[c:cccccccccc]\nMore')).toEqual([
+      'aaaaaaaaaa',
+      'bbbbbbbbbb',
+      'cccccccccc',
+    ]);
   });
 });

@@ -80,9 +80,21 @@ function collectList(list: Element, into: SpokenElement[]) {
   }
 }
 
+// The user's comments an answer part replies to are read before it, so the answer makes sense
+// heard on its own. A card without a known comment has no text and is skipped.
+function collectCards(tags: Element, into: SpokenElement[]) {
+  for (const card of tags.querySelectorAll('.answer-card[data-text]')) {
+    const text = collapse(card.getAttribute('data-text') ?? '');
+    if (text)
+      into.push({ element: card, block: { kind: 'text', text: `User's comment. ${text}` } });
+  }
+}
+
 function collect(container: Element, into: SpokenElement[]) {
   for (const child of container.children) {
-    if (listTags.has(child.tagName)) {
+    if (child.tagName === 'DIV' && child.classList.contains('answer-tags')) {
+      collectCards(child, into);
+    } else if (listTags.has(child.tagName)) {
       collectList(child, into);
     } else if (readTags.has(child.tagName)) {
       const block = describe(child);
