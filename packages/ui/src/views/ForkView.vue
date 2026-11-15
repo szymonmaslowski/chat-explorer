@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import type { Activity, Bookmark, Comment, Message } from '@shared/types';
+import type {
+  Activity,
+  ActivitySummary,
+  Bookmark,
+  Comment,
+  Message,
+  MessageHead,
+} from '@shared/types';
 import { useRoute, useRouter } from 'vue-router';
 import BookmarkList from '../components/BookmarkList.vue';
 import CommentLayer from '../components/CommentLayer.vue';
@@ -20,6 +27,7 @@ import MediaIcon from '../components/MediaIcon.vue';
 import { useCommentTyping } from '../composables/useCommentTyping';
 import { useLayout } from '../composables/useLayout';
 import { useMediaQuery } from '../composables/useMediaQuery';
+import { useMessageWindow } from '../composables/useMessageWindow';
 import { useReadTracking } from '../composables/useReadTracking';
 import {
   answeredPartLookup,
@@ -32,7 +40,12 @@ import {
 import { scrollToAndFlash } from '../lib/flash';
 import { keepSameList, keepSameMap, noItems } from '../lib/stable';
 import { awaitsAnswer, isUnread } from '../lib/read-state';
-import { applyEvent, openExploration } from '../stores/exploration';
+import {
+  applyEvent,
+  attemptKey,
+  loadAttemptActivities,
+  openExploration,
+} from '../stores/exploration';
 import { explorationIndex } from '../stores/exploration-index';
 import { api } from '../api';
 import { newId, outbox } from '../stores/outbox';
@@ -64,10 +77,19 @@ const parentFork = computed(() =>
   fork.value?.parentForkId ? (state.value.forks.get(fork.value.parentForkId) ?? null) : null,
 );
 const lookups = computed(() => explorationIndex(state.value));
-const path = computed<Message[]>((previous) =>
+const path = computed<MessageHead[]>((previous) =>
   keepSameList(previous, fork.value ? forkPath(fork.value, state.value.messages) : []),
 );
 const pathIds = computed(() => new Set(path.value.map((message) => message.id)));
+const pathIndex = computed(() => new Map(path.value.map((message, index) => [message.id, index])));
+// Only the newest messages, and older ones as the reader scrolls up, are on the page.
+const {
+  messages: shownMessages,
+  ready: windowReady,
+  hasOlder,
+  reveal,
+} = useMessageWindow({ state, fork, path, sentinelRef: 'olderSentinel' });
+const shownIds = computed(() => shownMessages.value.map((message) => message.id).join());
 // Claude's answers counted back from the newest, [0], so the user can refer to one as [-2].
 const answerIndexes = computed(() => {
   const answers = path.value.filter((message) => message.role === 'assistant');
@@ -82,33 +104,48 @@ const forkRun = computed(() =>
 const awaitingAnswer = computed(
   () => !!fork.value && awaitsAnswer(fork.value, state.value.messages, forkRun.value ?? undefined),
 );
-// By the user message a turn answered, each attempt's activity in order.
-const activityGroups = computed<Map<string, Activity[][]>>((previous) => {
-  const groups = new Map<string, Map<number, Activity[]>>();
-  const ordered = (fork.value && lookups.value.activitiesByFork.value.get(fork.value.id)) ?? [];
-  for (const activity of ordered) {
-    const attempts = groups.get(activity.afterMessageId) ?? new Map<number, Activity[]>();
-    attempts.set(activity.attempt, [...(attempts.get(activity.attempt) ?? []), activity]);
-    groups.set(activity.afterMessageId, attempts);
+interface AttemptGroup {
+  summary: ActivitySummary;
+  activities: Activity[];
+}
+// By the user message a turn answered, each attempt in order, with the steps loaded so far.
+const activityGroups = computed<Map<string, AttemptGroup[]>>((previous) => {
+  const loaded = new Map<string, Activity[]>();
+  for (const activity of (fork.value && lookups.value.activitiesByFork.value.get(fork.value.id)) ??
+    []) {
+    const key = attemptKey(activity);
+    loaded.set(key, [...(loaded.get(key) ?? []), activity]);
   }
-  const next = new Map(
-    [...groups].map(([messageId, attempts]) => {
-      const before = previous?.get(messageId);
-      const kept = [...attempts.values()].map((group) =>
-        keepSameList(
-          before?.find((each) => each[0]?.attempt === group[0]?.attempt),
-          group,
-        ),
-      );
-      return [messageId, keepSameList(before, kept)];
-    }),
+  const groups = new Map<string, AttemptGroup[]>();
+  const summaries = [...state.value.activitySummaries.values()]
+    .filter((summary) => summary.forkId === fork.value?.id)
+    .sort((first, second) => first.attempt - second.attempt);
+  for (const summary of summaries) {
+    const before = previous?.get(summary.afterMessageId);
+    const key = attemptKey(summary);
+    const kept = before?.find((group) => attemptKey(group.summary) === key);
+    const activities = keepSameList(kept?.activities, loaded.get(key) ?? []);
+    const group =
+      kept && kept.summary === summary && kept.activities === activities
+        ? kept
+        : { summary, activities };
+    groups.set(summary.afterMessageId, [...(groups.get(summary.afterMessageId) ?? []), group]);
+  }
+  return keepSameMap(
+    previous,
+    new Map(
+      [...groups].map(([messageId, list]) => [
+        messageId,
+        keepSameList(previous?.get(messageId), list),
+      ]),
+    ),
   );
-  return keepSameMap(previous, next);
 });
-const isWorking = (group: Activity[]) =>
+const isWorking = ({ summary }: AttemptGroup) =>
   forkRun.value?.status === 'answering' &&
-  group[0]?.attempt === forkRun.value.attempt &&
-  !group.some((activity) => activity.interrupted);
+  summary.attempt === forkRun.value.attempt &&
+  !summary.interrupted;
+const loadSteps = (group: AttemptGroup) => void loadAttemptActivities(state.value, group.summary);
 const lastAnswer = computed(() => path.value.findLast((message) => message.role === 'assistant'));
 const lastUnread = computed(() => path.value.findLast(isUnread));
 const attention = computed(() => lookups.value.attentionByFork.value);
@@ -164,7 +201,7 @@ const viewComments = computed<Comment[]>((previous) => {
     (fork.value && lookups.value.commentsByViewFork.value.get(fork.value.id)) ?? [];
   const forkId = fork.value?.id;
   const sentMessages = forkId
-    ? path.value.flatMap((message) => sentMessageComment(message, forkId) ?? [])
+    ? shownMessages.value.flatMap((message) => sentMessageComment(message, forkId) ?? [])
     : [];
   return keepSameList(previous, [
     ...forkComments.filter((comment) => pathIds.value.has(comment.messageId)),
@@ -188,6 +225,14 @@ watch(
   () => fork.value?.id,
   () => (draftsOnly.value = false),
 );
+// Every draft shows in drafts-only view, so the messages they are on come first.
+watch(draftsOnly, (only) => {
+  if (!only) return;
+  const first = drafts.value
+    .map((draft) => draft.messageId)
+    .sort((left, right) => (pathIndex.value.get(left) ?? 0) - (pathIndex.value.get(right) ?? 0))[0];
+  if (first) void reveal(first);
+});
 watch(
   () => [fork.value?.id, viewBookmarks.value.length === 0],
   () => (bookmarksOpen.value = false),
@@ -198,6 +243,15 @@ const drafts = computed<Comment[]>((previous) =>
     viewComments.value.filter((comment) => comment.status === 'draft'),
   ),
 );
+// The layer places only the comments on messages the page shows: a card listed under a message
+// needs that message on the page when the card is made.
+const shownComments = computed<Comment[]>((previous) => {
+  const shown = new Set(shownMessages.value.map((message) => message.id));
+  return keepSameList(
+    previous,
+    viewComments.value.filter((comment) => shown.has(comment.messageId)),
+  );
+});
 const queuedSubmissions = computed(() =>
   [...state.value.queuedSubmissions.values()].filter(
     (submission) => submission.forkId === fork.value?.id,
@@ -246,9 +300,27 @@ watch(
   { flush: 'post' },
 );
 
+// A link to a message, a comment or a bookmark further up shows everything down from it first.
+function linkedMessageId(hash: string) {
+  const id = hash.slice(3);
+  if (hash.startsWith('#m-')) return id;
+  if (hash.startsWith('#b-')) return state.value.bookmarks.get(id)?.messageId ?? null;
+  if (!hash.startsWith('#c-')) return null;
+  // A message's reply-box text shows as a sent comment under the message it replied to.
+  return state.value.comments.get(id)?.messageId ?? state.value.messages.get(id)?.parentId ?? null;
+}
+watch(
+  () => [route.hash, windowReady.value] as const,
+  ([hash, ready]) => {
+    const messageId = ready ? linkedMessageId(hash) : null;
+    if (messageId) void reveal(messageId);
+  },
+  { immediate: true },
+);
+
 let handledHash = '';
 watch(
-  () => [route.hash, path.value.length] as const,
+  () => [route.hash, shownMessages.value.length] as const,
   ([hash]) => {
     if (!hash.startsWith('#m-') || hash === handledHash) return;
     const target = document.getElementById(hash.slice(1));
@@ -366,8 +438,10 @@ watch(
       </p>
 
       <div class="conversation">
-        <template v-for="(message, index) in path" :key="message.id">
-          <div v-if="parentFork && index === ownStart" class="fork-point">
+        <div v-if="hasOlder" ref="olderSentinel" class="older" aria-hidden="true" />
+        <p v-if="path.length > 0 && !windowReady" class="muted">Loading…</p>
+        <template v-for="message in shownMessages" :key="message.id">
+          <div v-if="parentFork && pathIndex.get(message.id) === ownStart" class="fork-point">
             Forked from
             <RouterLink
               :to="
@@ -383,11 +457,11 @@ watch(
             :message="message"
             :quoted-comments="lookups.quotedCommentsByMessage.value.get(message.id) ?? noItems"
             :files="lookups.filesByMessage.value.get(message.id) ?? noItems"
-            :shared="ownStart !== -1 && index < ownStart"
+            :shared="ownStart !== -1 && pathIndex.get(message.id)! < ownStart"
             :is-new="newIds.has(message.id)"
             :answered-part="answeredPart"
             :forkable="!archived"
-            :splittable="splittable(message, index)"
+            :splittable="splittable(message, pathIndex.get(message.id)!)"
             :answer-index="answerIndexes.get(message.id) ?? null"
             @mark-unread="markUnread(message.id)"
             @mark-read="markReadUpTo(message.id)"
@@ -400,9 +474,11 @@ watch(
           </p>
           <ActivityGroup
             v-for="group in activityGroups.get(message.id) ?? []"
-            :key="`${message.id}-${group[0]!.attempt}`"
-            :activities="group"
+            :key="`${message.id}-${group.summary.attempt}`"
+            :summary="group.summary"
+            :activities="group.activities"
             :working="isWorking(group)"
+            @load="loadSteps(group)"
           />
           <div :id="`comments-${message.id}`" class="message-comments" />
           <RouterLink
@@ -420,9 +496,9 @@ watch(
           ref="commentLayer"
           :exploration-id="explorationId"
           :fork-id="fork.id"
-          :comments="viewComments"
+          :comments="shownComments"
           :bookmarks="viewBookmarks"
-          :layout-key="`${[...pathIds].join()} ${renderedCount}`"
+          :layout-key="`${shownIds} ${renderedCount}`"
           :read-only="archived"
           :drafts-only="draftsOnly"
           @show-text="draftsOnly = false"
@@ -461,9 +537,21 @@ watch(
   </div>
 </template>
 
+<style>
+/* The page keeps the reader's place itself when older messages go in above, so the browser's own
+   scroll anchoring would move it twice. */
+:root:has(.fork-view) {
+  overflow-anchor: none;
+}
+</style>
+
 <style scoped>
 .split-error {
   color: var(--danger);
+}
+
+.older {
+  height: 1px;
 }
 
 .top {

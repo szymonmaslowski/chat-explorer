@@ -1,12 +1,12 @@
-import type { Fork, ForkRun, Message } from '@shared/types';
+import type { Fork, ForkRun, MessageHead } from '@shared/types';
 
 export type Attention = 'unread' | 'failed';
 
-export const isUnread = (message: Message) =>
+export const isUnread = (message: Pick<MessageHead, 'role' | 'readAt'>) =>
   message.role === 'assistant' && message.readAt === null;
 
 // A stopped turn handled the fork's last message without answering it.
-export function awaitsAnswer(fork: Fork, messages: Map<string, Message>, run: ForkRun | undefined) {
+export function awaitsAnswer(fork: Fork, messages: Map<string, MessageHead>, run: ForkRun | undefined) {
   const lastId = fork.tipMessageId ?? fork.baseMessageId;
   const last = lastId ? messages.get(lastId) : undefined;
   return last?.role === 'user' && last.id !== run?.handledUpTo;
@@ -16,7 +16,7 @@ export function awaitsAnswer(fork: Fork, messages: Map<string, Message>, run: Fo
 // started while the fork waits for an answer.
 export function forkAttention(input: {
   forks: Map<string, Fork>;
-  messages: Map<string, Message>;
+  messages: Map<string, MessageHead>;
   forkRuns: Map<string, ForkRun>;
   sessionError: string | null;
 }) {

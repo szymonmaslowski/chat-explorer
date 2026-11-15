@@ -1,6 +1,5 @@
-import type { Activity, Comment, Fork, Message, MessageFile } from '@shared/types';
+import type { Activity, Comment, Fork, MessageFile, MessageHead } from '@shared/types';
 import { computed, effectScope } from 'vue';
-import { taggedIds } from '@shared/answer-tags';
 import { forkAttention, type Attention } from '../lib/read-state';
 import { groupBy, keepSameGroups, keepSameMap } from '../lib/stable';
 import type { ExplorationState } from './exploration';
@@ -45,10 +44,9 @@ function buildIndex(state: ExplorationState) {
     // Claude's answer to a sent comment, or to a message's reply-box text: the first answer with
     // its tag.
     answersByComment: computed(() => {
-      const answers = new Map<string, Message>();
+      const answers = new Map<string, MessageHead>();
       for (const message of state.messages.values()) {
-        if (message.role !== 'assistant') continue;
-        for (const id of taggedIds(message.content)) {
+        for (const id of message.answers) {
           if (!answers.has(id)) answers.set(id, message);
         }
       }

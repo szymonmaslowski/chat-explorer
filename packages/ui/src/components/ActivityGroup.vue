@@ -1,27 +1,37 @@
 <script setup lang="ts">
-import type { Activity } from '@shared/types';
+import type { Activity, ActivitySummary } from '@shared/types';
 import { computed, ref, watch } from 'vue';
 
 // What Claude did during one attempt at a turn: open while it works, one line once it answered,
-// greyed when the attempt died and was retried.
-const props = defineProps<{ activities: Activity[]; working: boolean }>();
+// greyed when the attempt died and was retried. Its steps load when it opens.
+const props = defineProps<{
+  summary: ActivitySummary;
+  activities: Activity[];
+  working: boolean;
+}>();
+const emit = defineEmits<{ load: [] }>();
 
-const interrupted = computed(() => props.activities.some((activity) => activity.interrupted));
+const interrupted = computed(() => props.summary.interrupted);
 const open = ref(props.working);
 watch(
   () => props.working,
   (working) => (open.value = working),
 );
+watch(
+  open,
+  (isOpen) => {
+    if (isOpen && props.activities.length < props.summary.count) emit('load');
+  },
+  { immediate: true },
+);
 
 const steps = computed(() => {
-  const count = props.activities.length;
+  const count = props.summary.count;
   return `${count} step${count === 1 ? '' : 's'}`;
 });
 
 const duration = computed(() => {
-  const first = props.activities[0]?.createdAt ?? 0;
-  const last = props.activities.at(-1)?.createdAt ?? first;
-  const seconds = Math.round((last - first) / 1000);
+  const seconds = Math.round((props.summary.lastAt - props.summary.firstAt) / 1000);
   if (seconds < 1) return '';
   const minutes = Math.floor(seconds / 60);
   return minutes > 0 ? ` for ${minutes}m ${seconds % 60}s` : ` for ${seconds}s`;

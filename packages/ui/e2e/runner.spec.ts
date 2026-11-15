@@ -78,6 +78,15 @@ test('shows what the runner does in a fork, its usage, and stops it on request',
   await expect(activity.locator('li')).toHaveCount(0);
   await expect(status).toHaveText('done');
 
+  // A finished attempt's steps load when it is opened, after a fresh load of the chat.
+  await page.reload();
+  await expect(activity).toContainText('Worked · 2 steps');
+  await activity.getByRole('button').click();
+  await expect(activity.locator('li')).toHaveText([
+    'Searching the web for "caching"',
+    'Reading report.pdf',
+  ]);
+
   // The map is about the whole chat, where one fork's state would mislead.
   await page.goto(`/e/${explorationId}/map`);
   await expect(page.locator('.fork-box')).toHaveCount(1);

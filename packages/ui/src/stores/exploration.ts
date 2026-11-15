@@ -1,13 +1,16 @@
 import type {
   Activity,
+  ActivitySummary,
   Bookmark,
   Comment,
   Exploration,
   ExplorationEvent,
   Fork,
   ForkRun,
+  LightSnapshot,
   Message,
   MessageFile,
+  MessageHead,
   Note,
   NoteGroup,
   QueuedSubmission,
@@ -15,6 +18,7 @@ import type {
   SessionStatus,
   Snapshot,
 } from '@shared/types';
+import { taggedIds } from '@shared/answer-tags';
 import { joinForkGroup, leaveForkGroup } from '@shared/fork-groups';
 import { defaultGroupName, noteForkMessage, reorderedIds } from '@shared/notes';
 import { nextTick, reactive, toRaw, watch } from 'vue';
@@ -28,7 +32,10 @@ export interface ExplorationState {
   status: 'loading' | 'ready' | 'missing' | 'deleted' | 'error';
   exploration: Exploration | null;
   forks: Map<string, Fork>;
-  messages: Map<string, Message>;
+  // Every message of the chat, without its text.
+  messages: Map<string, MessageHead>;
+  // The texts loaded so far, by message. A message's text never changes.
+  bodies: Map<string, string>;
   comments: Map<string, Comment>;
   queuedSubmissions: Map<string, QueuedSubmission>;
   files: Map<string, MessageFile>;
@@ -39,7 +46,10 @@ export interface ExplorationState {
   bookmarks: Map<string, Bookmark>;
   // By fork: what the runner is doing there.
   forkRuns: Map<string, ForkRun>;
+  // The runner steps loaded so far: those of running attempts, and of attempts opened.
   activities: Map<string, Activity>;
+  // Every attempt, counted, by attemptKey.
+  activitySummaries: Map<string, ActivitySummary>;
   sessionStatus: SessionStatus;
   sessionError: string | null;
   connected: boolean;
@@ -120,6 +130,33 @@ function syncItems<Item extends object>(
 
 const byId = (item: { id: string }) => item.id;
 
+export const attemptKey = (attempt: Pick<Activity, 'forkId' | 'afterMessageId' | 'attempt'>) =>
+  `${attempt.forkId} ${attempt.afterMessageId} ${attempt.attempt}`;
+
+const headOf = ({ content, ...message }: Message): MessageHead => ({
+  ...message,
+  answers: message.role === 'assistant' ? taggedIds(content) : [],
+});
+
+function putMessage(state: ExplorationState, message: Message) {
+  put(state.messages, message.id, headOf(message));
+  state.bodies.set(message.id, message.content);
+}
+
+function countActivity(state: ExplorationState, activity: Activity) {
+  const key = attemptKey(activity);
+  const summary = state.activitySummaries.get(key);
+  state.activitySummaries.set(key, {
+    forkId: activity.forkId,
+    afterMessageId: activity.afterMessageId,
+    attempt: activity.attempt,
+    count: (summary?.count ?? 0) + 1,
+    interrupted: (summary?.interrupted ?? false) || activity.interrupted,
+    firstAt: summary?.firstAt ?? activity.createdAt,
+    lastAt: activity.createdAt,
+  });
+}
+
 export function applyReadChange(
   state: ExplorationState,
   messageIds: string[],
@@ -127,14 +164,15 @@ export function applyReadChange(
 ) {
   for (const messageId of messageIds) {
     const message = state.messages.get(messageId);
-    if (message) message.readAt = readAt;
+    // A new head, so the message shown with its text is made again.
+    if (message) put(state.messages, messageId, { ...message, readAt });
   }
 }
 
 export function applyEvent(state: ExplorationState, event: ExplorationEvent) {
   switch (event.type) {
     case 'message.added':
-      put(state.messages, event.message.id, event.message);
+      putMessage(state, event.message);
       put(state.forks, event.fork.id, event.fork);
       break;
     case 'messages.read':
@@ -146,7 +184,7 @@ export function applyEvent(state: ExplorationState, event: ExplorationEvent) {
       break;
     case 'fork.split':
       for (const fork of event.forks) put(state.forks, fork.id, fork);
-      for (const message of event.messages) put(state.messages, message.id, message);
+      for (const message of event.messages) putMessage(state, message);
       for (const comment of event.comments) put(state.comments, comment.id, comment);
       for (const bookmark of event.bookmarks) put(state.bookmarks, bookmark.id, bookmark);
       for (const activity of event.activities) put(state.activities, activity.id, activity);
@@ -160,12 +198,18 @@ export function applyEvent(state: ExplorationState, event: ExplorationEvent) {
       put(state.replyDrafts, event.draft.forkId, event.draft);
       break;
     case 'activity.added':
+      if (!state.activities.has(event.activity.id)) countActivity(state, event.activity);
       put(state.activities, event.activity.id, event.activity);
       break;
     case 'activities.interrupted':
       for (const activity of state.activities.values()) {
         if (activity.forkId === event.forkId && activity.attempt === event.attempt) {
           put(state.activities, activity.id, { ...activity, interrupted: true });
+        }
+      }
+      for (const [key, summary] of state.activitySummaries) {
+        if (summary.forkId === event.forkId && summary.attempt === event.attempt) {
+          state.activitySummaries.set(key, { ...summary, interrupted: true });
         }
       }
       break;
@@ -592,12 +636,24 @@ export function applyChange(state: ExplorationState, change: Change) {
   }
 }
 
-function applySnapshot(state: ExplorationState, snapshot: Snapshot) {
+const isFull = (snapshot: LightSnapshot | Snapshot): snapshot is Snapshot =>
+  !('activitySummaries' in snapshot);
+
+// A daemon from before the light load sends the whole chat, texts and all steps included.
+function applySnapshot(state: ExplorationState, snapshot: LightSnapshot | Snapshot) {
   if (!state.exploration || !sameContent(state.exploration, snapshot.exploration)) {
     state.exploration = snapshot.exploration;
   }
   syncItems(state.forks, snapshot.forks, byId);
-  syncItems(state.messages, snapshot.messages, byId);
+  if (isFull(snapshot)) {
+    for (const message of snapshot.messages) state.bodies.set(message.id, message.content);
+    syncItems(state.messages, snapshot.messages.map(headOf), byId);
+    state.activitySummaries.clear();
+    for (const activity of snapshot.activities) countActivity(state, activity);
+  } else {
+    syncItems(state.messages, snapshot.messages, byId);
+    syncItems(state.activitySummaries, snapshot.activitySummaries, attemptKey);
+  }
   syncItems(state.comments, snapshot.comments, byId);
   syncItems(state.queuedSubmissions, snapshot.queuedSubmissions, byId);
   syncItems(state.files, snapshot.files, byId);
@@ -606,7 +662,8 @@ function applySnapshot(state: ExplorationState, snapshot: Snapshot) {
   syncItems(state.notes, snapshot.notes, byId);
   syncItems(state.bookmarks, snapshot.bookmarks, byId);
   syncItems(state.forkRuns, snapshot.forkRuns, (run) => run.forkId);
-  syncItems(state.activities, snapshot.activities, byId);
+  // Steps opened earlier stay loaded; the light load sends only those of running attempts.
+  for (const activity of snapshot.activities) put(state.activities, activity.id, activity);
   state.sessionStatus = snapshot.sessionStatus;
   state.sessionError = snapshot.sessionError;
   state.status = 'ready';
@@ -620,6 +677,7 @@ function createExplorationStore(explorationId: string) {
     exploration: null,
     forks: new Map(),
     messages: new Map(),
+    bodies: new Map(),
     comments: new Map(),
     queuedSubmissions: new Map(),
     files: new Map(),
@@ -629,6 +687,7 @@ function createExplorationStore(explorationId: string) {
     bookmarks: new Map(),
     forkRuns: new Map(),
     activities: new Map(),
+    activitySummaries: new Map(),
     sessionStatus: 'detached',
     sessionError: null,
     connected: false,
@@ -659,7 +718,15 @@ function createExplorationStore(explorationId: string) {
       });
     },
     events: Object.fromEntries(
-      eventTypes.map((type) => [type, (data: string) => applyServerEvent(state, JSON.parse(data))]),
+      eventTypes.map((type) => [
+        type,
+        (data: string) => {
+          const event: ExplorationEvent = JSON.parse(data);
+          applyServerEvent(state, event);
+          // A split moves messages and steps to a new fork, so the counted attempts come again.
+          if (event.type === 'fork.split') void load();
+        },
+      ]),
     ),
   });
   return { state, close: stream.close };
@@ -698,4 +765,28 @@ export function openExploration(explorationId: string) {
   active?.close();
   active = createExplorationStore(explorationId);
   return active.state;
+}
+
+const loadingBodies = new Map<string, Promise<void>>();
+const maxBodiesPerRequest = 200;
+
+// Loads the texts of these messages that are not loaded yet, a request per batch.
+export async function loadBodies(state: ExplorationState, messageIds: string[]) {
+  const missing = messageIds.filter((id) => !state.bodies.has(id) && !loadingBodies.has(id));
+  for (let start = 0; start < missing.length; start += maxBodiesPerRequest) {
+    const batch = missing.slice(start, start + maxBodiesPerRequest);
+    const request = api.messageBodies(state.explorationId, batch).then((bodies) => {
+      for (const body of bodies) state.bodies.set(body.id, body.content);
+    });
+    const settled = request.finally(() => {
+      for (const id of batch) loadingBodies.delete(id);
+    });
+    for (const id of batch) loadingBodies.set(id, settled);
+  }
+  await Promise.all(messageIds.flatMap((id) => loadingBodies.get(id) ?? []));
+}
+
+export async function loadAttemptActivities(state: ExplorationState, summary: ActivitySummary) {
+  const activities = await api.attemptActivities(state.explorationId, summary);
+  for (const activity of activities) put(state.activities, activity.id, activity);
 }

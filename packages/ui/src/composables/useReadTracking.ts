@@ -1,4 +1,4 @@
-import type { Fork, Message } from '@shared/types';
+import type { Fork, MessageHead } from '@shared/types';
 import { onBeforeUnmount, reactive, watch, type Ref } from 'vue';
 import { isUnread } from '../lib/read-state';
 import { visibleArea } from '../lib/reading-line';
@@ -10,7 +10,7 @@ const checkEveryMs = 500;
 // How much of an answer's start has to be on screen for it to count as being looked at.
 const visibleStartPx = 40;
 
-const elementOf = (message: Message) => document.getElementById(`m-${message.id}`);
+const elementOf = (message: MessageHead) => document.getElementById(`m-${message.id}`);
 
 function startIsVisible(element: HTMLElement) {
   const { top, bottom } = visibleArea();
@@ -25,7 +25,7 @@ function startIsVisible(element: HTMLElement) {
 export function useReadTracking(input: {
   state: Ref<ExplorationState>;
   fork: Ref<Fork | null>;
-  path: Ref<Message[]>;
+  path: Ref<MessageHead[]>;
 }) {
   const newIds = reactive(new Set<string>());
   // Marking an answer unread by hand while it is on screen would otherwise undo itself.

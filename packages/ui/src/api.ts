@@ -1,5 +1,7 @@
 import type { ClaudeModel } from '@shared/models';
 import type {
+  Activity,
+  ActivitySummary,
   Bookmark,
   ChatDefaultPage,
   Comment,
@@ -9,6 +11,8 @@ import type {
   Fork,
   ForkSplit,
   ForkAwareness,
+  LightSnapshot,
+  MessageBody,
   MessageFile,
   NewBookmark,
   NewComment,
@@ -86,7 +90,23 @@ export const api = {
     call<Exploration>(`/api/explorations/${explorationId}/unarchive`, { method: 'POST' }),
   deleteExploration: (explorationId: string) =>
     call<{ ok: true }>(`/api/explorations/${explorationId}`, { method: 'DELETE' }),
-  snapshot: (explorationId: string) => call<Snapshot>(`/api/explorations/${explorationId}`),
+  snapshot: (explorationId: string) =>
+    call<LightSnapshot | Snapshot>(`/api/explorations/${explorationId}?light`),
+  messageBodies: (explorationId: string, messageIds: string[]) =>
+    call<MessageBody[]>(
+      `/api/explorations/${explorationId}/message-bodies?ids=${messageIds.join(',')}`,
+    ),
+  attemptActivities: (
+    explorationId: string,
+    attempt: Pick<ActivitySummary, 'forkId' | 'afterMessageId' | 'attempt'>,
+  ) =>
+    call<Activity[]>(
+      `/api/explorations/${explorationId}/activities?${new URLSearchParams({
+        forkId: attempt.forkId,
+        afterMessageId: attempt.afterMessageId,
+        attempt: String(attempt.attempt),
+      })}`,
+    ),
   createExploration: (input: {
     message: string;
     model: ClaudeModel;

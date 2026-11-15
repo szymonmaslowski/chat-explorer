@@ -1,6 +1,7 @@
 import { withPrefix } from '@shared/ids';
 import { createRouter, createWebHistory } from 'vue-router';
 import { scrollTopAtStartOf } from './lib/reading-line';
+import { whenWindowReady } from './composables/useMessageWindow';
 import { whenActiveExplorationLoaded } from './stores/exploration';
 import ExplorationsList from './views/ExplorationsList.vue';
 import ForkMap from './views/ForkMap.vue';
@@ -32,12 +33,14 @@ export const router = createRouter({
   async scrollBehavior(to, from, savedPosition) {
     if (savedPosition) {
       await whenActiveExplorationLoaded();
+      if (to.meta.opensAtEnd) await whenWindowReady();
       return savedPosition;
     }
     // Views scroll to `#m-`, `#c-` and `#n-` targets themselves once the content has rendered.
     if (to.hash || to.path === from.path) return false;
     if (!to.meta.opensAtEnd) return { top: 0 };
     await whenActiveExplorationLoaded();
+    await whenWindowReady();
     const firstUnread = document.querySelector<HTMLElement>('.message[data-unread]');
     const target = firstUnread
       ? () => scrollTopAtStartOf(firstUnread)

@@ -1,9 +1,9 @@
 import type { AnsweredPartLookup } from '@shared/answer-tags';
-import type { Comment, ExplorationListItem, Fork, Message } from '@shared/types';
+import type { Comment, ExplorationListItem, Fork, Message, MessageHead } from '@shared/types';
 import type { ExplorationState } from '../stores/exploration';
 
-export function pathTo(messageId: string | null, messages: Map<string, Message>) {
-  const path: Message[] = [];
+export function pathTo(messageId: string | null, messages: Map<string, MessageHead>) {
+  const path: MessageHead[] = [];
   let current = messageId ? messages.get(messageId) : undefined;
   while (current) {
     path.push(current);
@@ -12,7 +12,7 @@ export function pathTo(messageId: string | null, messages: Map<string, Message>)
   return path.reverse();
 }
 
-export function forkPath(fork: Fork, messages: Map<string, Message>) {
+export function forkPath(fork: Fork, messages: Map<string, MessageHead>) {
   return pathTo(fork.tipMessageId ?? fork.baseMessageId, messages);
 }
 
@@ -39,6 +39,17 @@ export function archivingFork(fork: Fork, forks: Map<string, Fork>) {
 
 export const commentLink = (comment: Comment) =>
   `/e/${comment.explorationId}/f/${comment.viewForkId}#c-${comment.id}`;
+
+// A message with its text, kept per head and text, so a list holding it stays the same.
+const withBodies = new WeakMap<MessageHead, Message>();
+export function withBody(head: MessageHead, content: string) {
+  const kept = withBodies.get(head);
+  if (kept?.content === content) return kept;
+  const { answers: _answers, ...fields } = head;
+  const message: Message = { ...fields, content };
+  withBodies.set(head, message);
+  return message;
+}
 
 // What the user typed in the reply box shows as a sent comment under the message it replied to,
 // like a general comment, so an answer's card of it has a place to go back to. The first message
@@ -78,12 +89,13 @@ export function sentMessageComment(message: Message, viewForkId: string) {
 // answer's markdown depends only on what its own tags name, and the lookup stays the same function
 // while the chat changes.
 export function answeredPartLookup(
-  state: Pick<ExplorationState, 'comments' | 'messages'>,
+  state: Pick<ExplorationState, 'comments' | 'messages' | 'bodies'>,
 ): AnsweredPartLookup {
   return (kind, id) => {
     if (kind === 'message') {
-      const message = state.messages.get(id);
-      if (!message) return null;
+      const head = state.messages.get(id);
+      if (!head) return null;
+      const message = withBody(head, state.bodies.get(id) ?? '');
       const sent = sentMessageComment(message, message.forkId);
       return { quote: '', text: message.content, href: sent && commentLink(sent) };
     }
