@@ -12,6 +12,7 @@ import { formatDateTime } from '../lib/date-time';
 import { isUnread } from '../lib/read-state';
 import { bringToReadingLine, scrollToEdge } from '../lib/reading-line';
 import { speechBlocks, type SpokenElement } from '../lib/speech-blocks';
+import { openExploration } from '../stores/exploration';
 import { checkSpeechAvailable, playBlock, playFrom, speech, togglePause } from '../stores/speech';
 import ConfirmButton from './ConfirmButton.vue';
 import FileLinks from './FileLinks.vue';
@@ -37,8 +38,13 @@ const emit = defineEmits<{
   rendered: [];
 }>();
 
+const chatFiles = computed(() => openExploration(props.message.explorationId).files);
+const imageSize = (fileId: string) => {
+  const file = chatFiles.value.get(fileId);
+  return file?.width && file.height ? { width: file.width, height: file.height } : null;
+};
 const html = computed(() =>
-  props.message.content ? renderMarkdown(props.message.content, props.answeredPart) : '',
+  props.message.content ? renderMarkdown(props.message.content, props.answeredPart, imageSize) : '',
 );
 // A file the text already shows, such as a screenshot in an answer, is not listed again below.
 const listedFiles = computed(() =>
@@ -544,6 +550,7 @@ onMounted(findBlocks);
 .content :deep(img) {
   display: block;
   max-width: calc(100% - 2rem);
+  height: auto;
   margin: 0.75rem 1rem;
   border-radius: var(--radius);
   box-shadow: var(--shadow);

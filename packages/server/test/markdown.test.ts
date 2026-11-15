@@ -37,4 +37,11 @@ describe('rendering markdown', () => {
     expect(html).toContain('<td class="align-right">2</td>');
     expect(html).not.toContain('style=');
   });
+
+  it('gives an upload in an answer its size, so its room is kept before it loads', () => {
+    const html = renderMarkdown('![Shot](/api/files/abc)', undefined, (fileId) =>
+      fileId === 'abc' ? { width: 828, height: 1792 } : null,
+    );
+    expect(html).toContain('width="828" height="1792"');
+  });
 });

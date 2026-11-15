@@ -6,6 +6,17 @@ import FileIcon from './FileIcon.vue';
 defineProps<{ files: readonly MessageFile[] }>();
 const imageViewer = useImageViewer();
 
+// The thumbnail's size, fitted into its box, so its room is kept before it loads.
+const box = { width: 160, height: 128 };
+function thumbnailSize(file: MessageFile) {
+  if (!file.width || !file.height) return {};
+  const scale = Math.min(1, box.width / file.width, box.height / file.height);
+  return {
+    width: Math.round(file.width * scale),
+    height: Math.round(file.height * scale),
+  };
+}
+
 function openImage(event: MouseEvent, file: MessageFile) {
   if (file.kind !== 'image') return;
   event.preventDefault();
@@ -29,6 +40,7 @@ function openImage(event: MouseEvent, file: MessageFile) {
         v-if="file.kind === 'image'"
         :src="`/api/files/${file.id}`"
         :alt="file.name"
+        v-bind="thumbnailSize(file)"
         decoding="async"
       />
       <template v-else>

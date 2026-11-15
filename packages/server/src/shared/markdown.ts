@@ -21,6 +21,13 @@ markdown.renderer.rules.image = (tokens, index, options, env, self) => {
     return `<a class="remote-image" href="${escapeHtml(src)}" target="_blank" rel="noreferrer">${escapeHtml(label)}</a>`;
   }
   token.attrSet('decoding', 'async');
+  // An upload's size keeps its room before it loads, so the text below does not move.
+  const fileId = /^\/api\/files\/([^/?#]+)$/.exec(src)?.[1];
+  const size = fileId ? (env as RenderEnv).imageSize?.(fileId) : null;
+  if (size) {
+    token.attrSet('width', String(size.width));
+    token.attrSet('height', String(size.height));
+  }
   return renderImage(tokens, index, options, env, self);
 };
 
@@ -38,5 +45,15 @@ for (const rule of ['th_open', 'td_open'] as const) {
   };
 }
 
-export const renderMarkdown = (source: string, answeredPart?: AnsweredPartLookup) =>
-  markdown.render(source, { answeredPart });
+export type ImageSizeLookup = (fileId: string) => { width: number; height: number } | null;
+
+interface RenderEnv {
+  answeredPart?: AnsweredPartLookup;
+  imageSize?: ImageSizeLookup;
+}
+
+export const renderMarkdown = (
+  source: string,
+  answeredPart?: AnsweredPartLookup,
+  imageSize?: ImageSizeLookup,
+) => markdown.render(source, { answeredPart, imageSize } satisfies RenderEnv);
