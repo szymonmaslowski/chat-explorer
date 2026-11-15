@@ -30,4 +30,11 @@ describe('rendering markdown', () => {
     expect(html).toContain('class="answer-card"');
     expect(html).not.toContain('answer-jump');
   });
+
+  it('aligns table cells with classes, never inline styles', () => {
+    const html = renderMarkdown('| a | b |\n|:-:|--:|\n| 1 | 2 |');
+    expect(html).toContain('<th class="align-center">a</th>');
+    expect(html).toContain('<td class="align-right">2</td>');
+    expect(html).not.toContain('style=');
+  });
 });

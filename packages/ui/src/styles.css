@@ -313,3 +313,16 @@ html.image-viewer-open {
     min-width: 2.5rem;
   }
 }
+
+/* Table alignment from markdown, as classes so the Content-Security-Policy allows no inline styles. */
+:is(th, td).align-left {
+  text-align: left;
+}
+
+:is(th, td).align-center {
+  text-align: center;
+}
+
+:is(th, td).align-right {
+  text-align: right;
+}

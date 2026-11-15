@@ -3,8 +3,7 @@
 const directives = {
   'default-src': ["'self'"],
   'script-src': ["'self'"],
-  // markdown-it aligns table cells with style attributes.
-  'style-src': ["'self'", "'unsafe-inline'"],
+  'style-src': ["'self'"],
   // data: for the stylesheet's icons and data images in answers, blob: for picked files.
   'img-src': ["'self'", 'data:', 'blob:'],
   // blob: for the speech audio.

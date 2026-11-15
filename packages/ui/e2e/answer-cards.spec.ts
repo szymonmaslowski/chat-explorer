@@ -203,3 +203,22 @@ test('shows a remote image in an answer as a link to it, and loads nothing', asy
   await expect(page.locator('.message.assistant img')).toHaveCount(0);
   expect(await remote).toBeNull();
 });
+
+test('aligns the columns of a table in an answer under the Content-Security-Policy', async ({
+  page,
+  request,
+}) => {
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'Compare them' } })
+  ).json();
+  await attachFakeSession(request, explorationId);
+  await deliverAndAnswer(request, explorationId, '| Name | Cost |\n|:--|--:|\n| Redis | 12 |');
+  await detachFakeSession(request);
+  await page.goto(`/e/${explorationId}`);
+  const cost = page.locator('.message.assistant td', { hasText: '12' });
+  await expect(cost).toHaveCSS('text-align', 'right');
+  await expect(page.locator('.message.assistant th', { hasText: 'Name' })).toHaveCSS(
+    'text-align',
+    'left',
+  );
+});

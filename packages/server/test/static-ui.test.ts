@@ -21,6 +21,8 @@ describe('serving the UI', () => {
     for (const path of ['/e/chat_x', '/assets/index.js']) {
       const policy = (await app.request(path)).headers.get('content-security-policy');
       expect(policy).toContain("script-src 'self';");
+      expect(policy).toContain("style-src 'self';");
+      expect(policy).not.toContain('unsafe');
       expect(policy).toContain("img-src 'self' data: blob:;");
       expect(policy).toContain("frame-ancestors 'none'");
       expect(policy).not.toMatch(/https?:|\*/);

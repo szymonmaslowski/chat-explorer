@@ -24,5 +24,19 @@ markdown.renderer.rules.image = (tokens, index, options, env, self) => {
   return renderImage(tokens, index, options, env, self);
 };
 
+// Table alignment as a class, not markdown-it's style attribute, so the Content-Security-Policy
+// needs no exception for inline styles.
+for (const rule of ['th_open', 'td_open'] as const) {
+  markdown.renderer.rules[rule] = (tokens, index, options, _env, self) => {
+    const token = tokens[index]!;
+    const align = /text-align:\s*(left|center|right)/.exec(String(token.attrGet('style') ?? ''));
+    if (align) {
+      token.attrs = (token.attrs ?? []).filter(([name]) => name !== 'style');
+      token.attrJoin('class', `align-${align[1]}`);
+    }
+    return self.renderToken(tokens, index, options);
+  };
+}
+
 export const renderMarkdown = (source: string, answeredPart?: AnsweredPartLookup) =>
   markdown.render(source, { answeredPart });
