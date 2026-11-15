@@ -15,6 +15,7 @@ import {
 import { lineBoxes, nestingLevels, outlinePath } from '../lib/outlines';
 import { useCopied } from '../composables/useCopied';
 import { blockClipboardText } from '../lib/clipboard';
+import { scrollToAndFlash } from '../lib/flash';
 import {
   blockIndexAt,
   blockTextRange,
@@ -126,14 +127,15 @@ const editedIds = computed(
 );
 const placeOfEditor = (editor: OpenEditor) =>
   openedPlaces.value.find((place) => place.key === editor.placeKey);
-// A comment open in an editor shows there, not also as a card. A sent comment shows in the
-// reply it went with, and its fork as a link under the message, so it needs no card; a saved note
-// keeps its card, which is the way to the note.
+// A comment open in an editor shows there, not also as a card. A sent comment that quotes text
+// shows in the reply it went with, and its fork as a link under the message, so it needs no card.
+// A saved note keeps its card, which is the way to the note, and a sent general comment keeps its
+// card under its message, where an answer's card of it leads.
 const shownComments = computed(() =>
   props.comments.filter(
     (comment) =>
       !editedIds.value.has(comment.id) &&
-      (comment.status !== 'submitted' || comment.type === 'note'),
+      (comment.status !== 'submitted' || comment.type === 'note' || comment.quote === ''),
   ),
 );
 
@@ -887,7 +889,14 @@ watch(
     const range = ranges?.get(hash.slice(3));
     if (!range) return;
     if (hash.startsWith('#c-')) reveal(hash.slice(3), range);
-    scrollToRange(range);
+    // A general comment quotes nothing: its card, listed under the message, is what to show.
+    const card = range.collapsed
+      ? layer.value?.parentElement?.querySelector<HTMLElement>(
+          `.comment-card[data-comment-id="${hash.slice(3)}"]`,
+        )
+      : null;
+    if (card) scrollToAndFlash(card);
+    else scrollToRange(range);
     handledHash = hash;
     // So the same link scrolls there again the next time.
     void router.replace({ hash: '' }).then(() => (handledHash = ''));

@@ -132,7 +132,9 @@ test('opens a fork from the map at its end', async ({ page }) => {
 
 test('links the fork of a sent fork comment under its message, with no card', async ({ page }) => {
   await openSeededExploration(page);
-  await expect(page.locator('.comment-card.submitted')).toHaveCount(0);
+  await expect(page.locator('.comment-card.submitted')).toHaveText([
+    /sent\s*Keep the answers short\.$/,
+  ]);
   await page.getByRole('link', { name: '↳ Fork: Purging cached responses on a CDN' }).click();
   await expect(page.locator('.fork-title')).toHaveText('Purging cached responses on a CDN');
 });

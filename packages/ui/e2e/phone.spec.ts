@@ -32,7 +32,9 @@ test.describe('on a phone', () => {
     await openSeededExploration(page);
     await expect(page.getByRole('link', { name: 'Chat', exact: true })).toBeInViewport();
     await expect(page.locator('.comment-outlines path').first()).toBeAttached();
-    await expect(page.locator('.message-comments .comment-card')).toHaveCount(0);
+    await expect(page.locator('.message-comments .comment-card')).toHaveText([
+      /sent\s*Keep the answers short\.$/,
+    ]);
     await expect(page.locator('.comment-layer > .comment-card')).toHaveCount(0);
 
     await page.evaluate(() => {

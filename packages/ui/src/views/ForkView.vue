@@ -23,6 +23,7 @@ import { useMediaQuery } from '../composables/useMediaQuery';
 import { useReadTracking } from '../composables/useReadTracking';
 import {
   answeredPartLookup,
+  sentMessageComment,
   archivingFork,
   forkPath,
   forkTitle,
@@ -161,10 +162,14 @@ const answeredPart = computed(() => answeredPartLookup(state.value));
 const viewComments = computed<Comment[]>((previous) => {
   const forkComments =
     (fork.value && lookups.value.commentsByViewFork.value.get(fork.value.id)) ?? [];
-  return keepSameList(
-    previous,
-    forkComments.filter((comment) => pathIds.value.has(comment.messageId)),
-  );
+  const forkId = fork.value?.id;
+  const sentMessages = forkId
+    ? path.value.flatMap((message) => sentMessageComment(message, forkId) ?? [])
+    : [];
+  return keepSameList(previous, [
+    ...forkComments.filter((comment) => pathIds.value.has(comment.messageId)),
+    ...sentMessages,
+  ]);
 });
 const viewBookmarks = computed<Bookmark[]>((previous) => {
   const order = new Map(path.value.map((message, index) => [message.id, index]));

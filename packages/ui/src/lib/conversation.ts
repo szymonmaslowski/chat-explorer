@@ -40,24 +40,56 @@ export function archivingFork(fork: Fork, forks: Map<string, Fork>) {
 export const commentLink = (comment: Comment) =>
   `/e/${comment.explorationId}/f/${comment.viewForkId}#c-${comment.id}`;
 
-// What the tags in an answer point at: a comment, linking to the text it quotes, or the text of
-// a message. It reads the chat when called, so an answer's markdown depends only on what its own
-// tags name, and the lookup stays the same function while the chat changes.
+// What the user typed in the reply box shows as a sent comment under the message it replied to,
+// like a general comment, so an answer's card of it has a place to go back to. The first message
+// of a chat replies to nothing and has none. Kept per message, so a list holding it stays the same.
+const sentMessageComments = new WeakMap<Message, Comment>();
+export function sentMessageComment(message: Message, viewForkId: string) {
+  if (message.role !== 'user' || !message.content || !message.parentId) return null;
+  const kept = sentMessageComments.get(message);
+  if (kept?.viewForkId === viewForkId) return kept;
+  const comment: Comment = {
+    id: message.id,
+    explorationId: message.explorationId,
+    messageId: message.parentId,
+    viewForkId,
+    quote: '',
+    startOffset: 0,
+    endOffset: 0,
+    body: message.content,
+    editBody: null,
+    type: 'inline',
+    status: 'submitted',
+    submissionId: null,
+    replyMessageId: message.id,
+    createdForkId: null,
+    noteGroupId: null,
+    createdNoteId: null,
+    forkGroupId: null,
+    createdAt: message.createdAt,
+    updatedAt: message.createdAt,
+  };
+  sentMessageComments.set(message, comment);
+  return comment;
+}
+
+// What the tags in an answer point at: a comment, linking to the text it quotes or to its card,
+// or the text of a message, linking to its sent comment. It reads the chat when called, so an
+// answer's markdown depends only on what its own tags name, and the lookup stays the same function
+// while the chat changes.
 export function answeredPartLookup(
   state: Pick<ExplorationState, 'comments' | 'messages'>,
 ): AnsweredPartLookup {
   return (kind, id) => {
     if (kind === 'message') {
       const message = state.messages.get(id);
-      return message ? { quote: '', text: message.content, href: null } : null;
+      if (!message) return null;
+      const sent = sentMessageComment(message, message.forkId);
+      return { quote: '', text: message.content, href: sent && commentLink(sent) };
     }
     const comment = state.comments.get(id);
     if (!comment) return null;
-    return {
-      quote: comment.quote,
-      text: comment.body,
-      href: comment.quote ? commentLink(comment) : null,
-    };
+    return { quote: comment.quote, text: comment.body, href: commentLink(comment) };
   };
 }
 
