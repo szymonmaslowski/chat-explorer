@@ -88,6 +88,19 @@ describe('answer tags', () => {
     ]);
   });
 
+  it('reads an item of paragraphs paragraph by paragraph, around its nested list', () => {
+    const body = rendered(
+      '1. **First.** Options:\n\n   - A\n   - B\n\n   I choose A.\n\n2. Second.',
+    );
+    expect(speechBlocks(body).map(({ element, block }) => [element.tagName, block])).toEqual([
+      ['P', { kind: 'text', text: 'First. Options:' }],
+      ['LI', { kind: 'text', text: 'A' }],
+      ['LI', { kind: 'text', text: 'B' }],
+      ['P', { kind: 'text', text: 'I choose A.' }],
+      ['P', { kind: 'text', text: 'Second.' }],
+    ]);
+  });
+
   it('leaves tags in code and next to other text as they are', () => {
     const body = rendered(
       '```\n[c:aaaaaaaaaa]\n```\n\n    [c:aaaaaaaaaa]\n\nSee [c:aaaaaaaaaa]',

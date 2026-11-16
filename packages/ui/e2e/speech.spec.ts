@@ -1,5 +1,13 @@
 import { expect, type Locator, type Page } from '@playwright/test';
-import { openSeededExploration, seededDraftQuote, tapQuotedText, test } from './helpers';
+import {
+  attachFakeSession,
+  deliverAndAnswer,
+  detachFakeSession,
+  openSeededExploration,
+  seededDraftQuote,
+  tapQuotedText,
+  test,
+} from './helpers';
 
 async function playFrom(page: Page, block: Locator) {
   await block.click();
@@ -111,6 +119,29 @@ test('a tapped block offers a comment on the whole block', async ({ page }) => {
   await page.keyboard.press('ControlOrMeta+Enter');
   await expect(page.locator('.comment-card.draft', { hasText: 'Which CDNs?' })).toBeVisible();
   await expect(block).not.toHaveClass('picked');
+});
+
+test('a tapped paragraph after a nested list is a block of its own', async ({ page, request }) => {
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'Which order?' } })
+  ).json();
+  await attachFakeSession(request, explorationId);
+  await deliverAndAnswer(
+    request,
+    explorationId,
+    '1. **When to build.** Options:\n\n   - A: first.\n   - B: last.\n\n   I would choose A.\n\n2. Limits.',
+  );
+  await page.goto(`/e/${explorationId}`);
+  const answer = page.locator('.message.assistant [data-anchor-root]');
+  const choice = answer.locator('li > p', { hasText: 'I would choose A.' });
+
+  await choice.click({ position: { x: 20, y: 8 } });
+  await expect(choice).toHaveClass('picked');
+  await page.getByRole('button', { name: 'Comment', exact: true }).click();
+  await expect(page.locator('.comment-editor')).toContainText('I would choose A.');
+  await expect(page.locator('.comment-editor')).not.toContainText('When to build');
+
+  await detachFakeSession(request);
 });
 
 test('announces code instead of reading it', async ({ page }) => {

@@ -104,7 +104,10 @@ function collect(container: Element, into: SpokenElement[]) {
 }
 
 // An item is read without its nested lists, code and tables, which follow it as blocks of their own.
+// An item of paragraphs, from a list with blank lines, is read paragraph by paragraph: one block
+// for the whole item would pick and quote its text after a nested list together with the first.
 function collectItem(item: Element, into: SpokenElement[]) {
+  if ([...item.children].some((child) => child.tagName === 'P')) return collect(item, into);
   const text = spokenText(item);
   if (text) into.push({ element: item, block: { kind: 'text', text } });
   for (const child of item.children) {
