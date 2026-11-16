@@ -459,11 +459,14 @@ export class ChatStore {
     );
   }
 
-  changesSince(explorationId: string, after: number): ChangeSet {
+  changesSince(
+    explorationId: string,
+    after: number,
+  ): Omit<ChangeSet, 'sessionStatus' | 'sessionError'> {
     this.requireExplorationRow(explorationId);
     const seq = this.latestChangeSeq();
     const { floor } = this.db.get<{ floor: number }>('SELECT floor FROM change_log')!;
-    const empty: ChangeSet = {
+    const empty: Omit<ChangeSet, 'sessionStatus' | 'sessionError'> = {
       seq,
       reset: after < floor,
       exploration: null,
@@ -496,7 +499,12 @@ export class ChatStore {
   }
 
   // Adds what a change log row names, as it is now; false when it is gone from the chat.
-  private addCurrent(set: ChangeSet, explorationId: string, kind: ChangeKind, id: string) {
+  private addCurrent(
+    set: Omit<ChangeSet, 'sessionStatus' | 'sessionError'>,
+    explorationId: string,
+    kind: ChangeKind,
+    id: string,
+  ) {
     const row = <Row>(table: string, key = 'id') =>
       this.db.get<Row>(
         `SELECT * FROM ${table} WHERE ${key} = ? AND exploration_id = ?`,

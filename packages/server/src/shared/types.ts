@@ -306,6 +306,9 @@ export interface ChangeSet {
   forkRuns: ForkRun[];
   activities: Activity[];
   deleted: { kind: ChangeKind; id: string }[];
+  // The log keeps no session state, so a chat caught up from it gets the current one.
+  sessionStatus: SessionStatus;
+  sessionError: string | null;
 }
 
 export type ExplorationEvent =

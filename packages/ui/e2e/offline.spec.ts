@@ -1,6 +1,13 @@
 import { expect, type APIRequestContext } from '@playwright/test';
 import type { Snapshot } from '@shared/types';
-import { answeredChat, clickQuotedText, selectAnswer, test } from './helpers';
+import {
+  answeredChat,
+  attachFakeSession,
+  clickQuotedText,
+  detachFakeSession,
+  selectAnswer,
+  test,
+} from './helpers';
 
 const snapshotOf = async (request: APIRequestContext, explorationId: string) =>
   (await (await request.get(`/api/explorations/${explorationId}`)).json()) as Snapshot;
@@ -67,6 +74,25 @@ test('sends changes made offline when the page opens again', async ({ page, cont
   await expect
     .poll(async () => (await snapshotOf(request, explorationId)).comments.map(({ body }) => body))
     .toEqual(['Saved before the page closed']);
+});
+
+test("shows the session's state when the page opens from the device's copy", async ({
+  page,
+  context,
+  request,
+}) => {
+  const explorationId = await answeredChat(request);
+  await page.goto(`/e/${explorationId}`);
+  await expect(page.locator('.status .label')).toHaveText('detached');
+  // The device saves its copy a moment after a change.
+  await page.waitForTimeout(1_500);
+  await page.close();
+
+  await attachFakeSession(request, explorationId);
+  const reopened = await context.newPage();
+  await reopened.goto(`/e/${explorationId}`);
+  await expect(reopened.locator('.status .label')).toHaveText('paused');
+  await detachFakeSession(request);
 });
 
 test('keeps an edit started offline open when the connection is back', async ({

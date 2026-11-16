@@ -782,6 +782,8 @@ export function applyChangeSet(
     put(state.activities, activity.id, activity);
   }
   for (const { kind, id } of changes.deleted) removeChanged(state, kind, id);
+  state.sessionStatus = changes.sessionStatus;
+  state.sessionError = changes.sessionError;
   state.seq = changes.seq;
   state.status = state.exploration ? 'ready' : state.status;
   if (options.withPending) applyPending(state);

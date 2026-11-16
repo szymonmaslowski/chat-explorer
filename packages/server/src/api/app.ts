@@ -18,6 +18,7 @@ import { withLegacyIdsPrefixed } from './legacy-ids.js';
 import { claudeModels, type ClaudeModel } from '../shared/models.js';
 import {
   chatDefaultPages,
+  type ChangeSet,
   type ExplorationListItem,
   type ExplorationView,
   type LightSnapshot,
@@ -427,8 +428,14 @@ export function createApp(options: AppOptions) {
   });
 
   app.get('/api/explorations/:id/changes', (context) => {
+    const explorationId = context.req.param('id');
     const { after } = changesQuery.parse(context.req.query());
-    return context.json(store.changesSince(context.req.param('id'), after));
+    const changes: ChangeSet = {
+      ...store.changesSince(explorationId, after),
+      sessionStatus: hub.status(explorationId),
+      sessionError: sessions.error(explorationId),
+    };
+    return context.json(changes);
   });
 
   app.get('/api/explorations/:id/message-bodies', (context) => {

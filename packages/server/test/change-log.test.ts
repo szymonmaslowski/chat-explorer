@@ -100,4 +100,19 @@ describe('change log', () => {
       comments: [],
     });
   });
+
+  it('sends the session state with the changes, which the log keeps no record of', async () => {
+    const { request, store } = createTestApp();
+    const { explorationId } = seedConversation(store);
+    const seq = store.latestChangeSeq();
+    expect(await changesAfter(request, explorationId, seq)).toMatchObject({
+      sessionStatus: 'detached',
+      sessionError: null,
+    });
+
+    store.attach({ explorationId, shimId: 'shim-a', sessionId: 'session-a', takeover: false });
+    expect(await changesAfter(request, explorationId, store.latestChangeSeq())).toMatchObject({
+      sessionStatus: 'attached',
+    });
+  });
 });
