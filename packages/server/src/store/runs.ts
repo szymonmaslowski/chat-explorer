@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import type { Database } from '../db/database.js';
 import {
   toActivity,
+  isShimRunnerId,
   shimRunnerId,
   toForkRun,
   type ActivityRow,
@@ -20,6 +21,9 @@ const runnerOnlineMs = 90_000;
 // After this many attempts that died before answering, the fork waits for Retry.
 export const maxFailedAttempts = 3;
 const maxUpdateLines = 10;
+// A terminal session that answered and then made no step for this long has stopped working, as
+// when the user interrupted it without it waiting for feedback again.
+export const followUpIdleMs = 10 * 60_000;
 
 export interface Lease {
   forkId: string;
@@ -69,6 +73,10 @@ const unansweredAfter = `COALESCE(
 // on each, the user messages it has not answered yet, and what it reports back.
 export class RunStore {
   private lastRunnerSeenAt = 0;
+
+  // Forks a terminal session answered and keeps holding while it works on before waiting for
+  // feedback again, so its steps show under the answer: the answer's id and the last step's time.
+  private readonly followUps = new Map<string, { answerId: string; lastStepAt: number }>();
 
   constructor(
     private readonly db: Database,
@@ -417,24 +425,45 @@ export class RunStore {
         shimRunnerId(shimId),
       )
       .map((row) => {
-        // Taking the input delivers the fork's queued submissions as its messages.
-        this.pendingInput(row.fork_id, row.lease_id!);
+        // Taking the input delivers the fork's queued submissions as its messages. A new message
+        // ends the work after the session's answer: its steps go under that message now.
+        if (this.pendingInput(row.fork_id, row.lease_id!).length > 0) {
+          this.followUps.delete(row.fork_id);
+        }
         return row.fork_id;
       });
   }
 
-  // What an attached session did while answering a fork it holds.
+  // What an attached session did while answering a fork it holds. After it answered, its steps
+  // go under the answer until it waits for feedback again.
   addShimActivity(
     forkId: string,
     shimId: string,
-    input: { afterMessageId: string; kind: ActivityKind; text: string },
+    input: { afterMessageId?: string; kind: ActivityKind; text: string },
   ) {
     const row = this.db.get<ForkRunRow>(
       'SELECT * FROM fork_runs WHERE fork_id = ? AND runner_id = ? AND lease_id IS NOT NULL',
       forkId,
       shimRunnerId(shimId),
     );
-    return row ? this.addActivity(forkId, row.lease_id!, input) : null;
+    if (!row) return null;
+    const followUp = this.followUps.get(forkId);
+    const afterMessageId = input.afterMessageId ?? followUp?.answerId;
+    if (!afterMessageId) return null;
+    if (followUp && input.afterMessageId === undefined) followUp.lastStepAt = this.now();
+    return this.addActivity(forkId, row.lease_id!, { ...input, afterMessageId });
+  }
+
+  // The forks a session answered and still works on, without new messages from the user.
+  shimFollowUps(explorationId: string, shimId: string) {
+    return this.db
+      .all<ForkRunRow>(
+        'SELECT * FROM fork_runs WHERE exploration_id = ? AND runner_id = ? AND lease_id IS NOT NULL',
+        explorationId,
+        shimRunnerId(shimId),
+      )
+      .map((row) => row.fork_id)
+      .filter((forkId) => this.followUps.has(forkId));
   }
 
   renewShimLeases(shimId: string) {
@@ -445,17 +474,43 @@ export class RunStore {
     );
   }
 
-  // The session answered the fork up to `upToMessageId`.
-  finishShimTurn(forkId: string, shimId: string, upToMessageId: string) {
+  // The session answered the fork up to `upToMessageId` with `answerId`. It keeps the fork until
+  // it waits for feedback again, as the work it does meanwhile belongs to that answer.
+  finishShimTurn(forkId: string, shimId: string, upToMessageId: string, answerId: string) {
     const row = this.db.get<ForkRunRow>('SELECT * FROM fork_runs WHERE fork_id = ?', forkId);
     if (!row?.lease_id || row.runner_id !== shimRunnerId(shimId)) return;
-    this.update(forkId, {
-      ...noLease,
-      input_cursor: upToMessageId,
-      failed_attempts: 0,
-      status: 'idle',
-      status_detail: null,
-    });
+    this.update(forkId, { input_cursor: upToMessageId, failed_attempts: 0, status: 'answering' });
+    this.followUps.set(forkId, { answerId, lastStepAt: this.now() });
+    this.publishRun(forkId);
+  }
+
+  // The session waits for feedback again, or is gone: the forks it answered are free.
+  releaseShimFollowUps(shimId: string) {
+    const rows = this.db.all<ForkRunRow>(
+      'SELECT * FROM fork_runs WHERE runner_id = ? AND lease_id IS NOT NULL',
+      shimRunnerId(shimId),
+    );
+    for (const row of rows) {
+      if (this.followUps.has(row.fork_id)) this.releaseFollowUp(row.fork_id);
+    }
+  }
+
+  // Follow-ups of sessions that died, whose leases ran out, or that made no step for long.
+  releaseStaleFollowUps() {
+    for (const [forkId, followUp] of this.followUps) {
+      const row = this.db.get<ForkRunRow>('SELECT * FROM fork_runs WHERE fork_id = ?', forkId);
+      const expired = !row?.lease_id || (row.lease_expires_at ?? 0) <= this.now();
+      if (expired || this.now() - followUp.lastStepAt >= followUpIdleMs) {
+        this.releaseFollowUp(forkId);
+      }
+    }
+  }
+
+  private releaseFollowUp(forkId: string) {
+    this.followUps.delete(forkId);
+    const row = this.db.get<ForkRunRow>('SELECT * FROM fork_runs WHERE fork_id = ?', forkId);
+    if (!row || !isShimRunnerId(row.runner_id)) return;
+    this.update(forkId, { ...noLease, status: 'idle', status_detail: null });
     this.publishRun(forkId);
   }
 

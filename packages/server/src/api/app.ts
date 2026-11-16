@@ -33,6 +33,7 @@ import { guardLocalRequests } from './guard.js';
 import { registerJobTools } from './job-tools.js';
 import { registerRunnerRoutes } from './runner-routes.js';
 import { serveUi } from './static-ui.js';
+import { ProgressLines } from '../store/progress-lines.js';
 
 export interface AppOptions {
   store: ChatStore;
@@ -240,6 +241,7 @@ function eventStream(context: Context, subscribe: (send: SendEvent) => () => voi
 }
 
 export function createApp(options: AppOptions) {
+  const progressLines = new ProgressLines();
   const { store, hub, bus, sessions, transcriber, speaker, fileStorage, port } = options;
   const localUrl = `http://127.0.0.1:${port}`;
   const explorationUrls = (explorationId: string) => ({
@@ -711,6 +713,7 @@ export function createApp(options: AppOptions) {
 
   internal.post('/detach', async (context) => {
     const { shimId } = shimBody.parse(await context.req.json());
+    options.runs.releaseShimFollowUps(shimId);
     for (const explorationId of store.detach(shimId)) hub.refreshStatus(explorationId);
     return context.json({ ok: true });
   });
@@ -728,7 +731,8 @@ export function createApp(options: AppOptions) {
     const forkId = context.req.param('id');
     const body = addMessageBody.parse(await context.req.json());
     const message = store.addAssistantMessage({ forkId, ...body });
-    options.runs.finishShimTurn(forkId, body.shimId, body.inReplyTo);
+    options.runs.finishShimTurn(forkId, body.shimId, body.inReplyTo, message.id);
+    hub.refreshStatus(store.forkExplorationId(forkId));
     return context.json({ messageId: message.id }, 201);
   });
 
@@ -773,6 +777,7 @@ export function createApp(options: AppOptions) {
 
   internal.post('/explorations/:id/feedback', async (context) => {
     const { shimId, waitMs } = feedbackBody.parse(await context.req.json());
+    options.runs.releaseShimFollowUps(shimId);
     const result = await hub.waitForFeedback({
       explorationId: context.req.param('id'),
       shimId,
@@ -858,19 +863,23 @@ export function createApp(options: AppOptions) {
       return context.json({ explorationId: null, forks: [] });
     }
     const { working, arrived } = hub.duringWork(exploration.id, attachment.shimId);
+    const followUps = options.runs.shimFollowUps(exploration.id, attachment.shimId);
     const steps = [
       ...texts.map((text) => ({ kind: 'text' as const, text })),
       ...(tool ? [{ kind: 'tool' as const, text: tool }] : []),
     ];
-    for (const fork of working) {
-      for (const step of steps) {
+    for (const step of steps) {
+      for (const fork of working) {
         options.runs.addShimActivity(fork.forkId, attachment.shimId, {
           afterMessageId: fork.inReplyTo,
           ...step,
         });
       }
+      for (const forkId of followUps) options.runs.addShimActivity(forkId, attachment.shimId, step);
     }
-    return context.json({ explorationId: exploration.id, forks: arrived });
+    const shown = working.length > 0 || followUps.length > 0;
+    const remind = shown && progressLines.count(attachment.shimId, texts.length > 0, tool !== null);
+    return context.json({ explorationId: exploration.id, forks: arrived, remind });
   });
 
   internal.get('/sessions/:sessionId/exploration', (context) =>

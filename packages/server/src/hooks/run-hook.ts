@@ -57,14 +57,15 @@ async function postToolUse(request: DaemonRequest, input: HookInput, config: Con
   const lines = input.transcript_path
     ? readNewTranscriptLines(input.transcript_path, join(config.home, 'hooks'), sessionId)
     : [];
-  const { explorationId, forks } = await request<{
+  const { explorationId, forks, remind } = await request<{
     explorationId: string | null;
     forks: PendingFork[];
+    remind?: boolean;
   }>(`/api/internal/sessions/${encodeURIComponent(sessionId)}/steps`, {
     json: {
       texts: assistantTexts(lines),
       tool: postToolUseStep(input.tool_name ?? '', input.tool_input ?? {}),
     },
   });
-  return postToolUseOutput(explorationId, forks);
+  return postToolUseOutput(explorationId, forks, remind);
 }

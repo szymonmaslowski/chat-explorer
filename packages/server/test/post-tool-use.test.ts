@@ -6,8 +6,10 @@ import {
   assistantTexts,
   postToolUseOutput,
   postToolUseStep,
+  progressReminder,
   readNewTranscriptLines,
 } from '../src/hooks/post-tool-use.js';
+import { callsBeforeReminder } from '../src/store/progress-lines.js';
 import { createTestApp, seedConversation } from './helpers.js';
 
 const assistantLine = (text: string, isSidechain = false) =>
@@ -60,6 +62,9 @@ describe('the post-tool-use hook', () => {
     expect(context).toContain('Also the tests');
     expect(postToolUseOutput('abc', [])).toBeNull();
     expect(postToolUseOutput(null, [])).toBeNull();
+    expect(postToolUseOutput('abc', [], true)?.hookSpecificOutput.additionalContext).toBe(
+      progressReminder,
+    );
   });
 });
 
@@ -88,6 +93,7 @@ describe('steps of an attached terminal session', () => {
     expect(await step({ texts: ['Found the cause.'], tool: 'Running pnpm test' })).toEqual({
       explorationId,
       forks: [],
+      remind: false,
     });
     expect(store.snapshot(explorationId).activities.map((activity) => activity.text)).toEqual([
       'Found the cause.',
@@ -106,6 +112,70 @@ describe('steps of an attached terminal session', () => {
       { forkId: mainForkId, userMessages: [{ text: 'Fix the build' }, { text: 'Also the tests' }] },
     ]);
     expect((await step({ tool: 'Running pnpm test' })).forks).toEqual([]);
+  });
+
+  it('go under its answer while it works on, until it waits for feedback again', async () => {
+    const { store, hub, request, step, explorationId, mainForkId } = setup();
+    store.submit(explorationId, mainForkId, 'Build it');
+    const handed = await hub.waitForFeedback({ explorationId, shimId: 'shim-a', waitMs: 10 });
+    const inReplyTo = handed.status === 'feedback' ? handed.forks[0]!.inReplyTo : '';
+    const answer = await (
+      await request(`/api/internal/forks/${mainForkId}/messages`, {
+        method: 'POST',
+        json: { shimId: 'shim-a', inReplyTo, content: 'On it.' },
+      })
+    ).json();
+    expect(store.snapshot(explorationId).forkRuns[0]).toMatchObject({
+      status: 'answering',
+      heldByTerminal: true,
+    });
+    expect(hub.status(explorationId)).toBe('answering');
+
+    await step({ texts: ['Step 1: the store'], tool: 'Editing store.ts' });
+    const activities = store.snapshot(explorationId).activities;
+    expect(activities.map((activity) => [activity.afterMessageId, activity.text])).toEqual([
+      [answer.messageId, 'Step 1: the store'],
+      [answer.messageId, 'Editing store.ts'],
+    ]);
+
+    // A message from the user meanwhile takes the steps from then on.
+    store.submit(explorationId, mainForkId, 'Also the docs');
+    const { forks } = await step({ tool: 'Editing docs.md' });
+    const newMessage = forks[0].inReplyTo;
+    expect(store.snapshot(explorationId).activities.at(-1)).toMatchObject({
+      afterMessageId: newMessage,
+      text: 'Editing docs.md',
+    });
+
+    await request(`/api/internal/forks/${mainForkId}/messages`, {
+      method: 'POST',
+      json: { shimId: 'shim-a', inReplyTo: newMessage, content: 'Done.' },
+    });
+    const waiting = request(`/api/internal/explorations/${explorationId}/feedback`, {
+      method: 'POST',
+      json: { shimId: 'shim-a', waitMs: 10 },
+    });
+    expect(await (await waiting).json()).toEqual({ status: 'timeout' });
+    expect(store.snapshot(explorationId).forkRuns[0]).toMatchObject({
+      status: 'idle',
+      heldByTerminal: false,
+    });
+    await step({ tool: 'Running ls' });
+    expect(store.snapshot(explorationId).activities.at(-1)!.text).toBe('Editing docs.md');
+  });
+
+  it(`remind it to write a line after ${callsBeforeReminder} tool calls without one`, async () => {
+    const { store, hub, step, explorationId, mainForkId } = setup();
+    store.submit(explorationId, mainForkId, 'Build it');
+    await hub.waitForFeedback({ explorationId, shimId: 'shim-a', waitMs: 10 });
+    const reminders = [];
+    for (let call = 1; call <= callsBeforeReminder + 2; call++) {
+      reminders.push((await step({ tool: `Call ${call}` })).remind);
+    }
+    expect(reminders).toEqual([false, false, false, false, true, false, false]);
+    expect((await step({ texts: ['Now the tests'], tool: 'Running pnpm test' })).remind).toBe(
+      false,
+    );
   });
 
   it('are ignored for a session that is not attached', async () => {

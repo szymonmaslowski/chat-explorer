@@ -83,16 +83,26 @@ export function readNewTranscriptLines(
   return complete.split('\n').filter(Boolean);
 }
 
-export function postToolUseOutput(explorationId: string | null, forks: PendingFork[]) {
-  if (!explorationId || forks.length === 0) return null;
+export const progressReminder =
+  'chat-explorer: you made several tool calls without a line about what you are doing. Write one short line now, such as "Running the e2e suite" or "Step 3: service worker". The user follows your steps in the browser.';
+
+export function postToolUseOutput(
+  explorationId: string | null,
+  forks: PendingFork[],
+  remind = false,
+) {
+  const parts = [
+    ...(explorationId && forks.length > 0
+      ? [
+          `While you were working, the user wrote more in chat-explorer exploration ${explorationId}:`,
+          JSON.stringify(forks, null, 2),
+          "Take it into account now. Answer it together with what you are doing, with add_message and the fork's inReplyTo above; or answer it at once if it is quick or changes your work, then carry on.",
+        ]
+      : []),
+    ...(remind ? [progressReminder] : []),
+  ];
+  if (parts.length === 0) return null;
   return {
-    hookSpecificOutput: {
-      hookEventName: 'PostToolUse',
-      additionalContext: [
-        `While you were working, the user wrote more in chat-explorer exploration ${explorationId}:`,
-        JSON.stringify(forks, null, 2),
-        "Take it into account now. Answer it together with what you are doing, with add_message and the fork's inReplyTo above; or answer it at once if it is quick or changes your work, then carry on.",
-      ].join('\n'),
-    },
+    hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: parts.join('\n') },
   };
 }

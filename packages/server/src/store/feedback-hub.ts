@@ -34,6 +34,7 @@ export interface StartingSessions {
 export interface SessionLeases {
   status(explorationId: string): 'answering' | 'listening' | 'detached';
   claimForShim(explorationId: string, shimId: string): string[];
+  shimFollowUps(explorationId: string, shimId: string): string[];
 }
 
 // A shim long-polls in rounds, so after a round times out there is a short gap before the next one.
@@ -122,6 +123,8 @@ export class FeedbackHub {
     }
     if (this.isListening(explorationId)) return 'listening';
     if (this.store.pendingForks(explorationId).length > 0) return 'answering';
+    // It answered and works on before waiting for feedback again.
+    if (this.leases?.shimFollowUps(explorationId, attachment.shimId).length) return 'answering';
     return 'attached';
   }
 

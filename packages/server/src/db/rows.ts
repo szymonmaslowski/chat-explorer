@@ -330,7 +330,7 @@ export const toBookmark = (row: BookmarkRow): Bookmark => ({
 });
 
 export const shimRunnerId = (shimId: string) => `shim:${shimId}`;
-const isShimRunnerId = (runnerId: string | null) => runnerId?.startsWith('shim:') ?? false;
+export const isShimRunnerId = (runnerId: string | null) => runnerId?.startsWith('shim:') ?? false;
 
 export const toForkRun = (row: ForkRunRow): ForkRun => ({
   forkId: row.fork_id,

@@ -22,7 +22,7 @@ import { SpeechCache } from '../speech/speech-cache.js';
 import { Database } from '../db/database.js';
 import { EventBus } from '../store/event-bus.js';
 import { FeedbackHub } from '../store/feedback-hub.js';
-import { RunStore } from '../store/runs.js';
+import { leaseMs, RunStore } from '../store/runs.js';
 import { ChatStore } from '../store/store.js';
 import { ensureMachineToken } from '../runner/machine-token.js';
 import { superviseRunner } from '../runner/supervisor.js';
@@ -71,6 +71,7 @@ const pruneChanges = () => store.pruneChanges(Date.now() - changeLogMs);
 pruneChanges();
 setInterval(pruneChanges, staleDraftSweepMs).unref();
 setInterval(() => void fileStorage.removeStaleDrafts(), staleDraftSweepMs).unref();
+setInterval(() => runs.releaseStaleFollowUps(), leaseMs / 2).unref();
 const chatterbox = chatterboxEngine(config.speechPath);
 const speaker = new Speaker({
   engines: settings.speech.engine === 'say' ? [sayEngine()] : [chatterbox, sayEngine()],
