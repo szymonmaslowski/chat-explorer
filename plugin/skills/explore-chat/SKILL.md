@@ -41,7 +41,7 @@ Repeat until the user interrupts you in the terminal:
 
 ## While you work
 
-A plugin hook runs after each of your tool calls. It shows the call, and the short lines you write in the terminal between steps, as steps under the fork you are answering, so the user sees progress. Before a long stretch of work, write one such line saying what you are about to do.
+A plugin hook runs after each of your tool calls. It shows the call, and the short lines you write in the terminal between steps, as steps under the fork you are answering, so the user sees progress. After you answer, your steps go on showing under your answer until you call `await_feedback` again, so work you do after answering stays visible too. Before a long stretch of work, and at each new stage of it, write one short line saying what you are doing; after 5 tool calls without one, the hook reminds you.
 
 The same hook hands you messages the user sends meanwhile, as context after a tool call. Take them into account at once: answer them with the rest, using the fork's newest `inReplyTo` from that context, or answer right away with `add_message` if they are quick or change your work, then carry on.
 
