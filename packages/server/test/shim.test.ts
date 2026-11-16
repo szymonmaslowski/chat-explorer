@@ -173,6 +173,10 @@ describe('MCP shim', () => {
       { name: 'Group 2', notes: [{ topic: 'Lemon', checked: true, createdBy: 'claude' }] },
       { name: 'Shopping', notes: [{ topic: 'Milk', deletionRequested: true }] },
     ]);
+    const { value: read } = await call('read_notes', { noteIds: [lemon] });
+    expect(read.notes).toMatchObject([{ topic: 'Lemon', groupName: 'Group 2', description: '' }]);
+    const { value: found } = await call('search_notes', { query: 'milk' });
+    expect(found.notes).toMatchObject([{ id: milk, topic: 'Milk' }]);
 
     const userNote = await daemonRequest(`/api/explorations/${explorationId}/notes`, {
       groupId: group.id,

@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { StoreError } from '../store/errors.js';
 import type { Job, RunStore } from '../store/runs.js';
 import type { ChatStore } from '../store/store.js';
+import { readNotesDescription, readNotesLimit, searchNotesDescription } from '../mcp/note-tools.js';
 
 export interface JobToolsOptions {
   store: ChatStore;
@@ -123,12 +124,31 @@ function toolsFor(job: Job, { store, runs }: JobToolsOptions) {
   server.registerTool(
     'list_notes',
     {
-      description: "Read the chat's notes in full: every group with its notes in order.",
+      description:
+        "The chat's notes as an index: each group with its notes' ids, topics, text length and last change, without their text. Read the text of the notes you need with read_notes, or find notes by their words with search_notes.",
       inputSchema: { groupId: z.string().optional() },
     },
     tool(({ groupId }: { groupId?: string | undefined }) =>
-      store.readNotes(job.explorationId, groupId),
+      store.listNotes(job.explorationId, groupId),
     ),
+  );
+
+  server.registerTool(
+    'read_notes',
+    {
+      description: `${readNotesDescription} Notes that would make the result too long come back in notShown, to read in another call.`,
+      inputSchema: { noteIds: z.array(z.string()).min(1).max(readNotesLimit) },
+    },
+    tool(({ noteIds }: { noteIds: string[] }) => store.readNotes(job.explorationId, noteIds)),
+  );
+
+  server.registerTool(
+    'search_notes',
+    {
+      description: searchNotesDescription,
+      inputSchema: { query: z.string().min(1) },
+    },
+    tool(({ query }: { query: string }) => store.searchNotes(job.explorationId, query)),
   );
 
   server.registerTool(

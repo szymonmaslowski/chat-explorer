@@ -151,20 +151,33 @@ export interface NotesIndex {
   }[];
 }
 
-export interface NotesRead {
+interface NoteFacts {
+  id: string;
+  topic: string | null;
+  checked: boolean;
+  createdBy: NoteAuthor;
+  deletionRequested: boolean;
+  updatedAt: number;
+}
+
+export interface NotesList {
   groups: {
     id: string;
     name: string;
     checklist: boolean;
-    notes: {
-      id: string;
-      topic: string | null;
-      description: string;
-      checked: boolean;
-      createdBy: NoteAuthor;
-      deletionRequested: boolean;
-    }[];
+    notes: (NoteFacts & { length: number })[];
   }[];
+}
+
+export interface NotesRead {
+  notes: (NoteFacts & { groupId: string; groupName: string; description: string })[];
+  // Notes asked for that did not fit in this read, for another call.
+  notShown: { id: string; topic: string | null; length: number }[];
+}
+
+export interface NotesFound {
+  notes: { id: string; groupId: string; topic: string | null; snippet: string }[];
+  more: boolean;
 }
 
 export interface Attachment {
@@ -182,6 +195,33 @@ const shortened = (text: string, length: number) => {
 const summaryFrom = (text: string) => shortened(text, forkSummaryLength);
 const pageMessageLength = 2_000;
 const excerptOf = (text: string) => shortened(text, repliesToExcerptLength);
+
+// Below a tool result's size limit, so a read never spills into a file Claude must read in parts.
+const notesReadBudget = 40_000;
+const notesFoundLimit = 20;
+const snippetLength = 200;
+
+const noteFacts = (note: NoteRow) => ({
+  id: note.id,
+  topic: note.topic,
+  checked: note.checked === 1,
+  createdBy: note.created_by,
+  deletionRequested: note.deletion_requested_at !== null,
+  updatedAt: note.updated_at,
+});
+
+// The text around the first word found, or the start of the text when only the topic matched.
+function snippetAround(text: string, words: string[]) {
+  const singleLine = text.replace(/\s+/g, ' ').trim();
+  const lower = singleLine.toLowerCase();
+  const hit = Math.min(
+    ...words.map((word) => lower.indexOf(word)).filter((index) => index !== -1),
+    singleLine.length,
+  );
+  const start = hit === singleLine.length ? 0 : Math.max(0, hit - snippetLength / 4);
+  const snippet = shortened(singleLine.slice(start), snippetLength);
+  return start > 0 ? `…${snippet}` : snippet;
+}
 
 // A comment in a fork group goes to the group's fork, whatever its own type.
 const startsAFork = (comment: CommentRow) =>
@@ -2241,7 +2281,7 @@ export class ChatStore {
     };
   }
 
-  readNotes(explorationId: string, groupId?: string): NotesRead {
+  listNotes(explorationId: string, groupId?: string): NotesList {
     this.requireExplorationRow(explorationId);
     if (groupId !== undefined) this.requireNoteGroupRow(groupId, explorationId);
     return {
@@ -2251,15 +2291,61 @@ export class ChatStore {
           id: group.id,
           name: group.name,
           checklist: group.checklist === 1,
-          notes: notes.map((note) => ({
-            id: note.id,
-            topic: note.topic,
-            description: note.description,
-            checked: note.checked === 1,
-            createdBy: note.created_by,
-            deletionRequested: note.deletion_requested_at !== null,
-          })),
+          notes: notes.map((note) => ({ ...noteFacts(note), length: note.description.length })),
         })),
+    };
+  }
+
+  readNotes(explorationId: string, noteIds: string[]): NotesRead {
+    this.requireExplorationRow(explorationId);
+    const groups = new Map(
+      this.db
+        .all<NoteGroupRow>('SELECT * FROM note_groups WHERE exploration_id = ?', explorationId)
+        .map((group) => [group.id, group.name]),
+    );
+    const read: NotesRead = { notes: [], notShown: [] };
+    let size = 0;
+    // Ids from before the prefixes still turn up in old notes and messages.
+    for (const noteId of new Set(noteIds.map((id) => withPrefix('note', id)))) {
+      const note = this.requireNoteRow(noteId);
+      if (note.exploration_id !== explorationId) {
+        throw new StoreError('not_found', `Note ${noteId} is not in this chat.`);
+      }
+      size += note.description.length;
+      if (read.notes.length > 0 && size > notesReadBudget) {
+        read.notShown.push({ id: note.id, topic: note.topic, length: note.description.length });
+        continue;
+      }
+      read.notes.push({
+        ...noteFacts(note),
+        groupId: note.group_id,
+        groupName: groups.get(note.group_id) ?? '',
+        description: note.description,
+      });
+    }
+    return read;
+  }
+
+  // Notes holding every word of the query, in their topic or text.
+  searchNotes(explorationId: string, query: string): NotesFound {
+    this.requireExplorationRow(explorationId);
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+    if (words.length === 0)
+      throw new StoreError('invalid', 'Give at least one word to search for.');
+    const found = this.groupsWithNotes(explorationId)
+      .flatMap(({ notes }) => notes)
+      .filter((note) => {
+        const text = `${note.topic ?? ''}\n${note.description}`.toLowerCase();
+        return words.every((word) => text.includes(word));
+      });
+    return {
+      notes: found.slice(0, notesFoundLimit).map((note) => ({
+        id: note.id,
+        groupId: note.group_id,
+        topic: note.topic,
+        snippet: snippetAround(note.description, words),
+      })),
+      more: found.length > notesFoundLimit,
     };
   }
 

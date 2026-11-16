@@ -9,8 +9,9 @@ import { DaemonStartError, ensureDaemon } from '../daemon/control.js';
 import { openBrowser } from '../open-browser.js';
 import type { ExplorationListItem, Note, NoteGroup } from '../shared/types.js';
 import type { FeedbackResult } from '../store/feedback-hub.js';
-import type { ForkMapEntry, ForkRead, NotesRead } from '../store/store.js';
+import type { ForkMapEntry, ForkRead, NotesFound, NotesList, NotesRead } from '../store/store.js';
 import { packageVersion } from '../version.js';
+import { readNotesDescription, readNotesLimit, searchNotesDescription } from './note-tools.js';
 
 const heartbeatIntervalMs = 15_000;
 // Node's fetch gives up waiting for response headers after 300 s, so long-polls stay below that.
@@ -319,14 +320,48 @@ export function createShim(options: ShimOptions) {
     'list_notes',
     {
       description:
-        "Read the attached exploration's notes in full: every group with its notes in order. await_feedback already gives group names and note topics.",
+        "The attached exploration's notes as an index: each group with its notes' ids, topics, text length and last change, without their text. Read the text of the notes you need with read_notes, or find notes by their words with search_notes.",
       inputSchema: { groupId: z.string().optional().describe('Only this group') },
     },
     tool(async ({ groupId }: { groupId?: string | undefined }) => {
       const { explorationId } = requireAttachment();
       const query = groupId ? `?groupId=${encodeURIComponent(groupId)}` : '';
       return json(
-        await request<NotesRead>(`/api/internal/explorations/${explorationId}/notes${query}`),
+        await request<NotesList>(`/api/internal/explorations/${explorationId}/notes${query}`),
+      );
+    }),
+  );
+
+  server.registerTool(
+    'read_notes',
+    {
+      description: `${readNotesDescription} Notes that would make the result too long come back in notShown, to read in another call.`,
+      inputSchema: { noteIds: z.array(z.string()).min(1).max(readNotesLimit) },
+    },
+    tool(async ({ noteIds }: { noteIds: string[] }) => {
+      const { explorationId } = requireAttachment();
+      const ids = encodeURIComponent(noteIds.join(','));
+      return json(
+        await request<NotesRead>(
+          `/api/internal/explorations/${explorationId}/notes/read?ids=${ids}`,
+        ),
+      );
+    }),
+  );
+
+  server.registerTool(
+    'search_notes',
+    {
+      description: searchNotesDescription,
+      inputSchema: { query: z.string().min(1) },
+    },
+    tool(async ({ query }: { query: string }) => {
+      const { explorationId } = requireAttachment();
+      const q = encodeURIComponent(query);
+      return json(
+        await request<NotesFound>(
+          `/api/internal/explorations/${explorationId}/notes/search?q=${q}`,
+        ),
       );
     }),
   );

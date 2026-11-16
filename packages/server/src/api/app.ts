@@ -783,7 +783,17 @@ export function createApp(options: AppOptions) {
   });
 
   internal.get('/explorations/:id/notes', (context) =>
-    context.json(store.readNotes(context.req.param('id'), context.req.query('groupId'))),
+    context.json(store.listNotes(context.req.param('id'), context.req.query('groupId'))),
+  );
+
+  internal.get('/explorations/:id/notes/read', (context) =>
+    context.json(
+      store.readNotes(context.req.param('id'), (context.req.query('ids') ?? '').split(',')),
+    ),
+  );
+
+  internal.get('/explorations/:id/notes/search', (context) =>
+    context.json(store.searchNotes(context.req.param('id'), context.req.query('q') ?? '')),
   );
 
   internal.post('/explorations/:id/note-groups', async (context) => {

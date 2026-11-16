@@ -52,6 +52,9 @@ describe('job tools', () => {
         'list_forks',
         'read_fork',
         'add_notes',
+        'list_notes',
+        'read_notes',
+        'search_notes',
       ]),
     );
 
@@ -71,6 +74,29 @@ describe('job tools', () => {
     });
     expect(snapshot.forks.find((fork) => fork.id === mainForkId)!.summary).toBe('Caching notes');
     expect(snapshot.notes[0]).toMatchObject({ topic: 'Redis', sourceMessageId: question.id });
+  });
+
+  it('lists notes as an index, reads them by id and finds them by their words', async () => {
+    const { connect, call, lease, store, explorationId } = await setup();
+    const group = store.createNoteGroup(explorationId, { name: 'Facts' });
+    const note = store.createNote(explorationId, { groupId: group.id, topic: 'Redis' });
+    store.updateNote(note.id, { description: 'Use Redis for the session cache.' });
+    const client = await connect(lease.toolsToken);
+
+    const listed = await call(client, 'list_notes', {});
+    expect(listed.value.groups[0].notes[0]).toMatchObject({ id: note.id, length: 32 });
+    expect(listed.value.groups[0].notes[0]).not.toHaveProperty('description');
+    const read = await call(client, 'read_notes', { noteIds: [note.id] });
+    expect(read.value.notes[0]).toMatchObject({ description: 'Use Redis for the session cache.' });
+    const found = await call(client, 'search_notes', { query: 'session cache' });
+    expect(found.value.notes).toEqual([
+      {
+        id: note.id,
+        groupId: group.id,
+        topic: 'Redis',
+        snippet: 'Use Redis for the session cache.',
+      },
+    ]);
   });
 
   it('pages back through a fork with a cursor', async () => {

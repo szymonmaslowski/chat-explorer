@@ -545,9 +545,10 @@ describe('Claude and notes', () => {
     expect(store.keepNote(notes[0]!.id).deletionRequestedAt).toBeNull();
   });
 
-  it('reads notes in full or as an index of topics', () => {
+  it('lists notes without their text and reads chosen ones in full', () => {
     const { store, explorationId, group, notes } = seedNotes(['A', 'B']);
     store.requestNoteDeletion(notes[1]!.id);
+    store.updateNote(notes[0]!.id, { description: 'Lemons for the cake' });
     expect(store.notesIndex(explorationId)).toEqual({
       groups: [
         {
@@ -561,12 +562,62 @@ describe('Claude and notes', () => {
         },
       ],
     });
-    expect(store.readNotes(explorationId, group.id).groups[0]!.notes[1]).toMatchObject({
-      topic: 'B',
-      description: '',
-      createdBy: 'user',
-      deletionRequested: true,
+    const listed = store.listNotes(explorationId, group.id).groups[0]!.notes;
+    expect(listed[0]).toMatchObject({ topic: 'A', length: 19, createdBy: 'user' });
+    expect(listed[0]).not.toHaveProperty('description');
+    expect(listed[1]).toMatchObject({ topic: 'B', length: 0, deletionRequested: true });
+
+    expect(store.readNotes(explorationId, [notes[0]!.id])).toEqual({
+      notes: [
+        expect.objectContaining({
+          id: notes[0]!.id,
+          groupId: group.id,
+          groupName: 'General',
+          description: 'Lemons for the cake',
+        }),
+      ],
+      notShown: [],
     });
+    const oldId = notes[0]!.id.replace('note_', '');
+    expect(store.readNotes(explorationId, [oldId]).notes[0]!.id).toBe(notes[0]!.id);
+  });
+
+  it('leaves out of a read the notes past its size limit, for another call', () => {
+    const { store, explorationId, notes } = seedNotes(['A', 'B', 'C']);
+    for (const note of notes) store.updateNote(note.id, { description: 'x'.repeat(25_000) });
+    const read = store.readNotes(
+      explorationId,
+      notes.map((note) => note.id),
+    );
+    expect(read.notes.map((note) => note.topic)).toEqual(['A']);
+    expect(read.notShown).toEqual([
+      { id: notes[1]!.id, topic: 'B', length: 25_000 },
+      { id: notes[2]!.id, topic: 'C', length: 25_000 },
+    ]);
+    // A single note larger than the limit is still read, as nothing smaller can stand for it.
+    store.updateNote(notes[0]!.id, { description: 'x'.repeat(50_000) });
+    expect(store.readNotes(explorationId, [notes[0]!.id]).notes).toHaveLength(1);
+  });
+
+  it('reads only notes of the same chat', () => {
+    const { store, notes } = seedNotes(['A']);
+    const { exploration: other } = store.createExploration();
+    expect(() => store.readNotes(other.id, [notes[0]!.id])).toThrow(/not in this chat/);
+  });
+
+  it('finds notes holding every word, with a snippet around them', () => {
+    const { store, explorationId, notes } = seedNotes(['Shopping', 'Deploy', 'Cloud']);
+    store.updateNote(notes[0]!.id, { description: 'Milk and bread' });
+    store.updateNote(notes[1]!.id, {
+      description: `${'Intro. '.repeat(30)}Use Cloud Run with a CDN in front.`,
+    });
+    store.updateNote(notes[2]!.id, { description: 'Run it on GCP' });
+    const found = store.searchNotes(explorationId, 'cloud RUN');
+    expect(found.more).toBe(false);
+    expect(found.notes.map((note) => note.topic)).toEqual(['Deploy', 'Cloud']);
+    expect(found.notes[0]!.snippet).toMatch(/^….*Use Cloud Run with a CDN in front\.$/);
+    expect(found.notes[1]!.snippet).toBe('Run it on GCP');
+    expect(() => store.searchNotes(explorationId, '  ')).toThrow(/at least one word/);
   });
 
   it('wakes a waiting session for a note without a topic, once', async () => {
