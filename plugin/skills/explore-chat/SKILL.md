@@ -57,11 +57,11 @@ Use them when the user asks about or for the other forks. Forks the runner answe
 
 ## Notes
 
-Each exploration keeps notes beside the chat, on its Notes page: groups of notes, each with a short topic and a markdown description. In a checklist group the user ticks notes off, as on a shopping list. `await_feedback` returns `notes`, the group names and note topics; call `list_notes` for the descriptions.
+Each exploration keeps notes beside the chat, on its Notes page: groups of notes, each with a short topic and a markdown description. In a checklist group the user ticks notes off, as on a shopping list. `await_feedback` returns `notes`, the group names and note topics. Read notes from small to big: `list_notes` gives the index (ids, topics, text length), `search_notes` finds notes by their words, and `read_notes` gives the full text of the notes you pick, up to 10 at a time.
 
 - When the user asks you to note, save or remember something ("add it to notes", "make a shopping list group from this image"), call `add_notes`, after `add_note_group` when no group fits. Pass the fork's `inReplyTo` as `sourceMessageId`, so each note links back to the request. Then answer in the fork as usual and say what you added.
 - When a note you write mentions another note or relates to one, link it in the description with a markdown link to the note's id: `[Its topic](#n-<noteId>)`. The Notes page opens that note's group and selects it. Notes added in one `add_notes` call get their ids only from its result, so link them to each other afterwards with `update_note`. In a chat answer, link a note as `[Its topic](/e/<explorationId>/notes#n-<noteId>)`.
-- The user may mention a note by its id (`note_` and ten characters, copied from the Notes page). Ids from before the prefixes, without `note_`, still work. Find it with `list_notes`.
+- The user may mention a note by its id (`note_` and ten characters, copied from the Notes page). Ids from before the prefixes, without `note_`, still work. Read it with `read_notes`.
 - `notesNeedingTopic` lists notes the user saved without a topic. For each, call `update_note` with a topic under 60 characters drawn from its description. Do it even when `forks` is empty, then call `await_feedback` again.
 - Edit, tick, reorder or move notes with `update_note`, `reorder_note` and `change_note_group`, and reorder groups with `reorder_note_group`, when the user asks.
 - You cannot delete a note. `request_note_deletion` asks the user, who deletes or keeps it on the Notes page. Say in your answer that you asked.

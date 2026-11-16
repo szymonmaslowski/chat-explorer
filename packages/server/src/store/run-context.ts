@@ -36,6 +36,7 @@ Tools:
 - set_fork_summary: when you are told the fork is new, give it a summary under 60 characters of what it is about, before your final reply. Update it later only when the fork's topic changes.
 - update_chat: in your first turn in a chat, and when its topic shifts, set a short title and a one-sentence summary. Do it before your final reply: nothing runs after it.
 - Notes are kept beside the chat in groups. When the user asks you to note, save or remember something, use add_notes (after add_note_group when no group fits) and pass sourceMessageId, the id of their message. You cannot delete notes; request_note_deletion asks the user.
+- To read notes, start small: list_notes gives the index of topics, search_notes finds notes by their words, and read_notes gives the full text of the notes you chose. A link like #n-<noteId> in a note or message points at a note you can read by that id.
 - list_forks and read_fork show the chat's other forks and older messages of this one.`;
 
 const maxDigestLines = 30;
@@ -59,6 +60,29 @@ function othersDigest(store: ChatStore, forkId: string) {
   ].join('\n');
 }
 
+const maxIndexNotes = 60;
+
+// The chat's note topics by group, so the engine knows what is noted before reading any note.
+function notesDigest(store: ChatStore, explorationId: string) {
+  const { groups } = store.notesIndex(explorationId);
+  const total = groups.reduce((count, group) => count + group.notes.length, 0);
+  if (total === 0) return null;
+  const lines = ["The chat's notes (read them with read_notes, find more with search_notes):"];
+  let shown = 0;
+  for (const group of groups) {
+    if (group.notes.length === 0 || shown >= maxIndexNotes) continue;
+    lines.push(`- ${group.name} [${group.id}]`);
+    for (const note of group.notes.slice(0, maxIndexNotes - shown)) {
+      lines.push(
+        `  - [${note.id}] ${note.topic ?? '(no topic yet)'}${note.checked ? ' (ticked)' : ''}`,
+      );
+      shown += 1;
+    }
+  }
+  if (total > shown) lines.push(`- and ${total - shown} more, see list_notes`);
+  return lines.join('\n');
+}
+
 export function buildRunContext(
   store: ChatStore,
   forkId: string,
@@ -78,6 +102,7 @@ export function buildRunContext(
   }
   const omitted = answered.length - kept.length;
   const digest = othersDigest(store, forkId);
+  const notes = notesDigest(store, explorationId);
   const isNewFork =
     store.fork(forkId).needsSummary ||
     !fork.messages.some((message) => message.forkId === forkId && message.role === 'assistant');
@@ -92,6 +117,7 @@ export function buildRunContext(
       ? ['This fork is new: give it a summary with set_fork_summary once you know its topic.']
       : []),
     ...(digest ? ['', digest] : []),
+    ...(notes ? ['', notes] : []),
   ];
   const messages = kept.map(
     (message) => `<message id="${message.id}" role="${message.role}">\n${message.text}\n</message>`,

@@ -65,6 +65,22 @@ describe("hearing about the chat's other forks", () => {
     expect(separate.history).not.toContain(side.id);
   });
 
+  it('gives a new session the index of note topics, without their text', () => {
+    const { store, explorationId, mainFork } = chatWithTwoForks();
+    expect(
+      buildRunContext(store, mainFork.id, { resume: false, pendingIds: new Set() }).history,
+    ).not.toContain("The chat's notes");
+    const group = store.createNoteGroup(explorationId, { name: 'Facts' });
+    const note = store.createNote(explorationId, { groupId: group.id, topic: 'Redis' });
+    store.updateNote(note.id, { description: 'Secret detail' });
+    const { history } = buildRunContext(store, mainFork.id, {
+      resume: false,
+      pendingIds: new Set(),
+    });
+    expect(history).toContain(`- Facts [${group.id}]\n  - [${note.id}] Redis`);
+    expect(history).not.toContain('Secret detail');
+  });
+
   it('tells a running fork which other forks changed since it last heard', () => {
     const { store, runs, explorationId, mainFork, side } = chatWithTwoForks();
     store.submit(explorationId, mainFork.id, 'Main question');
