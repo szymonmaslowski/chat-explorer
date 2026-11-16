@@ -4,6 +4,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useAutosave } from '../composables/useAutosave';
 import { useExpandedArea } from '../composables/useExpandedArea';
 import { useRouter } from 'vue-router';
+import { isSentMessageComment } from '../lib/conversation';
 import { scrollToAndFlash } from '../lib/flash';
 import { insertAtCursor } from '../lib/insert-text';
 import { sortedGroups } from '../lib/notes';
@@ -45,7 +46,9 @@ const emit = defineEmits<{
 const card = ref<HTMLElement | null>(null);
 const savedFiles = computed(() =>
   [...openExploration(props.comment.explorationId).files.values()].filter(
-    (file) => file.commentId === props.comment.id,
+    (file) =>
+      file.commentId === props.comment.id ||
+      (isSentMessageComment(props.comment) && file.messageId === props.comment.id),
   ),
 );
 // While editing, the files are a draft list of their own: added and removed ones count on Save.

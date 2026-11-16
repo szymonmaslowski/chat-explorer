@@ -61,6 +61,10 @@ test('sends pasted and picked files with a reply, and Claude gets their paths', 
     /Attached files \(open them with the Read tool\):\\n- \/\S+\/screenshot\.png\\n- \/\S+\/notes\.md/,
   );
 
+  const sentCard = page.locator('.comment-card.submitted', { hasText: 'What do these show?' });
+  await expect(sentCard.locator('.files img')).toHaveAttribute('alt', 'screenshot.png');
+  await expect(sentCard.locator('.files a.text')).toHaveText('notes.md');
+
   const message = page.locator('.message.user').last();
   await message.getByRole('button', { name: 'Show the message' }).click();
   const thumbnail = message.locator('.files img');

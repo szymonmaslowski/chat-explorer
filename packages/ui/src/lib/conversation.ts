@@ -55,6 +55,8 @@ export function withBody(head: MessageHead, content: string) {
 // like a general comment, so an answer's card of it has a place to go back to. The first message
 // of a chat replies to nothing and has none. Kept per message, so a list holding it stays the same.
 const sentMessageComments = new WeakMap<Message, Comment>();
+// The sent card of a message carries the message's id, so the files sent with it show on it.
+export const isSentMessageComment = (comment: Comment) => comment.id === comment.replyMessageId;
 export function sentMessageComment(message: Message, viewForkId: string) {
   if (message.role !== 'user' || !message.content || !message.parentId) return null;
   const kept = sentMessageComments.get(message);
