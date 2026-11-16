@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FeedbackHub } from '../src/store/feedback-hub.js';
-import { followUpIdleMs, leaseMs } from '../src/store/runs.js';
+import { followUpIdleMs, leaseMs, RunStore } from '../src/store/runs.js';
 import { supervisorMessagePrefix } from '../src/store/store.js';
 import { createTestStore, seedConversation } from './helpers.js';
 
@@ -97,6 +97,22 @@ describe('an attached terminal session as the runner of its chat', () => {
     runs.releaseStaleFollowUps();
     expect(runs.shimFollowUps(explorationId, 'shim-a')).toEqual([]);
     expect(runs.claimable()).toEqual([]);
+  });
+
+  it('lets go of an answered fork whose follow-up a daemon restart forgot', async () => {
+    const context = setup();
+    const { store, feedback, explorationId, mainForkId, database, bus, clock } = context;
+    store.submit(explorationId, mainForkId, 'Before the restart');
+    const result = await feedback();
+    const inReplyTo = result.status === 'feedback' ? result.forks[0]!.inReplyTo : '';
+    context.runs.finishShimTurn(mainForkId, 'shim-a', inReplyTo, 'answer-id');
+
+    const restarted = new RunStore(database, bus, store, () => clock.now);
+    restarted.releaseStaleFollowUps();
+    expect(store.snapshot(explorationId).forkRuns[0]).toMatchObject({
+      status: 'idle',
+      heldByTerminal: false,
+    });
   });
 
   it('keeps its leases while it heartbeats, and leaves them to a runner once it is gone', async () => {

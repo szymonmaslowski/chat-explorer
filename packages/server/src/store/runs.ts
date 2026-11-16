@@ -486,24 +486,38 @@ export class RunStore {
 
   // The session waits for feedback again, or is gone: the forks it answered are free.
   releaseShimFollowUps(shimId: string) {
-    const rows = this.db.all<ForkRunRow>(
-      'SELECT * FROM fork_runs WHERE runner_id = ? AND lease_id IS NOT NULL',
-      shimRunnerId(shimId),
-    );
-    for (const row of rows) {
-      if (this.followUps.has(row.fork_id)) this.releaseFollowUp(row.fork_id);
+    for (const row of this.answeredShimRows(shimRunnerId(shimId)))
+      this.releaseFollowUp(row.fork_id);
+  }
+
+  // Answered forks of sessions that died, whose leases ran out, that made no step for long, or
+  // that the daemon lost track of in a restart.
+  releaseStaleFollowUps() {
+    for (const row of this.answeredShimRows()) {
+      const followUp = this.followUps.get(row.fork_id);
+      const expired = (row.lease_expires_at ?? 0) <= this.now();
+      if (!followUp || expired || this.now() - followUp.lastStepAt >= followUpIdleMs) {
+        this.releaseFollowUp(row.fork_id);
+      }
     }
   }
 
-  // Follow-ups of sessions that died, whose leases ran out, or that made no step for long.
-  releaseStaleFollowUps() {
-    for (const [forkId, followUp] of this.followUps) {
-      const row = this.db.get<ForkRunRow>('SELECT * FROM fork_runs WHERE fork_id = ?', forkId);
-      const expired = !row?.lease_id || (row.lease_expires_at ?? 0) <= this.now();
-      if (expired || this.now() - followUp.lastStepAt >= followUpIdleMs) {
-        this.releaseFollowUp(forkId);
-      }
-    }
+  // Forks a terminal session holds with nothing left to answer.
+  private answeredShimRows(runnerId?: string) {
+    return this.db.all<ForkRunRow>(
+      `SELECT fork_runs.* FROM fork_runs
+       JOIN forks ON forks.id = fork_runs.fork_id
+       WHERE fork_runs.lease_id IS NOT NULL AND fork_runs.runner_id LIKE 'shim:%'
+         AND (? IS NULL OR fork_runs.runner_id = ?)
+         AND NOT EXISTS (
+           SELECT 1 FROM messages
+           WHERE messages.fork_id = forks.id AND messages.role = 'user'
+             AND messages.rowid > ${unansweredAfter}
+         )
+         AND NOT EXISTS (SELECT 1 FROM submissions WHERE fork_id = forks.id AND status = 'queued')`,
+      runnerId ?? null,
+      runnerId ?? null,
+    );
   }
 
   private releaseFollowUp(forkId: string) {
