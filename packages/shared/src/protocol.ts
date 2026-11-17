@@ -1,6 +1,7 @@
 // What the backend and its clients (the runner, the plugin's MCP server and hooks) send each other
 // over HTTP, beyond the chat's own records in types.ts.
 import type { ClaudeModel } from './models.js';
+import type { ForkNetwork } from './network.js';
 import type { ForkKind, ForkRun, NoteAuthor, Role } from './types.js';
 
 export interface Lease {
@@ -31,6 +32,8 @@ export interface RunContext {
   model: ClaudeModel;
   // The fork's coding switch. The runner still checks its own config before it honours it.
   coding: boolean;
+  // The fork's allowed hosts. The runner uses them for a coding fork only.
+  network: ForkNetwork;
   systemPrompt: string;
   // Put before the first messages of a new session; null when the session is resumed.
   history: string | null;

@@ -1,4 +1,5 @@
 import type { ClaudeModel } from './models.js';
+import type { ForkNetwork } from './network.js';
 
 export type Role = 'user' | 'assistant';
 export type MessageSource = 'import' | 'live';
@@ -59,6 +60,8 @@ export interface Fork {
   awareness: ForkAwareness;
   // Claude may run commands and write files in the fork's workspace, in its container.
   coding: boolean;
+  // What a coding fork's container may reach.
+  network: ForkNetwork;
   createdAt: number;
   updatedAt: number;
   // Set on the fork the reader archived; the forks below it count as archived too.

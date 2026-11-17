@@ -16,6 +16,7 @@ import type { Speaker } from '../speech/speaker.js';
 import { prefixedIdPattern } from '@chat-explorer/shared/ids.js';
 import { withLegacyIdsPrefixed } from './legacy-ids.js';
 import { claudeModels, type ClaudeModel } from '@chat-explorer/shared/models.js';
+import { isHostPort, maxAllowedHosts } from '@chat-explorer/shared/network.js';
 import {
   chatDefaultPages,
   type ChangeSet,
@@ -126,6 +127,13 @@ const noteForkBody = z.object({ id: clientId, forkId: clientId, message: z.strin
 const answerForkBody = z.object({ forkId: clientId });
 const forkAwarenessBody = z.object({ awareness: z.enum(['aware', 'separate']) });
 const forkCodingBody = z.object({ coding: z.boolean() });
+const forkNetworkBody = z.object({
+  hosts: z
+    .array(z.string().refine(isHostPort, 'Write each host as name:port, such as github.com:443.'))
+    .max(maxAllowedHosts)
+    .transform((hosts) => [...new Set(hosts)]),
+  registries: z.boolean(),
+});
 const newBookmarkBody = z.object({
   id: clientId,
   forkId: z.string(),
@@ -298,6 +306,11 @@ export function createApp(options: AppOptions) {
   app.patch('/api/forks/:id/coding', async (context) => {
     const { coding } = forkCodingBody.parse(await context.req.json());
     return context.json(store.setForkCoding(context.req.param('id'), coding));
+  });
+
+  app.patch('/api/forks/:id/network', async (context) => {
+    const network = forkNetworkBody.parse(await context.req.json());
+    return context.json(store.setForkNetwork(context.req.param('id'), network));
   });
 
   app.post('/api/forks/:id/stop', (context) =>

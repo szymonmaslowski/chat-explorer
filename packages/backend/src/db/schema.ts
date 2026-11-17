@@ -374,4 +374,9 @@ export const migrations = [
   `
   ALTER TABLE forks ADD COLUMN coding INTEGER NOT NULL DEFAULT 0;
   `,
+  `
+  -- A JSON array of host:port entries.
+  ALTER TABLE forks ADD COLUMN allowed_hosts TEXT NOT NULL DEFAULT '[]';
+  ALTER TABLE forks ADD COLUMN registries INTEGER NOT NULL DEFAULT 0;
+  `,
 ];

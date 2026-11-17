@@ -1,3 +1,4 @@
+import { noNetwork } from '@shared/network';
 import type {
   Activity,
   ActivitySummary,
@@ -382,6 +383,7 @@ function addNewFork(
     summary,
     awareness: 'aware',
     coding: false,
+    network: noNetwork,
     createdAt: now,
     updatedAt: now,
     archivedAt: null,

@@ -79,8 +79,8 @@ export function buildRunContext(
   const fork = store.readFork(forkId);
   const explorationId = store.forkExplorationId(forkId);
   const { model } = store.backgroundSession(explorationId);
-  const { coding } = store.fork(forkId);
-  if (options.resume) return { model, coding, systemPrompt, history: null };
+  const { coding, network } = store.fork(forkId);
+  if (options.resume) return { model, coding, network, systemPrompt, history: null };
   const answered = fork.messages.filter((message) => !options.pendingIds.has(message.id));
   const kept: typeof answered = [];
   let length = 0;
@@ -114,6 +114,7 @@ export function buildRunContext(
   return {
     model,
     coding,
+    network,
     systemPrompt,
     history: [intro.join('\n'), ...messages].join('\n\n'),
   };

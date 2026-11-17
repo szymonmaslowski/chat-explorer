@@ -32,6 +32,7 @@ const lease: Lease = {
 const context: RunContext = {
   model: 'sonnet',
   coding: true,
+  network: { hosts: [], registries: false },
   systemPrompt: 'Be brief.',
   history: null,
 };

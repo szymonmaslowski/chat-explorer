@@ -55,6 +55,20 @@ describe("the fork's coding switch", () => {
     expect(context(false).coding).toBe(true);
     expect(context(true).coding).toBe(true);
   });
+
+  it("carries the fork's allowed hosts, new session or resumed", () => {
+    const { store } = createTestStore();
+    const { mainFork } = store.createExploration({
+      messages: [{ role: 'user', content: 'Hello' }],
+    });
+    const network = { hosts: ['github.com:443'], registries: true };
+    store.setForkNetwork(mainFork.id, network);
+    for (const resume of [false, true]) {
+      expect(
+        buildRunContext(store, mainFork.id, { resume, pendingIds: new Set() }).network,
+      ).toEqual(network);
+    }
+  });
 });
 
 describe("hearing about the chat's other forks", () => {

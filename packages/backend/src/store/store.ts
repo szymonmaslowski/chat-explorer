@@ -62,6 +62,7 @@ import {
   type AnsweredPartLookup,
 } from '@chat-explorer/shared/answer-tags.js';
 import { defaultClaudeModel, type ClaudeModel } from '@chat-explorer/shared/models.js';
+import type { ForkNetwork } from '@chat-explorer/shared/network.js';
 import {
   inTextOrder,
   joinForkGroup,
@@ -694,22 +695,29 @@ export class ChatStore {
   }
 
   setForkAwareness(forkId: string, awareness: ForkAwareness) {
-    return this.updateForkSetting(forkId, 'awareness', awareness);
+    return this.updateForkSettings(forkId, { awareness });
   }
 
   setForkCoding(forkId: string, coding: boolean) {
-    return this.updateForkSetting(forkId, 'coding', coding ? 1 : 0);
+    return this.updateForkSettings(forkId, { coding: coding ? 1 : 0 });
   }
 
-  private updateForkSetting(
+  setForkNetwork(forkId: string, network: ForkNetwork) {
+    return this.updateForkSettings(forkId, {
+      allowed_hosts: JSON.stringify(network.hosts),
+      registries: network.registries ? 1 : 0,
+    });
+  }
+
+  private updateForkSettings(
     forkId: string,
-    column: 'awareness' | 'coding',
-    value: string | number,
+    changes: Partial<Pick<ForkRow, 'awareness' | 'coding' | 'allowed_hosts' | 'registries'>>,
   ) {
     const row = this.requireWritableFork(forkId);
+    const columns = Object.keys(changes);
     this.db.run(
-      `UPDATE forks SET ${column} = ?, updated_at = ? WHERE id = ?`,
-      value,
+      `UPDATE forks SET ${columns.map((column) => `${column} = ?, `).join('')}updated_at = ? WHERE id = ?`,
+      ...Object.values(changes),
       this.now(),
       forkId,
     );

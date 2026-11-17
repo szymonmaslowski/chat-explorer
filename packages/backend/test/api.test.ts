@@ -285,6 +285,32 @@ describe("a fork's coding switch", () => {
   });
 });
 
+describe("a fork's allowed hosts", () => {
+  it('saves host:port entries and the registries preset, refusing anything else', async () => {
+    const { request, store } = createTestApp();
+    const { mainForkId } = seedConversation(store);
+    const set = (json: object) =>
+      request(`/api/forks/${mainForkId}/network`, { method: 'PATCH', json });
+    expect(store.fork(mainForkId).network).toEqual({ hosts: [], registries: false });
+    const saved = await set({
+      hosts: ['github.com:443', 'github.com:443', 'git.example.com:2222'],
+      registries: true,
+    });
+    expect(await saved.json()).toMatchObject({
+      network: { hosts: ['github.com:443', 'git.example.com:2222'], registries: true },
+    });
+    expect(store.fork(mainForkId).network.hosts).toEqual([
+      'github.com:443',
+      'git.example.com:2222',
+    ]);
+    for (const hosts of [['github.com'], ['10.0.0.1:22'], ['github.com:443 --x']]) {
+      expect((await set({ hosts, registries: false })).status).toBe(400);
+    }
+    expect((await set({ hosts: [], registries: 'yes' })).status).toBe(400);
+    expect(store.fork(mainForkId).network.registries).toBe(true);
+  });
+});
+
 describe('the main fork overseeing the other forks', () => {
   it('lets only the attached session message, stop or retry another fork', async () => {
     const { request, store } = createTestApp();

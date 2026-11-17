@@ -51,6 +51,8 @@ export interface ForkRow {
   summary: string;
   awareness: ForkAwareness;
   coding: number;
+  allowed_hosts: string;
+  registries: number;
   created_at: number;
   updated_at: number;
   archived_at: number | null;
@@ -228,6 +230,7 @@ export const toFork = (row: ForkRow): Fork => ({
   summary: row.summary,
   awareness: row.awareness,
   coding: row.coding === 1,
+  network: { hosts: JSON.parse(row.allowed_hosts) as string[], registries: row.registries === 1 },
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   archivedAt: row.archived_at,
