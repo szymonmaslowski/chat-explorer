@@ -12,7 +12,8 @@ import {
 import { RunnerClient } from './client.js';
 import { ensureEgress } from './egress.js';
 import { Runner } from './runner.js';
-import { readRunnerConfig } from './runner-config.js';
+import { runtime } from './container-runtime.js';
+import { readRunnerConfig, type RunnerConfig } from './runner-config.js';
 
 export interface StartRunnerOptions {
   baseUrl: string;
@@ -44,6 +45,16 @@ async function startingImage(version: string, log: (message: string) => void) {
   return { image: builtEarlier, newImage: buildImage(version) };
 }
 
+// Coding forks rely on how the runtime handles mounts, networks and limits, tested only on Docker
+// Desktop so far. On another runtime chat forks still run, and coding stays off until tested.
+async function onTestedRuntime(config: RunnerConfig, log: (message: string) => void) {
+  if (!config.coding.enabled) return config;
+  const { name, supported } = await runtime.identify();
+  if (supported) return config;
+  log(`Coding stays off: it has been tested on Docker Desktop only, and this is ${name}.`);
+  return { ...config, coding: { ...config.coding, enabled: false } };
+}
+
 // A runner on this machine, next to the daemon: its engine runs Claude Code in Docker at the
 // version installed here.
 export async function startRunner(options: StartRunnerOptions) {
@@ -60,7 +71,7 @@ export async function startRunner(options: StartRunnerOptions) {
   );
   const egressPath = join(options.runnerPath, 'egress');
   await ensureEgress({ image, port: options.port, egressPath });
-  const config = readRunnerConfig(options.runnerPath);
+  const config = await onTestedRuntime(readRunnerConfig(options.runnerPath), options.log);
   const runner = new Runner({
     client: new RunnerClient(options.baseUrl, options.machineToken),
     config,

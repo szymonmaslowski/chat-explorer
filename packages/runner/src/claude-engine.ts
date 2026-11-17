@@ -1,9 +1,9 @@
-import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { parseClaudeStreamLine, streamUserMessage } from './claude-stream.js';
 import { randomBytes } from 'node:crypto';
+import { runtime } from './container-runtime.js';
 import { openEgressPass, sandboxArguments } from './egress.js';
 import type { Engine, EngineEvent, EngineRun, EngineRunSpec } from './engine.js';
 import type { ContainerLimits } from './runner-config.js';
@@ -184,14 +184,12 @@ export function claudeCodeEngine(options: ClaudeEngineOptions): Engine {
           `completion-${randomBytes(6).toString('hex')}`,
           [],
         );
-        const child = spawn('docker', claudeCompletionArguments(prompt, options.image()), {
-          stdio: ['ignore', 'pipe', 'pipe'],
-          env: {
-            ...process.env,
-            ...pass.environment,
-            CLAUDE_CODE_OAUTH_TOKEN: options.oauthToken(),
-          },
+        const child = runtime.start(claudeCompletionArguments(prompt, options.image()), {
+          ...process.env,
+          ...pass.environment,
+          CLAUDE_CODE_OAUTH_TOKEN: options.oauthToken(),
         });
+        child.stdin.end();
         let output = '';
         child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()));
         child.on('error', (error) => {
@@ -215,13 +213,10 @@ export function claudeCodeEngine(options: ClaudeEngineOptions): Engine {
       mkdirSync(folders.work, { recursive: true });
       mkdirSync(folders.sessions, { recursive: true });
       const pass = openEgressPass(options.egressPath, options.port, spec.forkId, spec.hosts);
-      const child = spawn('docker', claudeDockerArguments(spec, options), {
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: {
-          ...process.env,
-          ...pass.environment,
-          CLAUDE_CODE_OAUTH_TOKEN: options.oauthToken(),
-        },
+      const child = runtime.start(claudeDockerArguments(spec, options), {
+        ...process.env,
+        ...pass.environment,
+        CLAUDE_CODE_OAUTH_TOKEN: options.oauthToken(),
       });
       child.on('error', () => pass.close());
       child.on('exit', () => pass.close());
@@ -254,7 +249,7 @@ export function claudeCodeEngine(options: ClaudeEngineOptions): Engine {
         stop: (stopOptions) => {
           if (stopOptions?.immediately) {
             child.kill('SIGKILL');
-            spawn('docker', ['kill', containerName(spec.forkId)], { stdio: 'ignore' });
+            runtime.kill(containerName(spec.forkId));
             return;
           }
           child.stdin.end();

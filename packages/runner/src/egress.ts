@@ -1,7 +1,7 @@
-import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { runtime } from './container-runtime.js';
 
 // The engine's container sits on an internal network with no way out but the egress proxy. The
 // proxy lets each container through to the model, the daemon's job tools and its fork's own
@@ -69,19 +69,8 @@ export function openEgressPass(
   };
 }
 
-function docker(args: string[]) {
-  return new Promise<{ code: number | null; output: string }>((resolve) => {
-    const child = spawn('docker', args, { stdio: ['ignore', 'pipe', 'pipe'] });
-    let output = '';
-    child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()));
-    child.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()));
-    child.on('error', (error) => resolve({ code: null, output: error.message }));
-    child.on('exit', (code) => resolve({ code, output }));
-  });
-}
-
 async function required(args: string[], what: string) {
-  const result = await docker(args);
+  const result = await runtime.command(args);
   if (result.code !== 0) throw new Error(`Could not ${what}: ${result.output.trim()}`);
 }
 
@@ -93,13 +82,13 @@ export async function ensureEgress(options: { image: string; port: number; egres
   rmSync(folders.policies, { recursive: true, force: true });
   mkdirSync(folders.policies, { recursive: true });
   mkdirSync(folders.logs, { recursive: true });
-  if ((await docker(['network', 'inspect', sandboxNetwork])).code !== 0) {
+  if ((await runtime.command(['network', 'inspect', sandboxNetwork])).code !== 0) {
     await required(
       ['network', 'create', '--internal', sandboxNetwork],
       'create the sandbox network',
     );
   }
-  await docker(['rm', '--force', egressContainer(port)]);
+  await runtime.command(['rm', '--force', egressContainer(port)]);
   const proxyOptions = {
     policiesPath: '/egress/policies',
     logsPath: '/egress/logs',

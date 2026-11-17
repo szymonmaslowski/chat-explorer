@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { runtime } from './container-runtime.js';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -47,38 +48,10 @@ export const imageTag = (version: string) => `${imageRepository}:${version}`;
 // A build once hung for hours inside `npm install`, so it gets a limit.
 const buildTimeoutMs = 15 * 60_000;
 
-interface DockerOptions {
-  stdin?: string;
-  timeoutMs?: number;
-  env?: NodeJS.ProcessEnv;
-}
-
-function docker(args: string[], { stdin, timeoutMs, env }: DockerOptions = {}) {
-  return new Promise<{ code: number | null; output: string }>((resolve) => {
-    const child = spawn('docker', args, { stdio: ['pipe', 'pipe', 'pipe'], env });
-    let output = '';
-    const timer =
-      timeoutMs === undefined
-        ? undefined
-        : setTimeout(() => {
-            output += `\nStopped after ${timeoutMs / 60_000} minutes.`;
-            child.kill('SIGKILL');
-          }, timeoutMs);
-    child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()));
-    child.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()));
-    child.on('error', (error) => resolve({ code: null, output: error.message }));
-    child.on('exit', (code) => {
-      clearTimeout(timer);
-      resolve({ code, output });
-    });
-    child.stdin.end(stdin);
-  });
-}
-
 // Built for this version, from today's Dockerfile.
 export async function hasImage(version: string) {
   const format = `{{ index .Config.Labels "${recipeLabel}" }}`;
-  const result = await docker(['image', 'inspect', '--format', format, imageTag(version)]);
+  const result = await runtime.command(['image', 'inspect', '--format', format, imageTag(version)]);
   return result.code === 0 && result.output.trim() === imageRecipe;
 }
 
@@ -95,7 +68,12 @@ export async function isolatedDockerConfig() {
 
 // The new config has no contexts, so the build is pointed at the engine the current context uses.
 async function dockerHost() {
-  const result = await docker(['context', 'inspect', '--format', '{{.Endpoints.docker.Host}}']);
+  const result = await runtime.command([
+    'context',
+    'inspect',
+    '--format',
+    '{{.Endpoints.docker.Host}}',
+  ]);
   const host = result.output.trim();
   return result.code === 0 && host ? host : null;
 }
@@ -108,11 +86,13 @@ export async function buildImage(version: string) {
     DOCKER_CONFIG: configDirectory,
     ...(host ? { DOCKER_HOST: host } : {}),
   };
-  const result = await docker(['build', '--tag', imageTag(version), '-'], {
-    stdin: claudeDockerfile(version),
-    timeoutMs: buildTimeoutMs,
-    env,
-  }).finally(() => rm(configDirectory, { recursive: true, force: true }));
+  const result = await runtime
+    .command(['build', '--tag', imageTag(version), '-'], {
+      stdin: claudeDockerfile(version),
+      timeoutMs: buildTimeoutMs,
+      env,
+    })
+    .finally(() => rm(configDirectory, { recursive: true, force: true }));
   if (result.code !== 0) {
     throw new Error(`Could not build the Claude Code image: ${result.output.trim().slice(-2_000)}`);
   }
@@ -132,7 +112,7 @@ export function newerVersion(left: string, right: string) {
 
 // The newest image built earlier, to run with while the image of a new version builds.
 export async function newestBuiltImage() {
-  const result = await docker(['image', 'ls', imageRepository, '--format', '{{.Tag}}']);
+  const result = await runtime.command(['image', 'ls', imageRepository, '--format', '{{.Tag}}']);
   if (result.code !== 0) return null;
   const versions = result.output.split('\n').filter((tag) => /^\d+\.\d+\.\d+$/.test(tag));
   return versions.length === 0 ? null : imageTag(versions.reduce(newerVersion));
