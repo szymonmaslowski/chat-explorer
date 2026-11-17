@@ -8,11 +8,11 @@ import { api } from '../api';
 const props = defineProps<{ fork: Fork }>();
 
 const saving = ref(false);
-const draft = ref(props.fork.network.hosts.join('\n'));
-watch(
-  () => props.fork.network.hosts,
-  (hosts) => (draft.value = hosts.join('\n')),
-);
+const savedHosts = computed(() => props.fork.network.hosts.join('\n'));
+const draft = ref(savedHosts.value);
+// Each save of the fork brings a new hosts array, so only a change of the hosts themselves resets
+// what the reader is typing.
+watch(savedHosts, (hosts) => (draft.value = hosts));
 
 const entries = computed(() =>
   draft.value
@@ -22,7 +22,7 @@ const entries = computed(() =>
 );
 const invalid = computed(() => entries.value.filter((entry) => !isHostPort(entry)));
 const tooMany = computed(() => entries.value.length > maxAllowedHosts);
-const changed = computed(() => entries.value.join('\n') !== props.fork.network.hosts.join('\n'));
+const changed = computed(() => entries.value.join('\n') !== savedHosts.value);
 
 async function save(network: Fork['network']) {
   saving.value = true;
