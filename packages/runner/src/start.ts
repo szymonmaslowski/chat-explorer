@@ -103,7 +103,7 @@ export async function startRunner(options: StartRunnerOptions) {
   });
   runner.start();
   options.log(
-    `Runner started with ${image}, coding ${config.coding.enabled ? `allowed (${config.coding.memory} memory, ${config.coding.processes} processes)` : 'off'}.`,
+    `Runner started with ${image}, coding ${config.coding.enabled ? `allowed (${config.coding.memory} memory, ${config.coding.processes} processes, ${config.coding.cpus} CPUs)` : 'off'}.`,
   );
   return runner;
 }

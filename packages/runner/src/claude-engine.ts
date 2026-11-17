@@ -48,7 +48,7 @@ export const forkFolders = (
   sessions: join(paths.forksPath, spec.forkId, 'claude-projects'),
 });
 
-const chatLimits: ContainerLimits = { memory: '2g', processes: 256 };
+const chatLimits: ContainerLimits = { memory: '2g', processes: 256, cpus: 2 };
 
 type ContainerOptions = Omit<ClaudeEngineOptions, 'oauthToken'>;
 
@@ -73,7 +73,7 @@ export function containerArguments(spec: EngineRunSpec, options: ContainerOption
     '--memory',
     limits.memory,
     '--cpus',
-    '2',
+    String(limits.cpus),
     '--env',
     'DISABLE_AUTOUPDATER=1',
     ...sandboxArguments(),

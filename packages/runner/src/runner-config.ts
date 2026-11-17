@@ -7,6 +7,7 @@ export interface ContainerLimits {
   // As `docker run --memory` takes it: a number with m or g, such as 4g.
   memory: string;
   processes: number;
+  cpus: number;
 }
 
 // The runner's own limits, set on this machine. The backend can ask for less, never for more.
@@ -19,6 +20,7 @@ export interface RunnerConfig {
 export const defaultCodingLimits: ContainerLimits & DiskLimits = {
   memory: '4g',
   processes: 512,
+  cpus: 2,
   workspaceLimitGb: 10,
   minFreeGb: 10,
 };
@@ -34,6 +36,7 @@ interface RunnerConfigFile {
     enabled?: unknown;
     memory?: unknown;
     processes?: unknown;
+    cpus?: unknown;
     workspaceLimitGb?: unknown;
     minFreeGb?: unknown;
   };
@@ -66,6 +69,12 @@ export function readRunnerConfig(runnerPath: string): RunnerConfig {
   if (typeof processes !== 'number' || !Number.isInteger(processes) || processes < 1) {
     throw new RunnerConfigError(`coding.processes in ${path} must be a whole number above 0.`);
   }
+  const cpus = parsed.coding?.cpus ?? defaultCodingLimits.cpus;
+  if (typeof cpus !== 'number' || !(cpus > 0) || !Number.isFinite(cpus)) {
+    throw new RunnerConfigError(
+      `coding.cpus in ${path} must be a number above 0, such as 4 or 1.5.`,
+    );
+  }
   const gigabytes = (name: keyof DiskLimits) => {
     const value = parsed.coding?.[name] ?? defaultCodingLimits[name];
     if (typeof value !== 'number' || !(value > 0) || !Number.isFinite(value)) {
@@ -81,6 +90,7 @@ export function readRunnerConfig(runnerPath: string): RunnerConfig {
       enabled,
       memory,
       processes,
+      cpus,
       workspaceLimitGb: gigabytes('workspaceLimitGb'),
       minFreeGb: gigabytes('minFreeGb'),
     },

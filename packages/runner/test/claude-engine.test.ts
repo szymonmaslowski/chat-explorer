@@ -96,7 +96,7 @@ describe('starting Claude Code in Docker', () => {
     workspacesPath: '/home/me/.chat-explorer/workspaces',
     filesPath: '/home/me/.chat-explorer/files',
     egressPath: '/home/me/.chat-explorer/runner/egress',
-    codingLimits: { memory: '6g', processes: 1024 },
+    codingLimits: { memory: '6g', processes: 1024, cpus: 6 },
   };
   const args = claudeDockerArguments(spec, options);
 
@@ -152,6 +152,8 @@ describe('starting Claude Code in Docker', () => {
         '6g',
         '--pids-limit',
         '1024',
+        '--cpus',
+        '6',
       ]),
     );
     expect(coding[coding.indexOf('--tools') + 1]).toBe(

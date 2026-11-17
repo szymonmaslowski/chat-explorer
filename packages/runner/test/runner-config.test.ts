@@ -17,6 +17,7 @@ describe("the runner's own config", () => {
         enabled: false,
         memory: '4g',
         processes: 512,
+        cpus: 2,
         workspaceLimitGb: 10,
         minFreeGb: 10,
       },
@@ -33,12 +34,13 @@ describe("the runner's own config", () => {
   it("takes a coding container's memory and process limits from the file", () => {
     writeFileSync(
       configPath,
-      JSON.stringify({ coding: { enabled: true, memory: '8g', processes: 2048 } }),
+      JSON.stringify({ coding: { enabled: true, memory: '8g', processes: 2048, cpus: 6 } }),
     );
     expect(readRunnerConfig(runnerPath).coding).toMatchObject({
       enabled: true,
       memory: '8g',
       processes: 2048,
+      cpus: 6,
     });
   });
 
@@ -64,6 +66,10 @@ describe("the runner's own config", () => {
     for (const memory of ['4', '4gb', '0g', 4, '-1g', '4g --privileged']) {
       writeFileSync(configPath, JSON.stringify({ coding: { memory } }));
       expect(() => readRunnerConfig(runnerPath)).toThrow(`coding.memory in ${configPath}`);
+    }
+    for (const cpus of [0, -1, '4']) {
+      writeFileSync(configPath, JSON.stringify({ coding: { cpus } }));
+      expect(() => readRunnerConfig(runnerPath)).toThrow(`coding.cpus in ${configPath}`);
     }
     for (const processes of [0, -5, 1.5, '512']) {
       writeFileSync(configPath, JSON.stringify({ coding: { processes } }));
