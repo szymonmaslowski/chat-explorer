@@ -2,10 +2,14 @@
 // Node's own modules. Each engine container signs in with its fork's id and a token as proxy
 // credentials. The runner writes `<policies>/<id>.json` with that token and the fork's hosts when
 // the container starts, rewrites it when the hosts change, and removes it when the container ends.
+//
+// It also stands in for the model's API on a port of its own. The engine holds a dummy token made
+// of the same id and token, and the proxy swaps in the real one, which never enters a container.
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { appendFile, readFile } from 'node:fs/promises';
 import { lookup as dnsLookup } from 'node:dns/promises';
 import http from 'node:http';
+import https from 'node:https';
 import net from 'node:net';
 import { join } from 'node:path';
 
@@ -78,6 +82,32 @@ function credentials(request) {
   };
 }
 
+// The model's dummy token: sk-ant-oat01-<id>.<token>, so Claude Code takes it for an OAuth token.
+function modelCredentials(request) {
+  const match = /^Bearer sk-ant-oat01-([a-z0-9_-]{1,64})\.([0-9a-f]{16,})$/.exec(
+    request.headers.authorization ?? '',
+  );
+  return match ? { id: match[1], token: match[2] } : null;
+}
+
+// Headers that describe this hop or carry a credential: never passed to the model's API as sent.
+const droppedModelHeaders = new Set([
+  'authorization',
+  'x-api-key',
+  'cookie',
+  'host',
+  'connection',
+  'keep-alive',
+  'proxy-authorization',
+  'proxy-connection',
+  'transfer-encoding',
+  'upgrade',
+  'te',
+  'trailer',
+]);
+
+const plainAddress = (address = '') => address.replace(/^::ffff:/, '');
+
 const splitHostPort = (target) => {
   const match = /^([a-z0-9.-]+):(\d{1,5})$/i.exec(target);
   return match ? { host: match[1].toLowerCase(), port: Number(match[2]) } : null;
@@ -94,24 +124,41 @@ export function startEgressProxy(options) {
     lookup = (host) => dnsLookup(host, { all: true, verbatim: true }),
     maxConnections = 128,
     connect = (port, host, onConnect) => net.connect(port, host, onConnect),
+    modelPort = 3129,
+    // Holds `model-token`, the real token, written by the runner.
+    secretsPath,
+    requestModel = (requestOptions, onResponse) =>
+      https.request({ host: 'api.anthropic.com', port: 443, ...requestOptions }, onResponse),
   } = options;
   const open = new Map();
+  // Where each pass was first used from. A pass works from that address only, so a token that
+  // leaks out of its container is worthless anywhere else.
+  const firstSeenAt = new Map();
 
   const log = (id, line) => {
     const file = policyIdPattern.test(id ?? '') ? `${id}.log` : '_unknown.log';
     appendFile(join(logsPath, file), `${new Date().toISOString()} ${line}\n`).catch(() => {});
   };
 
-  async function signedIn(request) {
-    const given = credentials(request);
+  async function signedIn(request, given = credentials(request)) {
     if (!given || !policyIdPattern.test(given.id)) return null;
     let policy;
     try {
       policy = JSON.parse(await readFile(join(policiesPath, `${given.id}.json`), 'utf8'));
     } catch {
+      for (const pass of firstSeenAt.keys()) {
+        if (pass.startsWith(`${given.id}:`)) firstSeenAt.delete(pass);
+      }
       return null;
     }
     if (typeof policy.token !== 'string' || !sameToken(given.token, policy.token)) return null;
+    const pass = `${given.id}:${policy.token}`;
+    const from = plainAddress(request.socket.remoteAddress);
+    if (!firstSeenAt.has(pass)) firstSeenAt.set(pass, from);
+    if (firstSeenAt.get(pass) !== from) {
+      log(given.id, `denied a request from ${from}: this pass belongs to another container`);
+      return null;
+    }
     const hosts = Array.isArray(policy.hosts) ? policy.hosts : [];
     return { id: given.id, allowed: new Set([...alwaysAllowed, toolsHost, ...hosts]) };
   }
@@ -227,5 +274,51 @@ export function startEgressProxy(options) {
     });
   });
 
-  return new Promise((resolve) => server.listen(port, () => resolve(server)));
+  const modelServer = http.createServer(async (request, response) => {
+    const fork = await signedIn(request, modelCredentials(request));
+    if (!fork) {
+      log(null, `denied model ${request.method} ${request.url}: no valid model token`);
+      response.writeHead(401).end();
+      return;
+    }
+    if (!request.url.startsWith('/v1/')) {
+      log(fork.id, `denied model ${request.method} ${request.url}: not a model API path`);
+      response.writeHead(404).end();
+      return;
+    }
+    let token;
+    try {
+      token = (await readFile(join(secretsPath, 'model-token'), 'utf8')).replace(/\s+/g, '');
+    } catch {
+      response.writeHead(503).end('The runner has no model token.');
+      return;
+    }
+    const headers = Object.fromEntries(
+      Object.entries(request.headers).filter(([name]) => !droppedModelHeaders.has(name)),
+    );
+    headers.authorization = `Bearer ${token}`;
+    const upstream = requestModel(
+      { method: request.method, path: request.url, headers },
+      (reply) => {
+        log(
+          fork.id,
+          `model ${request.method} ${request.url.replace(/\?.*/, '')} ${reply.statusCode}`,
+        );
+        response.writeHead(reply.statusCode ?? 502, reply.headers);
+        reply.pipe(response);
+      },
+    );
+    upstream.on('error', (error) => {
+      log(fork.id, `failed model ${request.method} ${request.url}: ${error.code ?? error.message}`);
+      if (!response.headersSent) response.writeHead(502);
+      response.end();
+    });
+    request.pipe(upstream);
+  });
+
+  const listening = (listener, listenPort) =>
+    new Promise((resolve) => listener.listen(listenPort, () => resolve(listener)));
+  return Promise.all([listening(server, port), listening(modelServer, modelPort)]).then(
+    ([forward, model]) => ({ forward, model }),
+  );
 }

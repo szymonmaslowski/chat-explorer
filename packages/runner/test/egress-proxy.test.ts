@@ -38,8 +38,14 @@ describe('a public address', () => {
 describe('the egress proxy', () => {
   const root = mkdtempSync(join(tmpdir(), 'egress-proxy-'));
   const policiesPath = join(root, 'policies');
+  const secretsPath = join(root, 'secrets');
   const logsPath = join(root, 'logs');
   let proxy: Server;
+  let model: Server;
+  let upstream: Server;
+  let modelPort: number;
+  const upstreamSaw: { authorization?: string; apiKey?: string; cookie?: string; path?: string }[] =
+    [];
   let target: Server;
   let proxyPort: number;
   let targetPort: number;
@@ -53,6 +59,21 @@ describe('the egress proxy', () => {
   beforeAll(async () => {
     mkdirSync(policiesPath);
     mkdirSync(logsPath);
+    mkdirSync(secretsPath);
+    writeFileSync(join(secretsPath, 'model-token'), 'sk-ant-oat01-real\n');
+    upstream = createServer((incoming, outgoing) => {
+      upstreamSaw.push({
+        authorization: incoming.headers.authorization,
+        apiKey: incoming.headers['x-api-key'] as string | undefined,
+        cookie: incoming.headers.cookie,
+        path: incoming.url,
+      });
+      outgoing
+        .writeHead(200, { 'content-type': 'text/event-stream' })
+        .end('event: message_stop\n\n');
+    });
+    await new Promise<void>((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+    const upstreamPort = (upstream.address() as AddressInfo).port;
     target = createServer((incoming, outgoing) =>
       outgoing.end(
         `hello from ${incoming.url}${incoming.headers['proxy-authorization'] ? ' with the sign-in' : ''}`,
@@ -60,8 +81,12 @@ describe('the egress proxy', () => {
     );
     await new Promise<void>((resolve) => target.listen(0, '127.0.0.1', resolve));
     targetPort = (target.address() as AddressInfo).port;
-    proxy = await startEgressProxy({
+    ({ forward: proxy, model } = await startEgressProxy({
       port: 0,
+      modelPort: 0,
+      secretsPath,
+      requestModel: (requestOptions, onResponse) =>
+        request({ ...requestOptions, host: '127.0.0.1', port: upstreamPort }, onResponse),
       policiesPath,
       logsPath,
       alwaysAllowed: ['api.anthropic.com:443'],
@@ -75,12 +100,15 @@ describe('the egress proxy', () => {
       // Every public address stands for the internet, played here by the local target.
       connect: (port, host, onConnect) =>
         connect(host === '104.16.1.34' ? targetPort : port, '127.0.0.1', onConnect),
-    });
+    }));
     proxyPort = (proxy.address() as AddressInfo).port;
+    modelPort = (model.address() as AddressInfo).port;
   });
 
   afterAll(() => {
     proxy.close();
+    model.close();
+    upstream.close();
     target.close();
     rmSync(root, { recursive: true, force: true });
   });
@@ -200,5 +228,62 @@ describe('the egress proxy', () => {
     first.socket.destroy();
     await expect.poll(() => status(tools, signIn('fork_f'))).toBe(200);
     second.socket.destroy();
+  });
+
+  describe('standing in for the model', () => {
+    const ask = (authorization: string, path = '/v1/messages?beta=true', from = '127.0.0.1') =>
+      new Promise<number>((resolve, reject) => {
+        const outgoing = request(
+          {
+            host: from,
+            port: modelPort,
+            method: 'POST',
+            path,
+            headers: {
+              authorization,
+              'x-api-key': 'added',
+              cookie: 'added',
+              'content-type': 'application/json',
+            },
+          },
+          (incoming) => {
+            incoming.resume();
+            incoming.on('end', () => resolve(incoming.statusCode ?? 0));
+          },
+        );
+        outgoing.on('error', reject);
+        outgoing.end('{}');
+      });
+    const dummy = (id: string, token = `${id}-token`) => `Bearer sk-ant-oat01-${id}.${token}`;
+
+    it('swaps the dummy token for the real one and drops credentials the engine added', async () => {
+      allow('fork_m', [], 'aa11bb22cc33dd44');
+      expect(await ask(dummy('fork_m', 'aa11bb22cc33dd44'))).toBe(200);
+      expect(upstreamSaw.at(-1)).toEqual({
+        authorization: 'Bearer sk-ant-oat01-real',
+        apiKey: undefined,
+        cookie: undefined,
+        path: '/v1/messages?beta=true',
+      });
+      await expect.poll(() => logOf('fork_m')).toMatch(/model POST \/v1\/messages 200/);
+    });
+
+    it('refuses a wrong token, a path outside the API, and a token whose container ended', async () => {
+      allow('fork_n', [], 'ee55ff66aa77bb88');
+      const sent = upstreamSaw.length;
+      expect(await ask(dummy('fork_n', 'ee55ff66aa77bb89'))).toBe(401);
+      expect(await ask('Bearer sk-ant-oat01-real')).toBe(401);
+      expect(await ask(dummy('fork_n', 'ee55ff66aa77bb88'), '/api/oauth/profile')).toBe(404);
+      rmSync(join(policiesPath, 'fork_n.json'));
+      expect(await ask(dummy('fork_n', 'ee55ff66aa77bb88'))).toBe(401);
+      expect(upstreamSaw.length).toBe(sent);
+    });
+
+    it('works only from the address its container first used', async () => {
+      allow('fork_p', [], '0011223344556677');
+      expect(await ask(dummy('fork_p', '0011223344556677'), undefined, '127.0.0.1')).toBe(200);
+      expect(await ask(dummy('fork_p', '0011223344556677'), undefined, '::1')).toBe(401);
+      await expect.poll(() => logOf('fork_p')).toMatch(/this pass belongs to another container/);
+    });
   });
 });

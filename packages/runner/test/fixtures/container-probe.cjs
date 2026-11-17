@@ -44,6 +44,23 @@ const lookup = (host) =>
     (error) => error.code,
   );
 
+// The model's API through the proxy's model port, with the container's dummy token. An empty body
+// gets 400 from the API once the real token is accepted, without spending a turn.
+const modelStatus = () =>
+  fetch(`${process.env.ANTHROPIC_BASE_URL}/v1/messages`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${process.env.CLAUDE_CODE_OAUTH_TOKEN}`,
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'oauth-2025-04-20',
+      'content-type': 'application/json',
+    },
+    body: '{}',
+  }).then(
+    (response) => response.status,
+    (error) => error.cause?.code ?? error.message,
+  );
+
 const npmView = () => {
   try {
     return execFileSync('npm', ['view', 'left-pad', 'version'], {
@@ -77,10 +94,11 @@ const write = (file) => {
     dns: await lookup('example.com'),
     outsideDirect: await tcp('1.1.1.1', 443),
     outsideThroughProxy: await throughProxy({ method: 'CONNECT', path: 'example.com:443' }),
-    modelThroughProxy: await throughProxy({ method: 'CONNECT', path: 'api.anthropic.com:443' }),
-    modelWithoutSignIn: await throughProxy(
-      { method: 'CONNECT', path: 'api.anthropic.com:443' },
-      false,
+    model: await modelStatus(),
+    modelHostThroughProxy: await throughProxy({ method: 'CONNECT', path: 'api.anthropic.com:443' }),
+    withoutSignIn: await throughProxy({ method: 'CONNECT', path: 'registry.npmjs.org:443' }, false),
+    dummyModelToken: /^sk-ant-oat01-fork_[0-9a-z]+\.[0-9a-f]+$/.test(
+      process.env.CLAUDE_CODE_OAUTH_TOKEN ?? '',
     ),
     allowedHostThroughProxy: await throughProxy({
       method: 'CONNECT',

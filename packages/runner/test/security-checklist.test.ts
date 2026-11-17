@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
@@ -9,14 +9,27 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import type { Lease, RunContext } from '@chat-explorer/shared/protocol.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { claudeDockerArguments, containerArguments, forkFolders } from '../src/claude-engine.js';
+import {
+  claudeDockerArguments,
+  containerArguments,
+  containerName,
+  forkFolders,
+} from '../src/claude-engine.js';
 import { newestBuiltImage } from '../src/claude-image.js';
-import { egressContainer, egressFolders, ensureEgress, openEgressPass } from '../src/egress.js';
+import {
+  egressContainer,
+  egressFolders,
+  ensureEgress,
+  openEgressPass,
+  writeModelToken,
+  type EgressPass,
+} from '../src/egress.js';
+import { readClaudeToken } from '../src/start.js';
 import { defaultCodingLimits, runnerConfigPath } from '../src/runner-config.js';
 import { checkedRunSpec, RunRefusedError } from '../src/run-spec.js';
 import { workspaceSize } from '../src/workspace-size.js';
@@ -101,6 +114,7 @@ async function probeCodingContainer() {
   writeFileSync(runnerConfigPath(runnerPath), JSON.stringify({ coding: { enabled: true } }));
   writeFileSync(join(otherFolders.work, 'secret.env'), 'TOKEN=other-fork');
   await ensureEgress({ image, port: dockerPort, egressPath: paths.egressPath });
+  writeModelToken(paths.egressPath, readClaudeToken(join(homedir(), '.chat-explorer', 'runner')));
   const probe = readFileSync(new URL('./fixtures/container-probe.cjs', import.meta.url), 'utf8');
   const probePaths = {
     runnerConfig: runnerConfigPath(runnerPath),
@@ -108,8 +122,14 @@ async function probeCodingContainer() {
     ownWorkspace: ownFolders.work,
     otherSessions: otherFolders.sessions,
   };
-  const inContainer = async (runSpec: typeof own, command: string[]) => {
-    const pass = openEgressPass(paths.egressPath, dockerPort, runSpec.forkId, runSpec.hosts);
+  const openPass = (runSpec: typeof own) =>
+    openEgressPass(paths.egressPath, dockerPort, runSpec.forkId, runSpec.hosts);
+  const inContainer = async (
+    runSpec: typeof own,
+    command: string[],
+    pass: EgressPass = openPass(runSpec),
+    keepPass = false,
+  ) => {
     try {
       const { stdout } = await run('docker', [...containerArguments(runSpec, paths), ...command], {
         timeout: 90_000,
@@ -119,12 +139,33 @@ async function probeCodingContainer() {
     } catch {
       return 'failed';
     } finally {
-      pass.close();
+      if (!keepPass) pass.close();
     }
   };
+  const ownPass = openPass(own);
   const results = JSON.parse(
-    await inContainer(own, ['node', '-e', probe, JSON.stringify(probePaths)]),
+    await inContainer(own, ['node', '-e', probe, JSON.stringify(probePaths)], ownPass, true),
   );
+  // The same pass used from another fork's container while its own still runs, as if its dummy
+  // token leaked, and then after its container ended.
+  const modelStatus = `fetch(process.env.ANTHROPIC_BASE_URL + '/v1/messages', { method: 'POST', headers: { authorization: 'Bearer ' + process.env.CLAUDE_CODE_OAUTH_TOKEN, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, body: '{}' }).then((response) => console.log(response.status), (error) => console.log(error.message))`;
+  const owner = spawn(
+    'docker',
+    [
+      ...containerArguments(own, paths),
+      'node',
+      '-e',
+      `${modelStatus}; setTimeout(() => {}, 60000)`,
+    ],
+    { env: { ...process.env, ...ownPass.environment } },
+  );
+  const ownerStatus = await new Promise<string>((resolve) =>
+    owner.stdout.once('data', (chunk: Buffer) => resolve(chunk.toString().trim())),
+  );
+  const leakedDummy = await inContainer(other, ['node', '-e', modelStatus], ownPass, true);
+  await run('docker', ['kill', containerName(own.forkId)]).catch(() => {});
+  ownPass.close();
+  const endedDummy = await inContainer(other, ['node', '-e', modelStatus], ownPass, true);
   const npmWithoutPreset = await inContainer(other, [
     'sh',
     '-c',
@@ -132,7 +173,19 @@ async function probeCodingContainer() {
   ]);
   const log = (forkId: string) =>
     readFileSync(join(egressFolders(paths.egressPath).logs, `${forkId}.log`), 'utf8');
-  return { results, npmWithoutPreset, log, root, ownFolders, otherFolders, own, other };
+  return {
+    results,
+    ownerStatus,
+    leakedDummy,
+    endedDummy,
+    npmWithoutPreset,
+    log,
+    root,
+    ownFolders,
+    otherFolders,
+    own,
+    other,
+  };
 }
 
 // The security acceptance checklist for coding forks, from the note "Coding forks: tools,
@@ -149,8 +202,10 @@ describe('coding forks: security acceptance checklist', () => {
       if (probed) rmSync(probed.root, { recursive: true, force: true });
     });
 
-    it('reaches the model through the proxy, so the refusals below are the rules at work', () => {
-      expect(probed.results.modelThroughProxy).toBe(200);
+    it('reaches the model only through the proxy, holding a dummy token, never the real one', () => {
+      expect(probed.results.model).toBe(400);
+      expect(probed.results.dummyModelToken).toBe(true);
+      expect(probed.results.modelHostThroughProxy).toBe(403);
     });
 
     it('1. a LAN address and the cloud metadata address are unreachable from a container', () => {
@@ -167,7 +222,7 @@ describe('coding forks: security acceptance checklist', () => {
     });
 
     it('lets a container out only after it signs in as its own fork', () => {
-      expect(probed.results.modelWithoutSignIn).toBe(407);
+      expect(probed.results.withoutSignIn).toBe(407);
     });
 
     it("reaches the fork's allowed hosts over HTTPS only, and npm install works with the preset", () => {
@@ -186,6 +241,12 @@ describe('coding forks: security acceptance checklist', () => {
       expect(probed.log(probed.other.forkId)).toMatch(
         /denied registry\.npmjs\.org:443: not on this fork's list/,
       );
+    });
+
+    it('7. the dummy model token works only from its own container, and dies with it', () => {
+      expect(probed.ownerStatus).toBe('400');
+      expect(probed.leakedDummy).toBe('401');
+      expect(probed.endedDummy).toBe('401');
     });
 
     it("6. a container cannot read the runner config or other forks' workspaces", () => {
@@ -239,7 +300,6 @@ describe('coding forks: security acceptance checklist', () => {
     expect(spec({ context: { coding: false }, config: notAllowed }).coding).toBe(false);
   });
 
-  it.todo('7. the dummy model token works only from its own container, and dies with it');
   it("8. the runner's size check does not follow symlinks out", async () => {
     const root = mkdtempSync(join(tmpdir(), 'checklist-8-'));
     const outside = join(root, 'outside');

@@ -4,7 +4,7 @@ import { createInterface } from 'node:readline';
 import { parseClaudeStreamLine, streamUserMessage } from './claude-stream.js';
 import { randomBytes } from 'node:crypto';
 import { runtime } from './container-runtime.js';
-import { openEgressPass, sandboxArguments } from './egress.js';
+import { openEgressPass, sandboxArguments, writeModelToken } from './egress.js';
 import type { Engine, EngineEvent, EngineRun, EngineRunSpec } from './engine.js';
 import type { ContainerLimits } from './runner-config.js';
 
@@ -74,8 +74,6 @@ export function containerArguments(spec: EngineRunSpec, options: ContainerOption
     limits.memory,
     '--cpus',
     '2',
-    '--env',
-    'CLAUDE_CODE_OAUTH_TOKEN',
     '--env',
     'DISABLE_AUTOUPDATER=1',
     ...sandboxArguments(),
@@ -159,8 +157,6 @@ export const claudeCompletionArguments = (prompt: string, image: string) => [
   'ALL',
   '--security-opt',
   'no-new-privileges',
-  '--env',
-  'CLAUDE_CODE_OAUTH_TOKEN',
   ...sandboxArguments(),
   image,
   'claude',
@@ -178,6 +174,7 @@ export function claudeCodeEngine(options: ClaudeEngineOptions): Engine {
   return {
     complete(prompt) {
       return new Promise((resolve, reject) => {
+        writeModelToken(options.egressPath, options.oauthToken());
         const pass = openEgressPass(
           options.egressPath,
           options.port,
@@ -187,7 +184,6 @@ export function claudeCodeEngine(options: ClaudeEngineOptions): Engine {
         const child = runtime.start(claudeCompletionArguments(prompt, options.image()), {
           ...process.env,
           ...pass.environment,
-          CLAUDE_CODE_OAUTH_TOKEN: options.oauthToken(),
         });
         child.stdin.end();
         let output = '';
@@ -212,11 +208,11 @@ export function claudeCodeEngine(options: ClaudeEngineOptions): Engine {
       const folders = forkFolders(options, spec);
       mkdirSync(folders.work, { recursive: true });
       mkdirSync(folders.sessions, { recursive: true });
+      writeModelToken(options.egressPath, options.oauthToken());
       const pass = openEgressPass(options.egressPath, options.port, spec.forkId, spec.hosts);
       const child = runtime.start(claudeDockerArguments(spec, options), {
         ...process.env,
         ...pass.environment,
-        CLAUDE_CODE_OAUTH_TOKEN: options.oauthToken(),
       });
       child.on('error', () => pass.close());
       child.on('exit', () => pass.close());
