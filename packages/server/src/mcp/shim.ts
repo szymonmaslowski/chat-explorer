@@ -9,7 +9,11 @@ import { DaemonStartError, ensureDaemon } from '../daemon/control.js';
 import { openBrowser } from '../open-browser.js';
 import type { ExplorationListItem, Note, NoteGroup } from '@chat-explorer/shared/types.js';
 import { packageVersion } from '@chat-explorer/shared/version.js';
-import { readNotesDescription, readNotesLimit, searchNotesDescription } from './note-tools.js';
+import {
+  readNotesDescription,
+  readNotesLimit,
+  searchNotesDescription,
+} from '@chat-explorer/shared/note-tools.js';
 import {
   type FeedbackResult,
   type ForkMapEntry,

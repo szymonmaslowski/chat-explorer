@@ -1,0 +1,36 @@
+{
+  "name": "@chat-explorer/backend",
+  "version": "0.1.0",
+  "description": "The chat-explorer backend: the store, the API, background sessions, dictation and speech, and the web UI it serves",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    "./package.json": "./package.json",
+    "./*.js": {
+      "chat-explorer-source": "./src/*.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && node scripts/copy-assets.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "seed": "node dist/dev/seed.js"
+  },
+  "dependencies": {
+    "@chat-explorer/shared": "workspace:*",
+    "@hono/node-server": "^2.1.5",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "hono": "^4.13.14",
+    "nanoid": "^6.0.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@chat-explorer/runner": "workspace:*",
+    "@types/node": "^22.20.5",
+    "linkedom": "^0.18.14",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.5"
+  }
+}

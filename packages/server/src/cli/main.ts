@@ -1,22 +1,22 @@
 #!/usr/bin/env node
-import '../suppress-warnings.js';
+import '@chat-explorer/shared/suppress-warnings.js';
 import { parseArgs } from 'node:util';
 import { createDaemonClient, DaemonError } from '@chat-explorer/shared/http.js';
 import { apiVersion, loadConfig } from '@chat-explorer/shared/config.js';
 import { probe } from '@chat-explorer/shared/health.js';
 import { DaemonStartError, ensureDaemon, stopDaemon } from '../daemon/control.js';
 import { servicePid, serviceRunsFor } from '../daemon/service.js';
-import { dictationAvailability } from '../dictation/availability.js';
-import { whisperModelPath, whisperModels } from '../dictation/models.js';
+import { dictationAvailability } from '@chat-explorer/backend/dictation/availability.js';
+import { whisperModelPath, whisperModels } from '@chat-explorer/backend/dictation/models.js';
 import { openBrowser } from '../open-browser.js';
 import {
   InstallError,
   installDictation,
   megabytes,
   uninstallDictation,
-} from '../dictation/install.js';
-import { loadSettings, runnerSettingsEnv, SettingsError } from '../settings.js';
-import { installSpeech, uninstallSpeech } from '../speech/install.js';
+} from '@chat-explorer/backend/dictation/install.js';
+import { loadSettings, runnerSettingsEnv, SettingsError } from '@chat-explorer/backend/settings.js';
+import { installSpeech, uninstallSpeech } from '@chat-explorer/backend/speech/install.js';
 import { relativeTime } from '@chat-explorer/shared/time.js';
 import type { ExplorationListItem } from '@chat-explorer/shared/types.js';
 import { packageVersion } from '@chat-explorer/shared/version.js';

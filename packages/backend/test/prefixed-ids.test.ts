@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
-import { prefixLegacyNames } from '../src/daemon/legacy-names.js';
+import { prefixLegacyNames } from '../src/legacy-names.js';
 import { Database } from '../src/db/database.js';
 import { migrations } from '../src/db/schema.js';
 import { createTestApp, seedConversation } from './helpers.js';

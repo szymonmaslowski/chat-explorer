@@ -1,4 +1,4 @@
-import '../suppress-warnings.js';
+import '@chat-explorer/shared/suppress-warnings.js';
 import { mkdirSync } from 'node:fs';
 import { loadConfig } from '@chat-explorer/shared/config.js';
 import { Database } from '../db/database.js';

@@ -5,6 +5,7 @@ import { defineConfig } from '@playwright/test';
 
 const port = 4519;
 const home = join(tmpdir(), 'chat-explorer-e2e');
+const backend = '../backend/dist';
 const server = '../server/dist';
 const fakeWhisper = resolve('e2e/fake-whisper');
 const microphoneAudio = join(tmpdir(), 'chat-explorer-e2e-microphone.wav');
@@ -54,7 +55,7 @@ export default defineConfig({
     },
   },
   webServer: {
-    command: `rm -rf "${home}" && mkdir -p "${home}/models" && touch "${home}/models/ggml-large-v3-turbo-q5_0.bin" && node ${server}/dev/seed.js && node ${server}/daemon/main.js`,
+    command: `rm -rf "${home}" && mkdir -p "${home}/models" && touch "${home}/models/ggml-large-v3-turbo-q5_0.bin" && node ${backend}/dev/seed.js && node ${server}/daemon/main.js`,
     url: `http://127.0.0.1:${port}/api/health`,
     // Without `claude` on PATH, background sessions fail to start instead of running Claude.
     // A fake whisper-cli stands in for Whisper, with an empty model file next to it.

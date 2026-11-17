@@ -6,7 +6,11 @@ import { z } from 'zod';
 import { StoreError } from '../store/errors.js';
 import type { Job, RunStore } from '../store/runs.js';
 import type { ChatStore } from '../store/store.js';
-import { readNotesDescription, readNotesLimit, searchNotesDescription } from '../mcp/note-tools.js';
+import {
+  readNotesDescription,
+  readNotesLimit,
+  searchNotesDescription,
+} from '@chat-explorer/shared/note-tools.js';
 
 export interface JobToolsOptions {
   store: ChatStore;
