@@ -16,14 +16,11 @@ import ExpandButton from './ExpandButton.vue';
 import FileDraftList from './FileDraftList.vue';
 import ListenButton from './ListenButton.vue';
 import MediaIcon from './MediaIcon.vue';
-import { notOffline, offline } from '../lib/online';
 
 const props = defineProps<{
   explorationId: string;
   forkId: string;
   drafts: Comment[];
-  // Claude is working on this fork, so the reply can also stop that and go first.
-  answering: boolean;
   savedDraft: ReplyDraft | null;
   hint: string;
   // The message a general comment is written after; null while the fork has none.
@@ -183,13 +180,6 @@ async function refreshFromDaemon() {
 onMounted(() => document.addEventListener('visibilitychange', refreshFromDaemon));
 onBeforeUnmount(() => document.removeEventListener('visibilitychange', refreshFromDaemon));
 
-// Stops Claude's turn first, so the reply is answered on its own instead of joining the turn.
-async function stopAndSubmit() {
-  if (!canSubmit.value) return;
-  await api.stopFork(props.forkId);
-  submit();
-}
-
 function submit() {
   if (!canSubmit.value) return;
   const { explorationId, forkId } = props;
@@ -316,15 +306,6 @@ function onKeydown(event: KeyboardEvent) {
         @click="saveAsComment"
       >
         <MediaIcon name="comment" />
-      </button>
-      <button
-        v-if="answering"
-        type="button"
-        :disabled="!canSubmit || offline"
-        :title="offline ? notOffline : 'Stop Claude\'s current answer and send this instead'"
-        @click="stopAndSubmit"
-      >
-        Stop and send
       </button>
       <button type="submit" class="primary" :disabled="!canSubmit">Submit</button>
     </div>

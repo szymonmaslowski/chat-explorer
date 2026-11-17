@@ -523,7 +523,6 @@ watch(
           :exploration-id="explorationId"
           :fork-id="fork.id"
           :drafts="drafts"
-          :answering="forkRun?.status === 'answering' && !forkRun.heldByTerminal"
           :saved-draft="state.replyDrafts.get(fork.id) ?? null"
           :hint="state.exploration?.title ?? ''"
           :last-message-id="path.at(-1)?.id ?? null"
