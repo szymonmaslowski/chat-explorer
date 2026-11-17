@@ -168,7 +168,7 @@ A fork with **Coding** switched on (Chat settings → This fork) runs in its con
 { "coding": { "enabled": true } }
 ```
 
-A coding container gets 4 GB of memory and 512 processes. Set `"memory"` (such as `"8g"` or `"512m"`) and `"processes"` beside `"enabled"` to change that for this machine. Restart the daemon after changing the file, so the runner reads it again. The fork's next container picks up the switch. For now the container reaches only the model and the chat tools, so downloads and package installs fail. The plan is in the note _Coding forks: build brief_.
+A coding container gets 4 GB of memory and 512 processes. Set `"memory"` (such as `"8g"` or `"512m"`) and `"processes"` beside `"enabled"` to change that for this machine. Restart the daemon after changing the file, so the runner reads it again. Switching coding on or off in a fork takes effect from its next message, which starts a new container and resumes the session. For now the container reaches only the model and the chat tools, so downloads and package installs fail. The plan is in the note _Coding forks: build brief_.
 
 The daemon listens on `127.0.0.1` only and rejects requests from other websites. Requests through `publicUrl` are accepted too, so anyone who can reach that address can start Claude sessions on your Mac. Keep it inside your tailnet (`tailscale serve`, not `tailscale funnel`).
 

@@ -1,8 +1,8 @@
 import type { Activity, ActivityKind } from '@chat-explorer/shared/types.js';
 import {
   type Lease,
-  type PendingMessage,
   type RunContext,
+  type RunInput,
   type RunUsage,
 } from '@chat-explorer/shared/protocol.js';
 
@@ -58,9 +58,8 @@ export class RunnerClient {
   }
 
   // New messages of the fork, after `after`, the newest one the engine already has.
-  // `others` is what changed in the chat's other forks since the engine last heard.
   input(lease: Lease, options: { waitMs: number; after: string | null }, signal?: AbortSignal) {
-    return this.fork<{ messages: PendingMessage[]; others: string | null; stop: boolean }>(
+    return this.fork<RunInput>(
       lease,
       'input',
       { waitMs: options.waitMs, after: options.after ?? undefined },

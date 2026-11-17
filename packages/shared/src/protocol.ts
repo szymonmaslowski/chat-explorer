@@ -36,6 +36,16 @@ export interface RunContext {
   history: string | null;
 }
 
+// What a running engine gets next: new messages, or a stop the reader asked for.
+export interface RunInput {
+  messages: PendingMessage[];
+  // What changed in the chat's other forks since the engine last heard.
+  others: string | null;
+  stop: boolean;
+  // The fork's coding switch now, which may differ from the one its container started with.
+  coding: boolean;
+}
+
 // A final reply of only this is not posted: everything went out with the answer tool already.
 export const noReply = '[no reply]';
 

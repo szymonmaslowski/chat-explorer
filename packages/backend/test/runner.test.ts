@@ -177,6 +177,31 @@ describe('the runner', () => {
     await runner.stop();
   });
 
+  it('starts a new container, resuming the session, once the coding switch changes', async () => {
+    const { runner, engineRuns, store, explorationId, mainForkId, messages } = setup({}, true);
+    runner.start();
+    store.submit(explorationId, mainForkId, 'First');
+    await until(() => engineRuns[0]?.sent.length === 1);
+    engineRuns[0]!.emit({ type: 'session', sessionId, model: 'claude-haiku-5-5' });
+    engineRuns[0]!.emit({
+      type: 'turn-finished',
+      answer: 'One.',
+      failed: false,
+      contextWindow: 1e6,
+    });
+    await until(() => store.snapshot(explorationId).forkRuns[0]?.status === 'idle');
+    expect(messages().at(-1)?.text).toBe('One.');
+
+    store.setForkCoding(mainForkId, true);
+    store.submit(explorationId, mainForkId, 'Now build it');
+    await until(() => engineRuns[1]?.sent.length === 1);
+    expect(engineRuns[0]!.stopped).toBe(true);
+    expect(engineRuns[0]!.sent).toEqual([expect.stringContaining('First')]);
+    expect(engineRuns[1]!.spec).toMatchObject({ coding: true, resume: true, sessionId });
+    expect(engineRuns[1]!.sent).toEqual(['Now build it']);
+    await runner.stop();
+  });
+
   it('lets an idle engine go and resumes its session for the next message', async () => {
     const { runner, engineRuns, store, explorationId, mainForkId, messages } = setup({
       idleCloseMs: 30,

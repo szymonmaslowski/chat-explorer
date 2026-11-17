@@ -1,7 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { RunnerClient, StaleLeaseError } from './client.js';
 import type { Engine, EngineEvent, EngineRun } from './engine.js';
-import { noReply, type Lease, type PendingMessage } from '@chat-explorer/shared/protocol.js';
+import {
+  noReply,
+  type Lease,
+  type PendingMessage,
+  type RunInput,
+} from '@chat-explorer/shared/protocol.js';
 import type { RunnerConfig } from './runner-config.js';
 import { checkedRunSpec } from './run-spec.js';
 
@@ -156,6 +161,7 @@ class ForkWorker {
   private finished = false;
   private closing = false;
   private stopping = false;
+  private coding = false;
   private exited: Promise<void> = Promise.resolve();
 
   constructor(
@@ -178,6 +184,7 @@ class ForkWorker {
       const resume = this.lease.sessionId !== null;
       const context = await client.context(this.lease, resume);
       this.history = context.history;
+      this.coding = context.coding;
       const engineRun = engine.start(
         checkedRunSpec({
           lease: this.lease,
@@ -217,7 +224,7 @@ class ForkWorker {
   private async inputLoop() {
     const { client } = this.options;
     while (!this.finished && !this.closing && !this.stopping) {
-      let input: { messages: PendingMessage[]; others: string | null; stop: boolean };
+      let input: RunInput;
       try {
         input = await client.input(
           this.lease,
@@ -230,6 +237,13 @@ class ForkWorker {
       }
       if (input.stop) {
         this.stopTurn();
+        return;
+      }
+      // A container keeps the coding switch it started with, so a changed switch lets this one go
+      // between turns. The fork is claimed again for the message, into a container started with
+      // the new switch, and resumes the same session.
+      if (input.messages.length > 0 && !this.turnOpen && input.coding !== this.coding) {
+        await this.close();
         return;
       }
       if (input.messages.length > 0) {

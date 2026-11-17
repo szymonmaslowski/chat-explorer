@@ -62,8 +62,8 @@ const setCoding = (coding: boolean) => save(() => api.setForkCoding(props.fork.i
       Coding: Claude runs commands and writes files in this fork's workspace
     </label>
     <p v-if="fork.coding" class="hint">
-      Takes effect when the fork's container next starts. The runner must allow coding in its own
-      config.
+      Takes effect from your next message, in a new container. The runner must allow coding in its
+      own config.
     </p>
   </section>
 </template>

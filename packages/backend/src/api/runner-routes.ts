@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
+import type { RunInput } from '@chat-explorer/shared/protocol.js';
 import type { Hono } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { z } from 'zod';
@@ -124,9 +125,10 @@ export function registerRunnerRoutes(app: Hono, options: RunnerRoutesOptions) {
       waitMs,
       context.req.raw.signal,
     );
-    if (!input) return context.json({ messages: [], others: null, stop: false });
+    const { coding } = store.fork(forkId);
+    if (!input) return context.json<RunInput>({ messages: [], others: null, stop: false, coding });
     const others = input.messages.length > 0 ? runs.othersUpdate(forkId, leaseId) : null;
-    return context.json({ ...input, others });
+    return context.json<RunInput>({ ...input, others, coding });
   });
 
   app.post('/api/runner/forks/:forkId/context', async (context) => {

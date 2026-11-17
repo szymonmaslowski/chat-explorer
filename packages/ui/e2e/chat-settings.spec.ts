@@ -36,7 +36,7 @@ test('opens a chat on the page its settings name, and shows the fork model there
   const coding = settings.getByRole('checkbox', { name: /Coding:/ });
   await expect(coding).not.toBeChecked();
   await coding.check();
-  await expect(forkSettings).toContainText("Takes effect when the fork's container next starts");
+  await expect(forkSettings).toContainText('Takes effect from your next message');
   await expect
     .poll(
       async () =>
