@@ -1,6 +1,6 @@
-import type { AnsweredPartLookup } from '../shared/answer-tags.js';
-import { messageSpeechBlocks } from '../shared/message-speech-blocks.js';
-import type { SpeechBlock } from '../shared/types.js';
+import type { AnsweredPartLookup } from '@chat-explorer/shared/answer-tags.js';
+import { messageSpeechBlocks } from '@chat-explorer/shared/message-speech-blocks.js';
+import type { SpeechBlock } from '@chat-explorer/shared/types.js';
 import { StoreError } from '../store/errors.js';
 import { speechText } from './announcements.js';
 import type { SpeechEngine } from './engines.js';

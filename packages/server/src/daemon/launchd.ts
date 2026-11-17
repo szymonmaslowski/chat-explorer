@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { Config } from '../config.js';
+import type { Config } from '@chat-explorer/shared/config.js';
 import { DaemonStartError, defaultDaemonEntry, stopDaemon, waitForHealth } from './control.js';
 import { launchAgentPath, runCommand, serviceLabel, userDomain, xmlString } from './service.js';
 

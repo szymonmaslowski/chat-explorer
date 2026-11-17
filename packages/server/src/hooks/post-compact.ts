@@ -1,4 +1,4 @@
-import type { Exploration } from '../shared/types.js';
+import type { Exploration } from '@chat-explorer/shared/types.js';
 
 export function postCompactOutput(exploration: Exploration | null) {
   if (!exploration) return null;

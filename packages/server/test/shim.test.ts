@@ -5,7 +5,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/api/app.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '@chat-explorer/shared/config.js';
 import { Database } from '../src/db/database.js';
 import { FileStorage } from '../src/files/file-storage.js';
 import { createShim } from '../src/mcp/shim.js';

@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import type { MessageFile } from '../src/shared/types.js';
+import type { MessageFile } from '@chat-explorer/shared/types.js';
 import { createTestApp, draft, seedConversation } from './helpers.js';
 
 const anchor = { quote: 'some text', startOffset: 16, endOffset: 25 };

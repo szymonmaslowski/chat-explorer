@@ -7,13 +7,15 @@
     "node": ">=22.13"
   },
   "scripts": {
-    "build": "pnpm --filter ui build && pnpm --filter chat-explorer build",
+    "build": "pnpm --filter ui build && pnpm --filter @chat-explorer/shared build && pnpm --filter chat-explorer build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
   "devDependencies": {
-    "prettier": "^3.9.10"
+    "prettier": "^3.9.10",
+    "vitest": "^5.0.5",
+    "typescript": "^6.0.3"
   }
 }

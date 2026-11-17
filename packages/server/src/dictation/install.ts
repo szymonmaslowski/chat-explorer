@@ -3,7 +3,7 @@ import { createReadStream, createWriteStream, existsSync } from 'node:fs';
 import { mkdir, rename, rm, statfs } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { pipeline } from 'node:stream/promises';
-import type { Config } from '../config.js';
+import type { Config } from '@chat-explorer/shared/config.js';
 import { dictationAvailability, findOnPath, whisperCommand } from './availability.js';
 import {
   whisperModelFiles,

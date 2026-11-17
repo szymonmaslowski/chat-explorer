@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ChangeSet, LightSnapshot } from '../src/shared/types.js';
+import type { ChangeSet, LightSnapshot } from '@chat-explorer/shared/types.js';
 import { createTestApp, draft, seedConversation } from './helpers.js';
 
 const changesAfter = async (

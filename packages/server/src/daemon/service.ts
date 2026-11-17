@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import type { Config } from '../config.js';
+import type { Config } from '@chat-explorer/shared/config.js';
 
 export const serviceLabel = 'local.chat-explorer.daemon';
 export const launchAgentPath = join(homedir(), 'Library', 'LaunchAgents', `${serviceLabel}.plist`);

@@ -1,8 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { noReply } from '../store/run-context.js';
-import type { Lease, PendingMessage } from '../store/runs.js';
 import { RunnerClient, StaleLeaseError } from './client.js';
 import type { Engine, EngineEvent, EngineRun } from './engine.js';
+import { noReply, type Lease, type PendingMessage } from '@chat-explorer/shared/protocol.js';
 
 export interface RunnerTimings {
   heartbeatMs: number;

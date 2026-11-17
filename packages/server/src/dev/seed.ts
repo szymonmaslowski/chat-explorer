@@ -1,6 +1,6 @@
 import '../suppress-warnings.js';
 import { mkdirSync } from 'node:fs';
-import { loadConfig } from '../config.js';
+import { loadConfig } from '@chat-explorer/shared/config.js';
 import { Database } from '../db/database.js';
 import { EventBus } from '../store/event-bus.js';
 import { ChatStore } from '../store/store.js';

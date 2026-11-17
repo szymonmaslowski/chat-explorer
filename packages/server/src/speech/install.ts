@@ -2,7 +2,7 @@ import { execFile, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
-import type { Config } from '../config.js';
+import type { Config } from '@chat-explorer/shared/config.js';
 import { checkDiskSpace, InstallError } from '../dictation/install.js';
 import { findOnPath } from '../dictation/availability.js';
 import { chatterboxEnvironment, chatterboxPaths, speechWorkerScript } from './chatterbox.js';

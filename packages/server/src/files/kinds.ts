@@ -1,5 +1,5 @@
 import { extname } from 'node:path';
-import type { FileKind } from '../shared/types.js';
+import type { FileKind } from '@chat-explorer/shared/types.js';
 
 export const maxFileBytes = 10 * 1024 * 1024;
 const maxNameLength = 100;

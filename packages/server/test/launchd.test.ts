@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '@chat-explorer/shared/config.js';
 import { launchAgentPlist } from '../src/daemon/launchd.js';
 import { serviceRunsFor } from '../src/daemon/service.js';
 

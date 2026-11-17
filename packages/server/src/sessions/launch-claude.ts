@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process';
 import { closeSync, mkdirSync, openSync, writeSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import type { Config } from '../config.js';
-import type { ClaudeModel } from '../shared/models.js';
+import type { Config } from '@chat-explorer/shared/config.js';
+import type { ClaudeModel } from '@chat-explorer/shared/models.js';
 
 export interface LaunchSpec {
   explorationId: string;

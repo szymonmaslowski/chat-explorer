@@ -1,8 +1,12 @@
 import { parseHTML } from 'linkedom';
 import { describe, expect, it } from 'vitest';
-import { taggedIds, withoutTagLines, type AnsweredPartLookup } from '../src/shared/answer-tags.js';
-import { renderMarkdown } from '../src/shared/markdown.js';
-import { speechBlocks } from '../src/shared/speech-blocks.js';
+import {
+  taggedIds,
+  withoutTagLines,
+  type AnsweredPartLookup,
+} from '@chat-explorer/shared/answer-tags.js';
+import { renderMarkdown } from '@chat-explorer/shared/markdown.js';
+import { speechBlocks } from '@chat-explorer/shared/speech-blocks.js';
 import { createTestStore, draft, seedConversation } from './helpers.js';
 
 const rendered = (markdown: string, answeredPart?: AnsweredPartLookup) =>

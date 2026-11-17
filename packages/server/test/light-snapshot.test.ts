@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Activity, LightSnapshot, MessageBody } from '../src/shared/types.js';
+import type { Activity, LightSnapshot, MessageBody } from '@chat-explorer/shared/types.js';
 import { createTestApp, seedConversation } from './helpers.js';
 
 function answeredWithSteps() {

@@ -1,9 +1,8 @@
 import { join } from 'node:path';
-import { createDaemonClient } from '../client/http.js';
-import type { Config } from '../config.js';
-import { probe } from '../daemon/control.js';
-import type { Exploration } from '../shared/types.js';
-import type { PendingFork } from '../store/store.js';
+import { createDaemonClient } from '@chat-explorer/shared/http.js';
+import type { Config } from '@chat-explorer/shared/config.js';
+import { probe } from '@chat-explorer/shared/health.js';
+import type { Exploration } from '@chat-explorer/shared/types.js';
 import { postCompactOutput } from './post-compact.js';
 import {
   assistantTexts,
@@ -11,6 +10,7 @@ import {
   postToolUseStep,
   readNewTranscriptLines,
 } from './post-tool-use.js';
+import { type PendingFork } from '@chat-explorer/shared/protocol.js';
 
 async function readStdin() {
   const chunks: Buffer[] = [];

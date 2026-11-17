@@ -3,15 +3,21 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import { createDaemonClient, DaemonError } from '../client/http.js';
-import { apiVersion, loadConfig, type Config } from '../config.js';
+import { createDaemonClient, DaemonError } from '@chat-explorer/shared/http.js';
+import { apiVersion, loadConfig, type Config } from '@chat-explorer/shared/config.js';
 import { DaemonStartError, ensureDaemon } from '../daemon/control.js';
 import { openBrowser } from '../open-browser.js';
-import type { ExplorationListItem, Note, NoteGroup } from '../shared/types.js';
-import type { FeedbackResult } from '../store/feedback-hub.js';
-import type { ForkMapEntry, ForkRead, NotesFound, NotesList, NotesRead } from '../store/store.js';
-import { packageVersion } from '../version.js';
+import type { ExplorationListItem, Note, NoteGroup } from '@chat-explorer/shared/types.js';
+import { packageVersion } from '@chat-explorer/shared/version.js';
 import { readNotesDescription, readNotesLimit, searchNotesDescription } from './note-tools.js';
+import {
+  type FeedbackResult,
+  type ForkMapEntry,
+  type ForkRead,
+  type NotesFound,
+  type NotesList,
+  type NotesRead,
+} from '@chat-explorer/shared/protocol.js';
 
 const heartbeatIntervalMs = 15_000;
 // Node's fetch gives up waiting for response headers after 300 s, so long-polls stay below that.

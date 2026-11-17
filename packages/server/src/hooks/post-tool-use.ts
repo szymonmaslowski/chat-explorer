@@ -8,8 +8,8 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import { toolSummary } from '../runner/claude-stream.js';
-import type { PendingFork } from '../store/store.js';
+import { toolSummary } from '@chat-explorer/shared/tool-summary.js';
+import { type PendingFork } from '@chat-explorer/shared/protocol.js';
 
 // The longest status line kept as a step.
 const maxTextLength = 500;

@@ -13,7 +13,7 @@ import { Speaker } from '../src/speech/speaker.js';
 import { SpeechCache } from '../src/speech/speech-cache.js';
 import { chooseVoice, type SpeechInspection } from '../src/speech/voices.js';
 import type { LaunchSpec, SessionProcess } from '../src/sessions/launch-claude.js';
-import type { ExplorationEvent } from '../src/shared/types.js';
+import type { ExplorationEvent } from '@chat-explorer/shared/types.js';
 import { EventBus } from '../src/store/event-bus.js';
 import { FeedbackHub } from '../src/store/feedback-hub.js';
 import { RunStore } from '../src/store/runs.js';

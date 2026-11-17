@@ -9,11 +9,12 @@ import {
   type ForkRunRow,
   type MessageRow,
 } from '../db/rows.js';
-import type { ActivityKind } from '../shared/types.js';
+import type { ActivityKind } from '@chat-explorer/shared/types.js';
 import { StoreError } from './errors.js';
 import type { EventBus } from './event-bus.js';
 import { newId } from './ids.js';
 import type { ChatStore } from './store.js';
+import { type Lease, type PendingMessage, type RunUsage } from '@chat-explorer/shared/protocol.js';
 
 export const leaseMs = 60_000;
 // A runner that asked for work within this time counts as online.
@@ -25,32 +26,10 @@ const maxUpdateLines = 10;
 // when the user interrupted it without it waiting for feedback again.
 export const followUpIdleMs = 10 * 60_000;
 
-export interface Lease {
-  forkId: string;
-  explorationId: string;
-  leaseId: string;
-  attempt: number;
-  // The engine session from earlier turns, to resume; null for a fork's first run.
-  sessionId: string | null;
-  // What the engine sends to the job tools; it stops working when the lease ends.
-  toolsToken: string;
-}
-
 export interface Job {
   forkId: string;
   explorationId: string;
   leaseId: string;
-}
-
-export interface PendingMessage {
-  id: string;
-  text: string;
-}
-
-export interface RunUsage {
-  model: string;
-  contextTokens: number;
-  contextWindow: number | null;
 }
 
 const noLease = {

@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
-import { idPattern, withPrefix, type PrefixedKind } from '../shared/ids.js';
+import { idPattern, withPrefix, type PrefixedKind } from '@chat-explorer/shared/ids.js';
 
 // Folders and files named after a chat or fork before ids had prefixes take the prefix too, so a
 // fork's engine sessions are found under its new id.

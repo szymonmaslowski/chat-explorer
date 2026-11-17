@@ -39,7 +39,7 @@ export default defineConfig({
   plugins: [vue(), serviceWorker()],
   resolve: {
     alias: {
-      '@shared': fileURLToPath(new URL('../server/src/shared', import.meta.url)),
+      '@shared': fileURLToPath(new URL('../shared/src', import.meta.url)),
     },
   },
   server: {

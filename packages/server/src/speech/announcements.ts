@@ -1,4 +1,4 @@
-import type { SpeechBlock } from '../shared/types.js';
+import type { SpeechBlock } from '@chat-explorer/shared/types.js';
 
 type PhraseLanguage = 'en' | 'pl';
 type Word = { other: string } & Partial<Record<Intl.LDMLPluralRule, string>>;

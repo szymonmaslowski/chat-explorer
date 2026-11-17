@@ -1,21 +1,9 @@
-import type { ClaudeModel } from '../shared/models.js';
 import { supervisorMessagePrefix, type ChatStore } from './store.js';
-
-// What a runner needs to start an engine for a fork: the model, the standing instructions, and for
-// a fork without an engine session yet, the conversation it continues.
-export interface RunContext {
-  model: ClaudeModel;
-  systemPrompt: string;
-  // Put before the first messages of a new session; null when the session is resumed.
-  history: string | null;
-}
+import { noReply, type RunContext } from '@chat-explorer/shared/protocol.js';
 
 // The newest messages of a long fork go into a new session up to about this many characters; the
 // rest is a pointer to read_fork.
 export const historyBudget = 120_000;
-
-// A final reply of only this is not posted: everything went out with the answer tool already.
-export const noReply = '[no reply]';
 
 export const systemPrompt = `You are Claude, answering in Chat Explorer: a chat app where the user reads your answers in a browser, selects text and comments on it, and branches the conversation into forks. You are working on one fork. Your final reply of each turn is posted in the fork as your answer.
 

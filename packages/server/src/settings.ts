@@ -1,9 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { z } from 'zod';
-import type { Config } from './config.js';
+import type { Config } from '@chat-explorer/shared/config.js';
 import { defaultWhisperModel, whisperModels } from './dictation/models.js';
 import { speechEngineNames } from './speech/engines.js';
-import { claudeModels, defaultClaudeModel } from './shared/models.js';
+import { claudeModels, defaultClaudeModel } from '@chat-explorer/shared/models.js';
 
 const settingsSchema = z
   .object({

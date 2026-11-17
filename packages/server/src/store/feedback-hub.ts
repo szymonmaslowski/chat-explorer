@@ -1,23 +1,7 @@
-import type { SessionStatus } from '../shared/types.js';
+import type { SessionStatus } from '@chat-explorer/shared/types.js';
 import type { EventBus } from './event-bus.js';
-import {
-  attachmentLivenessMs,
-  type ChatStore,
-  type NoteNeedingTopic,
-  type NotesIndex,
-  type PendingFork,
-} from './store.js';
-
-export type FeedbackResult =
-  | {
-      status: 'feedback';
-      forks: PendingFork[];
-      notesNeedingTopic: NoteNeedingTopic[];
-      notes: NotesIndex;
-    }
-  | { status: 'timeout' }
-  | { status: 'detached' }
-  | { status: 'deleted' };
+import { attachmentLivenessMs, type ChatStore } from './store.js';
+import { type FeedbackResult } from '@chat-explorer/shared/protocol.js';
 
 interface Waiter {
   explorationId: string;

@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '@chat-explorer/shared/config.js';
 import { loadSettings, SettingsError } from '../src/settings.js';
 
 let home: string;

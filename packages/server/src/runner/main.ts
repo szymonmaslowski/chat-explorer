@@ -1,6 +1,6 @@
-import { loadConfig } from '../config.js';
+import { loadConfig } from '@chat-explorer/shared/config.js';
 import { loadSettings } from '../settings.js';
-import { readMachineToken } from './machine-token.js';
+import { readMachineToken } from '@chat-explorer/shared/machine-token.js';
 import { startRunner } from './start.js';
 
 // The runner as its own process. It reaches the backend only over HTTP with the machine token, so

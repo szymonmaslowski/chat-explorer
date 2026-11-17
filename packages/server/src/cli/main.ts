@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import '../suppress-warnings.js';
 import { parseArgs } from 'node:util';
-import { createDaemonClient, DaemonError } from '../client/http.js';
-import { apiVersion, loadConfig } from '../config.js';
-import { DaemonStartError, ensureDaemon, probe, stopDaemon } from '../daemon/control.js';
+import { createDaemonClient, DaemonError } from '@chat-explorer/shared/http.js';
+import { apiVersion, loadConfig } from '@chat-explorer/shared/config.js';
+import { probe } from '@chat-explorer/shared/health.js';
+import { DaemonStartError, ensureDaemon, stopDaemon } from '../daemon/control.js';
 import { servicePid, serviceRunsFor } from '../daemon/service.js';
 import { dictationAvailability } from '../dictation/availability.js';
 import { whisperModelPath, whisperModels } from '../dictation/models.js';
@@ -16,9 +17,9 @@ import {
 } from '../dictation/install.js';
 import { loadSettings, SettingsError } from '../settings.js';
 import { installSpeech, uninstallSpeech } from '../speech/install.js';
-import { relativeTime } from '../shared/time.js';
-import type { ExplorationListItem } from '../shared/types.js';
-import { packageVersion } from '../version.js';
+import { relativeTime } from '@chat-explorer/shared/time.js';
+import type { ExplorationListItem } from '@chat-explorer/shared/types.js';
+import { packageVersion } from '@chat-explorer/shared/version.js';
 
 const usage = `Usage: chat-explorer <command>
 

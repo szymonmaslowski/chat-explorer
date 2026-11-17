@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { renderMarkdown } from '../src/shared/markdown.js';
+import { renderMarkdown } from '@chat-explorer/shared/markdown.js';
 
 describe('rendering markdown', () => {
   it('shows HTML in an answer as text, and drops script links', () => {

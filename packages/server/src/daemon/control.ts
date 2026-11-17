@@ -1,17 +1,9 @@
 import { spawn } from 'node:child_process';
 import { mkdirSync, openSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import type { Config } from '../config.js';
+import type { Config } from '@chat-explorer/shared/config.js';
+import { probe } from '@chat-explorer/shared/health.js';
 import { serviceRunsFor, startService } from './service.js';
-
-interface Health {
-  name: 'chat-explorer';
-  version: string;
-  apiVersion: number;
-  pid: number;
-}
-
-type Probe = { state: 'running'; health: Health } | { state: 'stopped' } | { state: 'foreign' };
 
 export interface DaemonTarget {
   version: string;
@@ -26,18 +18,6 @@ export const defaultDaemonEntry = fileURLToPath(new URL('./main.js', import.meta
 export class DaemonStartError extends Error {}
 
 const sleep = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
-
-export async function probe(baseUrl: string): Promise<Probe> {
-  try {
-    const response = await fetch(`${baseUrl}/api/health`, { signal: AbortSignal.timeout(1_000) });
-    const body: Partial<Health> = await response.json();
-    return body.name === 'chat-explorer'
-      ? { state: 'running', health: body as Health }
-      : { state: 'foreign' };
-  } catch (error) {
-    return isConnectionRefused(error) ? { state: 'stopped' } : { state: 'foreign' };
-  }
-}
 
 export function compareVersions(left: string, right: string) {
   const [leftCore = '', leftPrerelease] = left.split('-', 2);
@@ -124,9 +104,4 @@ function portTakenError(config: Config) {
   return new DaemonStartError(
     `Port ${config.port} is used by another program. Set CHAT_EXPLORER_PORT to use a different port.`,
   );
-}
-
-function isConnectionRefused(error: unknown) {
-  const cause = error instanceof Error ? error.cause : undefined;
-  return cause instanceof Error && 'code' in cause && cause.code === 'ECONNREFUSED';
 }

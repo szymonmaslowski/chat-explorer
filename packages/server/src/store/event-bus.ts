@@ -1,4 +1,4 @@
-import type { ExplorationEvent } from '../shared/types.js';
+import type { ExplorationEvent } from '@chat-explorer/shared/types.js';
 
 type Listener = (explorationId: string, event: ExplorationEvent) => void;
 

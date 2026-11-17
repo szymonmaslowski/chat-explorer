@@ -6,16 +6,16 @@ import { compress } from 'hono/compress';
 import { getCookie, setCookie } from 'hono/cookie';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
-import { apiVersion } from '../config.js';
+import { apiVersion } from '@chat-explorer/shared/config.js';
 import { dictationHint, type Transcriber } from '../dictation/transcriber.js';
 import type { FileStorage } from '../files/file-storage.js';
 import { maxFileBytes } from '../files/kinds.js';
 import { findTranscript, readTranscript } from '../import/transcript.js';
 import type { BackgroundSessions } from '../sessions/background-sessions.js';
 import type { Speaker } from '../speech/speaker.js';
-import { prefixedIdPattern } from '../shared/ids.js';
+import { prefixedIdPattern } from '@chat-explorer/shared/ids.js';
 import { withLegacyIdsPrefixed } from './legacy-ids.js';
-import { claudeModels, type ClaudeModel } from '../shared/models.js';
+import { claudeModels, type ClaudeModel } from '@chat-explorer/shared/models.js';
 import {
   chatDefaultPages,
   type ChangeSet,
@@ -23,7 +23,7 @@ import {
   type ExplorationView,
   type LightSnapshot,
   type Snapshot,
-} from '../shared/types.js';
+} from '@chat-explorer/shared/types.js';
 import { StoreError } from '../store/errors.js';
 import { newId } from '../store/ids.js';
 import type { EventBus } from '../store/event-bus.js';

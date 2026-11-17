@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 import { Database } from '../src/db/database.js';
 import { migrations } from '../src/db/schema.js';
-import { defaultGroupName, noteForkMessage, reorderedIds } from '../src/shared/notes.js';
+import { defaultGroupName, noteForkMessage, reorderedIds } from '@chat-explorer/shared/notes.js';
 import { createTestApp, createTestStore, draft, seedConversation } from './helpers.js';
 
 function setup() {

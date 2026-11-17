@@ -8,11 +8,8 @@ import {
   isolatedDockerConfig,
   newerVersion,
 } from '../src/runner/claude-image.js';
-import {
-  parseClaudeStreamLine,
-  streamUserMessage,
-  toolSummary,
-} from '../src/runner/claude-stream.js';
+import { toolSummary } from '@chat-explorer/shared/tool-summary.js';
+import { parseClaudeStreamLine, streamUserMessage } from '../src/runner/claude-stream.js';
 
 const recorded = readFileSync(new URL('./fixtures/claude-stream.jsonl', import.meta.url), 'utf8')
   .trim()

@@ -1,6 +1,10 @@
-import type { Activity, ActivityKind } from '../shared/types.js';
-import type { Lease, PendingMessage, RunUsage } from '../store/runs.js';
-import type { RunContext } from '../store/run-context.js';
+import type { Activity, ActivityKind } from '@chat-explorer/shared/types.js';
+import {
+  type Lease,
+  type PendingMessage,
+  type RunContext,
+  type RunUsage,
+} from '@chat-explorer/shared/protocol.js';
 
 export type Fetch = (url: string, init: RequestInit) => Promise<Response>;
 

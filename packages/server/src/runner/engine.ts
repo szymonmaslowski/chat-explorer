@@ -1,4 +1,4 @@
-import type { ClaudeModel } from '../shared/models.js';
+import type { ClaudeModel } from '@chat-explorer/shared/models.js';
 
 // What any engine reports while it works, in the runner's own terms, whatever its wire format.
 export type EngineEvent =

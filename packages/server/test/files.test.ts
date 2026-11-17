@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { classifyFile, storedFileName } from '../src/files/kinds.js';
-import type { MessageFile } from '../src/shared/types.js';
+import type { MessageFile } from '@chat-explorer/shared/types.js';
 import { createTestApp, draft, seedConversation } from './helpers.js';
 
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);

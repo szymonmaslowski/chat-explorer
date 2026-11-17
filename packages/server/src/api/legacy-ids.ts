@@ -1,4 +1,4 @@
-import { withPrefix, type PrefixedKind } from '../shared/ids.js';
+import { withPrefix, type PrefixedKind } from '@chat-explorer/shared/ids.js';
 
 // Chat, fork and note ids from before they had prefixes still arrive: in old links, in notes and
 // messages, from Claude sessions that saw them, from changes a page queued. An old id is the new

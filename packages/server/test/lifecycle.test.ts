@@ -4,8 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { loadConfig } from '../src/config.js';
-import { compareVersions, ensureDaemon, probe, stopDaemon } from '../src/daemon/control.js';
+import { loadConfig } from '@chat-explorer/shared/config.js';
+import { probe } from '@chat-explorer/shared/health.js';
+import { compareVersions, ensureDaemon, stopDaemon } from '../src/daemon/control.js';
 
 const daemonEntry = fileURLToPath(new URL('./fixtures/fake-daemon.mjs', import.meta.url));
 let config: ReturnType<typeof loadConfig>;

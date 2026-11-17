@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node"],
+    // Type checks and tests read the other packages' sources; builds read their built output.
+    "customConditions": ["chat-explorer-source"]
+  }
+}

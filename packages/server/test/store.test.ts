@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { withoutTagLines } from '../src/shared/answer-tags.js';
+import { withoutTagLines } from '@chat-explorer/shared/answer-tags.js';
 import { attachmentLivenessMs } from '../src/store/store.js';
 import { createTestStore, draft, seedConversation } from './helpers.js';
 

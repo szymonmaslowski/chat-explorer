@@ -34,8 +34,6 @@ import type {
   ExplorationView,
   FileKind,
   ForkAwareness,
-  ForkKind,
-  ForkRun,
   ForkSplit,
   MessageSource,
   NewBookmark,
@@ -55,27 +53,37 @@ import type {
   LightSnapshot,
   MessageBody,
   MessageHead,
-} from '../shared/types.js';
+} from '@chat-explorer/shared/types.js';
 import {
   commentTag,
   messageTag,
   taggedIds,
   withoutTagLines,
   type AnsweredPartLookup,
-} from '../shared/answer-tags.js';
-import { defaultClaudeModel, type ClaudeModel } from '../shared/models.js';
+} from '@chat-explorer/shared/answer-tags.js';
+import { defaultClaudeModel, type ClaudeModel } from '@chat-explorer/shared/models.js';
 import {
   inTextOrder,
   joinForkGroup,
   leaveForkGroup,
   type GroupableComment,
-} from '../shared/fork-groups.js';
-import { defaultGroupName, noteForkMessage, reorderedIds } from '../shared/notes.js';
+} from '@chat-explorer/shared/fork-groups.js';
+import { defaultGroupName, noteForkMessage, reorderedIds } from '@chat-explorer/shared/notes.js';
 import { StoreError } from './errors.js';
-import { idAlphabet, idLength, withPrefix } from '../shared/ids.js';
+import { idAlphabet, idLength, withPrefix } from '@chat-explorer/shared/ids.js';
 import type { EventBus } from './event-bus.js';
 import { newId, newPrefixedId } from './ids.js';
 import { repairMarkdown } from './repair-markdown.js';
+import {
+  type ForkMapEntry,
+  type ForkRead,
+  type NoteNeedingTopic,
+  type NotesFound,
+  type NotesIndex,
+  type NotesList,
+  type NotesRead,
+  type PendingFork,
+} from '@chat-explorer/shared/protocol.js';
 
 export const attachmentLivenessMs = 45_000;
 const forkSummaryLength = 80;
@@ -91,23 +99,6 @@ export interface NewMessage {
   createdAt?: number;
 }
 
-export interface UserMessageText {
-  id: string;
-  text: string;
-}
-
-export interface PendingFork {
-  forkId: string;
-  parentForkId: string | null;
-  isNewFork: boolean;
-  baseMessageId: string | null;
-  inReplyTo: string;
-  userMessages: UserMessageText[];
-  // The start of the message the user answered, so Claude can tell which answer they mean when
-  // one session answers many forks.
-  repliesTo: { messageId: string; excerpt: string } | null;
-}
-
 // A fork ends with a user message no turn handled yet; a stopped turn handled it without an answer.
 const awaitingAnswer = `(
   (SELECT role FROM messages WHERE messages.id = forks.tip_message_id) = 'user'
@@ -117,68 +108,6 @@ const awaitingAnswer = `(
 
 // Starts a message the session answering the main fork sends into another fork.
 export const supervisorMessagePrefix = '**From the main fork:**';
-
-export interface ForkMapEntry {
-  id: string;
-  parentForkId: string | null;
-  baseMessageId: string | null;
-  summary: string;
-  kind: ForkKind;
-  messageCount: number;
-  awaitingAnswer: boolean;
-  run: ForkRun | null;
-}
-
-export interface ForkRead {
-  forkId: string;
-  messages: { id: string; forkId: string; role: Role; text: string }[];
-  omitted: { count: number; forks: { id: string; summary: string }[] } | null;
-}
-
-export interface NoteNeedingTopic {
-  noteId: string;
-  groupId: string;
-  description: string;
-}
-
-// Group names and note topics, which Claude gets with every feedback.
-export interface NotesIndex {
-  groups: {
-    id: string;
-    name: string;
-    checklist: boolean;
-    notes: { id: string; topic: string | null; checked: boolean }[];
-  }[];
-}
-
-interface NoteFacts {
-  id: string;
-  topic: string | null;
-  checked: boolean;
-  createdBy: NoteAuthor;
-  deletionRequested: boolean;
-  updatedAt: number;
-}
-
-export interface NotesList {
-  groups: {
-    id: string;
-    name: string;
-    checklist: boolean;
-    notes: (NoteFacts & { length: number })[];
-  }[];
-}
-
-export interface NotesRead {
-  notes: (NoteFacts & { groupId: string; groupName: string; description: string })[];
-  // Notes asked for that did not fit in this read, for another call.
-  notShown: { id: string; topic: string | null; length: number }[];
-}
-
-export interface NotesFound {
-  notes: { id: string; groupId: string; topic: string | null; snippet: string }[];
-  more: boolean;
-}
 
 export interface Attachment {
   shimId: string;

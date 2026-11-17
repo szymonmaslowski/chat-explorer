@@ -1,4 +1,4 @@
-import type { ClaudeModel } from '../shared/models.js';
+import type { ClaudeModel } from '@chat-explorer/shared/models.js';
 import type {
   Activity,
   ActivityKind,
@@ -22,7 +22,7 @@ import type {
   QueuedSubmission,
   Role,
   RunStatus,
-} from '../shared/types.js';
+} from '@chat-explorer/shared/types.js';
 
 export interface ExplorationRow {
   id: string;
