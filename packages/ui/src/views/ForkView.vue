@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
 import type {
   Activity,
   ActivitySummary,
@@ -29,6 +29,7 @@ import { useLayout } from '../composables/useLayout';
 import { useMediaQuery } from '../composables/useMediaQuery';
 import { useMessageWindow } from '../composables/useMessageWindow';
 import { useReadTracking } from '../composables/useReadTracking';
+import { useStickyHeaderHeight } from '../composables/useStickyHeaderHeight';
 import {
   answeredPartLookup,
   sentMessageComment,
@@ -274,6 +275,7 @@ const trackScroll = () => {
   nearBottom = window.scrollY + window.innerHeight >= scrollHeight - nearBottomPx;
 };
 onMounted(() => window.addEventListener('scroll', trackScroll, { passive: true }));
+useStickyHeaderHeight(useTemplateRef<HTMLElement>('page'));
 onBeforeUnmount(() => window.removeEventListener('scroll', trackScroll));
 onBeforeUnmount(stopSpeech);
 
@@ -335,7 +337,7 @@ watch(
 </script>
 
 <template>
-  <div class="page fork-view">
+  <div ref="page" class="page fork-view">
     <ExplorationHeader
       :state="state"
       page="fork"

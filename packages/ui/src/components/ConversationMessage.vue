@@ -55,6 +55,13 @@ const content = ref<HTMLElement | null>(null);
 const article = ref<HTMLElement | null>(null);
 const jumpable = computed(() => props.message.role === 'assistant' && props.message.content !== '');
 const jumpTo = (edge: 'start' | 'end') => article.value && scrollToEdge(article.value, edge);
+// An answer's header sticks under the page's header while the answer is read; a click on it brings
+// the answer's start back, and the header with it.
+function onHeaderClick(event: MouseEvent) {
+  if (!jumpable.value) return;
+  if (event.target instanceof Element && event.target.closest('button, a')) return;
+  jumpTo('start');
+}
 const blocks = shallowRef<SpokenElement[]>([]);
 const speakable = computed(
   () => speech.available && props.message.role === 'assistant' && blocks.value.length > 0,
@@ -192,7 +199,11 @@ onMounted(findBlocks);
     :data-message-id="message.id"
     :data-unread="isUnread(message) || undefined"
   >
-    <header class="role">
+    <header
+      class="role"
+      :title="jumpable ? 'Go to the start of the answer' : undefined"
+      @click="onHeaderClick"
+    >
       {{ message.role === 'user' ? 'You' : 'Claude' }}
       <span v-if="answerIndex !== null" class="answer-index">[{{ answerIndex }}]</span>
       <time class="time" :datetime="new Date(message.createdAt).toISOString()">
@@ -365,6 +376,16 @@ onMounted(findBlocks);
 
 .new-label {
   color: var(--accent);
+}
+
+.message.assistant > .role {
+  position: sticky;
+  top: var(--sticky-header-height, 0px);
+  z-index: 3;
+  padding-block: 0.3rem;
+  margin-top: -0.3rem;
+  background: var(--background);
+  cursor: pointer;
 }
 
 .role {

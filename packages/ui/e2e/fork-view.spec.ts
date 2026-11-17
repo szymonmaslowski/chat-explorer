@@ -174,6 +174,38 @@ test('jumps to the end of a long answer and back to its start', async ({ page, r
   await expect(answer.getByText('Paragraph 40.')).not.toBeInViewport();
 });
 
+test("keeps an answer's header in view under the page's header, and a click on it goes to the answer's start", async ({
+  page,
+  request,
+}) => {
+  const paragraphs = Array.from({ length: 40 }, (_, index) => `Paragraph ${index + 1}.`);
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'Explain it at length' } })
+  ).json();
+  await attachFakeSession(request, explorationId);
+  await deliverAndAnswer(request, explorationId, paragraphs.join('\n\n'));
+  await detachFakeSession(request);
+  await page.goto(`/e/${explorationId}`);
+  const answer = page.locator('.message.assistant');
+  const header = answer.locator('.role');
+  const pageHeaderBottom = async () =>
+    (await page.locator('[data-sticky-header]').boundingBox())!.y +
+    (await page.locator('[data-sticky-header]').boundingBox())!.height;
+
+  await answer.getByText('Paragraph 30.').scrollIntoViewIfNeeded();
+  await expect(answer.getByText('Paragraph 1.', { exact: true })).not.toBeInViewport();
+  await expect(header).toBeInViewport();
+  expect(Math.round((await header.boundingBox())!.y)).toBe(Math.round(await pageHeaderBottom()));
+  await expect(answer.locator('.message-actions')).not.toBeInViewport();
+
+  await header.click();
+  await expect(answer.getByText('Paragraph 1.', { exact: true })).toBeInViewport();
+  await expect(answer.locator('.message-actions')).toBeInViewport();
+  await expect
+    .poll(async () => (await header.boundingBox())!.y - (await pageHeaderBottom()))
+    .toBeGreaterThan(8);
+});
+
 test('scrolls to the bottom of the fork from its header', async ({ page, request }) => {
   const { explorationId } = await (
     await request.post('/api/explorations', { data: { message: 'Tell me a lot' } })
