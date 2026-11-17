@@ -12,6 +12,7 @@ import {
 import { RunnerClient } from './client.js';
 import { ensureEgress } from './egress.js';
 import { Runner } from './runner.js';
+import { readRunnerConfig } from './runner-config.js';
 
 export interface StartRunnerOptions {
   baseUrl: string;
@@ -57,8 +58,10 @@ export async function startRunner(options: StartRunnerOptions) {
     (error: Error) => options.log(error.message),
   );
   await ensureEgress(image, options.port);
+  const config = readRunnerConfig(options.runnerPath);
   const runner = new Runner({
     client: new RunnerClient(options.baseUrl, options.machineToken),
+    config,
     engine: claudeCodeEngine({
       image: () => currentImage,
       port: options.port,
@@ -73,6 +76,6 @@ export async function startRunner(options: StartRunnerOptions) {
     onError: (error) => options.log(`Runner: ${error instanceof Error ? error.message : error}`),
   });
   runner.start();
-  options.log(`Runner started with ${image}.`);
+  options.log(`Runner started with ${image}, coding ${config.coding.enabled ? 'allowed' : 'off'}.`);
   return runner;
 }

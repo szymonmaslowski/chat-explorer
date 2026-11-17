@@ -53,7 +53,7 @@ const until = async (condition: () => boolean, timeoutMs = 3_000) => {
   }
 };
 
-function setup(timings = {}) {
+function setup(timings = {}, coding = false) {
   const context = createTestApp();
   const conversation = seedConversation(context.store);
   const client = new RunnerClient('http://127.0.0.1:4999', testMachineToken, async (url, init) =>
@@ -67,6 +67,7 @@ function setup(timings = {}) {
   const runner = new Runner({
     client,
     engine,
+    config: { path: '/runner/config.json', coding: { enabled: coding } },
     runnerId: 'runner-test',
     toolsUrl: 'http://host.docker.internal:4999/api/tools/mcp',
     maxParallel: 2,
@@ -76,6 +77,8 @@ function setup(timings = {}) {
   const messages = () => context.store.readFork(conversation.mainForkId).messages;
   return { ...context, ...conversation, runner, engineRuns, prompts, errors, messages };
 }
+
+const sessionId = '11111111-2222-3333-4444-555555555555';
 
 describe('the runner', () => {
   it('starts an engine with the fork history, posts its answer and its activity', async () => {
@@ -88,7 +91,7 @@ describe('the runner', () => {
     expect(run!.sent[0]).toContain('<message id=');
     expect(run!.sent[0]).toMatch(/What about Redis\?$/);
 
-    run!.emit({ type: 'session', sessionId: 'session-1', model: 'claude-haiku-5-5' });
+    run!.emit({ type: 'session', sessionId, model: 'claude-haiku-5-5' });
     run!.emit({ type: 'text', text: 'Let me check.' });
     run!.emit({ type: 'tool', name: 'WebSearch', summary: 'Searching the web for "redis"' });
     run!.emit({ type: 'usage', model: 'claude-haiku-5-5', contextTokens: 5_000 });
@@ -108,6 +111,29 @@ describe('the runner', () => {
     });
     await runner.stop();
     expect(errors).toEqual([]);
+  });
+
+  it('refuses a coding fork when its own config does not allow coding', async () => {
+    const { runner, engineRuns, store, explorationId, mainForkId } = setup();
+    store.setForkCoding(mainForkId, true);
+    runner.start();
+    store.submit(explorationId, mainForkId, 'Build it');
+    await until(() => store.snapshot(explorationId).forkRuns[0]?.status === 'failed');
+    expect(store.snapshot(explorationId).forkRuns[0]!.statusDetail).toMatch(
+      /Coding is turned on for this fork, but this runner does not allow it.*\/runner\/config\.json/,
+    );
+    expect(engineRuns).toHaveLength(0);
+    await runner.stop();
+  });
+
+  it('starts a coding fork with coding on when its config allows it', async () => {
+    const { runner, engineRuns, store, explorationId, mainForkId } = setup({}, true);
+    store.setForkCoding(mainForkId, true);
+    runner.start();
+    store.submit(explorationId, mainForkId, 'Build it');
+    await until(() => engineRuns[0]?.sent.length === 1);
+    expect(engineRuns[0]!.spec).toMatchObject({ forkId: mainForkId, explorationId, coding: true });
+    await runner.stop();
   });
 
   it('hands a message sent mid-turn to the same engine, without the history', async () => {
@@ -155,7 +181,7 @@ describe('the runner', () => {
     runner.start();
     store.submit(explorationId, mainForkId, 'First');
     await until(() => engineRuns[0]?.sent.length === 1);
-    engineRuns[0]!.emit({ type: 'session', sessionId: 'session-1', model: 'claude-haiku-5-5' });
+    engineRuns[0]!.emit({ type: 'session', sessionId, model: 'claude-haiku-5-5' });
     engineRuns[0]!.emit({
       type: 'turn-finished',
       answer: 'One.',
@@ -167,7 +193,7 @@ describe('the runner', () => {
 
     store.submit(explorationId, mainForkId, 'Second');
     await until(() => engineRuns[1]?.sent.length === 1);
-    expect(engineRuns[1]!.spec).toMatchObject({ resume: true, sessionId: 'session-1' });
+    expect(engineRuns[1]!.spec).toMatchObject({ resume: true, sessionId });
     expect(engineRuns[1]!.sent[0]).toBe('Second');
     expect(messages().at(-2)?.text).toBe('One.');
     await runner.stop();

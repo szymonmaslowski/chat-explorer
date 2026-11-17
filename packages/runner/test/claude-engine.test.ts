@@ -68,9 +68,11 @@ describe('reading Claude Code stream-json', () => {
 describe('starting Claude Code in Docker', () => {
   const spec = {
     forkId: 'fork000001',
+    explorationId: 'chat000001',
     model: 'sonnet' as const,
     sessionId: 'session-1',
     resume: true,
+    coding: false,
     systemPrompt: 'Be brief.',
     toolsUrl: 'http://host.docker.internal:4517/api/runner/mcp',
     toolsToken: 'job-token',

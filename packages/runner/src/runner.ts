@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { RunnerClient, StaleLeaseError } from './client.js';
 import type { Engine, EngineEvent, EngineRun } from './engine.js';
 import { noReply, type Lease, type PendingMessage } from '@chat-explorer/shared/protocol.js';
+import type { RunnerConfig } from './runner-config.js';
+import { checkedRunSpec } from './run-spec.js';
 
 export interface RunnerTimings {
   heartbeatMs: number;
@@ -17,6 +19,7 @@ export interface RunnerTimings {
 export interface RunnerOptions {
   client: RunnerClient;
   engine: Engine;
+  config: RunnerConfig;
   runnerId: string;
   // Where the engine reaches the job tools.
   toolsUrl: string;
@@ -175,15 +178,15 @@ class ForkWorker {
       const resume = this.lease.sessionId !== null;
       const context = await client.context(this.lease, resume);
       this.history = context.history;
-      const engineRun = engine.start({
-        forkId: this.lease.forkId,
-        model: context.model,
-        sessionId: this.lease.sessionId ?? randomUUID(),
-        resume,
-        systemPrompt: context.systemPrompt,
-        toolsUrl: this.options.toolsUrl,
-        toolsToken: this.lease.toolsToken,
-      });
+      const engineRun = engine.start(
+        checkedRunSpec({
+          lease: this.lease,
+          context,
+          sessionId: this.lease.sessionId ?? randomUUID(),
+          toolsUrl: this.options.toolsUrl,
+          config: this.options.config,
+        }),
+      );
       this.engineRun = engineRun;
       this.exited = new Promise((resolve) =>
         engineRun.onExit((result) => {

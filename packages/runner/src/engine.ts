@@ -11,10 +11,13 @@ export type EngineEvent =
 
 export interface EngineRunSpec {
   forkId: string;
+  explorationId: string;
   model: ClaudeModel;
   // A new session gets this id; an existing one is resumed.
   sessionId: string;
   resume: boolean;
+  // Commands and file writes in the fork's workspace; the runner's config allowed it.
+  coding: boolean;
   systemPrompt: string;
   // Job-scoped tools the engine reaches over MCP.
   toolsUrl: string;
