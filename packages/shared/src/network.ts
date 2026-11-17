@@ -1,11 +1,14 @@
+export const registryNames = ['npm', 'pypi', 'rust', 'go'] as const;
+export type RegistryName = (typeof registryNames)[number];
+
 // What a coding fork's container may reach, besides the model and the chat tools: hosts the
-// reader allowed, and the package registries when the preset is ticked.
+// reader allowed, and the package registries they ticked.
 export interface ForkNetwork {
   hosts: string[];
-  registries: boolean;
+  registries: RegistryName[];
 }
 
-export const noNetwork: ForkNetwork = { hosts: [], registries: false };
+export const noNetwork: ForkNetwork = { hosts: [], registries: [] };
 
 export const maxAllowedHosts = 100;
 
@@ -21,19 +24,30 @@ export function isHostPort(entry: string) {
   return port >= 1 && port <= 65_535;
 }
 
-// The hosts behind `npm install`, `pip install`, `cargo build` and `go mod download`.
-export const registryHosts = [
-  'registry.npmjs.org:443',
-  'registry.yarnpkg.com:443',
-  'pypi.org:443',
-  'files.pythonhosted.org:443',
-  'crates.io:443',
-  'index.crates.io:443',
-  'static.crates.io:443',
-  'proxy.golang.org:443',
-  'sum.golang.org:443',
-];
+// The hosts each package manager downloads from.
+export const packageRegistries: Record<RegistryName, { label: string; hosts: string[] }> = {
+  npm: {
+    label: 'npm, Yarn, pnpm',
+    hosts: ['registry.npmjs.org:443', 'registry.yarnpkg.com:443', 'repo.yarnpkg.com:443'],
+  },
+  pypi: { label: 'Python: PyPI', hosts: ['pypi.org:443', 'files.pythonhosted.org:443'] },
+  // rustup's hosts too, since the image has no Rust: it installs the toolchain itself.
+  rust: {
+    label: 'Rust: crates.io and rustup',
+    hosts: [
+      'crates.io:443',
+      'index.crates.io:443',
+      'static.crates.io:443',
+      'sh.rustup.rs:443',
+      'static.rust-lang.org:443',
+    ],
+  },
+  go: { label: 'Go modules', hosts: ['proxy.golang.org:443', 'sum.golang.org:443'] },
+};
 
 export const networkHosts = (network: ForkNetwork) => [
-  ...new Set([...(network.registries ? registryHosts : []), ...network.hosts]),
+  ...new Set([
+    ...network.registries.flatMap((name) => packageRegistries[name].hosts),
+    ...network.hosts,
+  ]),
 ];

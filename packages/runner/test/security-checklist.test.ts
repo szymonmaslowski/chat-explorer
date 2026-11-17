@@ -45,7 +45,7 @@ const lease: Lease = {
 const context: RunContext = {
   model: 'sonnet',
   coding: true,
-  network: { hosts: [], registries: false },
+  network: { hosts: [], registries: [] },
   systemPrompt: 'Be brief.',
   history: null,
 };
@@ -97,7 +97,7 @@ async function probeCodingContainer() {
   };
   const own = spec({
     lease: { forkId: 'fork_00000000a1' },
-    context: { network: { hosts: [], registries: true } },
+    context: { network: { hosts: [], registries: ['npm'] } },
   });
   const other = spec({ lease: { forkId: 'fork_00000000b2' } });
   const ownFolders = forkFolders(paths, own);
@@ -336,23 +336,27 @@ describe('checking a job before it runs', () => {
   it('refuses allowed hosts that are not plain host:port entries', () => {
     const hosts = (network: object) => () => spec({ context: { network } });
     for (const network of [
-      { hosts: ['github.com:443 --privileged'], registries: false },
-      { hosts: ['192.168.1.1:22'], registries: false },
-      { hosts: 'github.com:443', registries: false },
+      { hosts: ['github.com:443 --privileged'], registries: [] },
+      { hosts: ['192.168.1.1:22'], registries: [] },
+      { hosts: 'github.com:443', registries: [] },
       { hosts: [], registries: 'yes' },
+      { hosts: [], registries: true },
+      { hosts: [], registries: ['npm', 'cargo'] },
       {
         hosts: Array.from({ length: 101 }, (_, index) => `h${index}.example.com:443`),
-        registries: false,
+        registries: [],
       },
     ]) {
       expect(hosts(network)).toThrow(RunRefusedError);
     }
     expect(
-      spec({ context: { network: { hosts: ['github.com:443'], registries: true } } }).hosts,
+      spec({ context: { network: { hosts: ['github.com:443'], registries: ['npm', 'pypi'] } } })
+        .hosts,
     ).toEqual(expect.arrayContaining(['github.com:443', 'registry.npmjs.org:443', 'pypi.org:443']));
     expect(
-      spec({ context: { coding: false, network: { hosts: ['github.com:443'], registries: true } } })
-        .hosts,
+      spec({
+        context: { coding: false, network: { hosts: ['github.com:443'], registries: ['npm'] } },
+      }).hosts,
     ).toEqual([]);
   });
 

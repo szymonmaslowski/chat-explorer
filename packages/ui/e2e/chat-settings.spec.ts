@@ -45,8 +45,12 @@ test('opens a chat on the page its settings name, and shows the fork model there
     .toBe(true);
   const network = async () =>
     (await (await request.get(`/api/explorations/${explorationId}`)).json()).forks[0].network;
-  await forkSettings.getByLabel(/Package registries/).check();
-  await expect.poll(network).toMatchObject({ registries: true });
+  await forkSettings.getByLabel('Rust: crates.io and rustup').check();
+  await expect.poll(network).toMatchObject({ registries: ['rust'] });
+  await forkSettings.getByLabel('npm, Yarn, pnpm').check();
+  await expect.poll(network).toMatchObject({ registries: ['rust', 'npm'] });
+  await forkSettings.getByLabel('Rust: crates.io and rustup').uncheck();
+  await expect.poll(network).toMatchObject({ registries: ['npm'] });
   const hosts = forkSettings.getByLabel(/Other allowed hosts/);
   await hosts.fill('GitHub.com:443\n192.168.1.1:22');
   await expect(forkSettings.getByRole('alert')).toHaveText('Not a host and port: 192.168.1.1:22');
@@ -55,7 +59,7 @@ test('opens a chat on the page its settings name, and shows the fork model there
   await forkSettings.getByRole('button', { name: 'Save hosts' }).click();
   await expect
     .poll(network)
-    .toEqual({ hosts: ['github.com:443', 'git.example.com:2222'], registries: true });
+    .toEqual({ hosts: ['github.com:443', 'git.example.com:2222'], registries: ['npm'] });
   await expect(forkSettings.getByRole('button', { name: 'Save hosts' })).toHaveCount(0);
   await settings.getByLabel('Default page').selectOption('notes');
 

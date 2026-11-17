@@ -4,6 +4,7 @@ import {
   isHostPort,
   maxAllowedHosts,
   networkHosts,
+  registryNames,
   type ForkNetwork,
 } from '@chat-explorer/shared/network.js';
 import type { Lease, RunContext } from '@chat-explorer/shared/protocol.js';
@@ -19,7 +20,9 @@ export class RunRefusedError extends Error {}
 // proxy's policy, so anything but a plain host:port is refused.
 export function checkedHosts(network: ForkNetwork) {
   const { hosts, registries } = network ?? {};
-  if (typeof registries !== 'boolean' || !Array.isArray(hosts) || hosts.length > maxAllowedHosts) {
+  const knownRegistries =
+    Array.isArray(registries) && registries.every((name) => registryNames.includes(name));
+  if (!knownRegistries || !Array.isArray(hosts) || hosts.length > maxAllowedHosts) {
     throw new RunRefusedError("The fork's allowed hosts are not valid.");
   }
   const invalid = hosts.find((host) => typeof host !== 'string' || !isHostPort(host));

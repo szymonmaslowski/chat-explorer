@@ -1,10 +1,16 @@
 <script setup lang="ts">
-import { isHostPort, maxAllowedHosts, registryHosts } from '@shared/network';
+import {
+  isHostPort,
+  maxAllowedHosts,
+  packageRegistries,
+  registryNames,
+  type RegistryName,
+} from '@shared/network';
 import type { Fork } from '@shared/types';
 import { computed, ref, watch } from 'vue';
 import { api } from '../api';
 
-// What a coding fork's container may reach: the registries preset and hosts the reader typed.
+// What a coding fork's container may reach: the registries ticked and hosts the reader typed.
 const props = defineProps<{ fork: Fork }>();
 
 const saving = ref(false);
@@ -33,21 +39,31 @@ async function save(network: Fork['network']) {
   }
 }
 
-const setRegistries = (registries: boolean) => save({ ...props.fork.network, registries });
+const setRegistry = (name: RegistryName, ticked: boolean) => {
+  const others = props.fork.network.registries.filter((registry) => registry !== name);
+  return save({ ...props.fork.network, registries: ticked ? [...others, name] : others });
+};
 const saveHosts = () => save({ ...props.fork.network, hosts: entries.value });
 </script>
 
 <template>
   <div class="network">
-    <label :title="registryHosts.join('\n')">
-      <input
-        type="checkbox"
-        :checked="fork.network.registries"
-        :disabled="saving"
-        @change="setRegistries(($event.target as HTMLInputElement).checked)"
-      />
-      Package registries: npm, PyPI, crates.io, Go
-    </label>
+    <fieldset>
+      <legend>Package registries</legend>
+      <label
+        v-for="name in registryNames"
+        :key="name"
+        :title="packageRegistries[name].hosts.join('\n')"
+      >
+        <input
+          type="checkbox"
+          :checked="fork.network.registries.includes(name)"
+          :disabled="saving"
+          @change="setRegistry(name, ($event.target as HTMLInputElement).checked)"
+        />
+        {{ packageRegistries[name].label }}
+      </label>
+    </fieldset>
     <label class="hosts">
       Other allowed hosts, one per line as name:port
       <textarea
@@ -84,6 +100,20 @@ const saveHosts = () => save({ ...props.fork.network, hosts: entries.value });
   align-items: flex-start;
   gap: 0.4rem;
   margin: 0.2rem 0 0.4rem 1.4rem;
+}
+
+fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+legend {
+  padding: 0;
+  margin-bottom: 0.2rem;
 }
 
 label {

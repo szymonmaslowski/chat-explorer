@@ -705,7 +705,7 @@ export class ChatStore {
   setForkNetwork(forkId: string, network: ForkNetwork) {
     return this.updateForkSettings(forkId, {
       allowed_hosts: JSON.stringify(network.hosts),
-      registries: network.registries ? 1 : 0,
+      registries: JSON.stringify(network.registries),
     });
   }
 

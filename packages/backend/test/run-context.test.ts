@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { ForkNetwork } from '@chat-explorer/shared/network.js';
 import { buildRunContext, historyBudget } from '../src/store/run-context.js';
 import { createTestStore } from './helpers.js';
 
@@ -61,7 +62,7 @@ describe("the fork's coding switch", () => {
     const { mainFork } = store.createExploration({
       messages: [{ role: 'user', content: 'Hello' }],
     });
-    const network = { hosts: ['github.com:443'], registries: true };
+    const network: ForkNetwork = { hosts: ['github.com:443'], registries: ['npm'] };
     store.setForkNetwork(mainFork.id, network);
     for (const resume of [false, true]) {
       expect(

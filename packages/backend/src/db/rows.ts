@@ -1,4 +1,5 @@
 import type { ClaudeModel } from '@chat-explorer/shared/models.js';
+import type { RegistryName } from '@chat-explorer/shared/network.js';
 import type {
   Activity,
   ActivityKind,
@@ -52,7 +53,7 @@ export interface ForkRow {
   awareness: ForkAwareness;
   coding: number;
   allowed_hosts: string;
-  registries: number;
+  registries: string;
   created_at: number;
   updated_at: number;
   archived_at: number | null;
@@ -230,7 +231,10 @@ export const toFork = (row: ForkRow): Fork => ({
   summary: row.summary,
   awareness: row.awareness,
   coding: row.coding === 1,
-  network: { hosts: JSON.parse(row.allowed_hosts) as string[], registries: row.registries === 1 },
+  network: {
+    hosts: JSON.parse(row.allowed_hosts) as string[],
+    registries: JSON.parse(row.registries) as RegistryName[],
+  },
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   archivedAt: row.archived_at,

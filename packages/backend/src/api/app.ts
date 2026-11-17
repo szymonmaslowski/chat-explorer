@@ -16,7 +16,7 @@ import type { Speaker } from '../speech/speaker.js';
 import { prefixedIdPattern } from '@chat-explorer/shared/ids.js';
 import { withLegacyIdsPrefixed } from './legacy-ids.js';
 import { claudeModels, type ClaudeModel } from '@chat-explorer/shared/models.js';
-import { isHostPort, maxAllowedHosts } from '@chat-explorer/shared/network.js';
+import { isHostPort, maxAllowedHosts, registryNames } from '@chat-explorer/shared/network.js';
 import {
   chatDefaultPages,
   type ChangeSet,
@@ -132,7 +132,7 @@ const forkNetworkBody = z.object({
     .array(z.string().refine(isHostPort, 'Write each host as name:port, such as github.com:443.'))
     .max(maxAllowedHosts)
     .transform((hosts) => [...new Set(hosts)]),
-  registries: z.boolean(),
+  registries: z.array(z.enum(registryNames)).transform((names) => [...new Set(names)]),
 });
 const newBookmarkBody = z.object({
   id: clientId,

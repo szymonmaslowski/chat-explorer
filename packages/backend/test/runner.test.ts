@@ -211,13 +211,13 @@ describe('the runner', () => {
   it('gives a coding fork its allowed hosts, and follows a change without a new container', async () => {
     const { runner, engineRuns, store, explorationId, mainForkId } = setup({}, true);
     store.setForkCoding(mainForkId, true);
-    store.setForkNetwork(mainForkId, { hosts: ['github.com:443'], registries: false });
+    store.setForkNetwork(mainForkId, { hosts: ['github.com:443'], registries: [] });
     runner.start();
     store.submit(explorationId, mainForkId, 'Clone it');
     await until(() => engineRuns[0]?.sent.length === 1);
     expect(engineRuns[0]!.spec.hosts).toEqual(['github.com:443']);
 
-    store.setForkNetwork(mainForkId, { hosts: ['github.com:443'], registries: true });
+    store.setForkNetwork(mainForkId, { hosts: ['github.com:443'], registries: ['npm'] });
     store.submit(explorationId, mainForkId, 'Now install');
     await until(() => engineRuns[0]!.sent.length === 2);
     expect(engineRuns[0]!.allowedHosts.at(-1)).toEqual(
@@ -229,7 +229,7 @@ describe('the runner', () => {
 
   it('gives a chat fork no hosts, whatever its settings say', async () => {
     const { runner, engineRuns, store, explorationId, mainForkId } = setup({}, true);
-    store.setForkNetwork(mainForkId, { hosts: ['github.com:443'], registries: true });
+    store.setForkNetwork(mainForkId, { hosts: ['github.com:443'], registries: ['npm'] });
     runner.start();
     store.submit(explorationId, mainForkId, 'Hello');
     await until(() => engineRuns[0]?.sent.length === 1);

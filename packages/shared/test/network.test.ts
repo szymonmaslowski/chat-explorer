@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isHostPort, networkHosts, registryHosts } from '@chat-explorer/shared/network.js';
+import { isHostPort, networkHosts, packageRegistries } from '@chat-explorer/shared/network.js';
 
 describe('an allowed host entry', () => {
   it('takes a host name with a dot and a port', () => {
@@ -31,11 +31,12 @@ describe('an allowed host entry', () => {
 });
 
 describe("a fork's allowed hosts", () => {
-  it('adds the registries when the preset is on, once each', () => {
-    expect(networkHosts({ hosts: ['github.com:443'], registries: false })).toEqual([
-      'github.com:443',
-    ]);
-    const withPreset = networkHosts({ hosts: ['registry.npmjs.org:443'], registries: true });
-    expect(withPreset).toEqual(registryHosts);
+  it('adds the hosts of each ticked registry, once each', () => {
+    expect(networkHosts({ hosts: ['github.com:443'], registries: [] })).toEqual(['github.com:443']);
+    const withNpm = networkHosts({ hosts: ['registry.npmjs.org:443'], registries: ['npm'] });
+    expect(withNpm).toEqual(packageRegistries.npm.hosts);
+    const withRustAndGo = networkHosts({ hosts: [], registries: ['rust', 'go'] });
+    expect(withRustAndGo).toEqual([...packageRegistries.rust.hosts, ...packageRegistries.go.hosts]);
+    expect(withRustAndGo).not.toContain('registry.npmjs.org:443');
   });
 });

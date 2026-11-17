@@ -1,7 +1,10 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
+import { Database } from '../src/db/database.js';
+import { migrations } from '../src/db/schema.js';
 import { createTestApp, draft, seedConversation, testPort } from './helpers.js';
 
 describe('request guard', () => {
@@ -286,28 +289,49 @@ describe("a fork's coding switch", () => {
 });
 
 describe("a fork's allowed hosts", () => {
-  it('saves host:port entries and the registries preset, refusing anything else', async () => {
+  it('saves host:port entries and ticked registries, refusing anything else', async () => {
     const { request, store } = createTestApp();
     const { mainForkId } = seedConversation(store);
     const set = (json: object) =>
       request(`/api/forks/${mainForkId}/network`, { method: 'PATCH', json });
-    expect(store.fork(mainForkId).network).toEqual({ hosts: [], registries: false });
+    expect(store.fork(mainForkId).network).toEqual({ hosts: [], registries: [] });
     const saved = await set({
       hosts: ['github.com:443', 'github.com:443', 'git.example.com:2222'],
-      registries: true,
+      registries: ['rust', 'npm', 'rust'],
     });
     expect(await saved.json()).toMatchObject({
-      network: { hosts: ['github.com:443', 'git.example.com:2222'], registries: true },
+      network: { hosts: ['github.com:443', 'git.example.com:2222'], registries: ['rust', 'npm'] },
     });
     expect(store.fork(mainForkId).network.hosts).toEqual([
       'github.com:443',
       'git.example.com:2222',
     ]);
     for (const hosts of [['github.com'], ['10.0.0.1:22'], ['github.com:443 --x']]) {
-      expect((await set({ hosts, registries: false })).status).toBe(400);
+      expect((await set({ hosts, registries: [] })).status).toBe(400);
     }
-    expect((await set({ hosts: [], registries: 'yes' })).status).toBe(400);
-    expect(store.fork(mainForkId).network.registries).toBe(true);
+    for (const registries of [true, ['cargo'], 'npm']) {
+      expect((await set({ hosts: [], registries })).status).toBe(400);
+    }
+    expect(store.fork(mainForkId).network.registries).toEqual(['rust', 'npm']);
+  });
+
+  it('ticks every registry for a fork that had the one switch for all of them on', () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'chat-explorer-migration-')), 'test.db');
+    const old = new DatabaseSync(path);
+    const before = migrations.findIndex((migration) => migration.includes('new_registries'));
+    for (const migration of migrations.slice(0, before)) old.exec(migration);
+    old.exec(`PRAGMA user_version = ${before};
+      INSERT INTO explorations (id, created_at, updated_at) VALUES ('chat_0000000001', 1, 1);
+      INSERT INTO forks (id, exploration_id, registries, created_at, updated_at)
+        VALUES ('fork_000000000a', 'chat_0000000001', 1, 1, 1),
+          ('fork_000000000b', 'chat_0000000001', 0, 1, 1);`);
+    old.close();
+
+    const database = new Database(path);
+    expect(database.all('SELECT id, registries FROM forks ORDER BY id')).toEqual([
+      { id: 'fork_000000000a', registries: '["npm","pypi","rust","go"]' },
+      { id: 'fork_000000000b', registries: '[]' },
+    ]);
   });
 });
 

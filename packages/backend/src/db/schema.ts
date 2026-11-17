@@ -379,4 +379,11 @@ export const migrations = [
   ALTER TABLE forks ADD COLUMN allowed_hosts TEXT NOT NULL DEFAULT '[]';
   ALTER TABLE forks ADD COLUMN registries INTEGER NOT NULL DEFAULT 0;
   `,
+  `
+  -- A JSON array of registry names, one checkbox each, in place of one switch for all of them.
+  ALTER TABLE forks ADD COLUMN new_registries TEXT NOT NULL DEFAULT '[]';
+  UPDATE forks SET new_registries = '["npm","pypi","rust","go"]' WHERE registries = 1;
+  ALTER TABLE forks DROP COLUMN registries;
+  ALTER TABLE forks RENAME COLUMN new_registries TO registries;
+  `,
 ];
