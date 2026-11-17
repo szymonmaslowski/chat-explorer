@@ -165,12 +165,14 @@ describe('starting Claude Code in Docker', () => {
     expect(coding.join(' ')).not.toContain('/home/me/.chat-explorer/runner/config.json');
   });
 
-  it('leaves the CPUs uncapped when the runner config sets no number', () => {
+  it('leaves the CPUs uncapped unless capped, and offers coding processes first to the OOM killer', () => {
     const uncapped = claudeDockerArguments(
       { ...spec, coding: true },
       { ...options, codingLimits: { memory: '6g', processes: 1024 } },
     );
     expect(uncapped).not.toContain('--cpus');
+    expect(uncapped).toEqual(expect.arrayContaining(['--oom-score-adj', '500']));
+    expect(claudeDockerArguments(spec, options)).not.toContain('--oom-score-adj');
     expect(claudeDockerArguments(spec, options)).toEqual(expect.arrayContaining(['--cpus', '2']));
   });
 

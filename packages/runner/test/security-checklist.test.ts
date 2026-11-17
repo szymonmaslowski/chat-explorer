@@ -60,7 +60,7 @@ const engineOptions = {
   workspacesPath: '/workspaces',
   filesPath: '/files',
   egressPath: '/runner/egress',
-  codingLimits: defaultCodingLimits,
+  codingLimits: { ...defaultCodingLimits, memory: '4g' },
 };
 
 const spec = (overrides: { lease?: object; context?: object; config?: typeof allowed } = {}) =>
@@ -93,7 +93,7 @@ async function probeCodingContainer() {
     workspacesPath: join(root, 'workspaces'),
     filesPath: join(root, 'files'),
     egressPath: join(runnerPath, 'egress'),
-    codingLimits: defaultCodingLimits,
+    codingLimits: { ...defaultCodingLimits, memory: '4g' },
   };
   const own = spec({
     lease: { forkId: 'fork_00000000a1' },

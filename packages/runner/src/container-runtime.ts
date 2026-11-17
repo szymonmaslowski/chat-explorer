@@ -22,6 +22,8 @@ export interface ContainerRuntime {
   // Free bytes on the disk containers write to, seen from inside a running one. With Docker
   // Desktop that is its VM's disk, apart from the Mac's own.
   freeBytes(container: string): Promise<number | null>;
+  // All the memory containers share. With Docker Desktop that is its VM's, set in its settings.
+  memoryBytes(): Promise<number | null>;
   // Which runtime answers, and whether coding forks have been tested on it.
   identify(): Promise<{ name: string; supported: boolean }>;
 }
@@ -59,6 +61,11 @@ export const dockerRuntime: ContainerRuntime = {
     });
     const available = Number(result.output.trim().split('\n').at(-1)?.split(/\s+/)[3]);
     return result.code === 0 && Number.isFinite(available) ? available * 1024 : null;
+  },
+  async memoryBytes() {
+    const result = await dockerCommand(['info', '--format', '{{.MemTotal}}']);
+    const bytes = Number(result.output.trim());
+    return result.code === 0 && bytes > 0 ? bytes : null;
   },
   async identify() {
     const result = await dockerCommand(['info', '--format', '{{.OperatingSystem}}']);

@@ -206,13 +206,21 @@ export interface ReplyDraft {
 }
 
 // The agent loop's state of a fork: what its runner is doing and how full the context is.
-export type RunStatus = 'idle' | 'answering' | 'waiting_limit' | 'failed';
+export type RunStatus = 'idle' | 'answering' | 'waiting_limit' | 'waiting_memory' | 'failed';
+
+// How many coding forks fit in Docker's memory at once, each at its cap, and which forks hold that
+// room now: a coding fork outside them waits while all of it is taken.
+export interface CodingCapacity {
+  slots: number;
+  memory: string;
+  forkIds: string[];
+}
 
 export interface ForkRun {
   forkId: string;
   explorationId: string;
   status: RunStatus;
-  // Why it failed, or until when it waits for the usage limit.
+  // Why it failed, until when it waits for the usage limit, or why it waits for memory.
   statusDetail: string | null;
   attempt: number;
   // An attached terminal session holds the fork: the page cannot stop it.

@@ -23,6 +23,7 @@ import SpeechPlayer from '../components/SpeechPlayer.vue';
 import ActivityGroup from '../components/ActivityGroup.vue';
 import AttentionDot from '../components/AttentionDot.vue';
 import ForkRunStatus from '../components/ForkRunStatus.vue';
+import CodingRoomHint from '../components/CodingRoomHint.vue';
 import MediaIcon from '../components/MediaIcon.vue';
 import { useCommentTyping } from '../composables/useCommentTyping';
 import { useLayout } from '../composables/useLayout';
@@ -510,6 +511,7 @@ watch(
       </div>
 
       <ForkRunStatus :fork-id="fork.id" :run="forkRun" :awaiting-answer="awaitingAnswer" />
+      <CodingRoomHint v-if="!archived" :fork="fork" :run="forkRun" />
 
       <QueuedSubmissionCard
         v-for="submission in queuedSubmissions"

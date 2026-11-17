@@ -1,4 +1,4 @@
-import type { Activity, ActivityKind } from '@chat-explorer/shared/types.js';
+import type { Activity, ActivityKind, CodingCapacity } from '@chat-explorer/shared/types.js';
 import {
   type Lease,
   type RunContext,
@@ -93,6 +93,14 @@ export class RunnerClient {
 
   waiting(lease: Lease, until: string) {
     return this.fork(lease, 'waiting', { until });
+  }
+
+  waitingForMemory(lease: Lease, reason: string) {
+    return this.fork(lease, 'waiting-memory', { reason });
+  }
+
+  capacity(capacity: CodingCapacity | null) {
+    return this.post('/api/runner/capacity', { capacity });
   }
 
   release(lease: Lease) {

@@ -322,6 +322,11 @@ export function createApp(options: AppOptions) {
     return context.json({ ok: true });
   });
 
+  // For the composer of a coding fork, to say before sending when the fork would wait for memory.
+  app.get('/api/coding-capacity', (context) =>
+    context.json({ capacity: options.runs.currentCodingCapacity() }),
+  );
+
   app.get('/api/health', (context) =>
     context.json({ name: 'chat-explorer', version: options.version, apiVersion, pid: process.pid }),
   );

@@ -3,6 +3,7 @@ import { RunnerClient } from '@chat-explorer/runner/client.js';
 import type { Engine, EngineEvent, EngineRunSpec } from '@chat-explorer/runner/engine.js';
 import type { DiskGuard } from '@chat-explorer/runner/disk-guard.js';
 import { Runner } from '@chat-explorer/runner/runner.js';
+import { MemoryGate } from '@chat-explorer/runner/memory-gate.js';
 import { defaultCodingLimits } from '@chat-explorer/runner/runner-config.js';
 import { createTestApp, seedConversation, testMachineToken } from './helpers.js';
 
@@ -58,7 +59,7 @@ const until = async (condition: () => boolean, timeoutMs = 3_000) => {
   }
 };
 
-function setup(timings = {}, coding = false, diskGuard?: DiskGuard) {
+function setup(timings = {}, coding = false, diskGuard?: DiskGuard, memoryGate?: MemoryGate) {
   const context = createTestApp();
   const conversation = seedConversation(context.store);
   const client = new RunnerClient('http://127.0.0.1:4999', testMachineToken, async (url, init) =>
@@ -77,6 +78,7 @@ function setup(timings = {}, coding = false, diskGuard?: DiskGuard) {
       coding: { enabled: coding, ...defaultCodingLimits },
     },
     diskGuard,
+    memoryGate,
     runnerId: 'runner-test',
     toolsUrl: 'http://host.docker.internal:4999/api/tools/mcp',
     maxParallel: 2,
@@ -234,6 +236,95 @@ describe('the runner', () => {
     store.submit(explorationId, mainForkId, 'Hello');
     await until(() => engineRuns[0]?.sent.length === 1);
     expect(engineRuns[0]!.spec.hosts).toEqual([]);
+    await runner.stop();
+  });
+
+  it('holds a coding fork while Docker has no memory for it, and starts it once room frees', async () => {
+    const gate = new MemoryGate({ memory: '6656m', slots: 1, refusal: null });
+    const { runner, engineRuns, store, explorationId, mainForkId } = setup(
+      {},
+      true,
+      undefined,
+      gate,
+    );
+    const other = seedConversation(store);
+    store.setForkCoding(mainForkId, true);
+    store.setForkCoding(other.mainForkId, true);
+    const runOf = (forkId: string) =>
+      store
+        .snapshot(forkId === mainForkId ? explorationId : other.explorationId)
+        .forkRuns.find((run) => run.forkId === forkId);
+    runner.start();
+    store.submit(explorationId, mainForkId, 'Build the first');
+    await until(() => engineRuns[0]?.sent.length === 1);
+    store.submit(other.explorationId, other.mainForkId, 'Build the second');
+    await until(() => runOf(other.mainForkId)?.status === 'waiting_memory');
+    expect(runOf(other.mainForkId)?.statusDetail).toBe(
+      'Another coding fork is using the memory Docker has for coding (6656m).',
+    );
+    expect(engineRuns).toHaveLength(1);
+
+    engineRuns[0]!.emit({
+      type: 'turn-finished',
+      answer: 'Done.',
+      failed: false,
+      contextWindow: 1e6,
+    });
+    await until(() => runOf(mainForkId)?.status === 'idle');
+    await runner.stop();
+    await until(() => gate.forkIds.length === 0);
+  });
+
+  it('starts the waiting coding fork when the other one lets its container go', async () => {
+    const gate = new MemoryGate({ memory: '6656m', slots: 1, refusal: null });
+    const { runner, engineRuns, store, explorationId, mainForkId } = setup(
+      { idleCloseMs: 100 },
+      true,
+      undefined,
+      gate,
+    );
+    const other = seedConversation(store);
+    store.setForkCoding(mainForkId, true);
+    store.setForkCoding(other.mainForkId, true);
+    runner.start();
+    store.submit(explorationId, mainForkId, 'Build the first');
+    await until(() => engineRuns[0]?.sent.length === 1);
+    store.submit(other.explorationId, other.mainForkId, 'Build the second');
+    await until(() => gate.forkIds.length === 1 && engineRuns.length === 1);
+    engineRuns[0]!.emit({
+      type: 'turn-finished',
+      answer: 'Done.',
+      failed: false,
+      contextWindow: 1e6,
+    });
+    await until(() => engineRuns[1]?.sent.length === 1);
+    expect(engineRuns[1]!.spec.forkId).toBe(other.mainForkId);
+    expect(engineRuns[1]!.sent[0]).toContain('Build the second');
+    expect(gate.forkIds).toEqual([other.mainForkId]);
+    await runner.stop();
+  });
+
+  it('lets the reader stop a coding fork that waits for memory, its message handled', async () => {
+    const gate = new MemoryGate({ memory: '6656m', slots: 1, refusal: null });
+    const { runner, engineRuns, store, explorationId, mainForkId, runs } = setup(
+      {},
+      true,
+      undefined,
+      gate,
+    );
+    const other = seedConversation(store);
+    store.setForkCoding(mainForkId, true);
+    store.setForkCoding(other.mainForkId, true);
+    const otherRun = () => store.snapshot(other.explorationId).forkRuns[0];
+    runner.start();
+    store.submit(explorationId, mainForkId, 'Build the first');
+    await until(() => engineRuns[0]?.sent.length === 1);
+    store.submit(other.explorationId, other.mainForkId, 'Build the second');
+    await until(() => otherRun()?.status === 'waiting_memory');
+    expect(runs.requestStop(other.mainForkId)).toBe(true);
+    await until(() => otherRun()?.status === 'idle', 5_000);
+    expect(otherRun()?.handledUpTo).toBe(store.readFork(other.mainForkId).messages.at(-1)!.id);
+    expect(engineRuns).toHaveLength(1);
     await runner.stop();
   });
 

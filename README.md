@@ -174,13 +174,15 @@ The runner's config also sets this machine's limits for coding containers. Leave
 
 | Field              | Default | Meaning                                                                             |
 | ------------------ | ------- | ----------------------------------------------------------------------------------- |
-| `memory`           | `"4g"`  | memory per container, such as `"8g"` or `"512m"`                                    |
+| `memory`           | sized   | memory per container, such as `"8g"` or `"512m"`; see below                         |
 | `processes`        | `512`   | processes per container                                                             |
 | `cpus`             | all     | caps the CPUs per container, such as `6` or `1.5`; busy containers share the rest   |
 | `workspaceLimitGb` | `10`    | a workspace over this shows a warning; past 1.5 times it, the run stops             |
 | `minFreeGb`        | `10`    | coding runs stop when the Mac or Docker's own disk has less free, and new ones wait |
 
 Restart the daemon after changing the file, so the runner reads it again.
+
+**Memory.** Coding containers together never get more memory than Docker can spare: Docker's memory minus 1.5 GB for the egress proxy and chat forks. Without `memory` in the config, one coding container gets all of that, so one coding fork runs at a time. With a cap, as many run as fit: `"3g"` on an 8 GB Docker runs two. A coding fork with no room waits, shown as waiting for memory, and starts when another one goes idle; the page says so above the reply box before you send. To run more at once, set a smaller `memory`, or give Docker more memory in Docker Desktop's settings and restart the daemon. If Docker still runs out, it ends a coding process first, never the proxy.
 
 **Network.** A container reaches the outside only through the egress proxy, over HTTPS, to the hosts its fork allows. Under the coding switch, tick the package registries the fork needs, each on its own (npm, PyPI, Rust's crates.io with rustup, Go modules), or list other hosts as `name:port`, one per line. A change applies to the next connection, without a new container. Addresses on your own network are refused even when a name on the list points there. Each fork's allowed and denied connections are logged in `~/.chat-explorer/runner/egress/logs/<fork>.log`.
 

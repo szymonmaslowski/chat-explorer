@@ -73,6 +73,9 @@ export function containerArguments(spec: EngineRunSpec, options: ContainerOption
     '--memory',
     limits.memory,
     ...(limits.cpus === undefined ? [] : ['--cpus', String(limits.cpus)]),
+    // When Docker runs out of memory anyway, its kernel ends a coding process before the proxy or a
+    // chat fork.
+    ...(spec.coding ? ['--oom-score-adj', '500'] : []),
     '--env',
     'DISABLE_AUTOUPDATER=1',
     ...sandboxArguments(),

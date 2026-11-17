@@ -4,8 +4,8 @@ import { computed, ref } from 'vue';
 import { api } from '../api';
 import { notOffline, offline } from '../lib/online';
 
-// What Claude is doing in this fork, from the runner: working, waiting for the usage limit, or
-// failed with a way to try again.
+// What Claude is doing in this fork, from the runner: working, waiting for the usage limit or for
+// memory, or failed with a way to try again.
 const props = defineProps<{ forkId: string; run: ForkRun | null; awaitingAnswer: boolean }>();
 
 const busy = ref(false);
@@ -42,6 +42,17 @@ async function act(action: (forkId: string) => Promise<unknown>) {
   </div>
   <p v-else-if="run?.status === 'waiting_limit'" class="run-status muted">
     Waiting for the usage limit{{ until }}.
+  </p>
+  <p v-else-if="run?.status === 'waiting_memory'" class="run-status muted">
+    Waiting for memory: {{ run.statusDetail }} It starts once a coding fork goes idle.
+    <button
+      type="button"
+      :disabled="busy || offline"
+      :title="offline ? notOffline : undefined"
+      @click="act(api.stopFork)"
+    >
+      Stop
+    </button>
   </p>
   <p v-else-if="run?.status === 'answering' && run.heldByTerminal" class="run-status muted">
     Claude is working in the terminal…

@@ -15,11 +15,11 @@ export interface ContainerLimits {
 export interface RunnerConfig {
   // Where it was read from, to name in messages.
   path: string;
-  coding: { enabled: boolean } & ContainerLimits & DiskLimits;
+  // Left out, memory is sized from Docker's when the runner starts.
+  coding: { enabled: boolean; memory?: string } & Omit<ContainerLimits, 'memory'> & DiskLimits;
 }
 
-export const defaultCodingLimits: ContainerLimits & DiskLimits = {
-  memory: '4g',
+export const defaultCodingLimits: Omit<ContainerLimits, 'memory'> & DiskLimits = {
   processes: 512,
   workspaceLimitGb: 10,
   minFreeGb: 10,
@@ -61,8 +61,8 @@ export function readRunnerConfig(runnerPath: string): RunnerConfig {
   if (typeof enabled !== 'boolean') {
     throw new RunnerConfigError(`coding.enabled in ${path} must be true or false.`);
   }
-  const memory = parsed.coding?.memory ?? defaultCodingLimits.memory;
-  if (typeof memory !== 'string' || !memoryPattern.test(memory)) {
+  const memory = parsed.coding?.memory;
+  if (memory !== undefined && (typeof memory !== 'string' || !memoryPattern.test(memory))) {
     throw new RunnerConfigError(`coding.memory in ${path} must be a size such as "4g" or "512m".`);
   }
   const processes = parsed.coding?.processes ?? defaultCodingLimits.processes;
@@ -88,7 +88,7 @@ export function readRunnerConfig(runnerPath: string): RunnerConfig {
     path,
     coding: {
       enabled,
-      memory,
+      ...(memory === undefined ? {} : { memory }),
       processes,
       ...(cpus === undefined ? {} : { cpus }),
       workspaceLimitGb: gigabytes('workspaceLimitGb'),

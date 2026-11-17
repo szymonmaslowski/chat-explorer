@@ -115,3 +115,44 @@ test('offers Retry on a fork whose runner failed too often', async ({ page, requ
   await alert.getByRole('button', { name: 'Retry' }).click();
   await expect(alert).toHaveCount(0);
 });
+
+test('says before sending when a coding fork would wait for memory, and while it waits', async ({
+  page,
+  request,
+}) => {
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'Build the app' } })
+  ).json();
+  const runner = fakeRunner(request);
+  const { lease } = await runner.call('claim', {
+    runnerId: 'e2e-runner',
+    explorationId,
+    waitMs: 5_000,
+  });
+  await request.patch(`/api/forks/${lease.forkId}/coding`, { data: { coding: true } });
+  const capacity = { slots: 1, memory: '6656m', forkIds: ['fork_0therf0rk'] };
+  await runner.call('capacity', { capacity });
+
+  await page.goto(`/e/${explorationId}`);
+  const hint = page.locator('.coding-room');
+  await expect(hint).toHaveText(
+    "Docker's memory for coding is taken: another coding fork is using it (6656m). A message sent now waits until one of them goes idle.",
+  );
+
+  const fork = `forks/${lease.forkId}`;
+  const reason = 'Another coding fork is using the memory Docker has for coding (6656m).';
+  await runner.call(`${fork}/waiting-memory`, { leaseId: lease.leaseId, reason });
+  await expect(page.locator('.run-status')).toContainText(
+    `Waiting for memory: ${reason} It starts once a coding fork goes idle.`,
+  );
+  await expect(page.locator('.exploration-header .status')).toHaveText('waiting for memory');
+  await expect(hint).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Stop', exact: true }).click();
+  await expect
+    .poll(async () => (await runner.call(`${fork}/heartbeat`, { leaseId: lease.leaseId })).stop)
+    .toBe(true);
+  await runner.call(`${fork}/stopped`, { leaseId: lease.leaseId, upToMessageId: null });
+  await expect(page.locator('.run-status')).toHaveCount(0);
+  await runner.call('capacity', { capacity: null });
+});

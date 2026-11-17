@@ -40,6 +40,16 @@ const usageBody = leaseBody.extend({
   contextWindow: z.number().int().positive().nullable(),
 });
 const waitingBody = leaseBody.extend({ until: z.string() });
+const waitingMemoryBody = leaseBody.extend({ reason: z.string().min(1) });
+const capacityBody = z.object({
+  capacity: z
+    .object({
+      slots: z.number().int().min(0),
+      memory: z.string().min(1),
+      forkIds: z.array(z.string()),
+    })
+    .nullable(),
+});
 const failBody = leaseBody.extend({ reason: z.string() });
 const topicBody = z.object({ topic: z.string().trim().min(1) });
 const stoppedBody = leaseBody.extend({ upToMessageId: z.string().nullable() });
@@ -180,6 +190,18 @@ export function registerRunnerRoutes(app: Hono, options: RunnerRoutesOptions) {
   app.post('/api/runner/forks/:forkId/waiting', async (context) => {
     const { leaseId, until } = waitingBody.parse(await context.req.json());
     runs.waitForUsageLimit(context.req.param('forkId'), leaseId, until);
+    return context.json({ ok: true });
+  });
+
+  app.post('/api/runner/forks/:forkId/waiting-memory', async (context) => {
+    const { leaseId, reason } = waitingMemoryBody.parse(await context.req.json());
+    runs.waitForMemory(context.req.param('forkId'), leaseId, reason);
+    return context.json({ ok: true });
+  });
+
+  app.post('/api/runner/capacity', async (context) => {
+    const { capacity } = capacityBody.parse(await context.req.json());
+    runs.setCodingCapacity(capacity);
     return context.json({ ok: true });
   });
 

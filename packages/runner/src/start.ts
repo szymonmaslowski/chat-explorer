@@ -12,6 +12,7 @@ import {
 } from './claude-image.js';
 import { RunnerClient } from './client.js';
 import { ensureEgress } from './egress.js';
+import { codingMemory, MemoryGate } from './memory-gate.js';
 import { Runner } from './runner.js';
 import { runtime } from './container-runtime.js';
 import { readRunnerConfig, type RunnerConfig } from './runner-config.js';
@@ -73,6 +74,20 @@ export async function startRunner(options: StartRunnerOptions) {
   const egressPath = join(options.runnerPath, 'egress');
   await ensureEgress({ image, port: options.port, egressPath });
   const config = await onTestedRuntime(readRunnerConfig(options.runnerPath), options.log);
+  // Sized once: Docker Desktop's memory changes only with a restart of its VM.
+  const sizing = codingMemory(config.coding.memory, await runtime.memoryBytes());
+  const codingLimits = { ...config.coding, memory: sizing.memory };
+  const client = new RunnerClient(options.baseUrl, options.machineToken);
+  const reportCapacity = (forkIds: string[]) =>
+    client
+      .capacity(
+        config.coding.enabled ? { slots: sizing.slots, memory: sizing.memory, forkIds } : null,
+      )
+      .catch((error: Error) => options.log(`Runner: ${error.message}`));
+  const memoryGate = new MemoryGate(sizing, reportCapacity);
+  // Repeated, so the backend stops counting a runner that went away.
+  setInterval(() => void reportCapacity(memoryGate.forkIds), 30_000).unref();
+  void reportCapacity([]);
   const enginePaths = {
     forksPath: join(options.runnerPath, 'forks'),
     filesPath: options.filesPath,
@@ -80,18 +95,19 @@ export async function startRunner(options: StartRunnerOptions) {
     egressPath,
   };
   const runner = new Runner({
-    client: new RunnerClient(options.baseUrl, options.machineToken),
+    client,
     config,
     engine: claudeCodeEngine({
       ...enginePaths,
       image: () => currentImage,
       port: options.port,
-      codingLimits: config.coding,
+      codingLimits,
       oauthToken: () => readClaudeToken(options.runnerPath),
     }),
     runnerId: `${hostname()}-${process.pid}`,
     toolsUrl: `http://host.docker.internal:${options.port}/api/tools/mcp`,
     maxParallel: options.maxParallel,
+    memoryGate,
     diskGuard: diskGuard({
       limits: config.coding,
       workspacesPath: options.workspacesPath,
@@ -102,8 +118,9 @@ export async function startRunner(options: StartRunnerOptions) {
     onError: (error) => options.log(`Runner: ${error instanceof Error ? error.message : error}`),
   });
   runner.start();
-  options.log(
-    `Runner started with ${image}, coding ${config.coding.enabled ? `allowed (${config.coding.memory} memory, ${config.coding.processes} processes, ${config.coding.cpus ?? 'all'} CPUs)` : 'off'}.`,
-  );
+  const coding = sizing.refusal
+    ? `allowed, but ${sizing.refusal}`
+    : `allowed (${sizing.memory} memory each, ${sizing.slots} at once; ${config.coding.processes} processes, ${config.coding.cpus ?? 'all'} CPUs)`;
+  options.log(`Runner started with ${image}, coding ${config.coding.enabled ? coding : 'off'}.`);
   return runner;
 }

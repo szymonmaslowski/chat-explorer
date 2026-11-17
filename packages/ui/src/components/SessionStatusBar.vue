@@ -18,6 +18,7 @@ const runLabels: Record<RunState, string> = {
   waiting: 'waiting',
   answering: 'working',
   waiting_limit: 'waiting for the limit',
+  waiting_memory: 'waiting for memory',
   failed: 'failed',
 };
 const runExplanations: Record<RunState, string> = {
@@ -25,6 +26,7 @@ const runExplanations: Record<RunState, string> = {
   waiting: 'This fork waits for Claude to start',
   answering: 'Claude is answering in this fork',
   waiting_limit: 'Claude waits for the usage limit in this fork',
+  waiting_memory: 'This coding fork waits for Docker memory another one is using',
   failed: 'Claude could not answer in this fork',
 };
 const runState = computed<RunState | null>(() => {
@@ -102,7 +104,8 @@ const title = computed(() => {
   background: var(--success);
 }
 
-.waiting_limit .dot {
+.waiting_limit .dot,
+.waiting_memory .dot {
   background: var(--warning);
 }
 

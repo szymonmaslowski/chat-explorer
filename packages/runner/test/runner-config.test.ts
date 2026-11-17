@@ -15,7 +15,6 @@ describe("the runner's own config", () => {
       path: configPath,
       coding: {
         enabled: false,
-        memory: '4g',
         processes: 512,
         workspaceLimitGb: 10,
         minFreeGb: 10,
@@ -43,9 +42,10 @@ describe("the runner's own config", () => {
     });
   });
 
-  it('lets a coding container use every CPU unless the file caps them', () => {
+  it("leaves CPUs and memory to Docker's size unless the file caps them", () => {
     writeFileSync(configPath, JSON.stringify({ coding: { enabled: true } }));
     expect(readRunnerConfig(runnerPath).coding).not.toHaveProperty('cpus');
+    expect(readRunnerConfig(runnerPath).coding).not.toHaveProperty('memory');
   });
 
   it('takes the disk limits from the file, as gigabytes above 0', () => {

@@ -21,6 +21,20 @@ describe('runner API', () => {
     expect((await runner('claim', { runnerId: 'r' }, 'wrong')).status).toBe(401);
   });
 
+  it("shows the page the runner's room for coding forks while the runner keeps reporting it", async () => {
+    const { runner, request, clock } = setup();
+    const shown = async () => (await (await request('/api/coding-capacity')).json()).capacity;
+    expect(await shown()).toBeNull();
+    const capacity = { slots: 2, memory: '3g', forkIds: ['fork_000000000a'] };
+    expect((await runner('capacity', { capacity })).status).toBe(200);
+    expect(await shown()).toEqual(capacity);
+    clock.now += 60_000;
+    expect(await shown()).toEqual(capacity);
+    clock.now += 60_000;
+    expect(await shown()).toBeNull();
+    expect((await runner('capacity', { capacity: { slots: -1 } })).status).toBe(400);
+  });
+
   it('waits for a submit, claims its fork, delivers the message and stores the answer', async () => {
     const { runner, store, explorationId, mainForkId } = setup();
     const claim = runner('claim', { runnerId: 'runner-a', waitMs: 5_000 });

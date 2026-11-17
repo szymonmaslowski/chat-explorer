@@ -386,4 +386,12 @@ export const migrations = [
   ALTER TABLE forks DROP COLUMN registries;
   ALTER TABLE forks RENAME COLUMN new_registries TO registries;
   `,
+  `
+  -- A coding fork can wait for Docker's memory.
+  ALTER TABLE fork_runs ADD COLUMN new_status TEXT NOT NULL DEFAULT 'idle'
+    CHECK (new_status IN ('idle', 'answering', 'waiting_limit', 'waiting_memory', 'failed'));
+  UPDATE fork_runs SET new_status = status;
+  ALTER TABLE fork_runs DROP COLUMN status;
+  ALTER TABLE fork_runs RENAME COLUMN new_status TO status;
+  `,
 ];

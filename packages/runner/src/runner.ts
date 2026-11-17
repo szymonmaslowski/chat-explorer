@@ -8,6 +8,7 @@ import {
   type RunInput,
 } from '@chat-explorer/shared/protocol.js';
 import type { DiskGuard } from './disk-guard.js';
+import { waitingForMemory, type MemoryGate } from './memory-gate.js';
 import type { RunnerConfig } from './runner-config.js';
 import { checkedHosts, checkedRunSpec, RunRefusedError } from './run-spec.js';
 
@@ -34,6 +35,8 @@ export interface RunnerOptions {
   maxParallel: number;
   // Measures coding forks' disk use; none in tests that don't need it.
   diskGuard?: DiskGuard;
+  // Keeps coding containers within Docker's memory; none in tests that don't need it.
+  memoryGate?: MemoryGate;
   timings?: Partial<RunnerTimings>;
   onError?: (error: unknown) => void;
 }
@@ -172,6 +175,7 @@ class ForkWorker {
   private diskWarned = false;
   private hosts = '';
   private exited: Promise<void> = Promise.resolve();
+  private releaseMemory: (() => void) | null = null;
 
   constructor(
     private readonly lease: Lease,
@@ -202,7 +206,13 @@ class ForkWorker {
         toolsUrl: this.options.toolsUrl,
         config: this.options.config,
       });
-      const { diskGuard } = this.options;
+      const { diskGuard, memoryGate } = this.options;
+      if (spec.coding && memoryGate) {
+        const reason = waitingForMemory(memoryGate.sizing);
+        this.releaseMemory = await memoryGate.acquire(this.lease.forkId, this.abort.signal, () =>
+          this.report(() => client.waitingForMemory(this.lease, reason)),
+        );
+      }
       if (spec.coding && diskGuard) {
         const refusal = await diskGuard.refusal(spec);
         if (refusal) throw new RunRefusedError(refusal);
@@ -223,11 +233,13 @@ class ForkWorker {
       await this.inputLoop();
     } catch (error) {
       if (error instanceof StaleLeaseError) this.onReportError(error);
+      else if (!this.engineRun && (this.stopping || this.closing)) await this.letGoUnstarted();
       else await this.failAndStop(error instanceof Error ? error.message : String(error));
     } finally {
       if (this.heartbeat) clearInterval(this.heartbeat);
       if (this.diskChecks) clearInterval(this.diskChecks);
       await this.exited;
+      this.releaseMemory?.();
       await this.reports;
     }
   }
@@ -422,6 +434,16 @@ class ForkWorker {
     await client.fail(
       this.lease,
       result.error ?? `Claude Code stopped with exit code ${result.code ?? 'unknown'}.`,
+    );
+  }
+
+  // Stopped or closed before its container started, such as while it waited for memory.
+  private async letGoUnstarted() {
+    this.finished = true;
+    const { client } = this.options;
+    await this.reports;
+    await (this.stopping ? client.stopped(this.lease, null) : client.release(this.lease)).catch(
+      (error: unknown) => this.onReportError(error),
     );
   }
 

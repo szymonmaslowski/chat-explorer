@@ -9,7 +9,7 @@ import {
   type ForkRunRow,
   type MessageRow,
 } from '../db/rows.js';
-import type { ActivityKind } from '@chat-explorer/shared/types.js';
+import type { ActivityKind, CodingCapacity } from '@chat-explorer/shared/types.js';
 import { StoreError } from './errors.js';
 import type { EventBus } from './event-bus.js';
 import { newId } from './ids.js';
@@ -52,6 +52,7 @@ const unansweredAfter = `COALESCE(
 // on each, the user messages it has not answered yet, and what it reports back.
 export class RunStore {
   private lastRunnerSeenAt = 0;
+  private codingCapacity: { capacity: CodingCapacity | null; at: number } | null = null;
 
   // Forks a terminal session answered and keeps holding while it works on before waiting for
   // feedback again, so its steps show under the answer: the answer's id and the last step's time.
@@ -105,6 +106,17 @@ export class RunStore {
     );
     if (answering) return 'answering';
     return this.runnerOnline() ? 'listening' : 'detached';
+  }
+
+  // The runner repeats it while it runs, so one that went away stops counting.
+  setCodingCapacity(capacity: CodingCapacity | null) {
+    this.codingCapacity = { capacity, at: this.now() };
+  }
+
+  // Null while no runner is around, or its runner doesn't code.
+  currentCodingCapacity() {
+    const reported = this.codingCapacity;
+    return reported && this.now() - reported.at < runnerOnlineMs ? reported.capacity : null;
   }
 
   private runnerOnline() {
@@ -196,10 +208,17 @@ export class RunStore {
   // The runner stopped the turn: the messages it had count as handled, without an answer, and
   // the fork is free again.
   stopped(forkId: string, leaseId: string, upToMessageId: string | null) {
-    this.requireLease(forkId, leaseId);
+    const row = this.requireLease(forkId, leaseId);
+    // A fork stopped while it waited for memory never handed its messages to an engine. They count
+    // as handled all the same, or the fork would be claimed again for them.
+    const handled =
+      upToMessageId ??
+      (row.status === 'waiting_memory'
+        ? (this.pendingInput(forkId, leaseId).at(-1)?.id ?? null)
+        : null);
     this.update(forkId, {
       ...noLease,
-      ...(upToMessageId ? { input_cursor: upToMessageId } : {}),
+      ...(handled ? { input_cursor: handled } : {}),
       failed_attempts: 0,
       status: 'idle',
       status_detail: null,
@@ -320,6 +339,12 @@ export class RunStore {
       context_tokens: usage.contextTokens,
       context_window: usage.contextWindow,
     });
+    this.publishRun(forkId);
+  }
+
+  waitForMemory(forkId: string, leaseId: string, reason: string) {
+    this.requireLease(forkId, leaseId);
+    this.update(forkId, { status: 'waiting_memory', status_detail: reason });
     this.publishRun(forkId);
   }
 
