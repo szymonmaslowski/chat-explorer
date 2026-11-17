@@ -15,7 +15,7 @@ import {
   megabytes,
   uninstallDictation,
 } from '../dictation/install.js';
-import { loadSettings, SettingsError } from '../settings.js';
+import { loadSettings, runnerSettingsEnv, SettingsError } from '../settings.js';
 import { installSpeech, uninstallSpeech } from '../speech/install.js';
 import { relativeTime } from '@chat-explorer/shared/time.js';
 import type { ExplorationListItem } from '@chat-explorer/shared/types.js';
@@ -57,7 +57,8 @@ const truncate = (text: string, length: number) =>
 
 const commands: Record<string, (args: string[]) => Promise<void>> = {
   async runner() {
-    await import('../runner/main.js');
+    Object.assign(process.env, runnerSettingsEnv(loadSettings(config)));
+    await import('@chat-explorer/runner/main.js');
   },
   async start() {
     const { health, started } = await ensureRunning();

@@ -2,14 +2,10 @@ import { readFileSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { claudeDockerArguments } from '../src/runner/claude-engine.js';
-import {
-  claudeDockerfile,
-  isolatedDockerConfig,
-  newerVersion,
-} from '../src/runner/claude-image.js';
+import { claudeDockerArguments } from '../src/claude-engine.js';
+import { claudeDockerfile, isolatedDockerConfig, newerVersion } from '../src/claude-image.js';
 import { toolSummary } from '@chat-explorer/shared/tool-summary.js';
-import { parseClaudeStreamLine, streamUserMessage } from '../src/runner/claude-stream.js';
+import { parseClaudeStreamLine, streamUserMessage } from '../src/claude-stream.js';
 
 const recorded = readFileSync(new URL('./fixtures/claude-stream.jsonl', import.meta.url), 'utf8')
   .trim()

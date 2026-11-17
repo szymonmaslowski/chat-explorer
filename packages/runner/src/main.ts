@@ -1,12 +1,10 @@
 import { loadConfig } from '@chat-explorer/shared/config.js';
-import { loadSettings } from '../settings.js';
 import { readMachineToken } from '@chat-explorer/shared/machine-token.js';
 import { startRunner } from './start.js';
 
 // The runner as its own process. It reaches the backend only over HTTP with the machine token, so
 // the backend can be the daemon next to it or, later, one in the cloud.
 const config = loadConfig();
-const settings = loadSettings(config);
 const backendUrl = process.env.CHAT_EXPLORER_BACKEND_URL ?? config.baseUrl;
 const log = (message: string) => console.log(`${new Date().toISOString()} ${message}`);
 
@@ -16,10 +14,17 @@ const runner = await startRunner({
   machineToken: readMachineToken(config.machineTokenPath),
   runnerPath: config.runnerPath,
   filesPath: config.filesPath,
-  maxParallel: settings.runner.maxParallel,
-  idleMinutes: settings.runner.idleMinutes,
+  maxParallel: runnerSetting('CHAT_EXPLORER_RUNNER_MAX_PARALLEL'),
+  idleMinutes: runnerSetting('CHAT_EXPLORER_RUNNER_IDLE_MINUTES'),
   log,
 });
+
+// The daemon reads the settings file and passes the runner its part when it starts it.
+function runnerSetting(name: string) {
+  const value = Number(process.env[name]);
+  if (!(value > 0)) throw new Error(`${name} is not set: start the runner through the daemon.`);
+  return value;
+}
 
 const stop = async () => {
   await runner.stop();

@@ -46,6 +46,12 @@ export type Settings = z.infer<typeof settingsSchema>;
 
 export class SettingsError extends Error {}
 
+// The runner's part of the settings, which it gets in its environment instead of reading the file.
+export const runnerSettingsEnv = (settings: Settings) => ({
+  CHAT_EXPLORER_RUNNER_MAX_PARALLEL: String(settings.runner.maxParallel),
+  CHAT_EXPLORER_RUNNER_IDLE_MINUTES: String(settings.runner.idleMinutes),
+});
+
 export function loadSettings(config: Config): Settings {
   const fromFile: object = existsSync(config.settingsPath)
     ? parseJson(readFileSync(config.settingsPath, 'utf8'), config.settingsPath)

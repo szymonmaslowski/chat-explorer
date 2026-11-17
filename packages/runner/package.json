@@ -1,0 +1,28 @@
+{
+  "name": "@chat-explorer/runner",
+  "version": "0.1.0",
+  "description": "Claims chat-explorer forks and answers them with an engine in a Docker sandbox",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    "./package.json": "./package.json",
+    "./*.js": {
+      "chat-explorer-source": "./src/*.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@chat-explorer/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.5"
+  }
+}

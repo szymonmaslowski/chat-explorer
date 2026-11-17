@@ -14,7 +14,7 @@ import { FileStorage } from '../files/file-storage.js';
 import { findTranscript } from '../import/transcript.js';
 import { BackgroundSessions } from '../sessions/background-sessions.js';
 import { claudeLauncher } from '../sessions/launch-claude.js';
-import { loadSettings, SettingsError } from '../settings.js';
+import { loadSettings, runnerSettingsEnv, SettingsError } from '../settings.js';
 import { chatterboxEngine } from '../speech/chatterbox.js';
 import { inspectSpeech, sayEngine } from '../speech/macos.js';
 import { Speaker } from '../speech/speaker.js';
@@ -136,7 +136,11 @@ server.listen(config.port, '127.0.0.1', () => {
   if (!settings.runner.enabled) return;
   runner = superviseRunner({
     logPath: config.runnerLogPath,
-    env: { CHAT_EXPLORER_HOME: config.home, CHAT_EXPLORER_PORT: String(config.port) },
+    env: {
+      CHAT_EXPLORER_HOME: config.home,
+      CHAT_EXPLORER_PORT: String(config.port),
+      ...runnerSettingsEnv(settings),
+    },
   });
 });
 

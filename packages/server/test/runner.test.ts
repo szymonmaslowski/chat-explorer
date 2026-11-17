@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { RunnerClient } from '../src/runner/client.js';
-import type { Engine, EngineEvent, EngineRunSpec } from '../src/runner/engine.js';
-import { Runner } from '../src/runner/runner.js';
+import { RunnerClient } from '@chat-explorer/runner/client.js';
+import type { Engine, EngineEvent, EngineRunSpec } from '@chat-explorer/runner/engine.js';
+import { Runner } from '@chat-explorer/runner/runner.js';
 import { createTestApp, seedConversation, testMachineToken } from './helpers.js';
 
 interface FakeRun {

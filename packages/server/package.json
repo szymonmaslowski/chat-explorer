@@ -29,7 +29,8 @@
     "markdown-it": "^15.0.3",
     "nanoid": "^6.0.2",
     "zod": "^4.6.7",
-    "@chat-explorer/shared": "workspace:*"
+    "@chat-explorer/shared": "workspace:*",
+    "@chat-explorer/runner": "workspace:*"
   },
   "devDependencies": {
     "@types/markdown-it": "^14.2.0",

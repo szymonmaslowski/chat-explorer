@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { openSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-const runnerEntry = fileURLToPath(new URL('./main.js', import.meta.url));
+const runnerEntry = fileURLToPath(import.meta.resolve('@chat-explorer/runner/main.js'));
 const restartDelaysMs = [1_000, 5_000, 30_000];
 // A runner that stayed up this long counts as healthy again, so its next crash restarts quickly.
 const healthyAfterMs = 60_000;
