@@ -35,11 +35,18 @@ export function registerServiceWorker() {
     .catch(() => {});
 }
 
+// A worker no longer waiting, because another tab already switched to it or a newer version
+// replaced it, ignores the message; the page then only needs loading again. The same goes when
+// the switch does not come, so the button always does something.
+const takeoverWaitMs = 3_000;
+
 export function reloadIntoNewVersion() {
   const worker = waitingVersion.value;
   if (!worker) return;
+  if (worker.state !== 'installed') return location.reload();
   reloadOnTakeover = true;
   worker.postMessage('skip-waiting');
+  setTimeout(() => location.reload(), takeoverWaitMs);
 }
 
 // Fetched once through the worker, an image is kept for offline use.
