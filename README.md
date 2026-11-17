@@ -160,6 +160,16 @@ chat-explorer dictation install|uninstall   download or delete the Whisper model
 | `dictation`    | see below  | `{ "model": "large-v3-turbo-q5_0", "language": "auto" }` |
 | `speech`       | see below  | `{ "engine": "chatterbox", "cacheMegabytes": 1024 }`     |
 
+### Coding forks
+
+A fork with **Coding** switched on (Chat settings → This fork) runs in its container with Bash and file tools, in its own workspace: `~/.chat-explorer/workspaces/<chat>/<fork>`, real files you can open. The runner refuses such a fork unless its own config, `~/.chat-explorer/runner/config.json`, allows it:
+
+```json
+{ "coding": { "enabled": true } }
+```
+
+Restart the daemon after changing it, so the runner reads it again. The fork's next container picks up the switch. For now the container reaches only the model and the chat tools, so downloads and package installs fail. The plan is in the note _Coding forks: build brief_.
+
 The daemon listens on `127.0.0.1` only and rejects requests from other websites. Requests through `publicUrl` are accepted too, so anyone who can reach that address can start Claude sessions on your Mac. Keep it inside your tailnet (`tailscale serve`, not `tailscale funnel`).
 
 ## How it works
@@ -198,6 +208,7 @@ pnpm typecheck
 pnpm --filter ui test:e2e          # Playwright, runs in the installed Chrome against a seeded daemon
 pnpm --filter ui dev               # Vite dev server, proxies /api to the daemon
 pnpm --filter @chat-explorer/backend seed   # sample exploration in CHAT_EXPLORER_HOME
+pnpm --filter @chat-explorer/runner test:docker   # coding container checks; needs Docker and the runner image
 ```
 
 The code is in packages that reach each other only along these lines, which `pnpm check:imports` enforces:
