@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, openSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { Config } from '@chat-explorer/shared/config.js';
-import { probe } from '@chat-explorer/shared/health.js';
+import { DaemonStartError, probe } from '@chat-explorer/shared/health.js';
 import { serviceRunsFor, startService } from './service.js';
 
 export interface DaemonTarget {
@@ -14,8 +14,6 @@ export interface DaemonTarget {
 const startTimeoutMs = 5_000;
 const pollIntervalMs = 100;
 export const defaultDaemonEntry = fileURLToPath(new URL('./main.js', import.meta.url));
-
-export class DaemonStartError extends Error {}
 
 const sleep = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 

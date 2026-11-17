@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { Config } from '@chat-explorer/shared/config.js';
-import { DaemonStartError, defaultDaemonEntry, stopDaemon, waitForHealth } from './control.js';
+import { DaemonStartError } from '@chat-explorer/shared/health.js';
+import { defaultDaemonEntry, stopDaemon, waitForHealth } from './control.js';
 import { launchAgentPath, runCommand, serviceLabel, userDomain, xmlString } from './service.js';
 
 export function launchAgentPlist(input: {

@@ -1,3 +1,6 @@
+// The daemon could not be started or stopped; the message says why, for the user.
+export class DaemonStartError extends Error {}
+
 // Whether the daemon answers at its address, and which version it is.
 export interface Health {
   name: 'chat-explorer';

@@ -1,0 +1,30 @@
+{
+  "name": "@chat-explorer/mcp",
+  "version": "0.1.0",
+  "description": "The chat-explorer plugin's code: the MCP server that makes a Claude Code session a runner, and its hooks",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    "./package.json": "./package.json",
+    "./*.js": {
+      "chat-explorer-source": "./src/*.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@chat-explorer/shared": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.5"
+  }
+}

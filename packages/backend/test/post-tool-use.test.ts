@@ -8,9 +8,9 @@ import {
   postToolUseStep,
   progressReminder,
   readNewTranscriptLines,
-} from '../src/hooks/post-tool-use.js';
-import { callsBeforeReminder } from '@chat-explorer/backend/store/progress-lines.js';
-import { createTestApp, seedConversation } from '../../backend/test/helpers.js';
+} from '@chat-explorer/mcp/hooks/post-tool-use.js';
+import { callsBeforeReminder } from '../src/store/progress-lines.js';
+import { createTestApp, seedConversation } from './helpers.js';
 
 const assistantLine = (text: string, isSidechain = false) =>
   JSON.stringify({

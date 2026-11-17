@@ -3,8 +3,8 @@ import '@chat-explorer/shared/suppress-warnings.js';
 import { parseArgs } from 'node:util';
 import { createDaemonClient, DaemonError } from '@chat-explorer/shared/http.js';
 import { apiVersion, loadConfig } from '@chat-explorer/shared/config.js';
-import { probe } from '@chat-explorer/shared/health.js';
-import { DaemonStartError, ensureDaemon, stopDaemon } from '../daemon/control.js';
+import { DaemonStartError, probe } from '@chat-explorer/shared/health.js';
+import { ensureDaemon, stopDaemon } from '../daemon/control.js';
 import { servicePid, serviceRunsFor } from '../daemon/service.js';
 import { dictationAvailability } from '@chat-explorer/backend/dictation/availability.js';
 import { whisperModelPath, whisperModels } from '@chat-explorer/backend/dictation/models.js';
@@ -221,12 +221,17 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
   },
 
   async mcp() {
-    const { runShim } = await import('../mcp/shim.js');
-    await runShim();
+    const { runShim } = await import('@chat-explorer/mcp/shim.js');
+    await runShim({
+      config,
+      version: packageVersion,
+      openUrl: process.env.CHAT_EXPLORER_NO_BROWSER ? () => {} : openBrowser,
+      ensureDaemon: ensureRunning,
+    });
   },
 
   async hook([name]) {
-    const { runHook } = await import('../hooks/run-hook.js');
+    const { runHook } = await import('@chat-explorer/mcp/hooks/run-hook.js');
     await runHook(name ?? '', config);
   },
 

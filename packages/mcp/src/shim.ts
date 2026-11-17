@@ -4,11 +4,9 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { createDaemonClient, DaemonError } from '@chat-explorer/shared/http.js';
-import { apiVersion, loadConfig, type Config } from '@chat-explorer/shared/config.js';
-import { DaemonStartError, ensureDaemon } from '../daemon/control.js';
-import { openBrowser } from '../open-browser.js';
+import type { Config } from '@chat-explorer/shared/config.js';
+import { DaemonStartError } from '@chat-explorer/shared/health.js';
 import type { ExplorationListItem, Note, NoteGroup } from '@chat-explorer/shared/types.js';
-import { packageVersion } from '@chat-explorer/shared/version.js';
 import {
   readNotesDescription,
   readNotesLimit,
@@ -33,10 +31,13 @@ const defaultFeedbackTimeoutSeconds = 23 * 60 * 60;
 const keepListening =
   'Call await_feedback again now. Keep listening until the user interrupts you in the terminal.';
 
+// The command running the shim starts the daemon and opens the browser for it, so the shim reaches
+// the daemon only over HTTP.
 export interface ShimOptions {
   config: Config;
   version: string;
   openUrl: (url: string) => void;
+  ensureDaemon: () => Promise<unknown>;
 }
 
 interface Attachment {
@@ -61,7 +62,7 @@ export function createShim(options: ShimOptions) {
   let heartbeat: NodeJS.Timeout | null = null;
 
   const ensureReady = async () => {
-    daemonReady ??= ensureDaemon(options.config, { version: options.version, apiVersion });
+    daemonReady ??= options.ensureDaemon();
     try {
       await daemonReady;
     } catch (error) {
@@ -570,12 +571,8 @@ export function createShim(options: ShimOptions) {
   return { server, close, shimId };
 }
 
-export async function runShim() {
-  const shim = createShim({
-    config: loadConfig(),
-    version: packageVersion,
-    openUrl: process.env.CHAT_EXPLORER_NO_BROWSER ? () => {} : openBrowser,
-  });
+export async function runShim(options: ShimOptions) {
+  const shim = createShim(options);
   const transport = new StdioServerTransport();
   const exit = () => {
     void shim.close().finally(() => process.exit(0));

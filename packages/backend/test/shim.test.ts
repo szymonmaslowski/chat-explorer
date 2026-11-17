@@ -4,21 +4,21 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createApp } from '@chat-explorer/backend/api/app.js';
+import { createApp } from '../src/api/app.js';
 import { loadConfig } from '@chat-explorer/shared/config.js';
-import { Database } from '@chat-explorer/backend/db/database.js';
-import { FileStorage } from '@chat-explorer/backend/files/file-storage.js';
-import { createShim } from '../src/mcp/shim.js';
-import { EventBus } from '@chat-explorer/backend/store/event-bus.js';
-import { FeedbackHub } from '@chat-explorer/backend/store/feedback-hub.js';
-import { RunStore } from '@chat-explorer/backend/store/runs.js';
-import { ChatStore } from '@chat-explorer/backend/store/store.js';
+import { Database } from '../src/db/database.js';
+import { FileStorage } from '../src/files/file-storage.js';
+import { createShim } from '@chat-explorer/mcp/shim.js';
+import { EventBus } from '../src/store/event-bus.js';
+import { FeedbackHub } from '../src/store/feedback-hub.js';
+import { RunStore } from '../src/store/runs.js';
+import { ChatStore } from '../src/store/store.js';
 import {
   createTestSessions,
   createTestSpeaker,
   createTestTranscriber,
   testMachineToken,
-} from '../../backend/test/helpers.js';
+} from './helpers.js';
 
 const version = '0.0.0-test';
 let server: Server;
@@ -68,7 +68,12 @@ afterEach(async () => {
 
 async function connectClient() {
   const openedUrls: string[] = [];
-  const shim = createShim({ config, version, openUrl: (url) => openedUrls.push(url) });
+  const shim = createShim({
+    config,
+    version,
+    openUrl: (url) => openedUrls.push(url),
+    ensureDaemon: async () => {},
+  });
   shims.push(shim);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await shim.server.connect(serverTransport);
