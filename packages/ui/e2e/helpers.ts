@@ -61,19 +61,28 @@ export async function clickQuotedText(page: Page, quote: string) {
   await page.mouse.click(point.x, point.y);
 }
 
+// The point is measured once the page stops moving: a smooth scroll still under way, such as to a
+// queued submit, would carry the text away from it before the click.
 async function quotedTextPoint(page: Page, quote: string) {
   await page.waitForFunction((text) => document.body.innerText.includes(text), quote);
-  return page.evaluate((text) => {
+  return page.evaluate(async (text) => {
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     while (walker.nextNode()) {
       const node = walker.currentNode as Text;
       const at = node.data.indexOf(text);
       if (at === -1 || node.parentElement?.closest('[data-inserted]')) continue;
-      node.parentElement!.scrollIntoView({ block: 'center' });
       const range = document.createRange();
       range.setStart(node, at + 2);
       range.setEnd(node, at + 3);
-      const box = range.getBoundingClientRect();
+      const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+      let box = range.getBoundingClientRect();
+      for (let stillFrames = 0; stillFrames < 3;) {
+        node.parentElement!.scrollIntoView({ block: 'center' });
+        await nextFrame();
+        const moved = range.getBoundingClientRect();
+        stillFrames = moved.top === box.top ? stillFrames + 1 : 0;
+        box = moved;
+      }
       return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
     }
     throw new Error(`"${text}" not found`);
