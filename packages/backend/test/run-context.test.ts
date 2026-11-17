@@ -41,6 +41,22 @@ describe('the context of a new engine session', () => {
   });
 });
 
+describe("the fork's coding switch", () => {
+  it('is off for a new fork, and the context carries it once it is turned on', () => {
+    const { store } = createTestStore();
+    const { mainFork } = store.createExploration({
+      messages: [{ role: 'user', content: 'Hello' }],
+    });
+    const context = (resume: boolean) =>
+      buildRunContext(store, mainFork.id, { resume, pendingIds: new Set() });
+    expect(store.fork(mainFork.id).coding).toBe(false);
+    expect(context(false).coding).toBe(false);
+    expect(store.setForkCoding(mainFork.id, true).coding).toBe(true);
+    expect(context(false).coding).toBe(true);
+    expect(context(true).coding).toBe(true);
+  });
+});
+
 describe("hearing about the chat's other forks", () => {
   function chatWithTwoForks() {
     const context = createTestStore();

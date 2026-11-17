@@ -29,6 +29,8 @@ export interface RunUsage {
 // a fork without an engine session yet, the conversation it continues.
 export interface RunContext {
   model: ClaudeModel;
+  // The fork's coding switch. The runner still checks its own config before it honours it.
+  coding: boolean;
   systemPrompt: string;
   // Put before the first messages of a new session; null when the session is resumed.
   history: string | null;

@@ -125,6 +125,7 @@ const unreadFromBody = z.object({ viewForkId: z.string(), at: markedAt });
 const noteForkBody = z.object({ id: clientId, forkId: clientId, message: z.string() });
 const answerForkBody = z.object({ forkId: clientId });
 const forkAwarenessBody = z.object({ awareness: z.enum(['aware', 'separate']) });
+const forkCodingBody = z.object({ coding: z.boolean() });
 const newBookmarkBody = z.object({
   id: clientId,
   forkId: z.string(),
@@ -292,6 +293,11 @@ export function createApp(options: AppOptions) {
   app.patch('/api/forks/:id/awareness', async (context) => {
     const { awareness } = forkAwarenessBody.parse(await context.req.json());
     return context.json(store.setForkAwareness(context.req.param('id'), awareness));
+  });
+
+  app.patch('/api/forks/:id/coding', async (context) => {
+    const { coding } = forkCodingBody.parse(await context.req.json());
+    return context.json(store.setForkCoding(context.req.param('id'), coding));
   });
 
   app.post('/api/forks/:id/stop', (context) =>

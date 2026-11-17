@@ -694,10 +694,22 @@ export class ChatStore {
   }
 
   setForkAwareness(forkId: string, awareness: ForkAwareness) {
+    return this.updateForkSetting(forkId, 'awareness', awareness);
+  }
+
+  setForkCoding(forkId: string, coding: boolean) {
+    return this.updateForkSetting(forkId, 'coding', coding ? 1 : 0);
+  }
+
+  private updateForkSetting(
+    forkId: string,
+    column: 'awareness' | 'coding',
+    value: string | number,
+  ) {
     const row = this.requireWritableFork(forkId);
     this.db.run(
-      'UPDATE forks SET awareness = ?, updated_at = ? WHERE id = ?',
-      awareness,
+      `UPDATE forks SET ${column} = ?, updated_at = ? WHERE id = ?`,
+      value,
       this.now(),
       forkId,
     );

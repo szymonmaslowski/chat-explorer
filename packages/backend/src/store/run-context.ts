@@ -79,7 +79,8 @@ export function buildRunContext(
   const fork = store.readFork(forkId);
   const explorationId = store.forkExplorationId(forkId);
   const { model } = store.backgroundSession(explorationId);
-  if (options.resume) return { model, systemPrompt, history: null };
+  const { coding } = store.fork(forkId);
+  if (options.resume) return { model, coding, systemPrompt, history: null };
   const answered = fork.messages.filter((message) => !options.pendingIds.has(message.id));
   const kept: typeof answered = [];
   let length = 0;
@@ -110,5 +111,10 @@ export function buildRunContext(
   const messages = kept.map(
     (message) => `<message id="${message.id}" role="${message.role}">\n${message.text}\n</message>`,
   );
-  return { model, systemPrompt, history: [intro.join('\n'), ...messages].join('\n\n') };
+  return {
+    model,
+    coding,
+    systemPrompt,
+    history: [intro.join('\n'), ...messages].join('\n\n'),
+  };
 }

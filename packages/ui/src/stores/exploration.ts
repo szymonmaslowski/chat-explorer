@@ -381,6 +381,7 @@ function addNewFork(
     kind: 'soft',
     summary,
     awareness: 'aware',
+    coding: false,
     createdAt: now,
     updatedAt: now,
     archivedAt: null,

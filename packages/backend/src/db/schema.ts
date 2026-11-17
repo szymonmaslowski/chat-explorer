@@ -371,4 +371,7 @@ export const migrations = [
   -- Which device made a note's last edit, so an edit from another device made meanwhile is seen.
   ALTER TABLE notes ADD COLUMN updated_device TEXT;
   `,
+  `
+  ALTER TABLE forks ADD COLUMN coding INTEGER NOT NULL DEFAULT 0;
+  `,
 ];

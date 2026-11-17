@@ -272,6 +272,19 @@ describe('a chat setting', () => {
   });
 });
 
+describe("a fork's coding switch", () => {
+  it('turns coding on and off, and accepts only a yes or no', async () => {
+    const { request, store } = createTestApp();
+    const { mainForkId } = seedConversation(store);
+    const set = (json: object) =>
+      request(`/api/forks/${mainForkId}/coding`, { method: 'PATCH', json });
+    expect(await (await set({ coding: true })).json()).toMatchObject({ coding: true });
+    expect(store.fork(mainForkId).coding).toBe(true);
+    expect(await (await set({ coding: false })).json()).toMatchObject({ coding: false });
+    expect((await set({ coding: 'yes' })).status).toBe(400);
+  });
+});
+
 describe('the main fork overseeing the other forks', () => {
   it('lets only the attached session message, stop or retry another fork', async () => {
     const { request, store } = createTestApp();

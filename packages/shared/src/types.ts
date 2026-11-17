@@ -57,6 +57,8 @@ export interface Fork {
   kind: ForkKind;
   summary: string;
   awareness: ForkAwareness;
+  // Claude may run commands and write files in the fork's workspace, in its container.
+  coding: boolean;
   createdAt: number;
   updatedAt: number;
   // Set on the fork the reader archived; the forks below it count as archived too.

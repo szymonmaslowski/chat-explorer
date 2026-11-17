@@ -50,6 +50,7 @@ export interface ForkRow {
   kind: ForkKind;
   summary: string;
   awareness: ForkAwareness;
+  coding: number;
   created_at: number;
   updated_at: number;
   archived_at: number | null;
@@ -226,6 +227,7 @@ export const toFork = (row: ForkRow): Fork => ({
   kind: row.kind,
   summary: row.summary,
   awareness: row.awareness,
+  coding: row.coding === 1,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   archivedAt: row.archived_at,
