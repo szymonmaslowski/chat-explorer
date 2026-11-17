@@ -14,6 +14,7 @@ const runner = await startRunner({
   machineToken: readMachineToken(config.machineTokenPath),
   runnerPath: config.runnerPath,
   filesPath: config.filesPath,
+  workspacesPath: config.workspacesPath,
   maxParallel: runnerSetting('CHAT_EXPLORER_RUNNER_MAX_PARALLEL'),
   idleMinutes: runnerSetting('CHAT_EXPLORER_RUNNER_IDLE_MINUTES'),
   log,

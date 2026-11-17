@@ -9,6 +9,8 @@ import type { Engine, EngineEvent, EngineRun, EngineRunSpec } from './engine.js'
 export interface ClaudeEnginePaths {
   // Per fork: its working folder and its Claude Code sessions, kept between containers.
   forksPath: string;
+  // A coding fork works in its own folder here instead, per chat and fork.
+  workspacesPath: string;
   // Uploads, readable by the engine at the same path as on the host.
   filesPath: string;
 }
@@ -28,27 +30,25 @@ const killAfterMs = 5_000;
 
 export const containerName = (forkId: string) => `chat-explorer-run-${forkId}`;
 
-export const forkFolders = (forksPath: string, forkId: string) => ({
-  work: join(forksPath, forkId, 'work'),
-  sessions: join(forksPath, forkId, 'claude-projects'),
+// The session folder stays under the runner's folder for every fork, outside any workspace, so the
+// agent cannot reach it through a workspace mount or an editor.
+export const forkFolders = (
+  paths: ClaudeEnginePaths,
+  spec: Pick<EngineRunSpec, 'forkId' | 'explorationId' | 'coding'>,
+) => ({
+  work: spec.coding
+    ? join(paths.workspacesPath, spec.explorationId, spec.forkId)
+    : join(paths.forksPath, spec.forkId, 'work'),
+  sessions: join(paths.forksPath, spec.forkId, 'claude-projects'),
 });
 
-// The folder appears inside the container at the same absolute path, so Claude Code files the
-// session under the same project name it would use on the host.
-export function claudeDockerArguments(
-  spec: EngineRunSpec,
-  options: Omit<ClaudeEngineOptions, 'oauthToken'>,
-) {
-  const folders = forkFolders(options.forksPath, spec.forkId);
-  const mcpConfig = {
-    mcpServers: {
-      [mcpServerName]: {
-        type: 'http',
-        url: spec.toolsUrl,
-        headers: { Authorization: `Bearer ${spec.toolsToken}` },
-      },
-    },
-  };
+type ContainerOptions = Omit<ClaudeEngineOptions, 'oauthToken'>;
+
+// The one `docker run` template: only these flags, filled from checked values. Nothing from a job
+// is passed through as a flag. The work folder appears at the same absolute path inside, so Claude
+// Code files the session under the project name it would use on the host.
+export function containerArguments(spec: EngineRunSpec, options: ContainerOptions) {
+  const folders = forkFolders(options, spec);
   return [
     'run',
     '--interactive',
@@ -60,9 +60,9 @@ export function claudeDockerArguments(
     '--security-opt',
     'no-new-privileges',
     '--pids-limit',
-    '256',
+    spec.coding ? '512' : '256',
     '--memory',
-    '2g',
+    spec.coding ? '4g' : '2g',
     '--cpus',
     '2',
     '--env',
@@ -79,6 +79,31 @@ export function claudeDockerArguments(
     '--volume',
     `${options.filesPath}:${options.filesPath}:ro`,
     options.image(),
+  ];
+}
+
+const chatTools = ['WebSearch', 'Read'];
+const codingTools = ['Bash', 'Read', 'Edit', 'Write', 'Glob', 'Grep', 'WebSearch', 'TodoWrite'];
+
+const codingPrompt = (workspace: string) => `
+
+This fork is a coding fork. You run in a Linux container with Bash and file tools. Your workspace is ${workspace}: a real folder on the user's computer, kept between sessions, and the only folder that is. Work there: clone repositories into it or start projects in it, several side by side if needed. The network reaches only the model and the chat tools for now, so downloads and package installs fail.`;
+
+function claudeArguments(spec: EngineRunSpec, options: ContainerOptions) {
+  const mcpConfig = {
+    mcpServers: {
+      [mcpServerName]: {
+        type: 'http',
+        url: spec.toolsUrl,
+        headers: { Authorization: `Bearer ${spec.toolsToken}` },
+      },
+    },
+  };
+  const tools = spec.coding ? codingTools : chatTools;
+  const allowedTools = spec.coding
+    ? [...codingTools, `mcp__${mcpServerName}`]
+    : ['WebSearch', `Read(/${options.filesPath}/**)`, `mcp__${mcpServerName}`];
+  return [
     'claude',
     '-p',
     '--input-format',
@@ -91,20 +116,25 @@ export function claudeDockerArguments(
     spec.resume ? '--resume' : '--session-id',
     spec.sessionId,
     '--tools',
-    'WebSearch,Read',
+    tools.join(','),
     '--allowedTools',
-    'WebSearch',
-    `Read(/${options.filesPath}/**)`,
-    `mcp__${mcpServerName}`,
+    ...allowedTools,
     '--mcp-config',
     JSON.stringify(mcpConfig),
     '--strict-mcp-config',
     '--permission-prompts',
     'none',
     '--append-system-prompt',
-    spec.systemPrompt,
+    spec.coding
+      ? spec.systemPrompt + codingPrompt(forkFolders(options, spec).work)
+      : spec.systemPrompt,
   ];
 }
+
+export const claudeDockerArguments = (spec: EngineRunSpec, options: ContainerOptions) => [
+  ...containerArguments(spec, options),
+  ...claudeArguments(spec, options),
+];
 
 // The model for small jobs, cheap and quick.
 const completionModel = 'haiku';
@@ -158,7 +188,7 @@ export function claudeCodeEngine(options: ClaudeEngineOptions): Engine {
       });
     },
     start(spec) {
-      const folders = forkFolders(options.forksPath, spec.forkId);
+      const folders = forkFolders(options, spec);
       mkdirSync(folders.work, { recursive: true });
       mkdirSync(folders.sessions, { recursive: true });
       const child = spawn('docker', claudeDockerArguments(spec, options), {

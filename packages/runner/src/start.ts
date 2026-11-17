@@ -20,6 +20,7 @@ export interface StartRunnerOptions {
   machineToken: string;
   runnerPath: string;
   filesPath: string;
+  workspacesPath: string;
   maxParallel: number;
   idleMinutes: number;
   log: (message: string) => void;
@@ -67,6 +68,7 @@ export async function startRunner(options: StartRunnerOptions) {
       port: options.port,
       forksPath: join(options.runnerPath, 'forks'),
       filesPath: options.filesPath,
+      workspacesPath: options.workspacesPath,
       oauthToken: () => readClaudeToken(options.runnerPath),
     }),
     runnerId: `${hostname()}-${process.pid}`,

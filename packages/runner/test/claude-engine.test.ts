@@ -77,12 +77,14 @@ describe('starting Claude Code in Docker', () => {
     toolsUrl: 'http://host.docker.internal:4517/api/runner/mcp',
     toolsToken: 'job-token',
   };
-  const args = claudeDockerArguments(spec, {
+  const options = {
     image: () => 'chat-explorer-claude:2.1.319',
     port: 4517,
     forksPath: '/home/me/.chat-explorer/runner/forks',
+    workspacesPath: '/home/me/.chat-explorer/workspaces',
     filesPath: '/home/me/.chat-explorer/files',
-  });
+  };
+  const args = claudeDockerArguments(spec, options);
 
   it('reaches the outside only through the egress proxy', () => {
     expect(args).toEqual(expect.arrayContaining(['--network', 'chat-explorer-sandbox']));
@@ -109,6 +111,36 @@ describe('starting Claude Code in Docker', () => {
       url: spec.toolsUrl,
       headers: { Authorization: 'Bearer job-token' },
     });
+  });
+
+  it('gives a chat fork only web search and reading its uploads', () => {
+    expect(args[args.indexOf('--tools') + 1]).toBe('WebSearch,Read');
+    expect(args).not.toContain('Bash');
+  });
+
+  it('gives a coding fork its workspace, shell and file tools, and its own sessions folder', () => {
+    const coding = claudeDockerArguments(
+      { ...spec, forkId: 'fork_0000000002', explorationId: 'chat_0000000002', coding: true },
+      options,
+    );
+    const workspace = '/home/me/.chat-explorer/workspaces/chat_0000000002/fork_0000000002';
+    expect(coding).toEqual(
+      expect.arrayContaining([
+        '--volume',
+        `${workspace}:${workspace}`,
+        '--workdir',
+        workspace,
+        '--volume',
+        '/home/me/.chat-explorer/runner/forks/fork_0000000002/claude-projects:/home/agent/.claude/projects',
+        '--memory',
+        '4g',
+      ]),
+    );
+    expect(coding[coding.indexOf('--tools') + 1]).toBe(
+      'Bash,Read,Edit,Write,Glob,Grep,WebSearch,TodoWrite',
+    );
+    expect(coding.at(-1)).toContain(`Your workspace is ${workspace}`);
+    expect(coding.join(' ')).not.toContain('/home/me/.chat-explorer/runner/config.json');
   });
 
   it('builds an image at the given Claude Code version with the updater off', () => {

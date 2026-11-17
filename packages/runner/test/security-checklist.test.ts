@@ -25,6 +25,7 @@ const engineOptions = {
   image: () => 'chat-explorer-claude:2.1.325',
   port: 4517,
   forksPath: '/runner/forks',
+  workspacesPath: '/workspaces',
   filesPath: '/files',
 };
 

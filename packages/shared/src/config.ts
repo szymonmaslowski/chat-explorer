@@ -16,6 +16,8 @@ export function loadConfig() {
     sessionsPath: join(home, 'sessions'),
     modelsPath: join(home, 'models'),
     filesPath: join(home, 'files'),
+    // A coding fork's project, per chat and fork: real files the user can open.
+    workspacesPath: join(home, 'workspaces'),
     speechPath: join(home, 'speech'),
     speechCachePath: join(home, 'speech-cache'),
     runnerPath: join(home, 'runner'),
