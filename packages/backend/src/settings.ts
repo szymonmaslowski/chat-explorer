@@ -19,7 +19,7 @@ const settingsSchema = z
     runner: z
       .object({
         enabled: z.boolean().default(false),
-        maxParallel: z.number().int().positive().default(3),
+        maxParallel: z.number().int().positive().default(5),
         idleMinutes: z.number().positive().default(10),
       })
       .strict()
