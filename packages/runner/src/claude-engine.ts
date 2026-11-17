@@ -5,6 +5,7 @@ import { createInterface } from 'node:readline';
 import { parseClaudeStreamLine, streamUserMessage } from './claude-stream.js';
 import { sandboxArguments } from './egress.js';
 import type { Engine, EngineEvent, EngineRun, EngineRunSpec } from './engine.js';
+import type { ContainerLimits } from './runner-config.js';
 
 export interface ClaudeEnginePaths {
   // Per fork: its working folder and its Claude Code sessions, kept between containers.
@@ -20,6 +21,8 @@ export interface ClaudeEngineOptions extends ClaudeEnginePaths {
   image: () => string;
   // The daemon's port, which names the egress proxy the engine goes out through.
   port: number;
+  // From the runner's config: a coding fork's container gets these instead of the chat limits.
+  codingLimits: ContainerLimits;
   oauthToken: () => string;
 }
 
@@ -42,6 +45,8 @@ export const forkFolders = (
   sessions: join(paths.forksPath, spec.forkId, 'claude-projects'),
 });
 
+const chatLimits: ContainerLimits = { memory: '2g', processes: 256 };
+
 type ContainerOptions = Omit<ClaudeEngineOptions, 'oauthToken'>;
 
 // The one `docker run` template: only these flags, filled from checked values. Nothing from a job
@@ -49,6 +54,7 @@ type ContainerOptions = Omit<ClaudeEngineOptions, 'oauthToken'>;
 // Code files the session under the project name it would use on the host.
 export function containerArguments(spec: EngineRunSpec, options: ContainerOptions) {
   const folders = forkFolders(options, spec);
+  const limits = spec.coding ? options.codingLimits : chatLimits;
   return [
     'run',
     '--interactive',
@@ -60,9 +66,9 @@ export function containerArguments(spec: EngineRunSpec, options: ContainerOption
     '--security-opt',
     'no-new-privileges',
     '--pids-limit',
-    spec.coding ? '512' : '256',
+    String(limits.processes),
     '--memory',
-    spec.coding ? '4g' : '2g',
+    limits.memory,
     '--cpus',
     '2',
     '--env',

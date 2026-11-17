@@ -67,7 +67,10 @@ function setup(timings = {}, coding = false) {
   const runner = new Runner({
     client,
     engine,
-    config: { path: '/runner/config.json', coding: { enabled: coding } },
+    config: {
+      path: '/runner/config.json',
+      coding: { enabled: coding, memory: '4g', processes: 512 },
+    },
     runnerId: 'runner-test',
     toolsUrl: 'http://host.docker.internal:4999/api/tools/mcp',
     maxParallel: 2,

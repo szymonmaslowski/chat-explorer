@@ -17,7 +17,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { claudeDockerArguments, containerArguments, forkFolders } from '../src/claude-engine.js';
 import { newestBuiltImage } from '../src/claude-image.js';
 import { egressContainer, ensureEgress } from '../src/egress.js';
-import { runnerConfigPath } from '../src/runner-config.js';
+import { defaultCodingLimits, runnerConfigPath } from '../src/runner-config.js';
 import { checkedRunSpec, RunRefusedError } from '../src/run-spec.js';
 import { workspaceSize } from '../src/workspace-size.js';
 
@@ -35,8 +35,8 @@ const context: RunContext = {
   systemPrompt: 'Be brief.',
   history: null,
 };
-const allowed = { path: '/runner/config.json', coding: { enabled: true } };
-const notAllowed = { ...allowed, coding: { enabled: false } };
+const allowed = { path: '/runner/config.json', coding: { enabled: true, ...defaultCodingLimits } };
+const notAllowed = { ...allowed, coding: { ...allowed.coding, enabled: false } };
 const sessionId = '11111111-2222-3333-4444-555555555555';
 const toolsUrl = 'http://host.docker.internal:4517/api/tools/mcp';
 const engineOptions = {
@@ -45,6 +45,7 @@ const engineOptions = {
   forksPath: '/runner/forks',
   workspacesPath: '/workspaces',
   filesPath: '/files',
+  codingLimits: defaultCodingLimits,
 };
 
 const spec = (overrides: { lease?: object; context?: object; config?: typeof allowed } = {}) =>
@@ -76,6 +77,7 @@ async function probeCodingContainer() {
     forksPath: join(runnerPath, 'forks'),
     workspacesPath: join(root, 'workspaces'),
     filesPath: join(root, 'files'),
+    codingLimits: defaultCodingLimits,
   };
   const own = spec({ lease: { forkId: 'fork_00000000a1' } });
   const other = spec({ lease: { forkId: 'fork_00000000b2' } });

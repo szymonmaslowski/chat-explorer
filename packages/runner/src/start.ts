@@ -69,6 +69,7 @@ export async function startRunner(options: StartRunnerOptions) {
       forksPath: join(options.runnerPath, 'forks'),
       filesPath: options.filesPath,
       workspacesPath: options.workspacesPath,
+      codingLimits: config.coding,
       oauthToken: () => readClaudeToken(options.runnerPath),
     }),
     runnerId: `${hostname()}-${process.pid}`,
@@ -78,6 +79,8 @@ export async function startRunner(options: StartRunnerOptions) {
     onError: (error) => options.log(`Runner: ${error instanceof Error ? error.message : error}`),
   });
   runner.start();
-  options.log(`Runner started with ${image}, coding ${config.coding.enabled ? 'allowed' : 'off'}.`);
+  options.log(
+    `Runner started with ${image}, coding ${config.coding.enabled ? `allowed (${config.coding.memory} memory, ${config.coding.processes} processes)` : 'off'}.`,
+  );
   return runner;
 }

@@ -83,6 +83,7 @@ describe('starting Claude Code in Docker', () => {
     forksPath: '/home/me/.chat-explorer/runner/forks',
     workspacesPath: '/home/me/.chat-explorer/workspaces',
     filesPath: '/home/me/.chat-explorer/files',
+    codingLimits: { memory: '6g', processes: 1024 },
   };
   const args = claudeDockerArguments(spec, options);
 
@@ -133,7 +134,9 @@ describe('starting Claude Code in Docker', () => {
         '--volume',
         '/home/me/.chat-explorer/runner/forks/fork_0000000002/claude-projects:/home/agent/.claude/projects',
         '--memory',
-        '4g',
+        '6g',
+        '--pids-limit',
+        '1024',
       ]),
     );
     expect(coding[coding.indexOf('--tools') + 1]).toBe(
