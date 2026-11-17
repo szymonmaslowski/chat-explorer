@@ -8,15 +8,38 @@ const baseImage =
   'node:22-slim@sha256:5ec23b7c622b00547753bc6ffd78085dd868a68aeb41c8e0a1418f033e13d96d';
 export const imageRepository = 'chat-explorer-claude';
 export const versionLabel = 'chat-explorer.claude-code-version';
+// Raised whenever the Dockerfile below changes, so an image built from an older one is rebuilt.
+export const recipeLabel = 'chat-explorer.image-recipe';
+export const imageRecipe = '2';
+
+// The tools a coding fork works with. Installed before Claude Code, so a new Claude Code version
+// reuses this layer from the build cache. apt checks the packages against Debian's signing keys;
+// the versions follow the base image's release, not pinned one by one.
+const codingPackages = [
+  'ca-certificates',
+  'curl',
+  'g++',
+  'git',
+  'jq',
+  'make',
+  'openssh-client',
+  'procps',
+  'python3',
+  'python3-venv',
+  'unzip',
+];
 
 // The image a fork's engine runs in: Claude Code at the version the user has, as an unprivileged
-// user. The updater is off: the container is thrown away and could not reach the download hosts.
+// user, with the tools for coding. The updater is off: the container is thrown away and could not
+// reach the download hosts.
 export const claudeDockerfile = (version: string) => `FROM ${baseImage}
-RUN npm install -g @anthropic-ai/claude-code@${version} && useradd --create-home agent
+RUN apt-get update && apt-get install --yes --no-install-recommends ${codingPackages.join(' ')} \
+  && rm -rf /var/lib/apt/lists/* && useradd --create-home agent
+RUN npm install -g @anthropic-ai/claude-code@${version}
 USER agent
 WORKDIR /home/agent
 ENV DISABLE_AUTOUPDATER=1
-LABEL ${versionLabel}="${version}"
+LABEL ${versionLabel}="${version}" ${recipeLabel}="${imageRecipe}"
 `;
 
 export const imageTag = (version: string) => `${imageRepository}:${version}`;
@@ -52,8 +75,11 @@ function docker(args: string[], { stdin, timeoutMs, env }: DockerOptions = {}) {
   });
 }
 
+// Built for this version, from today's Dockerfile.
 export async function hasImage(version: string) {
-  return (await docker(['image', 'inspect', imageTag(version)])).code === 0;
+  const format = `{{ index .Config.Labels "${recipeLabel}" }}`;
+  const result = await docker(['image', 'inspect', '--format', format, imageTag(version)]);
+  return result.code === 0 && result.output.trim() === imageRecipe;
 }
 
 // Docker Desktop's credential helper asks macOS for access to the keychain, and a build waited on

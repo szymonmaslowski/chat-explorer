@@ -158,6 +158,9 @@ describe('starting Claude Code in Docker', () => {
     expect(dockerfile).toMatch(/^FROM node:22-slim@sha256:/);
     expect(dockerfile).toContain('@anthropic-ai/claude-code@2.1.319');
     expect(dockerfile).toContain('DISABLE_AUTOUPDATER=1');
+    expect(dockerfile).toMatch(/apt-get install .*\bgit\b.*\bopenssh-client\b/);
+    expect(dockerfile.indexOf('apt-get install')).toBeLessThan(dockerfile.indexOf('claude-code@'));
+    expect(dockerfile).toContain('chat-explorer.image-recipe="2"');
   });
 });
 
