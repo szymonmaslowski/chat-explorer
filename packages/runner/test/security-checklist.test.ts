@@ -1,7 +1,11 @@
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { Lease, RunContext } from '@chat-explorer/shared/protocol.js';
 import { describe, expect, it } from 'vitest';
 import { claudeDockerArguments } from '../src/claude-engine.js';
 import { checkedRunSpec, RunRefusedError } from '../src/run-spec.js';
+import { workspaceSize } from '../src/workspace-size.js';
 
 const lease: Lease = {
   forkId: 'fork_0000000001',
@@ -81,7 +85,22 @@ describe('coding forks: security acceptance checklist', () => {
 
   it.todo("6. a container cannot read the runner config or other forks' workspaces");
   it.todo('7. the dummy model token works only from its own container, and dies with it');
-  it.todo("8. the runner's size check and host-side reads do not follow symlinks out");
+  it("8. the runner's size check does not follow symlinks out", async () => {
+    const root = mkdtempSync(join(tmpdir(), 'checklist-8-'));
+    const outside = join(root, 'outside');
+    const workspace = join(root, 'workspace');
+    mkdirSync(outside);
+    mkdirSync(join(workspace, 'src'), { recursive: true });
+    writeFileSync(join(outside, 'big.bin'), Buffer.alloc(1_000_000));
+    writeFileSync(join(workspace, 'src', 'main.ts'), 'x'.repeat(1_000));
+    symlinkSync(outside, join(workspace, 'to-outside'));
+    symlinkSync(join(outside, 'big.bin'), join(workspace, 'src', 'big-link'));
+    symlinkSync(workspace, join(workspace, 'src', 'loop'));
+    const size = await workspaceSize(workspace);
+    expect(size).toBeGreaterThanOrEqual(1_000);
+    expect(size).toBeLessThan(100_000);
+    rmSync(root, { recursive: true });
+  });
   it.todo('9. a container cannot write the session folders of other forks');
   it.todo('10. hidden config entries stay out of the capabilities report and the proxy logs');
 });
