@@ -61,6 +61,21 @@ const modelStatus = () =>
     (error) => error.cause?.code ?? error.message,
   );
 
+// A dev server or a test's own server inside the container, fetched the way scripts do.
+const localServer = () =>
+  new Promise((resolve) => {
+    const server = http.createServer((request, response) => response.end('local'));
+    server.listen(0, '127.0.0.1', async () => {
+      const { port } = server.address();
+      const status = await fetch(`http://localhost:${port}/`).then(
+        (response) => response.status,
+        (error) => error.cause?.code ?? error.message,
+      );
+      server.close();
+      resolve(status);
+    });
+  });
+
 const npmView = () => {
   try {
     return execFileSync('npm', ['view', 'left-pad', 'version'], {
@@ -106,6 +121,7 @@ const write = (file) => {
     }),
     allowedHostOverPlainHttp: await throughProxy({ path: 'http://registry.npmjs.org/left-pad' }),
     npm: npmView(),
+    localServer: await localServer(),
     runnerConfigVisible: fs.existsSync(paths.runnerConfig),
     otherWorkspaceVisible: fs.existsSync(paths.otherWorkspace),
     ownWorkspace: write(path.join(paths.ownWorkspace, 'probe.txt')),

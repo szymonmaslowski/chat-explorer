@@ -83,12 +83,14 @@ export function openEgressPass(
   const allow = (allowed: string[]) => writeWhole(file, JSON.stringify({ token, hosts: allowed }));
   allow(hosts);
   const url = `http://${id}:${token}@${proxyAddress(port)}`;
+  // The model is reached on the proxy's own port, directly, not through the forward proxy, and so
+  // is this container itself: a dev server or a test's local server.
+  const direct = [egressContainer(port), 'localhost', '127.0.0.1', '::1'].join(',');
   return {
     environment: {
       ...Object.fromEntries(proxyEnvironmentNames.map((name) => [name, url])),
-      // The model is reached on the proxy's own port, directly, not through the forward proxy.
-      NO_PROXY: egressContainer(port),
-      no_proxy: egressContainer(port),
+      NO_PROXY: direct,
+      no_proxy: direct,
       ANTHROPIC_BASE_URL: `http://${modelAddress(port)}`,
       CLAUDE_CODE_OAUTH_TOKEN: `sk-ant-oat01-${id}.${token}`,
     },

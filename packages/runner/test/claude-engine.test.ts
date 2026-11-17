@@ -207,6 +207,9 @@ describe("a container's pass through the egress proxy", () => {
       `http://fork_0000000001:${token}@chat-explorer-egress-4517:3128`,
     );
     expect(statSync(file).mode & 0o777).toBe(0o600);
+    expect(pass.environment.NO_PROXY).toBe('chat-explorer-egress-4517,localhost,127.0.0.1,::1');
+    expect(pass.environment.CLAUDE_CODE_OAUTH_TOKEN).toBe(`sk-ant-oat01-fork_0000000001.${token}`);
+    expect(pass.environment.ANTHROPIC_BASE_URL).toBe('http://chat-explorer-egress-4517:3129');
     pass.allow(['github.com:443', 'registry.npmjs.org:443']);
     expect(policy()).toEqual({ token, hosts: ['github.com:443', 'registry.npmjs.org:443'] });
     expect(readdirSync(egressFolders(egressPath).policies)).toEqual(['fork_0000000001.json']);

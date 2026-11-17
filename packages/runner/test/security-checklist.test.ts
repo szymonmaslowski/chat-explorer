@@ -229,6 +229,7 @@ describe('coding forks: security acceptance checklist', () => {
       expect(probed.results.allowedHostThroughProxy).toBe(200);
       expect(probed.results.allowedHostOverPlainHttp).toBe(403);
       expect(probed.results.npm).toMatch(/^\d+\.\d+\.\d+$/);
+      expect(probed.results.localServer).toBe(200);
       expect(probed.npmWithoutPreset).toBe('failed');
     });
 
