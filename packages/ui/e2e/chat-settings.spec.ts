@@ -33,6 +33,16 @@ test('opens a chat on the page its settings name, and shows the fork model there
   await expect(forkSettings.locator('code')).toHaveText(forks[0].id);
   await expect(forkSettings.getByRole('button', { name: 'Copy Fork ID' })).toBeVisible();
   await expect(settings.getByLabel("Hears about the chat's other forks")).toBeChecked();
+  const coding = settings.getByRole('checkbox', { name: /Coding:/ });
+  await expect(coding).not.toBeChecked();
+  await coding.check();
+  await expect(forkSettings).toContainText("Takes effect when the fork's container next starts");
+  await expect
+    .poll(
+      async () =>
+        (await (await request.get(`/api/explorations/${explorationId}`)).json()).forks[0].coding,
+    )
+    .toBe(true);
   await settings.getByLabel('Default page').selectOption('notes');
 
   await page.getByRole('link', { name: 'Chats' }).click();

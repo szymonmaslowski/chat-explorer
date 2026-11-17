@@ -149,6 +149,8 @@ export const api = {
     }),
   setForkAwareness: (forkId: string, awareness: ForkAwareness) =>
     call<Fork>(`/api/forks/${forkId}/awareness`, { method: 'PATCH', json: { awareness } }),
+  setForkCoding: (forkId: string, coding: boolean) =>
+    call<Fork>(`/api/forks/${forkId}/coding`, { method: 'PATCH', json: { coding } }),
   retryFork: (forkId: string) => call<{ ok: true }>(`/api/forks/${forkId}/retry`, { json: {} }),
   splitFork: (messageId: string, forkId: string) =>
     call<ForkSplit>(`/api/messages/${messageId}/split`, { json: { forkId } }),

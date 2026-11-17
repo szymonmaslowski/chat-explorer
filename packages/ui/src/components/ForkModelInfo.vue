@@ -4,8 +4,8 @@ import { computed, ref } from 'vue';
 import { api } from '../api';
 import CopyableId from './CopyableId.vue';
 
-// The fork's model and how full its context is, from the runner's last turn, and whether the
-// fork hears about the chat's other forks.
+// The fork's model and how full its context is, from the runner's last turn, whether the fork
+// hears about the chat's other forks, and whether Claude may code in it.
 const props = defineProps<{ fork: Fork; run: ForkRun | undefined }>();
 
 const saving = ref(false);
@@ -16,14 +16,18 @@ const share = computed(() => {
   return contextTokens !== null && contextWindow ? contextTokens / contextWindow : null;
 });
 
-async function setAware(aware: boolean) {
+async function save(change: () => Promise<unknown>) {
   saving.value = true;
   try {
-    await api.setForkAwareness(props.fork.id, aware ? 'aware' : 'separate');
+    await change();
   } finally {
     saving.value = false;
   }
 }
+
+const setAware = (aware: boolean) =>
+  save(() => api.setForkAwareness(props.fork.id, aware ? 'aware' : 'separate'));
+const setCoding = (coding: boolean) => save(() => api.setForkCoding(props.fork.id, coding));
 </script>
 
 <template>
@@ -48,6 +52,19 @@ async function setAware(aware: boolean) {
       />
       Hears about the chat's other forks
     </label>
+    <label>
+      <input
+        type="checkbox"
+        :checked="fork.coding"
+        :disabled="saving"
+        @change="setCoding(($event.target as HTMLInputElement).checked)"
+      />
+      Coding: Claude runs commands and writes files in this fork's workspace
+    </label>
+    <p v-if="fork.coding" class="hint">
+      Takes effect when the fork's container next starts. The runner must allow coding in its own
+      config.
+    </p>
   </section>
 </template>
 
@@ -74,6 +91,11 @@ label {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+}
+
+.hint {
+  color: var(--text-muted);
+  font-size: 0.85em;
 }
 
 .bar {
