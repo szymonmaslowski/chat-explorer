@@ -61,7 +61,7 @@ describe('speech blocks', () => {
 
   it('reads code inside a list item after the item', () => {
     expect(blocksOf('- Run this:\n\n  ```sh\n  pnpm build\n  ```')).toEqual([
-      { tag: 'LI', block: { kind: 'text', text: 'Run this:' } },
+      { tag: 'P', block: { kind: 'text', text: 'Run this:' } },
       { tag: 'PRE', block: { kind: 'code', language: 'sh', lines: 1 } },
     ]);
   });
