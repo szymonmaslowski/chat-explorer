@@ -47,7 +47,7 @@ test('opens a chat on the page its settings name, and shows the fork model there
     (await (await request.get(`/api/explorations/${explorationId}`)).json()).forks[0].network;
   await forkSettings.getByLabel('Rust: crates.io and rustup').check();
   await expect.poll(network).toMatchObject({ registries: ['rust'] });
-  await forkSettings.getByLabel('npm, Yarn, pnpm').check();
+  await forkSettings.getByLabel('npm', { exact: true }).check();
   await expect.poll(network).toMatchObject({ registries: ['rust', 'npm'] });
   await forkSettings.getByLabel('Rust: crates.io and rustup').uncheck();
   await expect.poll(network).toMatchObject({ registries: ['npm'] });

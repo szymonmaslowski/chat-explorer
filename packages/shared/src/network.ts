@@ -24,18 +24,16 @@ export function isHostPort(entry: string) {
   return port >= 1 && port <= 65_535;
 }
 
-// The hosts each package manager downloads from.
+// The fewest hosts each package manager needs to install packages. Where a registry splits work
+// over several hosts, each is needed: PyPI's index and its files, Go's modules and the checksum
+// database that verifies them, Cargo's index and its downloads.
 export const packageRegistries: Record<RegistryName, { label: string; hosts: string[] }> = {
-  npm: {
-    label: 'npm, Yarn, pnpm',
-    hosts: ['registry.npmjs.org:443', 'registry.yarnpkg.com:443', 'repo.yarnpkg.com:443'],
-  },
+  npm: { label: 'npm', hosts: ['registry.npmjs.org:443'] },
   pypi: { label: 'Python: PyPI', hosts: ['pypi.org:443', 'files.pythonhosted.org:443'] },
   // rustup's hosts too, since the image has no Rust: it installs the toolchain itself.
   rust: {
     label: 'Rust: crates.io and rustup',
     hosts: [
-      'crates.io:443',
       'index.crates.io:443',
       'static.crates.io:443',
       'sh.rustup.rs:443',

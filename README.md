@@ -182,7 +182,7 @@ The runner's config also sets this machine's limits for coding containers. Leave
 
 Restart the daemon after changing the file, so the runner reads it again.
 
-**Network.** A container reaches the outside only through the egress proxy, over HTTPS, to the hosts its fork allows. Under the coding switch, tick the package registries the fork needs, each on its own (npm with Yarn and pnpm, PyPI, Rust's crates.io with rustup, Go modules), or list other hosts as `name:port`, one per line. A change applies to the next connection, without a new container. Addresses on your own network are refused even when a name on the list points there. Each fork's allowed and denied connections are logged in `~/.chat-explorer/runner/egress/logs/<fork>.log`.
+**Network.** A container reaches the outside only through the egress proxy, over HTTPS, to the hosts its fork allows. Under the coding switch, tick the package registries the fork needs, each on its own (npm, PyPI, Rust's crates.io with rustup, Go modules), or list other hosts as `name:port`, one per line. A change applies to the next connection, without a new container. Addresses on your own network are refused even when a name on the list points there. Each fork's allowed and denied connections are logged in `~/.chat-explorer/runner/egress/logs/<fork>.log`.
 
 **Model token.** The real Claude token never enters a container. The proxy stands in for the model's API and swaps the container's dummy token for the real one. A dummy works only from its own container, and only while that container runs.
 
