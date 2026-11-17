@@ -311,13 +311,12 @@ chat-explorer hook <name>      hook handlers (used by the plugin)
 ai-chat-explorer/
   package.json, pnpm-workspace.yaml, tsconfig.base.json
   packages/
-    server/        daemon, CLI, MCP shim, hooks; published as `chat-explorer`
-      src/db/      schema, migrations, queries
-      src/api/     REST + SSE routes
-      src/mcp/     shim and tool definitions
-      src/import/  transcript parser
-      src/cli/
-    ui/            Vue app; its build output is copied into server/dist/ui
+    shared/        protocol and chat types, markdown, config, the daemon client
+    backend/       store, REST + SSE routes, sessions, dictation, speech; serves the UI
+    runner/        claims forks, engines, the Docker sandbox
+    mcp/           the plugin's MCP shim and hooks
+    cli/           the `chat-explorer` command and the daemon; published as `chat-explorer`
+    ui/            Vue app; its build output is copied into backend/dist/ui
   plugin/
     .claude-plugin/plugin.json
     skills/explore-chat/SKILL.md
@@ -327,7 +326,7 @@ ai-chat-explorer/
   docs/plan.md
 ```
 
-Development setup: `pnpm link --global` in `packages/server`, then `/plugin marketplace add ~/projects/private/ai-chat-explorer` and `/plugin install chat-explorer`.
+Development setup: `pnpm link --global` in `packages/cli`, then `/plugin marketplace add ~/projects/private/ai-chat-explorer` and `/plugin install chat-explorer`.
 
 ## Build phases
 

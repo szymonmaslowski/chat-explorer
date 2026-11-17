@@ -11,7 +11,7 @@ git clone <this repo> ai-chat-explorer
 cd ai-chat-explorer
 pnpm install
 pnpm build
-cd packages/server && pnpm link --global   # puts `chat-explorer` on your PATH
+cd packages/cli && pnpm link --global      # puts `chat-explorer` on your PATH
 ```
 
 If pnpm reports that its global bin directory is not set up, run `pnpm setup` and open a new shell first.
@@ -192,10 +192,23 @@ The design and its decisions are in [docs/plan.md](docs/plan.md).
 ## Development
 
 ```sh
-pnpm build                         # UI, then server with the UI inside
-pnpm test                          # unit tests
+pnpm build                         # UI, then every package; the backend's build holds the UI
+pnpm test                          # the import check between packages, then unit tests
 pnpm typecheck
 pnpm --filter ui test:e2e          # Playwright, runs in the installed Chrome against a seeded daemon
 pnpm --filter ui dev               # Vite dev server, proxies /api to the daemon
-pnpm --filter chat-explorer seed   # sample exploration in CHAT_EXPLORER_HOME
+pnpm --filter @chat-explorer/backend seed   # sample exploration in CHAT_EXPLORER_HOME
 ```
+
+The code is in packages that reach each other only along these lines, which `pnpm check:imports` enforces:
+
+| Package            | Holds                                                                       | May import       |
+| ------------------ | --------------------------------------------------------------------------- | ---------------- |
+| `packages/shared`  | Protocol and chat types, markdown, speech blocks, config, the daemon client | nothing          |
+| `packages/backend` | Store, API, background sessions, dictation and speech, serves the web UI    | shared           |
+| `packages/runner`  | Claims forks and answers them with an engine in Docker                      | shared           |
+| `packages/mcp`     | The plugin's MCP server and hooks                                           | shared           |
+| `packages/cli`     | The `chat-explorer` command and the daemon around the backend               | all of the above |
+| `packages/ui`      | The web UI                                                                  | shared           |
+
+If you linked `chat-explorer` before the split, from `packages/server`, link it again from `packages/cli` and run `chat-explorer service install` again, so the login service starts the new daemon entry.
