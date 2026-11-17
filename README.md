@@ -168,7 +168,25 @@ A fork with **Coding** switched on (Chat settings → This fork) runs in its con
 { "coding": { "enabled": true } }
 ```
 
-A coding container gets 4 GB of memory and 512 processes. Set `"memory"` (such as `"8g"` or `"512m"`) and `"processes"` beside `"enabled"` to change that for this machine. Restart the daemon after changing the file, so the runner reads it again. Switching coding on or off in a fork takes effect from its next message, which starts a new container and resumes the session. For now the container reaches only the model and the chat tools, so downloads and package installs fail. The plan is in the note _Coding forks: build brief_.
+Switching coding on or off in a fork takes effect from its next message, which starts a new container and resumes the session. The image has git, an SSH client, curl, Python, make and g++ besides Node.
+
+The runner's config also sets this machine's limits for coding containers. Leave a field out to keep its default:
+
+| Field              | Default | Meaning                                                                             |
+| ------------------ | ------- | ----------------------------------------------------------------------------------- |
+| `memory`           | `"4g"`  | memory per container, such as `"8g"` or `"512m"`                                    |
+| `processes`        | `512`   | processes per container                                                             |
+| `cpus`             | `2`     | CPUs per container, such as `6` or `1.5`                                            |
+| `workspaceLimitGb` | `10`    | a workspace over this shows a warning; past 1.5 times it, the run stops             |
+| `minFreeGb`        | `10`    | coding runs stop when the Mac or Docker's own disk has less free, and new ones wait |
+
+Restart the daemon after changing the file, so the runner reads it again.
+
+**Network.** A container reaches the outside only through the egress proxy, over HTTPS, to the hosts its fork allows. Under the coding switch, tick **Package registries** (npm, PyPI, crates.io, Go) or list other hosts as `name:port`, one per line. A change applies to the next connection, without a new container. Addresses on your own network are refused even when a name on the list points there. Each fork's allowed and denied connections are logged in `~/.chat-explorer/runner/egress/logs/<fork>.log`.
+
+**Model token.** The real Claude token never enters a container. The proxy stands in for the model's API and swaps the container's dummy token for the real one. A dummy works only from its own container, and only while that container runs.
+
+The plan is in the note _Coding forks: build brief_.
 
 The daemon listens on `127.0.0.1` only and rejects requests from other websites. Requests through `publicUrl` are accepted too, so anyone who can reach that address can start Claude sessions on your Mac. Keep it inside your tailnet (`tailscale serve`, not `tailscale funnel`).
 
