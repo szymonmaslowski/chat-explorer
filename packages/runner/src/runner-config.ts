@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { DiskLimits } from './disk-guard.js';
 
 // What a coding fork's container may use, in Docker's own units.
 export interface ContainerLimits {
@@ -12,10 +13,15 @@ export interface ContainerLimits {
 export interface RunnerConfig {
   // Where it was read from, to name in messages.
   path: string;
-  coding: { enabled: boolean } & ContainerLimits;
+  coding: { enabled: boolean } & ContainerLimits & DiskLimits;
 }
 
-export const defaultCodingLimits: ContainerLimits = { memory: '4g', processes: 512 };
+export const defaultCodingLimits: ContainerLimits & DiskLimits = {
+  memory: '4g',
+  processes: 512,
+  workspaceLimitGb: 10,
+  minFreeGb: 10,
+};
 
 const memoryPattern = /^[1-9]\d*[mg]$/;
 
@@ -24,7 +30,13 @@ export const runnerConfigPath = (runnerPath: string) => join(runnerPath, 'config
 export class RunnerConfigError extends Error {}
 
 interface RunnerConfigFile {
-  coding?: { enabled?: unknown; memory?: unknown; processes?: unknown };
+  coding?: {
+    enabled?: unknown;
+    memory?: unknown;
+    processes?: unknown;
+    workspaceLimitGb?: unknown;
+    minFreeGb?: unknown;
+  };
 }
 
 export function readRunnerConfig(runnerPath: string): RunnerConfig {
@@ -54,5 +66,23 @@ export function readRunnerConfig(runnerPath: string): RunnerConfig {
   if (typeof processes !== 'number' || !Number.isInteger(processes) || processes < 1) {
     throw new RunnerConfigError(`coding.processes in ${path} must be a whole number above 0.`);
   }
-  return { path, coding: { enabled, memory, processes } };
+  const gigabytes = (name: keyof DiskLimits) => {
+    const value = parsed.coding?.[name] ?? defaultCodingLimits[name];
+    if (typeof value !== 'number' || !(value > 0) || !Number.isFinite(value)) {
+      throw new RunnerConfigError(
+        `coding.${name} in ${path} must be a number of gigabytes above 0.`,
+      );
+    }
+    return value;
+  };
+  return {
+    path,
+    coding: {
+      enabled,
+      memory,
+      processes,
+      workspaceLimitGb: gigabytes('workspaceLimitGb'),
+      minFreeGb: gigabytes('minFreeGb'),
+    },
+  };
 }

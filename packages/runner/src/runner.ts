@@ -1,14 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { RunnerClient, StaleLeaseError } from './client.js';
-import type { Engine, EngineEvent, EngineRun } from './engine.js';
+import type { Engine, EngineEvent, EngineRun, EngineRunSpec } from './engine.js';
 import {
   noReply,
   type Lease,
   type PendingMessage,
   type RunInput,
 } from '@chat-explorer/shared/protocol.js';
+import type { DiskGuard } from './disk-guard.js';
 import type { RunnerConfig } from './runner-config.js';
-import { checkedHosts, checkedRunSpec } from './run-spec.js';
+import { checkedHosts, checkedRunSpec, RunRefusedError } from './run-spec.js';
 
 export interface RunnerTimings {
   heartbeatMs: number;
@@ -19,6 +20,8 @@ export interface RunnerTimings {
   claimWaitMs: number;
   inputWaitMs: number;
   retryMs: number;
+  // How often a coding fork's disk use is measured while it runs.
+  diskCheckMs: number;
 }
 
 export interface RunnerOptions {
@@ -29,6 +32,8 @@ export interface RunnerOptions {
   // Where the engine reaches the job tools.
   toolsUrl: string;
   maxParallel: number;
+  // Measures coding forks' disk use; none in tests that don't need it.
+  diskGuard?: DiskGuard;
   timings?: Partial<RunnerTimings>;
   onError?: (error: unknown) => void;
 }
@@ -40,6 +45,7 @@ const defaultTimings: RunnerTimings = {
   claimWaitMs: 30_000,
   inputWaitMs: 30_000,
   retryMs: 5_000,
+  diskCheckMs: 60_000,
 };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -162,6 +168,8 @@ class ForkWorker {
   private closing = false;
   private stopping = false;
   private coding = false;
+  private diskChecks: NodeJS.Timeout | undefined;
+  private diskWarned = false;
   private hosts = '';
   private exited: Promise<void> = Promise.resolve();
 
@@ -187,15 +195,23 @@ class ForkWorker {
       this.history = context.history;
       this.coding = context.coding;
       this.hosts = JSON.stringify(context.network);
-      const engineRun = engine.start(
-        checkedRunSpec({
-          lease: this.lease,
-          context,
-          sessionId: this.lease.sessionId ?? randomUUID(),
-          toolsUrl: this.options.toolsUrl,
-          config: this.options.config,
-        }),
-      );
+      const spec = checkedRunSpec({
+        lease: this.lease,
+        context,
+        sessionId: this.lease.sessionId ?? randomUUID(),
+        toolsUrl: this.options.toolsUrl,
+        config: this.options.config,
+      });
+      const { diskGuard } = this.options;
+      if (spec.coding && diskGuard) {
+        const refusal = await diskGuard.refusal(spec);
+        if (refusal) throw new RunRefusedError(refusal);
+        this.diskChecks = setInterval(
+          () => void this.checkDisk(diskGuard, spec),
+          this.timings.diskCheckMs,
+        );
+      }
+      const engineRun = engine.start(spec);
       this.engineRun = engineRun;
       this.exited = new Promise((resolve) =>
         engineRun.onExit((result) => {
@@ -210,6 +226,7 @@ class ForkWorker {
       else await this.failAndStop(error instanceof Error ? error.message : String(error));
     } finally {
       if (this.heartbeat) clearInterval(this.heartbeat);
+      if (this.diskChecks) clearInterval(this.diskChecks);
       await this.exited;
       await this.reports;
     }
@@ -262,6 +279,27 @@ class ForkWorker {
         await this.close();
         return;
       }
+    }
+  }
+
+  private async checkDisk(diskGuard: DiskGuard, spec: EngineRunSpec) {
+    if (this.finished) return;
+    try {
+      const verdict = await diskGuard.check(spec);
+      if (verdict.stop) {
+        await this.failAndStop(verdict.stop);
+        return;
+      }
+      if (!verdict.warning || this.diskWarned || !this.newestSentId) return;
+      this.diskWarned = true;
+      const activity = {
+        afterMessageId: this.newestSentId,
+        kind: 'progress',
+        text: verdict.warning,
+      } as const;
+      this.report(() => this.options.client.activity(this.lease, activity));
+    } catch (error) {
+      this.options.onError?.(error);
     }
   }
 

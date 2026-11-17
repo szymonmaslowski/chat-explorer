@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { RunnerClient } from '@chat-explorer/runner/client.js';
 import type { Engine, EngineEvent, EngineRunSpec } from '@chat-explorer/runner/engine.js';
+import type { DiskGuard } from '@chat-explorer/runner/disk-guard.js';
 import { Runner } from '@chat-explorer/runner/runner.js';
+import { defaultCodingLimits } from '@chat-explorer/runner/runner-config.js';
 import { createTestApp, seedConversation, testMachineToken } from './helpers.js';
 
 interface FakeRun {
@@ -56,7 +58,7 @@ const until = async (condition: () => boolean, timeoutMs = 3_000) => {
   }
 };
 
-function setup(timings = {}, coding = false) {
+function setup(timings = {}, coding = false, diskGuard?: DiskGuard) {
   const context = createTestApp();
   const conversation = seedConversation(context.store);
   const client = new RunnerClient('http://127.0.0.1:4999', testMachineToken, async (url, init) =>
@@ -72,8 +74,9 @@ function setup(timings = {}, coding = false) {
     engine,
     config: {
       path: '/runner/config.json',
-      coding: { enabled: coding, memory: '4g', processes: 512 },
+      coding: { enabled: coding, ...defaultCodingLimits },
     },
+    diskGuard,
     runnerId: 'runner-test',
     toolsUrl: 'http://host.docker.internal:4999/api/tools/mcp',
     maxParallel: 2,
@@ -231,6 +234,49 @@ describe('the runner', () => {
     store.submit(explorationId, mainForkId, 'Hello');
     await until(() => engineRuns[0]?.sent.length === 1);
     expect(engineRuns[0]!.spec.hosts).toEqual([]);
+    await runner.stop();
+  });
+
+  it('refuses to start a coding fork the disk guard turns down, with its reason', async () => {
+    const guard: DiskGuard = {
+      refusal: async () => 'Your Mac has 2.0 GB free.',
+      check: async () => ({}),
+    };
+    const { runner, engineRuns, store, explorationId, mainForkId } = setup({}, true, guard);
+    store.setForkCoding(mainForkId, true);
+    runner.start();
+    store.submit(explorationId, mainForkId, 'Build it');
+    await until(() => store.snapshot(explorationId).forkRuns[0]?.status === 'failed');
+    expect(store.snapshot(explorationId).forkRuns[0]!.statusDetail).toBe(
+      'Your Mac has 2.0 GB free.',
+    );
+    expect(engineRuns).toHaveLength(0);
+    await runner.stop();
+  });
+
+  it('warns once when a coding workspace grows past its limit, and stops it past the hard one', async () => {
+    let verdict: { warning?: string; stop?: string } = {};
+    const guard: DiskGuard = { refusal: async () => null, check: async () => verdict };
+    const { runner, engineRuns, store, explorationId, mainForkId } = setup(
+      { diskCheckMs: 10 },
+      true,
+      guard,
+    );
+    store.setForkCoding(mainForkId, true);
+    runner.start();
+    store.submit(explorationId, mainForkId, 'Build it');
+    await until(() => engineRuns[0]?.sent.length === 1);
+    verdict = { warning: 'The workspace is 11.0 GB, over its 10 GB limit.' };
+    const warnings = () =>
+      store
+        .snapshot(explorationId)
+        .activities.filter((activity) => activity.text.startsWith('The workspace is'));
+    await until(() => warnings().length === 1);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(warnings()).toHaveLength(1);
+    verdict = { stop: 'The workspace is 16.0 GB, past 1.5 times its limit.' };
+    await until(() => engineRuns[0]!.stopped);
+    await until(() => store.snapshot(explorationId).forkRuns[0]?.status !== 'answering');
     await runner.stop();
   });
 

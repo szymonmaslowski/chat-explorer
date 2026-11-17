@@ -1,7 +1,8 @@
 import { hostname } from 'node:os';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { claudeCodeEngine } from './claude-engine.js';
+import { claudeCodeEngine, containerName, forkFolders } from './claude-engine.js';
+import { diskGuard } from './disk-guard.js';
 import {
   buildImage,
   hasImage,
@@ -72,22 +73,31 @@ export async function startRunner(options: StartRunnerOptions) {
   const egressPath = join(options.runnerPath, 'egress');
   await ensureEgress({ image, port: options.port, egressPath });
   const config = await onTestedRuntime(readRunnerConfig(options.runnerPath), options.log);
+  const enginePaths = {
+    forksPath: join(options.runnerPath, 'forks'),
+    filesPath: options.filesPath,
+    workspacesPath: options.workspacesPath,
+    egressPath,
+  };
   const runner = new Runner({
     client: new RunnerClient(options.baseUrl, options.machineToken),
     config,
     engine: claudeCodeEngine({
+      ...enginePaths,
       image: () => currentImage,
       port: options.port,
-      forksPath: join(options.runnerPath, 'forks'),
-      filesPath: options.filesPath,
-      workspacesPath: options.workspacesPath,
-      egressPath,
       codingLimits: config.coding,
       oauthToken: () => readClaudeToken(options.runnerPath),
     }),
     runnerId: `${hostname()}-${process.pid}`,
     toolsUrl: `http://host.docker.internal:${options.port}/api/tools/mcp`,
     maxParallel: options.maxParallel,
+    diskGuard: diskGuard({
+      limits: config.coding,
+      workspacesPath: options.workspacesPath,
+      workspaceOf: (spec) => forkFolders(enginePaths, spec).work,
+      containerFreeBytes: (spec) => runtime.freeBytes(containerName(spec.forkId)),
+    }),
     timings: { idleCloseMs: options.idleMinutes * 60_000 },
     onError: (error) => options.log(`Runner: ${error instanceof Error ? error.message : error}`),
   });

@@ -13,7 +13,13 @@ describe("the runner's own config", () => {
   it('turns coding off when there is no config file', () => {
     expect(readRunnerConfig(runnerPath)).toEqual({
       path: configPath,
-      coding: { enabled: false, memory: '4g', processes: 512 },
+      coding: {
+        enabled: false,
+        memory: '4g',
+        processes: 512,
+        workspaceLimitGb: 10,
+        minFreeGb: 10,
+      },
     });
   });
 
@@ -29,11 +35,29 @@ describe("the runner's own config", () => {
       configPath,
       JSON.stringify({ coding: { enabled: true, memory: '8g', processes: 2048 } }),
     );
-    expect(readRunnerConfig(runnerPath).coding).toEqual({
+    expect(readRunnerConfig(runnerPath).coding).toMatchObject({
       enabled: true,
       memory: '8g',
       processes: 2048,
     });
+  });
+
+  it('takes the disk limits from the file, as gigabytes above 0', () => {
+    writeFileSync(configPath, JSON.stringify({ coding: { workspaceLimitGb: 25, minFreeGb: 5.5 } }));
+    expect(readRunnerConfig(runnerPath).coding).toMatchObject({
+      workspaceLimitGb: 25,
+      minFreeGb: 5.5,
+    });
+    for (const workspaceLimitGb of [0, -1, '10', null]) {
+      writeFileSync(configPath, JSON.stringify({ coding: { workspaceLimitGb } }));
+      if (workspaceLimitGb === null) {
+        expect(readRunnerConfig(runnerPath).coding.workspaceLimitGb).toBe(10);
+        continue;
+      }
+      expect(() => readRunnerConfig(runnerPath)).toThrow(
+        `coding.workspaceLimitGb in ${configPath}`,
+      );
+    }
   });
 
   it('refuses limits Docker would not read as meant', () => {
