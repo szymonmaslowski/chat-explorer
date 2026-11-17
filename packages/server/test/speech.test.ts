@@ -234,6 +234,17 @@ describe('speech API', () => {
     expect(spoken).toEqual([{ text: 'Diagram.', voice: daniel.identifier }]);
   });
 
+  it('reads a block of a note longer than any one block may be', async () => {
+    const { request, spoken } = createTestApp();
+    const note = `Opening line.\n\n${'A long paragraph of the note. '.repeat(500)}`;
+    const response = await request('/api/speech', {
+      method: 'POST',
+      json: { text: note, block: { kind: 'text', text: 'Opening line.' } },
+    });
+    expect(response.status).toBe(200);
+    expect(spoken).toEqual([{ text: 'Opening line.', voice: daniel.identifier }]);
+  });
+
   it('refuses an unknown message and empty text', async () => {
     const { request, store } = createTestApp();
     const { answer } = seedConversation(store);
