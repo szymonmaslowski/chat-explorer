@@ -1,4 +1,5 @@
 // Runs inside a coding container for the security checklist, and prints what it could reach.
+const { execFileSync } = require('node:child_process');
 const dns = require('node:dns').promises;
 const fs = require('node:fs');
 const http = require('node:http');
@@ -7,7 +8,8 @@ const path = require('node:path');
 
 const paths = JSON.parse(process.argv.at(-1));
 const proxy = new URL(process.env.HTTP_PROXY);
-const timeout = 3000;
+const signIn = `Basic ${Buffer.from(`${decodeURIComponent(proxy.username)}:${decodeURIComponent(proxy.password)}`).toString('base64')}`;
+const timeout = 5000;
 
 const tcp = (host, port) =>
   new Promise((resolve) => {
@@ -17,9 +19,16 @@ const tcp = (host, port) =>
     socket.on('error', (error) => resolve(error.code));
   });
 
-const throughProxy = (options) =>
+const throughProxy = (options, signedIn = true) =>
   new Promise((resolve) => {
-    const request = http.request({ host: proxy.hostname, port: proxy.port, timeout, ...options });
+    const headers = signedIn ? { 'proxy-authorization': signIn } : {};
+    const request = http.request({
+      host: proxy.hostname,
+      port: proxy.port,
+      timeout,
+      headers,
+      ...options,
+    });
     request.on('connect', (response) => (response.socket.destroy(), resolve(response.statusCode)));
     request.on('response', (response) => (response.resume(), resolve(response.statusCode)));
     request.on('timeout', () => (request.destroy(), resolve('timeout')));
@@ -32,6 +41,20 @@ const lookup = (host) =>
     () => 'resolved',
     (error) => error.code,
   );
+
+const npmView = () => {
+  try {
+    return execFileSync('npm', ['view', 'left-pad', 'version'], {
+      cwd: '/tmp',
+      timeout: 60000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .toString()
+      .trim();
+  } catch {
+    return 'failed';
+  }
+};
 
 const write = (file) => {
   try {
@@ -53,6 +76,16 @@ const write = (file) => {
     outsideDirect: await tcp('1.1.1.1', 443),
     outsideThroughProxy: await throughProxy({ method: 'CONNECT', path: 'example.com:443' }),
     modelThroughProxy: await throughProxy({ method: 'CONNECT', path: 'api.anthropic.com:443' }),
+    modelWithoutSignIn: await throughProxy(
+      { method: 'CONNECT', path: 'api.anthropic.com:443' },
+      false,
+    ),
+    allowedHostThroughProxy: await throughProxy({
+      method: 'CONNECT',
+      path: 'registry.npmjs.org:443',
+    }),
+    allowedHostOverPlainHttp: await throughProxy({ path: 'http://registry.npmjs.org/left-pad' }),
+    npm: npmView(),
     runnerConfigVisible: fs.existsSync(paths.runnerConfig),
     otherWorkspaceVisible: fs.existsSync(paths.otherWorkspace),
     ownWorkspace: write(path.join(paths.ownWorkspace, 'probe.txt')),

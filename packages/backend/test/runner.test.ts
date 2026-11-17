@@ -10,6 +10,7 @@ interface FakeRun {
   emit: (event: EngineEvent) => void;
   exit: (code: number | null, error?: string) => void;
   stopped: boolean;
+  allowedHosts: string[][];
 }
 
 function fakeEngine() {
@@ -29,12 +30,14 @@ function fakeEngine() {
         emit: (event) => listeners.forEach((listener) => listener(event)),
         exit: (code, error) => exitListeners.forEach((listener) => listener({ code, error })),
         stopped: false,
+        allowedHosts: [],
       };
       runs.push(run);
       return {
         send: (text) => run.sent.push(text),
         onEvent: (listener) => listeners.push(listener),
         onExit: (listener) => exitListeners.push(listener),
+        allowHosts: (hosts) => run.allowedHosts.push(hosts),
         stop: () => {
           run.stopped = true;
           setTimeout(() => run.exit(0));
@@ -199,6 +202,35 @@ describe('the runner', () => {
     expect(engineRuns[0]!.sent).toEqual([expect.stringContaining('First')]);
     expect(engineRuns[1]!.spec).toMatchObject({ coding: true, resume: true, sessionId });
     expect(engineRuns[1]!.sent).toEqual(['Now build it']);
+    await runner.stop();
+  });
+
+  it('gives a coding fork its allowed hosts, and follows a change without a new container', async () => {
+    const { runner, engineRuns, store, explorationId, mainForkId } = setup({}, true);
+    store.setForkCoding(mainForkId, true);
+    store.setForkNetwork(mainForkId, { hosts: ['github.com:443'], registries: false });
+    runner.start();
+    store.submit(explorationId, mainForkId, 'Clone it');
+    await until(() => engineRuns[0]?.sent.length === 1);
+    expect(engineRuns[0]!.spec.hosts).toEqual(['github.com:443']);
+
+    store.setForkNetwork(mainForkId, { hosts: ['github.com:443'], registries: true });
+    store.submit(explorationId, mainForkId, 'Now install');
+    await until(() => engineRuns[0]!.sent.length === 2);
+    expect(engineRuns[0]!.allowedHosts.at(-1)).toEqual(
+      expect.arrayContaining(['github.com:443', 'registry.npmjs.org:443']),
+    );
+    expect(engineRuns).toHaveLength(1);
+    await runner.stop();
+  });
+
+  it('gives a chat fork no hosts, whatever its settings say', async () => {
+    const { runner, engineRuns, store, explorationId, mainForkId } = setup({}, true);
+    store.setForkNetwork(mainForkId, { hosts: ['github.com:443'], registries: true });
+    runner.start();
+    store.submit(explorationId, mainForkId, 'Hello');
+    await until(() => engineRuns[0]?.sent.length === 1);
+    expect(engineRuns[0]!.spec.hosts).toEqual([]);
     await runner.stop();
   });
 

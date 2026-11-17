@@ -3,7 +3,8 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { parseClaudeStreamLine, streamUserMessage } from './claude-stream.js';
-import { sandboxArguments } from './egress.js';
+import { randomBytes } from 'node:crypto';
+import { openEgressPass, sandboxArguments } from './egress.js';
 import type { Engine, EngineEvent, EngineRun, EngineRunSpec } from './engine.js';
 import type { ContainerLimits } from './runner-config.js';
 
@@ -14,6 +15,8 @@ export interface ClaudeEnginePaths {
   workspacesPath: string;
   // Uploads, readable by the engine at the same path as on the host.
   filesPath: string;
+  // The egress proxy's policies and logs.
+  egressPath: string;
 }
 
 export interface ClaudeEngineOptions extends ClaudeEnginePaths {
@@ -75,7 +78,7 @@ export function containerArguments(spec: EngineRunSpec, options: ContainerOption
     'CLAUDE_CODE_OAUTH_TOKEN',
     '--env',
     'DISABLE_AUTOUPDATER=1',
-    ...sandboxArguments(options.port),
+    ...sandboxArguments(),
     '--volume',
     `${folders.work}:${folders.work}`,
     '--workdir',
@@ -145,7 +148,7 @@ export const claudeDockerArguments = (spec: EngineRunSpec, options: ContainerOpt
 // The model for small jobs, cheap and quick.
 const completionModel = 'haiku';
 
-export const claudeCompletionArguments = (prompt: string, image: string, port: number) => [
+export const claudeCompletionArguments = (prompt: string, image: string) => [
   'run',
   '--rm',
   '--cap-drop',
@@ -154,7 +157,7 @@ export const claudeCompletionArguments = (prompt: string, image: string, port: n
   'no-new-privileges',
   '--env',
   'CLAUDE_CODE_OAUTH_TOKEN',
-  ...sandboxArguments(port),
+  ...sandboxArguments(),
   image,
   'claude',
   '-p',
@@ -171,18 +174,28 @@ export function claudeCodeEngine(options: ClaudeEngineOptions): Engine {
   return {
     complete(prompt) {
       return new Promise((resolve, reject) => {
-        const child = spawn(
-          'docker',
-          claudeCompletionArguments(prompt, options.image(), options.port),
-          {
-            stdio: ['ignore', 'pipe', 'pipe'],
-            env: { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: options.oauthToken() },
-          },
+        const pass = openEgressPass(
+          options.egressPath,
+          options.port,
+          `completion-${randomBytes(6).toString('hex')}`,
+          [],
         );
+        const child = spawn('docker', claudeCompletionArguments(prompt, options.image()), {
+          stdio: ['ignore', 'pipe', 'pipe'],
+          env: {
+            ...process.env,
+            ...pass.environment,
+            CLAUDE_CODE_OAUTH_TOKEN: options.oauthToken(),
+          },
+        });
         let output = '';
         child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()));
-        child.on('error', reject);
+        child.on('error', (error) => {
+          pass.close();
+          reject(error);
+        });
         child.on('exit', () => {
+          pass.close();
           try {
             const result = JSON.parse(output) as { result?: string; is_error?: boolean };
             if (result.is_error || !result.result) throw new Error(result.result ?? 'No answer.');
@@ -197,10 +210,17 @@ export function claudeCodeEngine(options: ClaudeEngineOptions): Engine {
       const folders = forkFolders(options, spec);
       mkdirSync(folders.work, { recursive: true });
       mkdirSync(folders.sessions, { recursive: true });
+      const pass = openEgressPass(options.egressPath, options.port, spec.forkId, spec.hosts);
       const child = spawn('docker', claudeDockerArguments(spec, options), {
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: options.oauthToken() },
+        env: {
+          ...process.env,
+          ...pass.environment,
+          CLAUDE_CODE_OAUTH_TOKEN: options.oauthToken(),
+        },
       });
+      child.on('error', () => pass.close());
+      child.on('exit', () => pass.close());
       const eventListeners: ((event: EngineEvent) => void)[] = [];
       let errorOutput = '';
       createInterface({ input: child.stdout }).on('line', (line) => {
@@ -226,6 +246,7 @@ export function claudeCodeEngine(options: ClaudeEngineOptions): Engine {
             report(code === 0 ? { code } : { code, error: errorOutput.trim() || undefined }),
           );
         },
+        allowHosts: (hosts) => pass.allow(hosts),
         stop: (stopOptions) => {
           if (stopOptions?.immediately) {
             child.kill('SIGKILL');

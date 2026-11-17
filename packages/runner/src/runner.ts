@@ -8,7 +8,7 @@ import {
   type RunInput,
 } from '@chat-explorer/shared/protocol.js';
 import type { RunnerConfig } from './runner-config.js';
-import { checkedRunSpec } from './run-spec.js';
+import { checkedHosts, checkedRunSpec } from './run-spec.js';
 
 export interface RunnerTimings {
   heartbeatMs: number;
@@ -162,6 +162,7 @@ class ForkWorker {
   private closing = false;
   private stopping = false;
   private coding = false;
+  private hosts = '';
   private exited: Promise<void> = Promise.resolve();
 
   constructor(
@@ -185,6 +186,7 @@ class ForkWorker {
       const context = await client.context(this.lease, resume);
       this.history = context.history;
       this.coding = context.coding;
+      this.hosts = JSON.stringify(context.network);
       const engineRun = engine.start(
         checkedRunSpec({
           lease: this.lease,
@@ -246,6 +248,7 @@ class ForkWorker {
         await this.close();
         return;
       }
+      this.followHosts(input.network);
       if (input.messages.length > 0) {
         await this.send(input.messages, input.others);
         continue;
@@ -260,6 +263,15 @@ class ForkWorker {
         return;
       }
     }
+  }
+
+  // A changed host list goes to the proxy at once, without a new container: dev servers and other
+  // shell state survive it. A list the runner refuses fails the fork, as at the start.
+  private followHosts(network: RunInput['network']) {
+    const hosts = JSON.stringify(network);
+    if (!this.coding || hosts === this.hosts) return;
+    this.hosts = hosts;
+    this.engineRun?.allowHosts(checkedHosts(network));
   }
 
   private async send(messages: PendingMessage[], others: string | null) {

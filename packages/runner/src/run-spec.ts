@@ -1,5 +1,11 @@
 import { prefixedIdPattern } from '@chat-explorer/shared/ids.js';
 import { claudeModels } from '@chat-explorer/shared/models.js';
+import {
+  isHostPort,
+  maxAllowedHosts,
+  networkHosts,
+  type ForkNetwork,
+} from '@chat-explorer/shared/network.js';
 import type { Lease, RunContext } from '@chat-explorer/shared/protocol.js';
 import type { EngineRunSpec } from './engine.js';
 import type { RunnerConfig } from './runner-config.js';
@@ -8,6 +14,20 @@ const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a
 
 // A job the runner will not run, with the reason to show in the fork.
 export class RunRefusedError extends Error {}
+
+// The hosts a coding fork's container may reach, from the fork's settings. Entries go into the
+// proxy's policy, so anything but a plain host:port is refused.
+export function checkedHosts(network: ForkNetwork) {
+  const { hosts, registries } = network ?? {};
+  if (typeof registries !== 'boolean' || !Array.isArray(hosts) || hosts.length > maxAllowedHosts) {
+    throw new RunRefusedError("The fork's allowed hosts are not valid.");
+  }
+  const invalid = hosts.find((host) => typeof host !== 'string' || !isHostPort(host));
+  if (invalid !== undefined) {
+    throw new RunRefusedError(`The allowed host ${JSON.stringify(invalid)} is not a host:port.`);
+  }
+  return networkHosts({ hosts, registries });
+}
 
 // The engine's spec, built only from the fields the runner knows and checked against its own
 // config. Ids end up in folder paths and container names, so a backend that sends anything else,
@@ -43,6 +63,7 @@ export function checkedRunSpec(input: {
     sessionId,
     resume: lease.sessionId !== null,
     coding: context.coding,
+    hosts: context.coding ? checkedHosts(context.network) : [],
     systemPrompt: context.systemPrompt,
     toolsUrl: input.toolsUrl,
     toolsToken: lease.toolsToken,

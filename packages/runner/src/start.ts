@@ -58,7 +58,8 @@ export async function startRunner(options: StartRunnerOptions) {
     },
     (error: Error) => options.log(error.message),
   );
-  await ensureEgress(image, options.port);
+  const egressPath = join(options.runnerPath, 'egress');
+  await ensureEgress({ image, port: options.port, egressPath });
   const config = readRunnerConfig(options.runnerPath);
   const runner = new Runner({
     client: new RunnerClient(options.baseUrl, options.machineToken),
@@ -69,6 +70,7 @@ export async function startRunner(options: StartRunnerOptions) {
       forksPath: join(options.runnerPath, 'forks'),
       filesPath: options.filesPath,
       workspacesPath: options.workspacesPath,
+      egressPath,
       codingLimits: config.coding,
       oauthToken: () => readClaudeToken(options.runnerPath),
     }),

@@ -125,10 +125,12 @@ export function registerRunnerRoutes(app: Hono, options: RunnerRoutesOptions) {
       waitMs,
       context.req.raw.signal,
     );
-    const { coding } = store.fork(forkId);
-    if (!input) return context.json<RunInput>({ messages: [], others: null, stop: false, coding });
+    const { coding, network } = store.fork(forkId);
+    if (!input) {
+      return context.json<RunInput>({ messages: [], others: null, stop: false, coding, network });
+    }
     const others = input.messages.length > 0 ? runs.othersUpdate(forkId, leaseId) : null;
-    return context.json<RunInput>({ ...input, others, coding });
+    return context.json<RunInput>({ ...input, others, coding, network });
   });
 
   app.post('/api/runner/forks/:forkId/context', async (context) => {

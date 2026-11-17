@@ -16,7 +16,7 @@ import type { Lease, RunContext } from '@chat-explorer/shared/protocol.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { claudeDockerArguments, containerArguments, forkFolders } from '../src/claude-engine.js';
 import { newestBuiltImage } from '../src/claude-image.js';
-import { egressContainer, ensureEgress } from '../src/egress.js';
+import { egressContainer, egressFolders, ensureEgress, openEgressPass } from '../src/egress.js';
 import { defaultCodingLimits, runnerConfigPath } from '../src/runner-config.js';
 import { checkedRunSpec, RunRefusedError } from '../src/run-spec.js';
 import { workspaceSize } from '../src/workspace-size.js';
@@ -46,6 +46,7 @@ const engineOptions = {
   forksPath: '/runner/forks',
   workspacesPath: '/workspaces',
   filesPath: '/files',
+  egressPath: '/runner/egress',
   codingLimits: defaultCodingLimits,
 };
 
@@ -78,9 +79,13 @@ async function probeCodingContainer() {
     forksPath: join(runnerPath, 'forks'),
     workspacesPath: join(root, 'workspaces'),
     filesPath: join(root, 'files'),
+    egressPath: join(runnerPath, 'egress'),
     codingLimits: defaultCodingLimits,
   };
-  const own = spec({ lease: { forkId: 'fork_00000000a1' } });
+  const own = spec({
+    lease: { forkId: 'fork_00000000a1' },
+    context: { network: { hosts: [], registries: true } },
+  });
   const other = spec({ lease: { forkId: 'fork_00000000b2' } });
   const ownFolders = forkFolders(paths, own);
   const otherFolders = forkFolders(paths, other);
@@ -95,7 +100,7 @@ async function probeCodingContainer() {
   }
   writeFileSync(runnerConfigPath(runnerPath), JSON.stringify({ coding: { enabled: true } }));
   writeFileSync(join(otherFolders.work, 'secret.env'), 'TOKEN=other-fork');
-  await ensureEgress(image, dockerPort);
+  await ensureEgress({ image, port: dockerPort, egressPath: paths.egressPath });
   const probe = readFileSync(new URL('./fixtures/container-probe.cjs', import.meta.url), 'utf8');
   const probePaths = {
     runnerConfig: runnerConfigPath(runnerPath),
@@ -103,12 +108,31 @@ async function probeCodingContainer() {
     ownWorkspace: ownFolders.work,
     otherSessions: otherFolders.sessions,
   };
-  const { stdout } = await run(
-    'docker',
-    [...containerArguments(own, paths), 'node', '-e', probe, JSON.stringify(probePaths)],
-    { timeout: 60_000 },
+  const inContainer = async (runSpec: typeof own, command: string[]) => {
+    const pass = openEgressPass(paths.egressPath, dockerPort, runSpec.forkId, runSpec.hosts);
+    try {
+      const { stdout } = await run('docker', [...containerArguments(runSpec, paths), ...command], {
+        timeout: 90_000,
+        env: { ...process.env, ...pass.environment },
+      });
+      return stdout.trim();
+    } catch {
+      return 'failed';
+    } finally {
+      pass.close();
+    }
+  };
+  const results = JSON.parse(
+    await inContainer(own, ['node', '-e', probe, JSON.stringify(probePaths)]),
   );
-  return { results: JSON.parse(stdout), root, ownFolders, otherFolders };
+  const npmWithoutPreset = await inContainer(other, [
+    'sh',
+    '-c',
+    'cd /tmp && npm view left-pad version --fetch-retries=0',
+  ]);
+  const log = (forkId: string) =>
+    readFileSync(join(egressFolders(paths.egressPath).logs, `${forkId}.log`), 'utf8');
+  return { results, npmWithoutPreset, log, root, ownFolders, otherFolders, own, other };
 }
 
 // The security acceptance checklist for coding forks, from the note "Coding forks: tools,
@@ -142,6 +166,28 @@ describe('coding forks: security acceptance checklist', () => {
       expect(probed.results.outsideThroughProxy).toBe(403);
     });
 
+    it('lets a container out only after it signs in as its own fork', () => {
+      expect(probed.results.modelWithoutSignIn).toBe(407);
+    });
+
+    it("reaches the fork's allowed hosts over HTTPS only, and npm install works with the preset", () => {
+      expect(probed.results.allowedHostThroughProxy).toBe(200);
+      expect(probed.results.allowedHostOverPlainHttp).toBe(403);
+      expect(probed.results.npm).toMatch(/^\d+\.\d+\.\d+$/);
+      expect(probed.npmWithoutPreset).toBe('failed');
+    });
+
+    it("logs each fork's allowed and denied connections in its own log", () => {
+      const own = probed.log(probed.own.forkId);
+      expect(own).toMatch(/allowed registry\.npmjs\.org:443 \(\d+\.\d+\.\d+\.\d+\)/);
+      expect(own).toMatch(/denied example\.com:443: not on this fork's list/);
+      expect(own).toMatch(/denied 192\.168\.1\.1:443: not on this fork's list/);
+      expect(own).toMatch(/denied plain HTTP to registry\.npmjs\.org:80/);
+      expect(probed.log(probed.other.forkId)).toMatch(
+        /denied registry\.npmjs\.org:443: not on this fork's list/,
+      );
+    });
+
     it("6. a container cannot read the runner config or other forks' workspaces", () => {
       expect(probed.results.runnerConfigVisible).toBe(false);
       expect(probed.results.otherWorkspaceVisible).toBe(false);
@@ -162,14 +208,16 @@ describe('coding forks: security acceptance checklist', () => {
     const smuggled = {
       dockerArgs: ['--privileged'],
       extraArgs: ['--volume', '/:/host'],
-      network: 'host',
+      networkMode: 'host',
       image: 'attacker/image',
     };
     const built = spec({ lease: smuggled, context: smuggled });
+    expect(() => spec({ context: { network: 'host' } })).toThrow(RunRefusedError);
     expect(Object.keys(built).sort()).toEqual([
       'coding',
       'explorationId',
       'forkId',
+      'hosts',
       'model',
       'resume',
       'sessionId',
@@ -222,6 +270,29 @@ describe('checking a job before it runs', () => {
     expect(() =>
       checkedRunSpec({ lease, context, sessionId: '../x', toolsUrl, config: allowed }),
     ).toThrow('The session id is not valid.');
+  });
+
+  it('refuses allowed hosts that are not plain host:port entries', () => {
+    const hosts = (network: object) => () => spec({ context: { network } });
+    for (const network of [
+      { hosts: ['github.com:443 --privileged'], registries: false },
+      { hosts: ['192.168.1.1:22'], registries: false },
+      { hosts: 'github.com:443', registries: false },
+      { hosts: [], registries: 'yes' },
+      {
+        hosts: Array.from({ length: 101 }, (_, index) => `h${index}.example.com:443`),
+        registries: false,
+      },
+    ]) {
+      expect(hosts(network)).toThrow(RunRefusedError);
+    }
+    expect(
+      spec({ context: { network: { hosts: ['github.com:443'], registries: true } } }).hosts,
+    ).toEqual(expect.arrayContaining(['github.com:443', 'registry.npmjs.org:443', 'pypi.org:443']));
+    expect(
+      spec({ context: { coding: false, network: { hosts: ['github.com:443'], registries: true } } })
+        .hosts,
+    ).toEqual([]);
   });
 
   it('refuses a model or a coding switch it does not know', () => {

@@ -1,11 +1,12 @@
-import { readFileSync, rmSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { claudeDockerArguments } from '../src/claude-engine.js';
 import { claudeDockerfile, isolatedDockerConfig, newerVersion } from '../src/claude-image.js';
 import { toolSummary } from '@chat-explorer/shared/tool-summary.js';
 import { parseClaudeStreamLine, streamUserMessage } from '../src/claude-stream.js';
+import { egressFolders, openEgressPass } from '../src/egress.js';
 
 const recorded = readFileSync(new URL('./fixtures/claude-stream.jsonl', import.meta.url), 'utf8')
   .trim()
@@ -73,6 +74,7 @@ describe('starting Claude Code in Docker', () => {
     sessionId: 'session-1',
     resume: true,
     coding: false,
+    hosts: [],
     systemPrompt: 'Be brief.',
     toolsUrl: 'http://host.docker.internal:4517/api/runner/mcp',
     toolsToken: 'job-token',
@@ -83,14 +85,17 @@ describe('starting Claude Code in Docker', () => {
     forksPath: '/home/me/.chat-explorer/runner/forks',
     workspacesPath: '/home/me/.chat-explorer/workspaces',
     filesPath: '/home/me/.chat-explorer/files',
+    egressPath: '/home/me/.chat-explorer/runner/egress',
     codingLimits: { memory: '6g', processes: 1024 },
   };
   const args = claudeDockerArguments(spec, options);
 
-  it('reaches the outside only through the egress proxy', () => {
+  it('reaches the outside only through the egress proxy, its sign-in kept out of the arguments', () => {
     expect(args).toEqual(expect.arrayContaining(['--network', 'chat-explorer-sandbox']));
-    expect(args).toContain('HTTPS_PROXY=http://chat-explorer-egress-4517:3128');
-    expect(args).toContain('HTTP_PROXY=http://chat-explorer-egress-4517:3128');
+    for (const name of ['HTTPS_PROXY', 'HTTP_PROXY', 'https_proxy', 'http_proxy']) {
+      expect(args).toEqual(expect.arrayContaining(['--env', name]));
+    }
+    expect(args.join(' ')).not.toContain('chat-explorer-egress');
   });
 
   it('runs hardened, with the token from the environment and nothing else of the host', () => {
@@ -170,5 +175,28 @@ describe('building the Claude Code image', () => {
     expect(config).not.toHaveProperty('credHelpers');
     expect(config.cliPluginsExtraDirs).toEqual([join(homedir(), '.docker', 'cli-plugins')]);
     rmSync(directory, { recursive: true });
+  });
+});
+
+describe("a container's pass through the egress proxy", () => {
+  it('signs in as its fork, follows a changed list, and ends with the container', () => {
+    const egressPath = mkdtempSync(join(tmpdir(), 'egress-pass-'));
+    const pass = openEgressPass(egressPath, 4517, 'fork_0000000001', ['github.com:443']);
+    const file = join(egressFolders(egressPath).policies, 'fork_0000000001.json');
+    const policy = () =>
+      JSON.parse(readFileSync(file, 'utf8')) as { token: string; hosts: string[] };
+    const { token } = policy();
+    expect(token).toMatch(/^[0-9a-f]{48}$/);
+    expect(policy().hosts).toEqual(['github.com:443']);
+    expect(pass.environment.HTTPS_PROXY).toBe(
+      `http://fork_0000000001:${token}@chat-explorer-egress-4517:3128`,
+    );
+    expect(statSync(file).mode & 0o777).toBe(0o600);
+    pass.allow(['github.com:443', 'registry.npmjs.org:443']);
+    expect(policy()).toEqual({ token, hosts: ['github.com:443', 'registry.npmjs.org:443'] });
+    expect(readdirSync(egressFolders(egressPath).policies)).toEqual(['fork_0000000001.json']);
+    pass.close();
+    expect(existsSync(file)).toBe(false);
+    rmSync(egressPath, { recursive: true });
   });
 });

@@ -18,6 +18,8 @@ export interface EngineRunSpec {
   resume: boolean;
   // Commands and file writes in the fork's workspace; the runner's config allowed it.
   coding: boolean;
+  // Hosts the container may reach besides the model and the tools, as host:port. Checked.
+  hosts: string[];
   systemPrompt: string;
   // Job-scoped tools the engine reaches over MCP.
   toolsUrl: string;
@@ -31,6 +33,8 @@ export interface EngineRun {
   onEvent(listener: (event: EngineEvent) => void): void;
   onExit(listener: (result: { code: number | null; error?: string }) => void): void;
   stop(options?: { immediately?: boolean }): void;
+  // The fork's allowed hosts changed: new connections follow the new list.
+  allowHosts(hosts: string[]): void;
 }
 
 export interface Engine {

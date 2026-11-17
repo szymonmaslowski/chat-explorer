@@ -47,6 +47,8 @@ export interface RunInput {
   stop: boolean;
   // The fork's coding switch now, which may differ from the one its container started with.
   coding: boolean;
+  // The fork's allowed hosts now.
+  network: ForkNetwork;
 }
 
 // A final reply of only this is not posted: everything went out with the answer tool already.
