@@ -3,6 +3,7 @@ import type { Fork, ForkRun } from '@shared/types';
 import { computed, ref } from 'vue';
 import { api } from '../api';
 import CopyableId from './CopyableId.vue';
+import ForkNetworkSettings from './ForkNetworkSettings.vue';
 
 // The fork's model and how full its context is, from the runner's last turn, whether the fork
 // hears about the chat's other forks, and whether Claude may code in it.
@@ -65,6 +66,7 @@ const setCoding = (coding: boolean) => save(() => api.setForkCoding(props.fork.i
       Takes effect from your next message, in a new container. The runner must allow coding in its
       own config.
     </p>
+    <ForkNetworkSettings v-if="fork.coding" :fork="fork" />
   </section>
 </template>
 

@@ -1,4 +1,5 @@
 import type { ClaudeModel } from '@shared/models';
+import type { ForkNetwork } from '@shared/network';
 import type {
   Activity,
   ActivitySummary,
@@ -151,6 +152,8 @@ export const api = {
     call<Fork>(`/api/forks/${forkId}/awareness`, { method: 'PATCH', json: { awareness } }),
   setForkCoding: (forkId: string, coding: boolean) =>
     call<Fork>(`/api/forks/${forkId}/coding`, { method: 'PATCH', json: { coding } }),
+  setForkNetwork: (forkId: string, network: ForkNetwork) =>
+    call<Fork>(`/api/forks/${forkId}/network`, { method: 'PATCH', json: network }),
   retryFork: (forkId: string) => call<{ ok: true }>(`/api/forks/${forkId}/retry`, { json: {} }),
   splitFork: (messageId: string, forkId: string) =>
     call<ForkSplit>(`/api/messages/${messageId}/split`, { json: { forkId } }),

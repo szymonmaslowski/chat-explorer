@@ -43,6 +43,20 @@ test('opens a chat on the page its settings name, and shows the fork model there
         (await (await request.get(`/api/explorations/${explorationId}`)).json()).forks[0].coding,
     )
     .toBe(true);
+  const network = async () =>
+    (await (await request.get(`/api/explorations/${explorationId}`)).json()).forks[0].network;
+  await forkSettings.getByLabel(/Package registries/).check();
+  await expect.poll(network).toMatchObject({ registries: true });
+  const hosts = forkSettings.getByLabel(/Other allowed hosts/);
+  await hosts.fill('GitHub.com:443\n192.168.1.1:22');
+  await expect(forkSettings.getByRole('alert')).toHaveText('Not a host and port: 192.168.1.1:22');
+  await expect(forkSettings.getByRole('button', { name: 'Save hosts' })).toBeDisabled();
+  await hosts.fill('GitHub.com:443\n\ngit.example.com:2222');
+  await forkSettings.getByRole('button', { name: 'Save hosts' }).click();
+  await expect
+    .poll(network)
+    .toEqual({ hosts: ['github.com:443', 'git.example.com:2222'], registries: true });
+  await expect(forkSettings.getByRole('button', { name: 'Save hosts' })).toHaveCount(0);
   await settings.getByLabel('Default page').selectOption('notes');
 
   await page.getByRole('link', { name: 'Chats' }).click();
