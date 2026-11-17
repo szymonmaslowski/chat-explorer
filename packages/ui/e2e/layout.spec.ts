@@ -49,6 +49,49 @@ test.describe('on a wide screen', () => {
     await expect(mapColumn(page)).toHaveCount(0);
   });
 
+  test('keeps the column widths dragged in a chat on this device', async ({ page, request }) => {
+    const explorationId = await answeredChat(request);
+    const otherId = await answeredChat(request);
+    const width = async (column: ReturnType<typeof chatsColumn>) =>
+      Math.round((await column.boundingBox())!.width);
+    const drag = async (name: string, by: number) => {
+      const box = (await page.getByRole('separator', { name }).boundingBox())!;
+      const y = box.y + 200;
+      await page.mouse.move(box.x + box.width / 2, y);
+      await page.mouse.down();
+      await page.mouse.move(box.x + box.width / 2 + by, y, { steps: 5 });
+      await page.mouse.up();
+    };
+
+    await page.goto(`/e/${explorationId}`);
+    await expect(mapColumn(page)).toBeVisible();
+    const defaults = { chats: await width(chatsColumn(page)), map: await width(mapColumn(page)) };
+    await drag('Resize the chats list', 100);
+    await drag('Resize the map', -150);
+    const dragged = { chats: defaults.chats + 100, map: defaults.map - 250 };
+    expect(await width(chatsColumn(page))).toBeCloseTo(dragged.chats, -1);
+    expect(await width(mapColumn(page))).toBeCloseTo(dragged.map, -1);
+
+    await page.reload();
+    await expect(mapColumn(page)).toBeVisible();
+    expect(await width(chatsColumn(page))).toBeCloseTo(dragged.chats, -1);
+    expect(await width(mapColumn(page))).toBeCloseTo(dragged.map, -1);
+
+    await page.goto(`/e/${otherId}`);
+    await expect(mapColumn(page)).toBeVisible();
+    expect(await width(chatsColumn(page))).toBe(defaults.chats);
+    expect(await width(mapColumn(page))).toBe(defaults.map);
+
+    await page.goto(`/e/${explorationId}`);
+    await page.getByRole('separator', { name: 'Resize the map' }).dblclick();
+    await expect
+      .poll(async () => Math.abs((await width(mapColumn(page))) - (defaults.map - 100)))
+      .toBeLessThanOrEqual(2);
+    await page.getByRole('separator', { name: 'Resize the chats list' }).focus();
+    await page.keyboard.press('ArrowLeft');
+    expect(await width(chatsColumn(page))).toBeCloseTo(dragged.chats - 16, -1);
+  });
+
   test('opens all three at once for a chat with only its main fork', async ({ page, request }) => {
     const explorationId = await answeredChat(request);
     await page.goto('/');
