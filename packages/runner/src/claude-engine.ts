@@ -79,6 +79,8 @@ export function containerArguments(spec: EngineRunSpec, options: ContainerOption
     '--env',
     'DISABLE_AUTOUPDATER=1',
     ...sandboxArguments(),
+    // Node's own fetch ignores the proxy settings without this, so scripts Claude writes would fail.
+    ...(spec.coding ? ['--env', 'NODE_USE_ENV_PROXY=1'] : []),
     '--volume',
     `${folders.work}:${folders.work}`,
     '--workdir',
@@ -94,9 +96,11 @@ export function containerArguments(spec: EngineRunSpec, options: ContainerOption
 const chatTools = ['WebSearch', 'Read'];
 const codingTools = ['Bash', 'Read', 'Edit', 'Write', 'Glob', 'Grep', 'WebSearch', 'TodoWrite'];
 
-const codingPrompt = (workspace: string) => `
+const codingPrompt = (workspace: string, hosts: string[]) => `
 
-This fork is a coding fork. You run in a Linux container with Bash and file tools. Your workspace is ${workspace}: a real folder on the user's computer, kept between sessions, and the only folder that is. Work there: clone repositories into it or start projects in it, several side by side if needed. The network reaches only the model and the chat tools for now, so downloads and package installs fail.`;
+This fork is a coding fork. You run in a Linux container with Bash and file tools. Your workspace is ${workspace}: a real folder on the user's computer, kept between sessions, and the only folder that is. Work there: clone repositories into it or start projects in it, several side by side if needed.
+
+The network goes out only through a proxy, over HTTPS, to the hosts the user allowed for this fork. At the start of this session those were: ${hosts.length > 0 ? hosts.join(', ') : 'none'}. A connection the proxy refuses fails with a 403 or "Blocked by the sandbox". When you need a host that isn't allowed, tell the user which host:port to add under the fork's allowed hosts in Chat settings. Don't try to get around the proxy.`;
 
 function claudeArguments(spec: EngineRunSpec, options: ContainerOptions) {
   const mcpConfig = {
@@ -135,7 +139,7 @@ function claudeArguments(spec: EngineRunSpec, options: ContainerOptions) {
     'none',
     '--append-system-prompt',
     spec.coding
-      ? spec.systemPrompt + codingPrompt(forkFolders(options, spec).work)
+      ? spec.systemPrompt + codingPrompt(forkFolders(options, spec).work, spec.hosts)
       : spec.systemPrompt,
   ];
 }
