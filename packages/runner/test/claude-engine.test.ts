@@ -64,6 +64,16 @@ describe('reading Claude Code stream-json', () => {
       message: { role: 'user', content: 'Hi' },
     });
   });
+
+  it('reads the heartbeat of a running tool call, so a long build is not taken for stuck', () => {
+    const line = JSON.stringify({
+      type: 'tool_progress',
+      tool_name: 'Bash',
+      elapsed_time_seconds: 30,
+      heartbeat: true,
+    });
+    expect(parseClaudeStreamLine(line)).toEqual([{ type: 'heartbeat' }]);
+  });
 });
 
 describe('starting Claude Code in Docker', () => {

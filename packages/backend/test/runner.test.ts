@@ -280,6 +280,22 @@ describe('the runner', () => {
     await runner.stop();
   });
 
+  it('keeps a turn alive while its tool call sends heartbeats, past the stuck limit', async () => {
+    const { runner, engineRuns, store, explorationId, mainForkId } = setup({ stuckMs: 100 });
+    runner.start();
+    store.submit(explorationId, mainForkId, 'Build the project');
+    await until(() => engineRuns[0]?.sent.length === 1);
+    engineRuns[0]!.emit({ type: 'tool', name: 'Bash', summary: 'Running npm run build' });
+    for (let beat = 0; beat < 8; beat++) {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      engineRuns[0]!.emit({ type: 'heartbeat' });
+    }
+    expect(engineRuns[0]!.stopped).toBe(false);
+    expect(store.snapshot(explorationId).forkRuns[0]?.status).toBe('answering');
+    await until(() => engineRuns[0]!.stopped, 1_000);
+    await runner.stop();
+  });
+
   it('lets an idle engine go and resumes its session for the next message', async () => {
     const { runner, engineRuns, store, explorationId, mainForkId, messages } = setup({
       idleCloseMs: 30,

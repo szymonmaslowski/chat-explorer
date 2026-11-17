@@ -353,6 +353,8 @@ class ForkWorker {
         this.lastUsage = { model: event.model, contextTokens: event.contextTokens };
         await client.usage(this.lease, { ...this.lastUsage, contextWindow: this.contextWindow });
         return;
+      case 'heartbeat':
+        return;
       case 'rate-limited':
         await client.waiting(
           this.lease,

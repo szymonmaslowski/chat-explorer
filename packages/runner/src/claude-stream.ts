@@ -29,6 +29,8 @@ type StreamLine =
       modelUsage?: Record<string, { contextWindow?: number }>;
     }
   | { type: 'rate_limit_event'; rate_limit_info: { status: string; resetsAt?: number } }
+  // Printed every 30 seconds while a foreground tool call runs.
+  | { type: 'tool_progress' }
   | { type: 'other' };
 
 const contextTokensOf = (usage: StreamUsage) =>
@@ -84,6 +86,8 @@ export function parseClaudeStreamLine(raw: string): EngineEvent[] {
         },
       ];
     }
+    case 'tool_progress':
+      return [{ type: 'heartbeat' }];
     case 'rate_limit_event':
       return line.rate_limit_info.status === 'allowed'
         ? []

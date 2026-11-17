@@ -7,7 +7,9 @@ export type EngineEvent =
   | { type: 'text'; text: string }
   | { type: 'usage'; model: string; contextTokens: number }
   | { type: 'turn-finished'; answer: string; failed: boolean; contextWindow: number | null }
-  | { type: 'rate-limited'; resetsAt: number | null };
+  | { type: 'rate-limited'; resetsAt: number | null }
+  // A tool call is still running; nothing to show, but the turn is not stuck.
+  | { type: 'heartbeat' };
 
 export interface EngineRunSpec {
   forkId: string;
