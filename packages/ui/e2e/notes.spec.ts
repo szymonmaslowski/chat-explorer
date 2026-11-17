@@ -60,7 +60,14 @@ test('adds, edits and deletes notes, starting the General group', async ({ page,
   await expect(oatMilk).not.toHaveClass(/selected/);
   await oatMilk.click();
   await page.mouse.click(10, 650);
+  await expect(oatMilk).toHaveClass(/expanded/);
+  const closeBox = (await oatMilk.getByRole('button', { name: 'Close' }).boundingBox())!;
+  const noteBox = (await oatMilk.boundingBox())!;
+  expect(closeBox.x + closeBox.width).toBeGreaterThan(noteBox.x + noteBox.width - 24);
+  expect(closeBox.y).toBeLessThan(noteBox.y + 24);
+  await oatMilk.getByRole('button', { name: 'Close' }).click();
   await expect(oatMilk).not.toHaveClass(/selected/);
+  await expect(oatMilk.getByRole('button', { name: 'Close' })).toHaveCount(0);
   await oatMilk.click();
   await page.getByRole('button', { name: 'Delete' }).click();
   await page.getByRole('button', { name: 'Confirm' }).click();

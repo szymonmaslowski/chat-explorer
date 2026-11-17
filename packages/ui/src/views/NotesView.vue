@@ -230,7 +230,9 @@ function toggleSelected(noteId: string) {
   selectedNoteId.value = selectedNoteId.value === noteId ? null : noteId;
 }
 
+// An open note is expanded, outside a checklist, and stays so until its Close button.
 function deselectOutsideNotes(event: MouseEvent) {
+  if (!activeGroup.value?.checklist) return;
   if (event.target instanceof Element && !event.target.closest('.note, .speech-player')) {
     selectedNoteId.value = null;
   }

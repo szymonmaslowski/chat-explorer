@@ -136,6 +136,11 @@ function onClick(event: MouseEvent) {
   emit('toggleSelected');
 }
 
+function collapse() {
+  if (props.checklist) expandedByButton.value = false;
+  else emit('toggleSelected');
+}
+
 const spokenBlocks = () => blocks.value.map(({ block }) => block);
 
 function listen() {
@@ -227,6 +232,16 @@ function changeGroup(groupId: string | null) {
     }"
     @click="onClick"
   >
+    <button
+      v-if="expanded"
+      type="button"
+      class="icon-button close-button"
+      aria-label="Close"
+      title="Close"
+      @click.stop="collapse"
+    >
+      <MediaIcon name="close" />
+    </button>
     <h3 class="topic" :class="{ preparing: note.topic === null }">
       {{ note.topic ?? 'Preparing topic…' }}
       <span v-if="offline && outbox.isPending(note.id)" class="unsent"> · not sent yet </span>
@@ -453,6 +468,11 @@ function changeGroup(groupId: string | null) {
   margin: 0;
   font-size: 1rem;
   overflow-wrap: anywhere;
+}
+
+.close-button {
+  float: right;
+  margin: -0.2rem -0.35rem 0.25rem 0.5rem;
 }
 
 .topic.preparing {
