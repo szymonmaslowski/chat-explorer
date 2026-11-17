@@ -17,7 +17,6 @@ describe("the runner's own config", () => {
         enabled: false,
         memory: '4g',
         processes: 512,
-        cpus: 2,
         workspaceLimitGb: 10,
         minFreeGb: 10,
       },
@@ -44,6 +43,11 @@ describe("the runner's own config", () => {
     });
   });
 
+  it('lets a coding container use every CPU unless the file caps them', () => {
+    writeFileSync(configPath, JSON.stringify({ coding: { enabled: true } }));
+    expect(readRunnerConfig(runnerPath).coding).not.toHaveProperty('cpus');
+  });
+
   it('takes the disk limits from the file, as gigabytes above 0', () => {
     writeFileSync(configPath, JSON.stringify({ coding: { workspaceLimitGb: 25, minFreeGb: 5.5 } }));
     expect(readRunnerConfig(runnerPath).coding).toMatchObject({
@@ -67,7 +71,7 @@ describe("the runner's own config", () => {
       writeFileSync(configPath, JSON.stringify({ coding: { memory } }));
       expect(() => readRunnerConfig(runnerPath)).toThrow(`coding.memory in ${configPath}`);
     }
-    for (const cpus of [0, -1, '4']) {
+    for (const cpus of [0, -1, '4', null]) {
       writeFileSync(configPath, JSON.stringify({ coding: { cpus } }));
       expect(() => readRunnerConfig(runnerPath)).toThrow(`coding.cpus in ${configPath}`);
     }

@@ -7,7 +7,8 @@ export interface ContainerLimits {
   // As `docker run --memory` takes it: a number with m or g, such as 4g.
   memory: string;
   processes: number;
-  cpus: number;
+  // Left out, the container may use every CPU Docker has, shared with the others when they're busy.
+  cpus?: number;
 }
 
 // The runner's own limits, set on this machine. The backend can ask for less, never for more.
@@ -20,7 +21,6 @@ export interface RunnerConfig {
 export const defaultCodingLimits: ContainerLimits & DiskLimits = {
   memory: '4g',
   processes: 512,
-  cpus: 2,
   workspaceLimitGb: 10,
   minFreeGb: 10,
 };
@@ -69,8 +69,8 @@ export function readRunnerConfig(runnerPath: string): RunnerConfig {
   if (typeof processes !== 'number' || !Number.isInteger(processes) || processes < 1) {
     throw new RunnerConfigError(`coding.processes in ${path} must be a whole number above 0.`);
   }
-  const cpus = parsed.coding?.cpus ?? defaultCodingLimits.cpus;
-  if (typeof cpus !== 'number' || !(cpus > 0) || !Number.isFinite(cpus)) {
+  const cpus = parsed.coding?.cpus;
+  if (cpus !== undefined && (typeof cpus !== 'number' || !(cpus > 0) || !Number.isFinite(cpus))) {
     throw new RunnerConfigError(
       `coding.cpus in ${path} must be a number above 0, such as 4 or 1.5.`,
     );
@@ -90,7 +90,7 @@ export function readRunnerConfig(runnerPath: string): RunnerConfig {
       enabled,
       memory,
       processes,
-      cpus,
+      ...(cpus === undefined ? {} : { cpus }),
       workspaceLimitGb: gigabytes('workspaceLimitGb'),
       minFreeGb: gigabytes('minFreeGb'),
     },

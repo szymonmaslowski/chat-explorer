@@ -165,6 +165,15 @@ describe('starting Claude Code in Docker', () => {
     expect(coding.join(' ')).not.toContain('/home/me/.chat-explorer/runner/config.json');
   });
 
+  it('leaves the CPUs uncapped when the runner config sets no number', () => {
+    const uncapped = claudeDockerArguments(
+      { ...spec, coding: true },
+      { ...options, codingLimits: { memory: '6g', processes: 1024 } },
+    );
+    expect(uncapped).not.toContain('--cpus');
+    expect(claudeDockerArguments(spec, options)).toEqual(expect.arrayContaining(['--cpus', '2']));
+  });
+
   it('builds an image at the given Claude Code version with the updater off', () => {
     const dockerfile = claudeDockerfile('2.1.319');
     expect(dockerfile).toMatch(/^FROM node:22-slim@sha256:/);

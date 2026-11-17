@@ -176,7 +176,7 @@ The runner's config also sets this machine's limits for coding containers. Leave
 | ------------------ | ------- | ----------------------------------------------------------------------------------- |
 | `memory`           | `"4g"`  | memory per container, such as `"8g"` or `"512m"`                                    |
 | `processes`        | `512`   | processes per container                                                             |
-| `cpus`             | `2`     | CPUs per container, such as `6` or `1.5`                                            |
+| `cpus`             | all     | caps the CPUs per container, such as `6` or `1.5`; busy containers share the rest   |
 | `workspaceLimitGb` | `10`    | a workspace over this shows a warning; past 1.5 times it, the run stops             |
 | `minFreeGb`        | `10`    | coding runs stop when the Mac or Docker's own disk has less free, and new ones wait |
 
