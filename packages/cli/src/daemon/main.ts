@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { loadSettings, runnerSettingsEnv, SettingsError } from '@chat-explorer/backend/settings.js';
 import { startBackend } from '@chat-explorer/backend/server.js';
 import { loadConfig } from '@chat-explorer/shared/config.js';
-import { superviseRunner } from '../runner/supervisor.js';
+import { superviseRunner } from './runner-supervisor.js';
 
 // The daemon: the backend in this process, and the runner next to it when the settings enable it.
 const config = loadConfig();

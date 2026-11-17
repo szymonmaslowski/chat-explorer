@@ -4,11 +4,11 @@ import { parseArgs } from 'node:util';
 import { createDaemonClient, DaemonError } from '@chat-explorer/shared/http.js';
 import { apiVersion, loadConfig } from '@chat-explorer/shared/config.js';
 import { DaemonStartError, probe } from '@chat-explorer/shared/health.js';
-import { ensureDaemon, stopDaemon } from '../daemon/control.js';
-import { servicePid, serviceRunsFor } from '../daemon/service.js';
+import { ensureDaemon, stopDaemon } from './daemon/control.js';
+import { servicePid, serviceRunsFor } from './daemon/service.js';
 import { dictationAvailability } from '@chat-explorer/backend/dictation/availability.js';
 import { whisperModelPath, whisperModels } from '@chat-explorer/backend/dictation/models.js';
-import { openBrowser } from '../open-browser.js';
+import { openBrowser } from './open-browser.js';
 import {
   InstallError,
   installDictation,
@@ -145,7 +145,7 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
   },
 
   async service([action]) {
-    const { installService, uninstallService } = await import('../daemon/launchd.js');
+    const { installService, uninstallService } = await import('./daemon/launchd.js');
     if (action === 'install') {
       const { launchAgentPath, health } = await installService(config);
       console.log(`chat-explorer ${health.version} runs at login (${launchAgentPath}).`);

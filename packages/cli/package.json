@@ -8,7 +8,7 @@
     "node": ">=22.13"
   },
   "bin": {
-    "chat-explorer": "dist/cli/main.js"
+    "chat-explorer": "dist/main.js"
   },
   "files": [
     "dist",

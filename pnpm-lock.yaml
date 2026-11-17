@@ -58,6 +58,31 @@ importers:
         specifier: ^5.0.5
         version: 5.0.5(@types/node@22.20.5)(jsdom@30.1.3)(vite@8.3.5(@types/node@22.20.5))
 
+  packages/cli:
+    dependencies:
+      '@chat-explorer/backend':
+        specifier: workspace:*
+        version: link:../backend
+      '@chat-explorer/mcp':
+        specifier: workspace:*
+        version: link:../mcp
+      '@chat-explorer/runner':
+        specifier: workspace:*
+        version: link:../runner
+      '@chat-explorer/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      '@types/node':
+        specifier: ^22.20.5
+        version: 22.20.5
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@22.20.5)(jsdom@30.1.3)(vite@8.3.5(@types/node@22.20.5))
+
   packages/mcp:
     dependencies:
       '@chat-explorer/shared':
@@ -82,31 +107,6 @@ importers:
 
   packages/runner:
     dependencies:
-      '@chat-explorer/shared':
-        specifier: workspace:*
-        version: link:../shared
-    devDependencies:
-      '@types/node':
-        specifier: ^22.20.5
-        version: 22.20.5
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: ^5.0.5
-        version: 5.0.5(@types/node@22.20.5)(jsdom@30.1.3)(vite@8.3.5(@types/node@22.20.5))
-
-  packages/server:
-    dependencies:
-      '@chat-explorer/backend':
-        specifier: workspace:*
-        version: link:../backend
-      '@chat-explorer/mcp':
-        specifier: workspace:*
-        version: link:../mcp
-      '@chat-explorer/runner':
-        specifier: workspace:*
-        version: link:../runner
       '@chat-explorer/shared':
         specifier: workspace:*
         version: link:../shared
