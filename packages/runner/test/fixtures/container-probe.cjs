@@ -22,11 +22,13 @@ const tcp = (host, port) =>
 const throughProxy = (options, signedIn = true) =>
   new Promise((resolve) => {
     const headers = signedIn ? { 'proxy-authorization': signIn } : {};
+    // agent: false keeps NODE_USE_ENV_PROXY from sending this through the proxy, sign-in and all.
     const request = http.request({
       host: proxy.hostname,
       port: proxy.port,
       timeout,
       headers,
+      agent: false,
       ...options,
     });
     request.on('connect', (response) => (response.socket.destroy(), resolve(response.statusCode)));
