@@ -1,17 +1,19 @@
 <script setup lang="ts">
 import {
   isHostPort,
+  matchesHostPattern,
   maxAllowedHosts,
   packageRegistries,
   registryNames,
   type RegistryName,
 } from '@shared/network';
-import type { Fork } from '@shared/types';
+import type { CapabilitiesReport, Fork } from '@shared/types';
 import { computed, ref, watch } from 'vue';
 import { api } from '../api';
 
-// What a coding fork's container may reach: the registries ticked and hosts the reader typed.
-const props = defineProps<{ fork: Fork }>();
+// What a coding fork's container may reach: the registries ticked and hosts the reader typed,
+// within what the runner allows.
+const props = defineProps<{ fork: Fork; report: CapabilitiesReport | null }>();
 
 const saving = ref(false);
 const savedHosts = computed(() => props.fork.network.hosts.join('\n'));
@@ -29,6 +31,15 @@ const entries = computed(() =>
 const invalid = computed(() => entries.value.filter((entry) => !isHostPort(entry)));
 const tooMany = computed(() => entries.value.length > maxAllowedHosts);
 const changed = computed(() => entries.value.join('\n') !== savedHosts.value);
+const ceiling = computed(() => props.report?.capabilities.allowedHosts ?? null);
+// Not blocking: a host the runner keeps hidden isn't in its report, and the runner decides.
+const outsideCeiling = computed(() => {
+  const allowed = ceiling.value;
+  if (!allowed) return [];
+  return entries.value.filter(
+    (entry) => isHostPort(entry) && !allowed.some((pattern) => matchesHostPattern(pattern, entry)),
+  );
+});
 
 async function save(network: Fork['network']) {
   saving.value = true;
@@ -86,9 +97,14 @@ const saveHosts = () => save({ ...props.fork.network, hosts: entries.value });
     >
       Save hosts
     </button>
+    <p v-if="outsideCeiling.length > 0" class="error" role="alert">
+      Not allowed by this runner, unless it keeps them hidden: {{ outsideCeiling.join(', ') }}
+    </p>
     <p class="hint">
-      Everything else is refused, and so are addresses on your own network. Changes apply to new
-      connections at once.
+      <template v-if="report && ceiling">This runner allows {{ ceiling.join(', ') }}. </template>
+      <template v-else-if="report">This runner allows any public host. </template>
+      Everything else is refused, and so are addresses on your own network unless the runner's
+      config allows one. Changes apply to new connections at once.
     </p>
   </div>
 </template>

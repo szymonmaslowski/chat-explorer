@@ -9,7 +9,11 @@ import {
   type ForkRunRow,
   type MessageRow,
 } from '../db/rows.js';
-import type { ActivityKind, CodingCapacity } from '@chat-explorer/shared/types.js';
+import type {
+  ActivityKind,
+  CodingCapacity,
+  RunnerCapabilities,
+} from '@chat-explorer/shared/types.js';
 import { StoreError } from './errors.js';
 import type { EventBus } from './event-bus.js';
 import { newId } from './ids.js';
@@ -17,6 +21,11 @@ import type { ChatStore } from './store.js';
 import { type Lease, type PendingMessage, type RunUsage } from '@chat-explorer/shared/protocol.js';
 
 export const leaseMs = 60_000;
+
+interface RunnerReports {
+  capacity: CodingCapacity | null;
+  capabilities: RunnerCapabilities;
+}
 // A runner that asked for work within this time counts as online.
 const runnerOnlineMs = 90_000;
 // After this many attempts that died before answering, the fork waits for Retry.
@@ -52,7 +61,11 @@ const unansweredAfter = `COALESCE(
 // on each, the user messages it has not answered yet, and what it reports back.
 export class RunStore {
   private lastRunnerSeenAt = 0;
-  private codingCapacity: { capacity: CodingCapacity | null; at: number } | null = null;
+  // Forks whose container should be replaced, by lease: a new lease is a new container already.
+  private readonly restarts = new Set<string>();
+  private readonly runnerReports: {
+    [Kind in keyof RunnerReports]?: { value: RunnerReports[Kind]; at: number };
+  } = {};
 
   // Forks a terminal session answered and keeps holding while it works on before waiting for
   // feedback again, so its steps show under the answer: the answer's id and the last step's time.
@@ -108,15 +121,31 @@ export class RunStore {
     return this.runnerOnline() ? 'listening' : 'detached';
   }
 
-  // The runner repeats it while it runs, so one that went away stops counting.
-  setCodingCapacity(capacity: CodingCapacity | null) {
-    this.codingCapacity = { capacity, at: this.now() };
+  // The runner repeats its reports while it runs, so one that went away stops counting.
+  saveRunnerReport<Kind extends keyof RunnerReports>(kind: Kind, value: RunnerReports[Kind]) {
+    this.runnerReports[kind] = { value, at: this.now() } as (typeof this.runnerReports)[Kind];
   }
 
   // Null while no runner is around, or its runner doesn't code.
   currentCodingCapacity() {
-    const reported = this.codingCapacity;
-    return reported && this.now() - reported.at < runnerOnlineMs ? reported.capacity : null;
+    const reported = this.runnerReports.capacity;
+    return reported && this.runnerOnlineSince(reported.at) ? reported.value : null;
+  }
+
+  // The last report even from a runner that went away, with whether it still counts, so the page
+  // can show the choices as of then.
+  lastCapabilities() {
+    const reported = this.runnerReports.capabilities;
+    if (!reported) return null;
+    return {
+      capabilities: reported.value,
+      reportedAt: reported.at,
+      current: this.runnerOnlineSince(reported.at),
+    };
+  }
+
+  private runnerOnlineSince(at: number) {
+    return this.now() - at < runnerOnlineMs;
   }
 
   private runnerOnline() {
@@ -203,6 +232,27 @@ export class RunStore {
     this.update(forkId, { stop_requested: 1 });
     this.publishRun(forkId);
     return true;
+  }
+
+  // A fresh container for a fork whose runner holds one, such as after a credential changed in the
+  // runner's config. The runner lets the old one go once no turn runs, and the next message starts
+  // the new one, resuming the session.
+  requestRestart(forkId: string) {
+    const row = this.db.get<ForkRunRow>('SELECT * FROM fork_runs WHERE fork_id = ?', forkId);
+    if (!row?.lease_id || toForkRun(row).heldByTerminal) return false;
+    this.restarts.add(row.lease_id);
+    this.bus.publish(row.exploration_id, { type: 'fork-run.updated', run: toForkRun(row) });
+    return true;
+  }
+
+  // Read once: the runner acts on it.
+  takeRestart(forkId: string, leaseId: string) {
+    this.requireLease(forkId, leaseId);
+    return this.restarts.delete(leaseId);
+  }
+
+  restartRequested(leaseId: string) {
+    return this.restarts.has(leaseId);
   }
 
   // The runner stopped the turn: the messages it had count as handled, without an answer, and

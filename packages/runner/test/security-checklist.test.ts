@@ -30,8 +30,11 @@ import {
   type EgressPass,
 } from '../src/egress.js';
 import { readClaudeToken } from '../src/start.js';
-import { defaultCodingLimits, runnerConfigPath } from '../src/runner-config.js';
+import { defaultCodingLimits, runnerConfigPath, type RunnerConfig } from '../src/runner-config.js';
 import { checkedRunSpec, RunRefusedError } from '../src/run-spec.js';
+import type { Credential, HostRule } from '../src/access-config.js';
+import { capabilitiesReport } from '../src/capabilities.js';
+import { writeCredentialFiles } from '../src/credential-files.js';
 import { workspaceSize } from '../src/workspace-size.js';
 
 const lease: Lease = {
@@ -45,11 +48,15 @@ const lease: Lease = {
 const context: RunContext = {
   model: 'sonnet',
   coding: true,
-  network: { hosts: [], registries: [] },
+  network: { hosts: [], registries: [], credentials: [] },
   systemPrompt: 'Be brief.',
   history: null,
 };
-const allowed = { path: '/runner/config.json', coding: { enabled: true, ...defaultCodingLimits } };
+const allowed: RunnerConfig = {
+  path: '/runner/config.json',
+  coding: { enabled: true, ...defaultCodingLimits, allowedHosts: null, credentials: [] },
+  localBackend: true,
+};
 const notAllowed = { ...allowed, coding: { ...allowed.coding, enabled: false } };
 const sessionId = '11111111-2222-3333-4444-555555555555';
 const toolsUrl = 'http://host.docker.internal:4517/api/tools/mcp';
@@ -63,7 +70,7 @@ const engineOptions = {
   codingLimits: { ...defaultCodingLimits, memory: '4g' },
 };
 
-const spec = (overrides: { lease?: object; context?: object; config?: typeof allowed } = {}) =>
+const spec = (overrides: { lease?: object; context?: object; config?: RunnerConfig } = {}) =>
   checkedRunSpec({
     lease: { ...lease, ...overrides.lease },
     context: { ...context, ...overrides.context },
@@ -97,19 +104,31 @@ async function probeCodingContainer() {
   };
   const own = spec({
     lease: { forkId: 'fork_00000000a1' },
-    context: { network: { hosts: [], registries: ['npm'] } },
+    context: { network: { hosts: [], registries: ['npm'], credentials: [] } },
   });
   const other = spec({ lease: { forkId: 'fork_00000000b2' } });
+  const git = spec({
+    lease: { forkId: 'fork_00000000c3' },
+    context: {
+      network: { hosts: ['github.com:443', 'github.com:22'], registries: [], credentials: [] },
+    },
+  });
   const ownFolders = forkFolders(paths, own);
   const otherFolders = forkFolders(paths, other);
+  const gitFolders = forkFolders(paths, git);
   for (const folder of [
     ownFolders.work,
     ownFolders.sessions,
     otherFolders.work,
     otherFolders.sessions,
+    gitFolders.work,
+    gitFolders.sessions,
     paths.filesPath,
   ]) {
     mkdirSync(folder, { recursive: true });
+  }
+  for (const folders of [ownFolders, otherFolders, gitFolders]) {
+    writeCredentialFiles(folders.credentials, []);
   }
   writeFileSync(runnerConfigPath(runnerPath), JSON.stringify({ coding: { enabled: true } }));
   writeFileSync(join(otherFolders.work, 'secret.env'), 'TOKEN=other-fork');
@@ -123,7 +142,7 @@ async function probeCodingContainer() {
     otherSessions: otherFolders.sessions,
   };
   const openPass = (runSpec: typeof own) =>
-    openEgressPass(paths.egressPath, dockerPort, runSpec.forkId, runSpec.hosts);
+    openEgressPass(paths.egressPath, dockerPort, runSpec.forkId, runSpec.network);
   const inContainer = async (
     runSpec: typeof own,
     command: string[],
@@ -171,6 +190,13 @@ async function probeCodingContainer() {
     '-c',
     'cd /tmp && npm view left-pad version --fetch-retries=0',
   ]);
+  // A public repository over HTTPS, and SSH to GitHub through the proxy with its host key checked:
+  // without a key GitHub then answers "Permission denied", where a wrong host key would fail first.
+  const gitAccess = await inContainer(git, [
+    'sh',
+    '-c',
+    'cd /tmp && git clone -q --depth 1 https://github.com/octocat/Hello-World.git 2>&1 && echo cloned; ssh -F /credentials/ssh_config -o BatchMode=yes -T git@github.com 2>&1; true',
+  ]);
   const log = (forkId: string) =>
     readFileSync(join(egressFolders(paths.egressPath).logs, `${forkId}.log`), 'utf8');
   return {
@@ -179,6 +205,7 @@ async function probeCodingContainer() {
     leakedDummy,
     endedDummy,
     npmWithoutPreset,
+    gitAccess,
     log,
     root,
     ownFolders,
@@ -200,6 +227,12 @@ describe('coding forks: security acceptance checklist', () => {
     afterAll(async () => {
       await run('docker', ['rm', '--force', egressContainer(dockerPort)]).catch(() => {});
       if (probed) rmSync(probed.root, { recursive: true, force: true });
+    });
+
+    it('clones a public repository over HTTPS and reaches GitHub over SSH, host key checked', () => {
+      expect(probed.gitAccess).toContain('cloned');
+      expect(probed.gitAccess).toContain('Permission denied (publickey)');
+      expect(probed.gitAccess).not.toContain('Host key verification failed');
     });
 
     it('reaches the model only through the proxy, holding a dummy token, never the real one', () => {
@@ -264,7 +297,67 @@ describe('coding forks: security acceptance checklist', () => {
     });
   });
 
-  it.todo('3. a job naming a host, credential pairing or image outside the ceilings is refused');
+  it('3. a job naming a host, credential pairing or image outside the ceilings is refused', () => {
+    const rule = (pattern: string, flags: Partial<HostRule> = {}) => ({
+      pattern,
+      private: false,
+      hidden: false,
+      ...flags,
+    });
+    const token: Credential = {
+      name: 'GitHub token',
+      type: 'token',
+      file: '/runner/secrets/github-token',
+      username: 'x-access-token',
+      hosts: [rule('github.com:443'), rule('api.github.com:443')],
+      knownHosts: [],
+      hidden: false,
+    };
+    const ceilings: RunnerConfig = {
+      ...allowed,
+      coding: {
+        ...allowed.coding,
+        allowedHosts: [
+          rule('registry.npmjs.org:443'),
+          rule('*.githubusercontent.com:443'),
+          rule('git.home.example.com:2222', { private: true }),
+        ],
+        credentials: [token],
+      },
+    };
+    const network = (fields: object) => ({ hosts: [], registries: [], credentials: [], ...fields });
+    const job = (fields: object) =>
+      spec({ config: ceilings, context: { network: network(fields) } });
+
+    expect(() => job({ hosts: ['attacker.example.com:443'] })).toThrow(
+      "This runner doesn't allow attacker.example.com:443",
+    );
+    expect(() => job({ registries: ['pypi'] })).toThrow("This runner doesn't allow pypi.org:443");
+    expect(() => job({ credentials: ['Personal SSH key'] })).toThrow(
+      'The credential "Personal SSH key" is not in this runner\'s config.',
+    );
+    // A credential reaches only the hosts the config pairs it with.
+    expect(job({ credentials: ['GitHub token'] }).network.hosts).toEqual([
+      'github.com:443',
+      'api.github.com:443',
+    ]);
+    const within = job({
+      hosts: ['objects.githubusercontent.com:443', 'git.home.example.com:2222'],
+      registries: ['npm'],
+    });
+    expect(within.network).toEqual({
+      hosts: [
+        'registry.npmjs.org:443',
+        'objects.githubusercontent.com:443',
+        'git.home.example.com:2222',
+      ],
+      privateHosts: ['git.home.example.com:2222'],
+      hiddenHosts: [],
+    });
+    expect(within.credentials).toEqual([]);
+    // Images: the runner runs only its own built image, and a job has no field to name another;
+    // see check 4.
+  });
 
   it('4. a job cannot pass extra docker run flags or unknown fields through', () => {
     const smuggled = {
@@ -277,10 +370,11 @@ describe('coding forks: security acceptance checklist', () => {
     expect(() => spec({ context: { network: 'host' } })).toThrow(RunRefusedError);
     expect(Object.keys(built).sort()).toEqual([
       'coding',
+      'credentials',
       'explorationId',
       'forkId',
-      'hosts',
       'model',
+      'network',
       'resume',
       'sessionId',
       'systemPrompt',
@@ -317,7 +411,56 @@ describe('coding forks: security acceptance checklist', () => {
     expect(size).toBeLessThan(100_000);
     rmSync(root, { recursive: true });
   });
-  it.todo('10. hidden config entries stay out of the capabilities report and the proxy logs');
+  it('10. hidden config entries stay out of the capabilities report and the proxy logs', () => {
+    const rule = (pattern: string, hidden = false) => ({ pattern, private: false, hidden });
+    const config: RunnerConfig = {
+      ...allowed,
+      coding: {
+        ...allowed.coding,
+        allowedHosts: [rule('github.com:443'), rule('secret.example.com:443', true)],
+        credentials: [
+          {
+            name: 'Secret key',
+            type: 'ssh-key',
+            file: '/runner/secrets/secret-key',
+            username: 'x-access-token',
+            hosts: [rule('git.secret.example.com:22', true)],
+            knownHosts: [],
+            hidden: true,
+          },
+          {
+            name: 'GitHub token',
+            type: 'token',
+            file: '/runner/secrets/github-token',
+            username: 'x-access-token',
+            hosts: [rule('github.com:443'), rule('mirror.secret.example.com:443', true)],
+            knownHosts: [],
+            hidden: false,
+          },
+        ],
+      },
+    };
+    const report = JSON.stringify(
+      capabilitiesReport(config, { memory: '4g', slots: 1, refusal: null }, null),
+    );
+    expect(report).not.toMatch(/secret/i);
+    expect(report).not.toContain('/runner/secrets');
+    expect(report).toContain('GitHub token');
+    // The proxy masks every hidden host of the config in its logs, picked by this fork or not;
+    // the egress proxy's own tests check the masking.
+    const job = spec({
+      config,
+      context: {
+        network: { hosts: ['secret.example.com:443'], registries: [], credentials: ['Secret key'] },
+      },
+    });
+    expect(job.network.hiddenHosts.sort()).toEqual([
+      'git.secret.example.com:22',
+      'mirror.secret.example.com:443',
+      'secret.example.com:443',
+    ]);
+    expect(claudeDockerArguments(job, engineOptions).join(' ')).not.toMatch(/secret\.example/);
+  });
 });
 
 describe('checking a job before it runs', () => {
@@ -336,27 +479,35 @@ describe('checking a job before it runs', () => {
   it('refuses allowed hosts that are not plain host:port entries', () => {
     const hosts = (network: object) => () => spec({ context: { network } });
     for (const network of [
-      { hosts: ['github.com:443 --privileged'], registries: [] },
-      { hosts: ['192.168.1.1:22'], registries: [] },
-      { hosts: 'github.com:443', registries: [] },
-      { hosts: [], registries: 'yes' },
-      { hosts: [], registries: true },
-      { hosts: [], registries: ['npm', 'cargo'] },
+      { hosts: ['github.com:443 --privileged'], registries: [], credentials: [] },
+      { hosts: ['192.168.1.1:22'], registries: [], credentials: [] },
+      { hosts: 'github.com:443', registries: [], credentials: [] },
+      { hosts: [], registries: 'yes', credentials: [] },
+      { hosts: [], registries: true, credentials: [] },
+      { hosts: [], registries: ['npm', 'cargo'], credentials: [] },
       {
         hosts: Array.from({ length: 101 }, (_, index) => `h${index}.example.com:443`),
         registries: [],
+        credentials: [],
       },
+      { hosts: [], registries: [], credentials: 'GitHub' },
     ]) {
       expect(hosts(network)).toThrow(RunRefusedError);
     }
     expect(
-      spec({ context: { network: { hosts: ['github.com:443'], registries: ['npm', 'pypi'] } } })
-        .hosts,
+      spec({
+        context: {
+          network: { hosts: ['github.com:443'], registries: ['npm', 'pypi'], credentials: [] },
+        },
+      }).network.hosts,
     ).toEqual(expect.arrayContaining(['github.com:443', 'registry.npmjs.org:443', 'pypi.org:443']));
     expect(
       spec({
-        context: { coding: false, network: { hosts: ['github.com:443'], registries: ['npm'] } },
-      }).hosts,
+        context: {
+          coding: false,
+          network: { hosts: ['github.com:443'], registries: ['npm'], credentials: [] },
+        },
+      }).network.hosts,
     ).toEqual([]);
   });
 

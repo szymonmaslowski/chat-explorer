@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { RunnerClient } from '@chat-explorer/runner/client.js';
-import type { Engine, EngineEvent, EngineRunSpec } from '@chat-explorer/runner/engine.js';
+import type {
+  Engine,
+  EngineEvent,
+  EngineRunSpec,
+  HostPolicy,
+} from '@chat-explorer/runner/engine.js';
 import type { DiskGuard } from '@chat-explorer/runner/disk-guard.js';
 import { Runner } from '@chat-explorer/runner/runner.js';
+import type { Credential } from '@chat-explorer/runner/access-config.js';
 import { MemoryGate } from '@chat-explorer/runner/memory-gate.js';
 import { defaultCodingLimits } from '@chat-explorer/runner/runner-config.js';
 import { createTestApp, seedConversation, testMachineToken } from './helpers.js';
@@ -13,7 +19,7 @@ interface FakeRun {
   emit: (event: EngineEvent) => void;
   exit: (code: number | null, error?: string) => void;
   stopped: boolean;
-  allowedHosts: string[][];
+  allowedHosts: HostPolicy[];
 }
 
 function fakeEngine() {
@@ -40,7 +46,7 @@ function fakeEngine() {
         send: (text) => run.sent.push(text),
         onEvent: (listener) => listeners.push(listener),
         onExit: (listener) => exitListeners.push(listener),
-        allowHosts: (hosts) => run.allowedHosts.push(hosts),
+        allowHosts: (network) => run.allowedHosts.push(network),
         stop: () => {
           run.stopped = true;
           setTimeout(() => run.exit(0));
@@ -59,7 +65,14 @@ const until = async (condition: () => boolean, timeoutMs = 3_000) => {
   }
 };
 
-function setup(timings = {}, coding = false, diskGuard?: DiskGuard, memoryGate?: MemoryGate) {
+interface SetupExtras {
+  diskGuard?: DiskGuard;
+  memoryGate?: MemoryGate;
+  credentials?: Credential[];
+}
+
+function setup(timings = {}, coding = false, extras: SetupExtras = {}) {
+  const { diskGuard, memoryGate, credentials = [] } = extras;
   const context = createTestApp();
   const conversation = seedConversation(context.store);
   const client = new RunnerClient('http://127.0.0.1:4999', testMachineToken, async (url, init) =>
@@ -75,7 +88,8 @@ function setup(timings = {}, coding = false, diskGuard?: DiskGuard, memoryGate?:
     engine,
     config: {
       path: '/runner/config.json',
-      coding: { enabled: coding, ...defaultCodingLimits },
+      coding: { enabled: coding, ...defaultCodingLimits, allowedHosts: null, credentials },
+      localBackend: true,
     },
     diskGuard,
     memoryGate,
@@ -210,19 +224,87 @@ describe('the runner', () => {
     await runner.stop();
   });
 
-  it('gives a coding fork its allowed hosts, and follows a change without a new container', async () => {
-    const { runner, engineRuns, store, explorationId, mainForkId } = setup({}, true);
+  it('replaces the container on request once no turn runs, resuming the session', async () => {
+    const { runner, engineRuns, store, explorationId, mainForkId, runs } = setup({}, true);
     store.setForkCoding(mainForkId, true);
-    store.setForkNetwork(mainForkId, { hosts: ['github.com:443'], registries: [] });
+    runner.start();
+    store.submit(explorationId, mainForkId, 'Start the dev server');
+    await until(() => engineRuns[0]?.sent.length === 1);
+    engineRuns[0]!.emit({ type: 'session', sessionId, model: 'claude-haiku-5-5' });
+    expect(runs.requestRestart(mainForkId)).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(engineRuns[0]!.stopped).toBe(false);
+    engineRuns[0]!.emit({
+      type: 'turn-finished',
+      answer: 'Up.',
+      failed: false,
+      contextWindow: 1e6,
+    });
+    await until(() => engineRuns[0]!.stopped);
+    await until(() => store.snapshot(explorationId).forkRuns[0]?.status === 'idle');
+
+    store.submit(explorationId, mainForkId, 'Check it');
+    await until(() => engineRuns[1]?.sent.length === 1);
+    expect(engineRuns[1]!.spec).toMatchObject({ coding: true, resume: true, sessionId });
+    await runner.stop();
+  });
+
+  it("starts a new container with a fork's newly picked credential", async () => {
+    const credential: Credential = {
+      name: 'GitHub token',
+      type: 'token',
+      file: '/runner/secrets/github-token',
+      username: 'x-access-token',
+      hosts: [{ pattern: 'api.github.com:443', private: false, hidden: false }],
+      knownHosts: [],
+      hidden: false,
+    };
+    const { runner, engineRuns, store, explorationId, mainForkId } = setup({}, true, {
+      credentials: [credential],
+    });
+    store.setForkCoding(mainForkId, true);
     runner.start();
     store.submit(explorationId, mainForkId, 'Clone it');
     await until(() => engineRuns[0]?.sent.length === 1);
-    expect(engineRuns[0]!.spec.hosts).toEqual(['github.com:443']);
+    expect(engineRuns[0]!.spec.credentials).toEqual([]);
+    engineRuns[0]!.emit({
+      type: 'turn-finished',
+      answer: 'Done.',
+      failed: false,
+      contextWindow: 1e6,
+    });
+    await until(() => store.snapshot(explorationId).forkRuns[0]?.status === 'idle');
 
-    store.setForkNetwork(mainForkId, { hosts: ['github.com:443'], registries: ['npm'] });
+    store.setForkNetwork(mainForkId, { hosts: [], registries: [], credentials: ['GitHub token'] });
+    store.submit(explorationId, mainForkId, 'Now push');
+    await until(() => engineRuns[1]?.sent.length === 1);
+    expect(engineRuns[0]!.stopped).toBe(true);
+    expect(engineRuns[1]!.spec.credentials).toEqual([credential]);
+    expect(engineRuns[1]!.spec.network.hosts).toEqual(['api.github.com:443']);
+    await runner.stop();
+  });
+
+  it('gives a coding fork its allowed hosts, and follows a change without a new container', async () => {
+    const { runner, engineRuns, store, explorationId, mainForkId } = setup({}, true);
+    store.setForkCoding(mainForkId, true);
+    store.setForkNetwork(mainForkId, {
+      hosts: ['github.com:443'],
+      registries: [],
+      credentials: [],
+    });
+    runner.start();
+    store.submit(explorationId, mainForkId, 'Clone it');
+    await until(() => engineRuns[0]?.sent.length === 1);
+    expect(engineRuns[0]!.spec.network.hosts).toEqual(['github.com:443']);
+
+    store.setForkNetwork(mainForkId, {
+      hosts: ['github.com:443'],
+      registries: ['npm'],
+      credentials: [],
+    });
     store.submit(explorationId, mainForkId, 'Now install');
     await until(() => engineRuns[0]!.sent.length === 2);
-    expect(engineRuns[0]!.allowedHosts.at(-1)).toEqual(
+    expect(engineRuns[0]!.allowedHosts.at(-1)?.hosts).toEqual(
       expect.arrayContaining(['github.com:443', 'registry.npmjs.org:443']),
     );
     expect(engineRuns).toHaveLength(1);
@@ -231,22 +313,23 @@ describe('the runner', () => {
 
   it('gives a chat fork no hosts, whatever its settings say', async () => {
     const { runner, engineRuns, store, explorationId, mainForkId } = setup({}, true);
-    store.setForkNetwork(mainForkId, { hosts: ['github.com:443'], registries: ['npm'] });
+    store.setForkNetwork(mainForkId, {
+      hosts: ['github.com:443'],
+      registries: ['npm'],
+      credentials: [],
+    });
     runner.start();
     store.submit(explorationId, mainForkId, 'Hello');
     await until(() => engineRuns[0]?.sent.length === 1);
-    expect(engineRuns[0]!.spec.hosts).toEqual([]);
+    expect(engineRuns[0]!.spec.network.hosts).toEqual([]);
     await runner.stop();
   });
 
   it('holds a coding fork while Docker has no memory for it, and starts it once room frees', async () => {
     const gate = new MemoryGate({ memory: '6656m', slots: 1, refusal: null });
-    const { runner, engineRuns, store, explorationId, mainForkId } = setup(
-      {},
-      true,
-      undefined,
-      gate,
-    );
+    const { runner, engineRuns, store, explorationId, mainForkId } = setup({}, true, {
+      memoryGate: gate,
+    });
     const other = seedConversation(store);
     store.setForkCoding(mainForkId, true);
     store.setForkCoding(other.mainForkId, true);
@@ -280,8 +363,7 @@ describe('the runner', () => {
     const { runner, engineRuns, store, explorationId, mainForkId } = setup(
       { idleCloseMs: 100 },
       true,
-      undefined,
-      gate,
+      { memoryGate: gate },
     );
     const other = seedConversation(store);
     store.setForkCoding(mainForkId, true);
@@ -306,12 +388,9 @@ describe('the runner', () => {
 
   it('lets the reader stop a coding fork that waits for memory, its message handled', async () => {
     const gate = new MemoryGate({ memory: '6656m', slots: 1, refusal: null });
-    const { runner, engineRuns, store, explorationId, mainForkId, runs } = setup(
-      {},
-      true,
-      undefined,
-      gate,
-    );
+    const { runner, engineRuns, store, explorationId, mainForkId, runs } = setup({}, true, {
+      memoryGate: gate,
+    });
     const other = seedConversation(store);
     store.setForkCoding(mainForkId, true);
     store.setForkCoding(other.mainForkId, true);
@@ -333,7 +412,9 @@ describe('the runner', () => {
       refusal: async () => 'Your Mac has 2.0 GB free.',
       check: async () => ({}),
     };
-    const { runner, engineRuns, store, explorationId, mainForkId } = setup({}, true, guard);
+    const { runner, engineRuns, store, explorationId, mainForkId } = setup({}, true, {
+      diskGuard: guard,
+    });
     store.setForkCoding(mainForkId, true);
     runner.start();
     store.submit(explorationId, mainForkId, 'Build it');
@@ -351,7 +432,7 @@ describe('the runner', () => {
     const { runner, engineRuns, store, explorationId, mainForkId } = setup(
       { diskCheckMs: 10 },
       true,
-      guard,
+      { diskGuard: guard },
     );
     store.setForkCoding(mainForkId, true);
     runner.start();

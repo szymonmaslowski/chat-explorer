@@ -4,6 +4,7 @@ import type {
   Activity,
   ActivitySummary,
   Bookmark,
+  CapabilitiesReport,
   ChangeSet,
   ChatDefaultPage,
   CodingCapacity,
@@ -156,6 +157,9 @@ export const api = {
   setForkNetwork: (forkId: string, network: ForkNetwork) =>
     call<Fork>(`/api/forks/${forkId}/network`, { method: 'PATCH', json: network }),
   codingCapacity: () => call<{ capacity: CodingCapacity | null }>('/api/coding-capacity'),
+  runnerCapabilities: () => call<{ report: CapabilitiesReport | null }>('/api/runner-capabilities'),
+  restartContainer: (forkId: string) =>
+    call<{ restarting: boolean }>(`/api/forks/${forkId}/restart-container`, { json: {} }),
   retryFork: (forkId: string) => call<{ ok: true }>(`/api/forks/${forkId}/retry`, { json: {} }),
   splitFork: (messageId: string, forkId: string) =>
     call<ForkSplit>(`/api/messages/${messageId}/split`, { json: { forkId } }),

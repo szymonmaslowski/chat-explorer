@@ -156,3 +156,57 @@ test('says before sending when a coding fork would wait for memory, and while it
   await expect(page.locator('.run-status')).toHaveCount(0);
   await runner.call('capacity', { capacity: null });
 });
+
+test("offers a coding fork the runner's credentials and hosts, and restarts its container", async ({
+  page,
+  request,
+}) => {
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'Push the fix' } })
+  ).json();
+  const runner = fakeRunner(request);
+  await runner.call('capabilities', {
+    capabilities: {
+      coding: true,
+      codingOff: null,
+      allowedHosts: ['registry.npmjs.org:443', '*.githubusercontent.com:443'],
+      privateHosts: [],
+      credentials: [
+        { name: 'GitHub token', type: 'token', hosts: ['github.com:443', 'api.github.com:443'] },
+      ],
+      limits: { memory: '6656m', slots: 1, cpus: null, processes: 512, workspaceLimitGb: 10 },
+      configHash: 'abc',
+    },
+  });
+  const { forks } = await (await request.get(`/api/explorations/${explorationId}`)).json();
+  const forkId = forks[0].id;
+  await request.patch(`/api/forks/${forkId}/coding`, { data: { coding: true } });
+  const network = async () =>
+    (await (await request.get(`/api/explorations/${explorationId}`)).json()).forks[0].network;
+
+  await page.goto(`/e/${explorationId}`);
+  await page.getByRole('button', { name: 'Chat settings' }).click();
+  const forkSettings = page.getByRole('region', { name: 'This fork' });
+  await expect(forkSettings).toContainText(
+    'This runner allows registry.npmjs.org:443, *.githubusercontent.com:443.',
+  );
+  await forkSettings.getByLabel(/Other allowed hosts/).fill('github.com:443');
+  await expect(forkSettings.getByRole('alert')).toHaveText(
+    'Not allowed by this runner, unless it keeps them hidden: github.com:443',
+  );
+
+  await forkSettings.getByRole('checkbox', { name: /GitHub token/ }).check();
+  await expect.poll(network).toMatchObject({ credentials: ['GitHub token'] });
+  await expect(forkSettings.getByRole('note')).toContainText(
+    'Claude can read these credentials and use them anywhere on their hosts',
+  );
+  await forkSettings.getByLabel("A hidden credential's name").fill('Home git');
+  await forkSettings.getByRole('button', { name: 'Add' }).click();
+  await expect.poll(network).toMatchObject({ credentials: ['GitHub token', 'Home git'] });
+  await expect(forkSettings).toContainText('Home git (kept hidden by the runner)');
+
+  await forkSettings.getByRole('button', { name: 'Restart container' }).click();
+  await expect(forkSettings.getByRole('status')).toHaveText(
+    'No container is running. Your next message starts a fresh one.',
+  );
+});

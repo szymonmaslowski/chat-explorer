@@ -188,6 +188,47 @@ Restart the daemon after changing the file, so the runner reads it again.
 
 **Model token.** The real Claude token never enters a container. The proxy stands in for the model's API and swaps the container's dummy token for the real one. A dummy works only from its own container, and only while that container runs.
 
+**Host ceiling.** Without `allowedHosts` in the runner's config, a fork may be allowed any public host. With it, a fork may be allowed only the hosts it lists, and the runner refuses a job asking for any other. Entries are `host:port` or `*.domain:port`. An entry written as `{ "host": "git.home.lan:2222", "private": true }` may resolve to an address on your own network, which is otherwise always refused; add `"hidden": true` to keep a host out of what the backend sees and out of the proxy logs:
+
+```json
+{
+  "coding": {
+    "enabled": true,
+    "allowedHosts": ["registry.npmjs.org:443", "*.githubusercontent.com:443"]
+  }
+}
+```
+
+**Credentials.** Git credentials live in the runner's config, never in the backend. Each one has a name, a type (`token` or `ssh-key`), the file holding the secret (readable by you only: `chmod 600`) and the hosts it may be used for. A fork's settings show the names, and a fork that picks one may reach its hosts too:
+
+```json
+{
+  "coding": {
+    "credentials": [
+      {
+        "name": "GitHub token",
+        "type": "token",
+        "file": "~/.chat-explorer/runner/secrets/github-token",
+        "hosts": ["github.com:443", "api.github.com:443"]
+      },
+      {
+        "name": "Home git",
+        "type": "ssh-key",
+        "file": "~/.chat-explorer/runner/secrets/home-git-key",
+        "hosts": [{ "host": "git.home.lan:2222", "private": true }],
+        "knownHosts": ["[git.home.lan]:2222 ssh-ed25519 AAAA..."]
+      }
+    ]
+  }
+}
+```
+
+Git uses them by itself: a token over HTTPS through a credential helper (sent as user `x-access-token`; set `"username"` for another host, such as `"oauth2"` for GitLab), an SSH key through a generated SSH config that tunnels through the proxy. SSH checks host keys: GitHub's are built in, and for any other host the runner refuses the credential until you add its `known_hosts` line, from `ssh-keyscan -p <port> <host>` after checking the fingerprint. **Claude can read a credential it is given**, and can use it anywhere on its hosts: prefer a fine-grained token or a deploy key for one repository, never your personal SSH key. A credential marked `"hidden": true` isn't shown to the backend; type its name in the fork's settings instead.
+
+**Restart container.** A new credential or host key reaches a fork's container when it starts. The **Restart container** button in the fork's settings lets the current container go once no answer is running; the next message starts a fresh one and the conversation continues. Anything running in the old one, such as a dev server, stops.
+
+**Local backend only.** Coding forks run only when the backend is on this machine: its address must be loopback, and `localBackend` in the runner's config must not be `false`. A backend elsewhere needs enrolled devices first. The runner also refuses a config file other users could change.
+
 The plan is in the note _Coding forks: build brief_.
 
 The daemon listens on `127.0.0.1` only and rejects requests from other websites. Requests through `publicUrl` are accepted too, so anyone who can reach that address can start Claude sessions on your Mac. Keep it inside your tailnet (`tailscale serve`, not `tailscale funnel`).

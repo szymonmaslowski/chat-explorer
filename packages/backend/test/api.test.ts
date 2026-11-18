@@ -294,7 +294,7 @@ describe("a fork's allowed hosts", () => {
     const { mainForkId } = seedConversation(store);
     const set = (json: object) =>
       request(`/api/forks/${mainForkId}/network`, { method: 'PATCH', json });
-    expect(store.fork(mainForkId).network).toEqual({ hosts: [], registries: [] });
+    expect(store.fork(mainForkId).network).toEqual({ hosts: [], registries: [], credentials: [] });
     const saved = await set({
       hosts: ['github.com:443', 'github.com:443', 'git.example.com:2222'],
       registries: ['rust', 'npm', 'rust'],
@@ -313,6 +313,42 @@ describe("a fork's allowed hosts", () => {
       expect((await set({ hosts: [], registries })).status).toBe(400);
     }
     expect(store.fork(mainForkId).network.registries).toEqual(['rust', 'npm']);
+  });
+
+  it("keeps the names of the runner's credentials a fork picked, and only names", async () => {
+    const { request, store } = createTestApp();
+    const { mainForkId } = seedConversation(store);
+    const set = (json: object) =>
+      request(`/api/forks/${mainForkId}/network`, { method: 'PATCH', json });
+    const network = { hosts: [], registries: [] };
+    await set({ ...network, credentials: ['GitHub token', 'GitHub token', 'Home git'] });
+    expect(store.fork(mainForkId).network.credentials).toEqual(['GitHub token', 'Home git']);
+    // A page from before credentials existed leaves them alone.
+    await set({ hosts: ['github.com:443'], registries: [] });
+    expect(store.fork(mainForkId).network).toMatchObject({
+      hosts: ['github.com:443'],
+      credentials: ['GitHub token', 'Home git'],
+    });
+    for (const credentials of [['../key'], ['a'.repeat(65)], 'GitHub token']) {
+      expect((await set({ ...network, credentials })).status).toBe(400);
+    }
+  });
+
+  it('restarts the container of a fork only while a runner holds one', async () => {
+    const { request, store, runs } = createTestApp();
+    const { explorationId, mainForkId } = seedConversation(store);
+    const restart = async () =>
+      (
+        await (
+          await request(`/api/forks/${mainForkId}/restart-container`, { method: 'POST', json: {} })
+        ).json()
+      ).restarting;
+    expect(await restart()).toBe(false);
+    store.submit(explorationId, mainForkId, 'Build it');
+    const lease = runs.claim(mainForkId, 'runner-test')!;
+    expect(await restart()).toBe(true);
+    expect(runs.takeRestart(mainForkId, lease.leaseId)).toBe(true);
+    expect(runs.takeRestart(mainForkId, lease.leaseId)).toBe(false);
   });
 
   it('ticks every registry for a fork that had the one switch for all of them on', () => {

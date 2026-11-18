@@ -45,6 +45,8 @@ export interface RunInput {
   // What changed in the chat's other forks since the engine last heard.
   others: string | null;
   stop: boolean;
+  // The reader asked for a fresh container: let this one go once no turn runs.
+  restart: boolean;
   // The fork's coding switch now, which may differ from the one its container started with.
   coding: boolean;
   // The fork's allowed hosts now.

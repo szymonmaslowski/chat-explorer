@@ -1,4 +1,9 @@
-import type { Activity, ActivityKind, CodingCapacity } from '@chat-explorer/shared/types.js';
+import type {
+  Activity,
+  ActivityKind,
+  CodingCapacity,
+  RunnerCapabilities,
+} from '@chat-explorer/shared/types.js';
 import {
   type Lease,
   type RunContext,
@@ -101,6 +106,10 @@ export class RunnerClient {
 
   capacity(capacity: CodingCapacity | null) {
     return this.post('/api/runner/capacity', { capacity });
+  }
+
+  capabilities(capabilities: RunnerCapabilities) {
+    return this.post('/api/runner/capabilities', { capabilities });
   }
 
   release(lease: Lease) {

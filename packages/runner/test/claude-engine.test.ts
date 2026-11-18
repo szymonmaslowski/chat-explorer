@@ -7,6 +7,7 @@ import { claudeDockerfile, isolatedDockerConfig, newerVersion } from '../src/cla
 import { toolSummary } from '@chat-explorer/shared/tool-summary.js';
 import { parseClaudeStreamLine, streamUserMessage } from '../src/claude-stream.js';
 import { egressFolders, openEgressPass } from '../src/egress.js';
+import { noHosts } from '../src/engine.js';
 
 const recorded = readFileSync(new URL('./fixtures/claude-stream.jsonl', import.meta.url), 'utf8')
   .trim()
@@ -84,7 +85,8 @@ describe('starting Claude Code in Docker', () => {
     sessionId: 'session-1',
     resume: true,
     coding: false,
-    hosts: [],
+    network: noHosts,
+    credentials: [],
     systemPrompt: 'Be brief.',
     toolsUrl: 'http://host.docker.internal:4517/api/runner/mcp',
     toolsToken: 'job-token',
@@ -209,7 +211,10 @@ describe('building the Claude Code image', () => {
 describe("a container's pass through the egress proxy", () => {
   it('signs in as its fork, follows a changed list, and ends with the container', () => {
     const egressPath = mkdtempSync(join(tmpdir(), 'egress-pass-'));
-    const pass = openEgressPass(egressPath, 4517, 'fork_0000000001', ['github.com:443']);
+    const pass = openEgressPass(egressPath, 4517, 'fork_0000000001', {
+      ...noHosts,
+      hosts: ['github.com:443'],
+    });
     const file = join(egressFolders(egressPath).policies, 'fork_0000000001.json');
     const policy = () =>
       JSON.parse(readFileSync(file, 'utf8')) as { token: string; hosts: string[] };
@@ -223,8 +228,13 @@ describe("a container's pass through the egress proxy", () => {
     expect(pass.environment.NO_PROXY).toBe('chat-explorer-egress-4517,localhost,127.0.0.1,::1');
     expect(pass.environment.CLAUDE_CODE_OAUTH_TOKEN).toBe(`sk-ant-oat01-fork_0000000001.${token}`);
     expect(pass.environment.ANTHROPIC_BASE_URL).toBe('http://chat-explorer-egress-4517:3129');
-    pass.allow(['github.com:443', 'registry.npmjs.org:443']);
-    expect(policy()).toEqual({ token, hosts: ['github.com:443', 'registry.npmjs.org:443'] });
+    const changed = {
+      hosts: ['github.com:443', 'git.home.example.com:2222'],
+      privateHosts: ['git.home.example.com:2222'],
+      hiddenHosts: ['git.home.example.com:2222'],
+    };
+    pass.allow(changed);
+    expect(policy()).toEqual({ token, ...changed });
     expect(readdirSync(egressFolders(egressPath).policies)).toEqual(['fork_0000000001.json']);
     pass.close();
     expect(existsSync(file)).toBe(false);

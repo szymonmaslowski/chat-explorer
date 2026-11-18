@@ -1,6 +1,7 @@
 import { hostname } from 'node:os';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { capabilitiesReport } from './capabilities.js';
 import { claudeCodeEngine, containerName, forkFolders } from './claude-engine.js';
 import { diskGuard } from './disk-guard.js';
 import {
@@ -47,14 +48,25 @@ async function startingImage(version: string, log: (message: string) => void) {
   return { image: builtEarlier, newImage: buildImage(version) };
 }
 
-// Coding forks rely on how the runtime handles mounts, networks and limits, tested only on Docker
-// Desktop so far. On another runtime chat forks still run, and coding stays off until tested.
-async function onTestedRuntime(config: RunnerConfig, log: (message: string) => void) {
-  if (!config.coding.enabled) return config;
+const loopbackNames = ['127.0.0.1', 'localhost', '[::1]'];
+
+// Why coding forks must stay off on this runner even though its config allows them, or null.
+// They rely on how the runtime handles mounts, networks and limits, tested only on Docker Desktop
+// so far. And they run only for a backend on this machine: one elsewhere could be someone else's,
+// so it needs enrolled devices first. The runner judges that itself, never the backend.
+async function codingStaysOff(config: RunnerConfig, baseUrl: string) {
+  if (!config.coding.enabled) return null;
+  if (!config.localBackend) {
+    return `Coding stays off: localBackend is false in ${config.path}, and coding forks need a backend on this machine until devices can enroll.`;
+  }
+  if (!loopbackNames.includes(new URL(baseUrl).hostname)) {
+    return `Coding stays off: the backend at ${baseUrl} is not on this machine, and coding forks need one that is until devices can enroll.`;
+  }
   const { name, supported } = await runtime.identify();
-  if (supported) return config;
-  log(`Coding stays off: it has been tested on Docker Desktop only, and this is ${name}.`);
-  return { ...config, coding: { ...config.coding, enabled: false } };
+  if (!supported) {
+    return `Coding stays off: it has been tested on Docker Desktop only, and this is ${name}.`;
+  }
+  return null;
 }
 
 // A runner on this machine, next to the daemon: its engine runs Claude Code in Docker at the
@@ -73,7 +85,12 @@ export async function startRunner(options: StartRunnerOptions) {
   );
   const egressPath = join(options.runnerPath, 'egress');
   await ensureEgress({ image, port: options.port, egressPath });
-  const config = await onTestedRuntime(readRunnerConfig(options.runnerPath), options.log);
+  const configured = readRunnerConfig(options.runnerPath);
+  const codingOff = await codingStaysOff(configured, options.baseUrl);
+  if (codingOff) options.log(codingOff);
+  const config = codingOff
+    ? { ...configured, coding: { ...configured.coding, enabled: false } }
+    : configured;
   // Sized once: Docker Desktop's memory changes only with a restart of its VM.
   const sizing = codingMemory(config.coding.memory, await runtime.memoryBytes());
   const codingLimits = { ...config.coding, memory: sizing.memory };
@@ -84,10 +101,19 @@ export async function startRunner(options: StartRunnerOptions) {
         config.coding.enabled ? { slots: sizing.slots, memory: sizing.memory, forkIds } : null,
       )
       .catch((error: Error) => options.log(`Runner: ${error.message}`));
+  const capabilities = capabilitiesReport(configured, sizing, codingOff ?? sizing.refusal);
+  const reportCapabilities = () =>
+    client
+      .capabilities(capabilities)
+      .catch((error: Error) => options.log(`Runner: ${error.message}`));
   const memoryGate = new MemoryGate(sizing, reportCapacity);
   // Repeated, so the backend stops counting a runner that went away.
-  setInterval(() => void reportCapacity(memoryGate.forkIds), 30_000).unref();
+  setInterval(() => {
+    void reportCapacity(memoryGate.forkIds);
+    void reportCapabilities();
+  }, 30_000).unref();
   void reportCapacity([]);
+  void reportCapabilities();
   const enginePaths = {
     forksPath: join(options.runnerPath, 'forks'),
     filesPath: options.filesPath,

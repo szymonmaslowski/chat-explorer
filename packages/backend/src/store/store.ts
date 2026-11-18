@@ -706,12 +706,15 @@ export class ChatStore {
     return this.updateForkSettings(forkId, {
       allowed_hosts: JSON.stringify(network.hosts),
       registries: JSON.stringify(network.registries),
+      credentials: JSON.stringify(network.credentials),
     });
   }
 
   private updateForkSettings(
     forkId: string,
-    changes: Partial<Pick<ForkRow, 'awareness' | 'coding' | 'allowed_hosts' | 'registries'>>,
+    changes: Partial<
+      Pick<ForkRow, 'awareness' | 'coding' | 'allowed_hosts' | 'registries' | 'credentials'>
+    >,
   ) {
     const row = this.requireWritableFork(forkId);
     const columns = Object.keys(changes);

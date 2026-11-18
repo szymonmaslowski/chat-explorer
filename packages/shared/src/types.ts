@@ -210,6 +210,35 @@ export type RunStatus = 'idle' | 'answering' | 'waiting_limit' | 'waiting_memory
 
 // How many coding forks fit in Docker's memory at once, each at its cap, and which forks hold that
 // room now: a coding fork outside them waits while all of it is taken.
+// What a runner offers coding forks, from its own config, for the fork's settings to show. Display
+// only: the runner checks every job against its config again. Hidden entries are left out.
+export interface RunnerCapabilities {
+  coding: boolean;
+  // Why coding is off on this runner, when it is.
+  codingOff: string | null;
+  // Hosts a fork may be allowed, *.domain:port included; null allows any public host.
+  allowedHosts: string[] | null;
+  // Of those, the ones allowed on the user's own network.
+  privateHosts: string[];
+  credentials: { name: string; type: 'token' | 'ssh-key'; hosts: string[] }[];
+  limits: {
+    memory: string;
+    slots: number;
+    cpus: number | null;
+    processes: number;
+    workspaceLimitGb: number;
+  };
+  // Changes with the runner's config file.
+  configHash: string;
+}
+
+// The runner's last capabilities report, and whether that runner is still around.
+export interface CapabilitiesReport {
+  capabilities: RunnerCapabilities;
+  reportedAt: number;
+  current: boolean;
+}
+
 export interface CodingCapacity {
   slots: number;
   memory: string;

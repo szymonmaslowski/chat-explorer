@@ -16,7 +16,13 @@ import type { Speaker } from '../speech/speaker.js';
 import { prefixedIdPattern } from '@chat-explorer/shared/ids.js';
 import { withLegacyIdsPrefixed } from './legacy-ids.js';
 import { claudeModels, type ClaudeModel } from '@chat-explorer/shared/models.js';
-import { isHostPort, maxAllowedHosts, registryNames } from '@chat-explorer/shared/network.js';
+import {
+  credentialNamePattern,
+  isHostPort,
+  maxAllowedHosts,
+  maxCredentials,
+  registryNames,
+} from '@chat-explorer/shared/network.js';
 import {
   chatDefaultPages,
   type ChangeSet,
@@ -133,6 +139,11 @@ const forkNetworkBody = z.object({
     .max(maxAllowedHosts)
     .transform((hosts) => [...new Set(hosts)]),
   registries: z.array(z.enum(registryNames)).transform((names) => [...new Set(names)]),
+  credentials: z
+    .array(z.string().regex(credentialNamePattern, 'Not a credential name.'))
+    .max(maxCredentials)
+    .transform((names) => [...new Set(names)])
+    .optional(),
 });
 const newBookmarkBody = z.object({
   id: clientId,
@@ -309,9 +320,16 @@ export function createApp(options: AppOptions) {
   });
 
   app.patch('/api/forks/:id/network', async (context) => {
-    const network = forkNetworkBody.parse(await context.req.json());
-    return context.json(store.setForkNetwork(context.req.param('id'), network));
+    const forkId = context.req.param('id');
+    const { credentials, ...rest } = forkNetworkBody.parse(await context.req.json());
+    // A page loaded before credentials existed leaves them as they are.
+    const kept = credentials ?? store.fork(forkId).network.credentials;
+    return context.json(store.setForkNetwork(forkId, { ...rest, credentials: kept }));
   });
+
+  app.post('/api/forks/:id/restart-container', (context) =>
+    context.json({ restarting: options.runs.requestRestart(context.req.param('id')) }),
+  );
 
   app.post('/api/forks/:id/stop', (context) =>
     context.json({ stopping: options.runs.requestStop(context.req.param('id')) }),
@@ -325,6 +343,11 @@ export function createApp(options: AppOptions) {
   // For the composer of a coding fork, to say before sending when the fork would wait for memory.
   app.get('/api/coding-capacity', (context) =>
     context.json({ capacity: options.runs.currentCodingCapacity() }),
+  );
+
+  // What the runner offers coding forks, for the fork's settings to show. Display only.
+  app.get('/api/runner-capabilities', (context) =>
+    context.json({ report: options.runs.lastCapabilities() }),
   );
 
   app.get('/api/health', (context) =>

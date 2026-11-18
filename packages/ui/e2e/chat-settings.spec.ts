@@ -57,9 +57,11 @@ test('opens a chat on the page its settings name, and shows the fork model there
   await expect(forkSettings.getByRole('button', { name: 'Save hosts' })).toBeDisabled();
   await hosts.fill('GitHub.com:443\n\ngit.example.com:2222');
   await forkSettings.getByRole('button', { name: 'Save hosts' }).click();
-  await expect
-    .poll(network)
-    .toEqual({ hosts: ['github.com:443', 'git.example.com:2222'], registries: ['npm'] });
+  await expect.poll(network).toEqual({
+    hosts: ['github.com:443', 'git.example.com:2222'],
+    registries: ['npm'],
+    credentials: [],
+  });
   await expect(forkSettings.getByRole('button', { name: 'Save hosts' })).toHaveCount(0);
   await settings.getByLabel('Default page').selectOption('notes');
 

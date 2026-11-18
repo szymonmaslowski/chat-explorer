@@ -62,7 +62,11 @@ describe("the fork's coding switch", () => {
     const { mainFork } = store.createExploration({
       messages: [{ role: 'user', content: 'Hello' }],
     });
-    const network: ForkNetwork = { hosts: ['github.com:443'], registries: ['npm'] };
+    const network: ForkNetwork = {
+      hosts: ['github.com:443'],
+      registries: ['npm'],
+      credentials: [],
+    };
     store.setForkNetwork(mainFork.id, network);
     for (const resume of [false, true]) {
       expect(

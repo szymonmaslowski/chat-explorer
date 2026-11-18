@@ -394,4 +394,8 @@ export const migrations = [
   ALTER TABLE fork_runs DROP COLUMN status;
   ALTER TABLE fork_runs RENAME COLUMN new_status TO status;
   `,
+  `
+  -- A JSON array of credential names from the runner's config.
+  ALTER TABLE forks ADD COLUMN credentials TEXT NOT NULL DEFAULT '[]';
+  `,
 ];

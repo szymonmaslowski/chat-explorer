@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { runtime } from './container-runtime.js';
+import type { HostPolicy } from './engine.js';
 
 // The engine's container sits on an internal network with no way out but the egress proxy. The
 // proxy lets each container through to the daemon's job tools and its fork's own hosts, and to
@@ -66,7 +67,7 @@ export const sandboxArguments = () => [
 // fork allows.
 export interface EgressPass {
   environment: Record<string, string>;
-  allow(hosts: string[]): void;
+  allow(network: HostPolicy): void;
   close(): void;
 }
 
@@ -74,14 +75,14 @@ export function openEgressPass(
   egressPath: string,
   port: number,
   id: string,
-  hosts: string[],
+  network: HostPolicy,
 ): EgressPass {
   const { policies } = egressFolders(egressPath);
   mkdirSync(policies, { recursive: true });
   const token = randomBytes(24).toString('hex');
   const file = join(policies, `${id}.json`);
-  const allow = (allowed: string[]) => writeWhole(file, JSON.stringify({ token, hosts: allowed }));
-  allow(hosts);
+  const allow = (allowed: HostPolicy) => writeWhole(file, JSON.stringify({ token, ...allowed }));
+  allow(network);
   const url = `http://${id}:${token}@${proxyAddress(port)}`;
   // The model is reached on the proxy's own port, directly, not through the forward proxy, and so
   // is this container itself: a dev server or a test's local server.

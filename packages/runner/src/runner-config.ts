@@ -1,5 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import {
+  AccessConfigError,
+  checkOwnedFile,
+  readAccessConfig,
+  type AccessConfig,
+} from './access-config.js';
+import { runnerKnowsHostKey } from './credential-files.js';
 import type { DiskLimits } from './disk-guard.js';
 
 // What a coding fork's container may use, in Docker's own units.
@@ -16,7 +23,12 @@ export interface RunnerConfig {
   // Where it was read from, to name in messages.
   path: string;
   // Left out, memory is sized from Docker's when the runner starts.
-  coding: { enabled: boolean; memory?: string } & Omit<ContainerLimits, 'memory'> & DiskLimits;
+  coding: { enabled: boolean; memory?: string } & Omit<ContainerLimits, 'memory'> &
+    DiskLimits &
+    AccessConfig;
+  // The backend runs on this machine. Coding forks run only then, and only if its address is
+  // loopback too: a backend elsewhere needs enrolled devices first.
+  localBackend: boolean;
 }
 
 export const defaultCodingLimits: Omit<ContainerLimits, 'memory'> & DiskLimits = {
@@ -32,7 +44,10 @@ export const runnerConfigPath = (runnerPath: string) => join(runnerPath, 'config
 export class RunnerConfigError extends Error {}
 
 interface RunnerConfigFile {
+  localBackend?: unknown;
   coding?: {
+    allowedHosts?: unknown;
+    credentials?: unknown;
     enabled?: unknown;
     memory?: unknown;
     processes?: unknown;
@@ -49,7 +64,16 @@ export function readRunnerConfig(runnerPath: string): RunnerConfig {
     text = readFileSync(path, 'utf8');
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    return { path, coding: { enabled: false, ...defaultCodingLimits } };
+    return {
+      path,
+      coding: { enabled: false, ...defaultCodingLimits, allowedHosts: null, credentials: [] },
+      localBackend: true,
+    };
+  }
+  try {
+    checkOwnedFile(path, "The runner's config", { secret: false });
+  } catch (error) {
+    throw new RunnerConfigError((error as Error).message);
   }
   let parsed: RunnerConfigFile;
   try {
@@ -75,6 +99,17 @@ export function readRunnerConfig(runnerPath: string): RunnerConfig {
       `coding.cpus in ${path} must be a number above 0, such as 4 or 1.5.`,
     );
   }
+  const localBackend = parsed.localBackend ?? true;
+  if (typeof localBackend !== 'boolean') {
+    throw new RunnerConfigError(`localBackend in ${path} must be true or false.`);
+  }
+  let access: AccessConfig;
+  try {
+    access = readAccessConfig(parsed.coding, path, runnerKnowsHostKey);
+  } catch (error) {
+    if (error instanceof AccessConfigError) throw new RunnerConfigError(error.message);
+    throw error;
+  }
   const gigabytes = (name: keyof DiskLimits) => {
     const value = parsed.coding?.[name] ?? defaultCodingLimits[name];
     if (typeof value !== 'number' || !(value > 0) || !Number.isFinite(value)) {
@@ -93,6 +128,8 @@ export function readRunnerConfig(runnerPath: string): RunnerConfig {
       ...(cpus === undefined ? {} : { cpus }),
       workspaceLimitGb: gigabytes('workspaceLimitGb'),
       minFreeGb: gigabytes('minFreeGb'),
+      ...access,
     },
+    localBackend,
   };
 }

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import type { Fork, ForkRun } from '@shared/types';
-import { computed, ref } from 'vue';
+import type { CapabilitiesReport, Fork, ForkRun } from '@shared/types';
+import { computed, ref, watch } from 'vue';
 import { api } from '../api';
 import CopyableId from './CopyableId.vue';
+import ForkCredentialSettings from './ForkCredentialSettings.vue';
 import ForkNetworkSettings from './ForkNetworkSettings.vue';
 
 // The fork's model and how full its context is, from the runner's last turn, whether the fork
@@ -29,6 +30,36 @@ async function save(change: () => Promise<unknown>) {
 const setAware = (aware: boolean) =>
   save(() => api.setForkAwareness(props.fork.id, aware ? 'aware' : 'separate'));
 const setCoding = (coding: boolean) => save(() => api.setForkCoding(props.fork.id, coding));
+
+const report = ref<CapabilitiesReport | null>(null);
+watch(
+  () => props.fork.coding,
+  async (coding) => {
+    if (!coding) return;
+    report.value = await api
+      .runnerCapabilities()
+      .then((result) => result.report)
+      .catch(() => null);
+  },
+  { immediate: true },
+);
+const reportedAt = computed(() =>
+  report.value
+    ? new Date(report.value.reportedAt).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : '',
+);
+
+const restartNote = ref('');
+async function restartContainer() {
+  restartNote.value = '';
+  const { restarting } = await api.restartContainer(props.fork.id);
+  restartNote.value = restarting
+    ? 'The container closes once no answer is running. Your next message starts a fresh one and the conversation continues; anything running in the old one, such as a dev server, stops.'
+    : 'No container is running. Your next message starts a fresh one.';
+}
 </script>
 
 <template>
@@ -62,11 +93,26 @@ const setCoding = (coding: boolean) => save(() => api.setForkCoding(props.fork.i
       />
       Coding: Claude runs commands and writes files in this fork's workspace
     </label>
-    <p v-if="fork.coding" class="hint">
-      Takes effect from your next message, in a new container. The runner must allow coding in its
-      own config.
-    </p>
-    <ForkNetworkSettings v-if="fork.coding" :fork="fork" />
+    <template v-if="fork.coding">
+      <p class="hint">
+        Takes effect from your next message, in a new container. The runner must allow coding in its
+        own config.
+      </p>
+      <p v-if="report && !report.capabilities.coding" class="warning" role="alert">
+        {{ report.capabilities.codingOff ?? 'The runner has coding off.' }}
+      </p>
+      <p v-if="report && !report.current" class="hint">
+        The runner is offline: its choices below are as of {{ reportedAt }}.
+      </p>
+      <ForkNetworkSettings :fork="fork" :report="report" />
+      <ForkCredentialSettings :fork="fork" :report="report" />
+      <p>
+        <button type="button" :disabled="saving" @click="restartContainer">
+          Restart container
+        </button>
+      </p>
+      <p v-if="restartNote" class="hint" role="status">{{ restartNote }}</p>
+    </template>
   </section>
 </template>
 
@@ -97,6 +143,11 @@ label {
 
 .hint {
   color: var(--text-muted);
+  font-size: 0.85em;
+}
+
+.warning {
+  color: var(--warning);
   font-size: 0.85em;
 }
 

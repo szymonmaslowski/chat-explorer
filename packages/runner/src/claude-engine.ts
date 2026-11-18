@@ -4,8 +4,20 @@ import { createInterface } from 'node:readline';
 import { parseClaudeStreamLine, streamUserMessage } from './claude-stream.js';
 import { randomBytes } from 'node:crypto';
 import { runtime } from './container-runtime.js';
+import {
+  credentialsMount,
+  removeCredentialFiles,
+  writeCredentialFiles,
+} from './credential-files.js';
 import { openEgressPass, sandboxArguments, writeModelToken } from './egress.js';
-import type { Engine, EngineEvent, EngineRun, EngineRunSpec } from './engine.js';
+import {
+  noHosts,
+  type Engine,
+  type EngineEvent,
+  type EngineRun,
+  type EngineRunSpec,
+  type HostPolicy,
+} from './engine.js';
 import type { ContainerLimits } from './runner-config.js';
 
 export interface ClaudeEnginePaths {
@@ -46,6 +58,8 @@ export const forkFolders = (
     ? join(paths.workspacesPath, spec.explorationId, spec.forkId)
     : join(paths.forksPath, spec.forkId, 'work'),
   sessions: join(paths.forksPath, spec.forkId, 'claude-projects'),
+  // Written for each coding container and removed when it ends.
+  credentials: join(paths.forksPath, spec.forkId, 'credentials'),
 });
 
 const chatLimits: ContainerLimits = { memory: '2g', processes: 256, cpus: 2 };
@@ -80,7 +94,16 @@ export function containerArguments(spec: EngineRunSpec, options: ContainerOption
     'DISABLE_AUTOUPDATER=1',
     ...sandboxArguments(),
     // Node's own fetch ignores the proxy settings without this, so scripts Claude writes would fail.
-    ...(spec.coding ? ['--env', 'NODE_USE_ENV_PROXY=1'] : []),
+    ...(spec.coding
+      ? [
+          '--env',
+          'NODE_USE_ENV_PROXY=1',
+          '--env',
+          `GIT_CONFIG_SYSTEM=${credentialsMount}/gitconfig`,
+          '--volume',
+          `${folders.credentials}:${credentialsMount}:ro`,
+        ]
+      : []),
     '--volume',
     `${folders.work}:${folders.work}`,
     '--workdir',
@@ -96,11 +119,36 @@ export function containerArguments(spec: EngineRunSpec, options: ContainerOption
 const chatTools = ['WebSearch', 'Read'];
 const codingTools = ['Bash', 'Read', 'Edit', 'Write', 'Glob', 'Grep', 'WebSearch', 'TodoWrite'];
 
-const codingPrompt = (workspace: string, hosts: string[]) => `
+function shownHosts(network: HostPolicy) {
+  const hidden = network.hosts.filter((host) => network.hiddenHosts.includes(host)).length;
+  const shown = network.hosts.filter((host) => !network.hiddenHosts.includes(host));
+  const list = [...shown, ...(hidden > 0 ? [`${hidden} more the user keeps unnamed`] : [])];
+  return list.length > 0 ? list.join(', ') : 'none';
+}
+
+function credentialsPrompt(spec: EngineRunSpec) {
+  if (spec.credentials.length === 0) {
+    return `No credentials were given to this fork, so only public repositories can be cloned. SSH still goes through the proxy: git uses ${credentialsMount}/ssh_config by itself, and plain ssh needs -F ${credentialsMount}/ssh_config.`;
+  }
+  const listed = spec.credentials.map((credential) => {
+    const hosts = credential.hosts
+      .filter((rule) => !rule.hidden)
+      .map((rule) => rule.pattern)
+      .join(', ');
+    return `- ${credential.type === 'token' ? 'a token' : 'an SSH key'} for ${hosts || 'a host the user keeps unnamed'}`;
+  });
+  return `The user gave this fork these credentials:
+${listed.join('\n')}
+git uses them by itself: tokens over HTTPS through a credential helper, SSH keys through ${credentialsMount}/ssh_config, with host keys checked against ${credentialsMount}/known_hosts. Plain ssh needs -F ${credentialsMount}/ssh_config. Never print, copy or send a credential anywhere, and never turn off host key checking.`;
+}
+
+const codingPrompt = (workspace: string, spec: EngineRunSpec) => `
 
 This fork is a coding fork. You run in a Linux container with Bash and file tools. Your workspace is ${workspace}: a real folder on the user's computer, kept between sessions, and the only folder that is. Work there: clone repositories into it or start projects in it, several side by side if needed.
 
-The network goes out only through a proxy, over HTTPS, to the hosts the user allowed for this fork. At the start of this session those were: ${hosts.length > 0 ? hosts.join(', ') : 'none'}. A connection the proxy refuses fails with a 403 or "Blocked by the sandbox". When you need a host that isn't allowed, tell the user which host:port to add under the fork's allowed hosts in Chat settings. Don't try to get around the proxy.`;
+The network goes out only through a proxy, over HTTPS or SSH, to the hosts the user allowed for this fork. At the start of this session those were: ${shownHosts(spec.network)}. A connection the proxy refuses fails with a 403 or "Blocked by the sandbox". When you need a host that isn't allowed, tell the user which host:port to add under the fork's allowed hosts in Chat settings. Don't try to get around the proxy.
+
+${credentialsPrompt(spec)}`;
 
 function claudeArguments(spec: EngineRunSpec, options: ContainerOptions) {
   const mcpConfig = {
@@ -139,7 +187,7 @@ function claudeArguments(spec: EngineRunSpec, options: ContainerOptions) {
     'none',
     '--append-system-prompt',
     spec.coding
-      ? spec.systemPrompt + codingPrompt(forkFolders(options, spec).work, spec.hosts)
+      ? spec.systemPrompt + codingPrompt(forkFolders(options, spec).work, spec)
       : spec.systemPrompt,
   ];
 }
@@ -181,7 +229,7 @@ export function claudeCodeEngine(options: ClaudeEngineOptions): Engine {
           options.egressPath,
           options.port,
           `completion-${randomBytes(6).toString('hex')}`,
-          [],
+          noHosts,
         );
         const child = runtime.start(claudeCompletionArguments(prompt, options.image()), {
           ...process.env,
@@ -210,14 +258,19 @@ export function claudeCodeEngine(options: ClaudeEngineOptions): Engine {
       const folders = forkFolders(options, spec);
       mkdirSync(folders.work, { recursive: true });
       mkdirSync(folders.sessions, { recursive: true });
+      if (spec.coding) writeCredentialFiles(folders.credentials, spec.credentials);
       writeModelToken(options.egressPath, options.oauthToken());
-      const pass = openEgressPass(options.egressPath, options.port, spec.forkId, spec.hosts);
+      const pass = openEgressPass(options.egressPath, options.port, spec.forkId, spec.network);
       const child = runtime.start(claudeDockerArguments(spec, options), {
         ...process.env,
         ...pass.environment,
       });
-      child.on('error', () => pass.close());
-      child.on('exit', () => pass.close());
+      const ended = () => {
+        pass.close();
+        removeCredentialFiles(folders.credentials);
+      };
+      child.on('error', ended);
+      child.on('exit', ended);
       const eventListeners: ((event: EngineEvent) => void)[] = [];
       let errorOutput = '';
       createInterface({ input: child.stdout }).on('line', (line) => {

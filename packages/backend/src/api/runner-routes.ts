@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
+import { credentialNamePattern } from '@chat-explorer/shared/network.js';
 import type { RunInput } from '@chat-explorer/shared/protocol.js';
 import type { Hono } from 'hono';
 import { createMiddleware } from 'hono/factory';
@@ -41,6 +42,32 @@ const usageBody = leaseBody.extend({
 });
 const waitingBody = leaseBody.extend({ until: z.string() });
 const waitingMemoryBody = leaseBody.extend({ reason: z.string().min(1) });
+const hostList = z.array(z.string().max(300)).max(500);
+const capabilitiesBody = z.object({
+  capabilities: z.object({
+    coding: z.boolean(),
+    codingOff: z.string().nullable(),
+    allowedHosts: hostList.nullable(),
+    privateHosts: hostList,
+    credentials: z
+      .array(
+        z.object({
+          name: z.string().regex(credentialNamePattern),
+          type: z.enum(['token', 'ssh-key']),
+          hosts: hostList,
+        }),
+      )
+      .max(100),
+    limits: z.object({
+      memory: z.string(),
+      slots: z.number().int().min(0),
+      cpus: z.number().positive().nullable(),
+      processes: z.number().int().positive(),
+      workspaceLimitGb: z.number().positive(),
+    }),
+    configHash: z.string(),
+  }),
+});
 const capacityBody = z.object({
   capacity: z
     .object({
@@ -129,6 +156,7 @@ export function registerRunnerRoutes(app: Hono, options: RunnerRoutesOptions) {
       bus,
       () => {
         if (runs.stopRequested(forkId, leaseId)) return { messages: [], stop: true };
+        if (runs.restartRequested(leaseId)) return { messages: [], stop: false };
         const pending = runs.pendingInput(forkId, leaseId, after);
         return pending.length > 0 ? { messages: pending, stop: false } : null;
       },
@@ -136,11 +164,19 @@ export function registerRunnerRoutes(app: Hono, options: RunnerRoutesOptions) {
       context.req.raw.signal,
     );
     const { coding, network } = store.fork(forkId);
+    const restart = runs.takeRestart(forkId, leaseId);
     if (!input) {
-      return context.json<RunInput>({ messages: [], others: null, stop: false, coding, network });
+      return context.json<RunInput>({
+        messages: [],
+        others: null,
+        stop: false,
+        restart,
+        coding,
+        network,
+      });
     }
     const others = input.messages.length > 0 ? runs.othersUpdate(forkId, leaseId) : null;
-    return context.json<RunInput>({ ...input, others, coding, network });
+    return context.json<RunInput>({ ...input, others, restart, coding, network });
   });
 
   app.post('/api/runner/forks/:forkId/context', async (context) => {
@@ -201,7 +237,13 @@ export function registerRunnerRoutes(app: Hono, options: RunnerRoutesOptions) {
 
   app.post('/api/runner/capacity', async (context) => {
     const { capacity } = capacityBody.parse(await context.req.json());
-    runs.setCodingCapacity(capacity);
+    runs.saveRunnerReport('capacity', capacity);
+    return context.json({ ok: true });
+  });
+
+  app.post('/api/runner/capabilities', async (context) => {
+    const { capabilities } = capabilitiesBody.parse(await context.req.json());
+    runs.saveRunnerReport('capabilities', capabilities);
     return context.json({ ok: true });
   });
 

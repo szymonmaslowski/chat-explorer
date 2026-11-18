@@ -1,4 +1,5 @@
 import type { ClaudeModel } from '@chat-explorer/shared/models.js';
+import type { Credential } from './access-config.js';
 
 // What any engine reports while it works, in the runner's own terms, whatever its wire format.
 export type EngineEvent =
@@ -11,6 +12,18 @@ export type EngineEvent =
   // A tool call is still running; nothing to show, but the turn is not stuck.
   | { type: 'heartbeat' };
 
+// What a container may reach through the proxy besides the model and the tools, as host:port,
+// checked against the runner's config.
+export interface HostPolicy {
+  hosts: string[];
+  // Allowed to resolve to an address on the user's own network.
+  privateHosts: string[];
+  // Masked in the proxy's logs: every hidden host of the runner's config, picked or not.
+  hiddenHosts: string[];
+}
+
+export const noHosts: HostPolicy = { hosts: [], privateHosts: [], hiddenHosts: [] };
+
 export interface EngineRunSpec {
   forkId: string;
   explorationId: string;
@@ -20,8 +33,9 @@ export interface EngineRunSpec {
   resume: boolean;
   // Commands and file writes in the fork's workspace; the runner's config allowed it.
   coding: boolean;
-  // Hosts the container may reach besides the model and the tools, as host:port. Checked.
-  hosts: string[];
+  network: HostPolicy;
+  // Credentials of the runner's config the fork picked, for a coding container only.
+  credentials: Credential[];
   systemPrompt: string;
   // Job-scoped tools the engine reaches over MCP.
   toolsUrl: string;
@@ -36,7 +50,7 @@ export interface EngineRun {
   onExit(listener: (result: { code: number | null; error?: string }) => void): void;
   stop(options?: { immediately?: boolean }): void;
   // The fork's allowed hosts changed: new connections follow the new list.
-  allowHosts(hosts: string[]): void;
+  allowHosts(network: HostPolicy): void;
 }
 
 export interface Engine {

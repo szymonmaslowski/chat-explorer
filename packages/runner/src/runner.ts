@@ -10,7 +10,7 @@ import {
 import type { DiskGuard } from './disk-guard.js';
 import { waitingForMemory, type MemoryGate } from './memory-gate.js';
 import type { RunnerConfig } from './runner-config.js';
-import { checkedHosts, checkedRunSpec, RunRefusedError } from './run-spec.js';
+import { checkedAccess, checkedRunSpec, RunRefusedError } from './run-spec.js';
 
 export interface RunnerTimings {
   heartbeatMs: number;
@@ -171,11 +171,13 @@ class ForkWorker {
   private closing = false;
   private stopping = false;
   private coding = false;
+  private credentials = '';
   private diskChecks: NodeJS.Timeout | undefined;
   private diskWarned = false;
   private hosts = '';
   private exited: Promise<void> = Promise.resolve();
   private releaseMemory: (() => void) | null = null;
+  private restartAfterTurn = false;
 
   constructor(
     private readonly lease: Lease,
@@ -198,6 +200,7 @@ class ForkWorker {
       const context = await client.context(this.lease, resume);
       this.history = context.history;
       this.coding = context.coding;
+      this.credentials = JSON.stringify(context.network.credentials);
       this.hosts = JSON.stringify(context.network);
       const spec = checkedRunSpec({
         lease: this.lease,
@@ -270,10 +273,20 @@ class ForkWorker {
         this.stopTurn();
         return;
       }
-      // A container keeps the coding switch it started with, so a changed switch lets this one go
-      // between turns. The fork is claimed again for the message, into a container started with
-      // the new switch, and resumes the same session.
-      if (input.messages.length > 0 && !this.turnOpen && input.coding !== this.coding) {
+      // A container keeps the coding switch and credentials it started with, so a change lets this
+      // one go between turns. The fork is claimed again for the message, into a container started
+      // with the new settings, and resumes the same session.
+      const containerChanged =
+        input.coding !== this.coding ||
+        (this.coding && JSON.stringify(input.network.credentials) !== this.credentials);
+      if (input.messages.length > 0 && !this.turnOpen && containerChanged) {
+        await this.close();
+        return;
+      }
+      // Asked for a fresh container: this one goes now, or when the turn ends. Messages that came
+      // meanwhile wait for the new one.
+      if (input.restart) this.restartAfterTurn = true;
+      if (this.restartAfterTurn && !this.turnOpen) {
         await this.close();
         return;
       }
@@ -321,7 +334,7 @@ class ForkWorker {
     const hosts = JSON.stringify(network);
     if (!this.coding || hosts === this.hosts) return;
     this.hosts = hosts;
-    this.engineRun?.allowHosts(checkedHosts(network));
+    this.engineRun?.allowHosts(checkedAccess(network, this.options.config).network);
   }
 
   private async send(messages: PendingMessage[], others: string | null) {
@@ -389,6 +402,7 @@ class ForkWorker {
         await client.finishTurn(this.lease, this.newestSentId!);
         this.turnOpen = false;
         this.idleSince = Date.now();
+        if (this.restartAfterTurn) void this.close();
     }
   }
 
