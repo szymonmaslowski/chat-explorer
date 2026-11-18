@@ -119,6 +119,42 @@ describe('job tools', () => {
     expect(earlier.value.nextBefore).toBeNull();
   });
 
+  it('reads longer messages on request, in pages that stay within a tool result', async () => {
+    const { connect, call, lease, mainForkId } = await setup();
+    const client = await connect(lease.toolsToken);
+    await call(client, 'answer', { text: 'a'.repeat(30_000) });
+    await call(client, 'answer', { text: 'b'.repeat(30_000) });
+    const sizes = (page: { messages: { text: string; truncated: boolean }[] }) =>
+      page.messages.map((message) => [message.text.length, message.truncated]);
+
+    const cut = await call(client, 'read_fork', { forkId: mainForkId, limit: 2 });
+    expect(sizes(cut.value)).toEqual([
+      [2_001, true],
+      [2_001, true],
+    ]);
+    const longer = await call(client, 'read_fork', {
+      forkId: mainForkId,
+      limit: 2,
+      maxChars: 5_000,
+    });
+    expect(sizes(longer.value)).toEqual([
+      [5_001, true],
+      [5_001, true],
+    ]);
+    const whole = await call(client, 'read_fork', { forkId: mainForkId, limit: 2, maxChars: 0 });
+    expect(sizes(whole.value)).toEqual([[30_000, false]]);
+    const before = await call(client, 'read_fork', {
+      forkId: mainForkId,
+      limit: 2,
+      maxChars: 0,
+      before: whole.value.nextBefore,
+    });
+    expect(sizes(before.value)).toEqual([
+      ['Note this down'.length, false],
+      [30_000, false],
+    ]);
+  });
+
   it("keeps to the job's chat and stops working when the lease ends", async () => {
     const { connect, call, lease, store, runs, mainForkId } = await setup();
     const other = store.createExploration({ title: 'Other' });

@@ -86,7 +86,14 @@ export interface ForkMapEntry {
 
 export interface ForkRead {
   forkId: string;
-  messages: { id: string; forkId: string; role: Role; text: string; createdAt: number }[];
+  messages: {
+    id: string;
+    forkId: string;
+    role: Role;
+    text: string;
+    truncated?: true;
+    createdAt: number;
+  }[];
   omitted: { count: number; forks: { id: string; summary: string }[] } | null;
 }
 

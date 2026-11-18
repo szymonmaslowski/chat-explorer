@@ -779,7 +779,14 @@ export function createApp(options: AppOptions) {
 
   internal.get('/forks/:id', (context) => {
     const limit = context.req.query('limit');
-    return context.json(store.readFork(context.req.param('id'), limit ? Number(limit) : undefined));
+    const maxChars = context.req.query('maxChars');
+    return context.json(
+      store.readFork(
+        context.req.param('id'),
+        limit ? Number(limit) : undefined,
+        maxChars ? Number(maxChars) : undefined,
+      ),
+    );
   });
 
   internal.post('/forks/:id/messages', async (context) => {

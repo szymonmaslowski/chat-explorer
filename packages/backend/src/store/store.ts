@@ -127,7 +127,12 @@ const pageMessageLength = 2_000;
 const excerptOf = (text: string) => shortened(text, repliesToExcerptLength);
 
 // Below a tool result's size limit, so a read never spills into a file Claude must read in parts.
-const notesReadBudget = 40_000;
+const toolResultBudget = 40_000;
+// Cut at `maxChars`, or not at all when it is 0.
+const cutText = (text: string, maxChars: number) =>
+  maxChars > 0 && text.length > maxChars
+    ? { text: `${text.slice(0, maxChars)}…`, truncated: true }
+    : { text, truncated: false };
 const notesFoundLimit = 20;
 const snippetLength = 200;
 
@@ -828,7 +833,7 @@ export class ChatStore {
     this.publish([[explorationId, { type: 'messages.read', messageIds, readAt }]]);
   }
 
-  readFork(forkId: string, limit?: number): ForkRead {
+  readFork(forkId: string, limit?: number, maxChars = 0): ForkRead {
     const fork = this.requireForkRow(forkId);
     const path = this.pathTo(fork.tip_message_id);
     const kept = limit === undefined ? path : path.slice(-limit);
@@ -836,13 +841,17 @@ export class ChatStore {
     const omittedForkIds = [...new Set(omittedRows.map((row) => row.fork_id))];
     return {
       forkId,
-      messages: kept.map((row) => ({
-        id: row.id,
-        forkId: row.fork_id,
-        role: row.role,
-        text: this.messageText(row),
-        createdAt: row.created_at,
-      })),
+      messages: kept.map((row) => {
+        const { text, truncated } = cutText(this.messageText(row), maxChars);
+        return {
+          id: row.id,
+          forkId: row.fork_id,
+          role: row.role,
+          text,
+          ...(truncated && { truncated }),
+          createdAt: row.created_at,
+        };
+      }),
       omitted:
         omittedRows.length === 0
           ? null
@@ -854,29 +863,42 @@ export class ChatStore {
   }
 
   // A page of a fork's path for the job tools, newest last, going back from `before`. Long
-  // messages are cut, so one answer cannot fill the reader's context.
-  readForkPage(forkId: string, options: { limit: number; before?: string | undefined }) {
+  // messages are cut, so one answer cannot fill the reader's context. A reader that asks for longer
+  // ones gets fewer messages instead, so the page stays within a tool result's size.
+  readForkPage(
+    forkId: string,
+    options: { limit: number; before?: string | undefined; maxChars?: number | undefined },
+  ) {
     const fork = this.requireForkRow(forkId);
     const path = this.pathTo(fork.tip_message_id);
     const end = options.before ? path.findIndex((row) => row.id === options.before) : path.length;
     if (end === -1) {
       throw new StoreError('not_found', `Message ${options.before} is not in fork ${forkId}.`);
     }
-    const start = Math.max(0, end - options.limit);
+    const maxChars = options.maxChars ?? pageMessageLength;
+    const messages = [];
+    let size = 0;
+    let start = end;
+    while (start > 0 && messages.length < options.limit) {
+      const row = path[start - 1]!;
+      const { text, truncated } = cutText(this.messageText(row), maxChars);
+      const overBudget = options.maxChars !== undefined && size + text.length > toolResultBudget;
+      if (messages.length > 0 && overBudget) break;
+      size += text.length;
+      start -= 1;
+      messages.unshift({
+        id: row.id,
+        forkId: row.fork_id,
+        role: row.role,
+        text,
+        truncated,
+        createdAt: row.created_at,
+      });
+    }
     return {
       forkId,
       summary: fork.summary,
-      messages: path.slice(start, end).map((row) => {
-        const text = this.messageText(row);
-        return {
-          id: row.id,
-          forkId: row.fork_id,
-          role: row.role,
-          text: text.length > pageMessageLength ? `${text.slice(0, pageMessageLength)}…` : text,
-          truncated: text.length > pageMessageLength,
-          createdAt: row.created_at,
-        };
-      }),
+      messages,
       nextBefore: start > 0 ? path[start]!.id : null,
     };
   }
@@ -2274,7 +2296,7 @@ export class ChatStore {
         throw new StoreError('not_found', `Note ${noteId} is not in this chat.`);
       }
       size += note.description.length;
-      if (read.notes.length > 0 && size > notesReadBudget) {
+      if (read.notes.length > 0 && size > toolResultBudget) {
         read.notShown.push({ id: note.id, topic: note.topic, length: note.description.length });
         continue;
       }

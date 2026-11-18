@@ -210,12 +210,33 @@ export function createShim(options: ShimOptions) {
       inputSchema: {
         forkId: z.string(),
         limit: z.number().int().positive().optional().describe('Return only the newest messages'),
+        maxChars: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe(
+            'Cut each message at this many characters, marked truncated. 0 or none: no cut',
+          ),
       },
     },
-    tool(async ({ forkId, limit }: { forkId: string; limit?: number | undefined }) => {
-      const query = limit ? `?limit=${limit}` : '';
-      return json(await request<ForkRead>(`/api/internal/forks/${forkId}${query}`));
-    }),
+    tool(
+      async ({
+        forkId,
+        limit,
+        maxChars,
+      }: {
+        forkId: string;
+        limit?: number | undefined;
+        maxChars?: number | undefined;
+      }) => {
+        const query = new URLSearchParams();
+        if (limit) query.set('limit', String(limit));
+        if (maxChars) query.set('maxChars', String(maxChars));
+        const search = query.size > 0 ? `?${query}` : '';
+        return json(await request<ForkRead>(`/api/internal/forks/${forkId}${search}`));
+      },
+    ),
   );
 
   server.registerTool(

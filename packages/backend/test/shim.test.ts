@@ -140,6 +140,9 @@ describe('MCP shim', () => {
       'A branch of the conversation.',
     ]);
     for (const message of read.messages) expect(message.createdAt).toEqual(expect.any(Number));
+    expect(read.messages[0]).not.toHaveProperty('truncated');
+    const { value: cut } = await call('read_fork', { forkId: started.mainForkId, maxChars: 4 });
+    expect(cut.messages[0]).toMatchObject({ text: 'What…', truncated: true });
     const { value: map } = await call('get_map');
     expect(map.forks).toMatchObject([{ summary: 'Forks explained', awaitingAnswer: false }]);
     const { value: list } = await call('list_explorations');

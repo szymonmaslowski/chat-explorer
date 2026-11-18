@@ -19,6 +19,7 @@ export interface JobToolsOptions {
 
 const defaultPageSize = 20;
 const maxPageSize = 100;
+const maxMessageChars = 100_000;
 
 const json = (value: unknown): CallToolResult => ({
   content: [{ type: 'text', text: JSON.stringify(value, null, 2) }],
@@ -99,11 +100,20 @@ function toolsFor(job: Job, { store, runs }: JobToolsOptions) {
     'read_fork',
     {
       description:
-        'Read a fork of this chat: its messages, oldest first, ending with its newest one. Pass the returned nextBefore as before to read further back. Long messages are cut, marked truncated.',
+        'Read a fork of this chat: its messages, oldest first, ending with its newest one. Pass the returned nextBefore as before to read further back. Messages longer than maxChars (2,000 by default) are cut, marked truncated.',
       inputSchema: {
         forkId: z.string(),
         limit: z.number().int().min(1).max(maxPageSize).optional(),
         before: z.string().optional(),
+        maxChars: z
+          .number()
+          .int()
+          .min(0)
+          .max(maxMessageChars)
+          .optional()
+          .describe(
+            'Cut each message at this many characters instead, or not at all with 0. The page then holds fewer messages, so it stays within a tool result.',
+          ),
       },
     },
     tool(
@@ -111,16 +121,18 @@ function toolsFor(job: Job, { store, runs }: JobToolsOptions) {
         forkId,
         limit,
         before,
+        maxChars,
       }: {
         forkId: string;
         limit?: number | undefined;
         before?: string | undefined;
+        maxChars?: number | undefined;
       }) => {
         sameChat(job, store.forkExplorationId(forkId), `Fork ${forkId}`);
         if (!aware && forkId !== job.forkId) {
           throw new StoreError('not_found', `This fork reads only itself, not fork ${forkId}.`);
         }
-        return store.readForkPage(forkId, { limit: limit ?? defaultPageSize, before });
+        return store.readForkPage(forkId, { limit: limit ?? defaultPageSize, before, maxChars });
       },
     ),
   );
