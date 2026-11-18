@@ -139,6 +139,7 @@ describe('MCP shim', () => {
       'What is a fork?',
       'A branch of the conversation.',
     ]);
+    for (const message of read.messages) expect(message.createdAt).toEqual(expect.any(Number));
     const { value: map } = await call('get_map');
     expect(map.forks).toMatchObject([{ summary: 'Forks explained', awaitingAnswer: false }]);
     const { value: list } = await call('list_explorations');

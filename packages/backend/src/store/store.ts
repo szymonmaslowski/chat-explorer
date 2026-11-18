@@ -841,6 +841,7 @@ export class ChatStore {
         forkId: row.fork_id,
         role: row.role,
         text: this.messageText(row),
+        createdAt: row.created_at,
       })),
       omitted:
         omittedRows.length === 0
@@ -873,6 +874,7 @@ export class ChatStore {
           role: row.role,
           text: text.length > pageMessageLength ? `${text.slice(0, pageMessageLength)}…` : text,
           truncated: text.length > pageMessageLength,
+          createdAt: row.created_at,
         };
       }),
       nextBefore: start > 0 ? path[start]!.id : null,

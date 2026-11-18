@@ -106,6 +106,7 @@ describe('job tools', () => {
     expect(latest.value.messages.map((message: { text: string }) => message.text)).toEqual([
       'Note this down',
     ]);
+    expect(latest.value.messages[0].createdAt).toEqual(expect.any(Number));
     const earlier = await call(client, 'read_fork', {
       forkId: mainForkId,
       limit: 2,
