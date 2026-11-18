@@ -2,6 +2,8 @@
 // Node's own modules. Each engine container signs in with its fork's id and a token as proxy
 // credentials. The runner writes `<policies>/<id>.json` with that token and the fork's hosts when
 // the container starts, rewrites it when the hosts change, and removes it when the container ends.
+// The policy also names hosts the runner's config allows on your own network, and hidden hosts,
+// which the logs never name.
 //
 // It also stands in for the model's API on a port of its own. The engine holds a dummy token made
 // of the same id and token, and the proxy swaps in the real one, which never enters a container.
@@ -159,13 +161,18 @@ export function startEgressProxy(options) {
       log(given.id, `denied a request from ${from}: this pass belongs to another container`);
       return null;
     }
-    const hosts = Array.isArray(policy.hosts) ? policy.hosts : [];
-    return { id: given.id, allowed: new Set([...alwaysAllowed, toolsHost, ...hosts]) };
+    const list = (name) => (Array.isArray(policy[name]) ? policy[name] : []);
+    return {
+      id: given.id,
+      allowed: new Set([...alwaysAllowed, toolsHost, ...list('hosts')]),
+      onPrivateNetwork: new Set(list('privateHosts')),
+      hidden: new Set(list('hiddenHosts')),
+    };
   }
 
   // Where to connect for an allowed host: the address its name resolves to, checked first, so a
   // name that points at the local network, now or after a quick DNS change, is refused.
-  async function address(target) {
+  async function address(target, privateAllowed) {
     if (`${target.host}:${target.port}` === toolsHost) return { host: target.host };
     let resolved;
     try {
@@ -174,7 +181,7 @@ export function startEgressProxy(options) {
       return { refused: 'its name does not resolve' };
     }
     if (resolved.length === 0) return { refused: 'its name does not resolve' };
-    if (resolved.some((entry) => !isPublicAddress(entry.address))) {
+    if (!privateAllowed && resolved.some((entry) => !isPublicAddress(entry.address))) {
       return { refused: 'it resolves to a private address' };
     }
     const chosen = resolved.find((entry) => entry.family === 4) ?? resolved[0];
@@ -184,7 +191,8 @@ export function startEgressProxy(options) {
   const server = http.createServer(async (request, response) => {
     const fork = await signedIn(request);
     if (!fork) {
-      log(null, `denied ${request.method} ${request.url}: no valid proxy sign-in`);
+      // Without a sign-in there is no policy to tell a hidden host by, so no target is logged.
+      log(null, `denied a ${request.method} request: no valid proxy sign-in`);
       response.writeHead(407, { 'proxy-authenticate': 'Basic realm="chat-explorer"' }).end();
       return;
     }
@@ -197,7 +205,10 @@ export function startEgressProxy(options) {
     }
     const target = `${url.hostname}:${url.port || '80'}`;
     if (url.protocol !== 'http:' || target !== toolsHost) {
-      log(fork.id, `denied plain HTTP to ${target}: only HTTPS goes out`);
+      log(
+        fork.id,
+        `denied plain HTTP to ${fork.hidden.has(target) ? 'a hidden host' : target}: only HTTPS goes out`,
+      );
       response.writeHead(403).end('Plain HTTP is refused by the sandbox. Use HTTPS.');
       return;
     }
@@ -225,27 +236,30 @@ export function startEgressProxy(options) {
     const refuse = (status, reason) => socket.end(`HTTP/1.1 ${status}\r\n\r\n${reason}`);
     const fork = await signedIn(request);
     if (!fork) {
-      log(null, `denied CONNECT ${request.url}: no valid proxy sign-in`);
+      log(null, 'denied a CONNECT: no valid proxy sign-in');
+      // A client that first tries without a sign-in retries on a new connection, as this one ends.
       socket.end(
-        'HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm="chat-explorer"\r\n\r\n',
+        'HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm="chat-explorer"\r\nConnection: close\r\nContent-Length: 0\r\n\r\n',
       );
       return;
     }
     const target = splitHostPort(request.url);
-    if (!target || !fork.allowed.has(`${target.host}:${target.port}`)) {
-      log(fork.id, `denied ${request.url}: not on this fork's list`);
+    const named = target ? `${target.host}:${target.port}` : request.url;
+    const shown = fork.hidden.has(named) ? 'a hidden host' : named;
+    if (!target || !fork.allowed.has(named)) {
+      log(fork.id, `denied ${shown}: not on this fork's list`);
       refuse('403 Forbidden', "Blocked by the sandbox: add the host to this fork's allowed hosts.");
       return;
     }
     const connections = open.get(fork.id) ?? 0;
     if (connections >= maxConnections) {
-      log(fork.id, `denied ${request.url}: over ${maxConnections} open connections`);
+      log(fork.id, `denied ${shown}: over ${maxConnections} open connections`);
       refuse('429 Too Many Requests', 'Too many open connections.');
       return;
     }
-    const where = await address(target);
+    const where = await address(target, fork.onPrivateNetwork.has(named));
     if (where.refused) {
-      log(fork.id, `denied ${request.url}: ${where.refused}`);
+      log(fork.id, `denied ${shown}: ${where.refused}`);
       refuse('403 Forbidden', `Blocked by the sandbox: ${where.refused}.`);
       return;
     }
@@ -257,14 +271,17 @@ export function startEgressProxy(options) {
       open.set(fork.id, (open.get(fork.id) ?? 1) - 1);
     };
     const upstream = connect(target.port, where.host, () => {
-      log(fork.id, `allowed ${request.url} (${where.host})`);
+      log(
+        fork.id,
+        fork.hidden.has(named) ? `allowed ${shown}` : `allowed ${named} (${where.host})`,
+      );
       socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
       upstream.write(head);
       upstream.pipe(socket);
       socket.pipe(upstream);
     });
     upstream.on('error', (error) => {
-      log(fork.id, `failed ${request.url}: ${error.code ?? error.message}`);
+      log(fork.id, `failed ${shown}: ${error.code ?? error.message}`);
       refuse('502 Bad Gateway', 'Could not connect.');
     });
     upstream.on('close', release);

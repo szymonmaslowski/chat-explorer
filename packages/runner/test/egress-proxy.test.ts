@@ -54,6 +54,8 @@ describe('the egress proxy', () => {
     'allowed.example.com': '104.16.1.34',
     'rebound.example.com': '192.168.1.10',
     'mapped.example.com': '::ffff:10.0.0.1',
+    'git.home.example.com': '192.168.1.20',
+    'secret.example.com': '104.16.1.34',
   };
 
   beforeAll(async () => {
@@ -99,7 +101,11 @@ describe('the egress proxy', () => {
       maxConnections: 2,
       // Every public address stands for the internet, played here by the local target.
       connect: (port, host, onConnect) =>
-        connect(host === '104.16.1.34' ? targetPort : port, '127.0.0.1', onConnect),
+        connect(
+          ['104.16.1.34', '192.168.1.20'].includes(host) ? targetPort : port,
+          '127.0.0.1',
+          onConnect,
+        ),
     }));
     proxyPort = (proxy.address() as AddressInfo).port;
     modelPort = (model.address() as AddressInfo).port;
@@ -185,6 +191,41 @@ describe('the egress proxy', () => {
     await expect
       .poll(() => logOf('fork_d'))
       .toMatch(/denied rebound\.example\.com:443: it resolves to a private address/);
+  });
+
+  it("lets a host the runner's config allows on your own network resolve there", async () => {
+    const policy = (privateHosts: string[]) =>
+      writeFileSync(
+        join(policiesPath, 'fork_h.json'),
+        JSON.stringify({
+          token: 'fork_h-token',
+          hosts: ['git.home.example.com:2222'],
+          privateHosts,
+        }),
+      );
+    policy([]);
+    expect(await status('git.home.example.com:2222', signIn('fork_h'))).toBe(403);
+    policy(['git.home.example.com:2222']);
+    expect(await status('git.home.example.com:2222', signIn('fork_h'))).toBe(200);
+  });
+
+  it('never names a hidden host in the logs, allowed or denied', async () => {
+    writeFileSync(
+      join(policiesPath, 'fork_i.json'),
+      JSON.stringify({
+        token: 'fork_i-token',
+        hosts: ['secret.example.com:443'],
+        hiddenHosts: ['secret.example.com:443', 'other-secret.example.com:443'],
+      }),
+    );
+    expect(await status('secret.example.com:443', signIn('fork_i'))).toBe(200);
+    expect(await status('other-secret.example.com:443', signIn('fork_i'))).toBe(403);
+    expect(await status('secret.example.com:443')).toBe(407);
+    await expect
+      .poll(() => logOf('fork_i'))
+      .toMatch(/denied a hidden host: not on this fork's list/);
+    expect(logOf('fork_i')).toMatch(/allowed a hidden host/);
+    expect(logOf('fork_i') + logOf('_unknown')).not.toMatch(/secret/);
   });
 
   it('forwards plain HTTP to the tools host only, and keeps the sign-in from it', async () => {
