@@ -14,6 +14,7 @@ import type { Credential } from '../src/access-config.js';
 import {
   githubHostKeys,
   removeCredentialFiles,
+  removeLeftoverCredentials,
   writeCredentialFiles,
 } from '../src/credential-files.js';
 
@@ -108,5 +109,14 @@ describe("a coding container's credential folder", () => {
     removeCredentialFiles(folder);
     expect(existsSync(folder)).toBe(false);
     expect(existsSync(token)).toBe(true);
+  });
+
+  it('is removed at the start for every fork, when a runner stopped without cleaning up', () => {
+    const forksPath = join(root, 'forks');
+    const left = join(forksPath, 'fork_000000000a', 'credentials');
+    writeCredentialFiles(left, credentials);
+    removeLeftoverCredentials(forksPath, (forkId) => join(forksPath, forkId, 'credentials'));
+    expect(existsSync(left)).toBe(false);
+    expect(existsSync(join(forksPath, 'fork_000000000a'))).toBe(true);
   });
 });

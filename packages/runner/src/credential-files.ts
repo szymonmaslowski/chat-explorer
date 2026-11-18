@@ -1,4 +1,12 @@
-import { chmodSync, copyFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { splitHostPort } from '@chat-explorer/shared/network.js';
 import { knownHostsName, type Credential } from './access-config.js';
@@ -128,3 +136,10 @@ export function writeCredentialFiles(folder: string, credentials: Credential[]) 
 
 export const removeCredentialFiles = (folder: string) =>
   rmSync(folder, { recursive: true, force: true });
+
+// Copies left by containers of a runner that stopped without cleaning up, such as after a crash.
+// No container runs yet when the runner starts.
+export function removeLeftoverCredentials(forksPath: string, folderOf: (forkId: string) => string) {
+  if (!existsSync(forksPath)) return;
+  for (const forkId of readdirSync(forksPath)) removeCredentialFiles(folderOf(forkId));
+}

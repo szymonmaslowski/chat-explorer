@@ -13,6 +13,7 @@ import {
 } from './claude-image.js';
 import { RunnerClient } from './client.js';
 import { ensureEgress } from './egress.js';
+import { removeLeftoverCredentials } from './credential-files.js';
 import { codingMemory, MemoryGate } from './memory-gate.js';
 import { Runner } from './runner.js';
 import { runtime } from './container-runtime.js';
@@ -120,6 +121,10 @@ export async function startRunner(options: StartRunnerOptions) {
     workspacesPath: options.workspacesPath,
     egressPath,
   };
+  removeLeftoverCredentials(
+    enginePaths.forksPath,
+    (forkId) => forkFolders(enginePaths, { forkId, explorationId: '', coding: false }).credentials,
+  );
   const runner = new Runner({
     client,
     config,
