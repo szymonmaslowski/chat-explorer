@@ -233,6 +233,7 @@ describe('coding forks: security acceptance checklist', () => {
       expect(probed.gitAccess).toContain('cloned');
       expect(probed.gitAccess).toContain('Permission denied (publickey)');
       expect(probed.gitAccess).not.toContain('Host key verification failed');
+      expect(probed.gitAccess).not.toContain('Warning');
     });
 
     it('reaches the model only through the proxy, holding a dummy token, never the real one', () => {

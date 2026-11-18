@@ -76,7 +76,8 @@ function sshConfig(credentials: Credential[]) {
       'Host *',
       `  UserKnownHostsFile ${inside('known_hosts')}`,
       '  StrictHostKeyChecking yes',
-      `  ProxyCommand node ${inside('connect.mjs')} %h %p`,
+      // NODE_USE_ENV_PROXY makes Node warn on stderr, which ssh would show with every command.
+      `  ProxyCommand node --no-warnings ${inside('connect.mjs')} %h %p`,
     ].join('\n'),
     '',
   ].join('\n\n');

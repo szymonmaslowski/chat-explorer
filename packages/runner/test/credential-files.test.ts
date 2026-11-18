@@ -97,7 +97,7 @@ describe("a coding container's credential folder", () => {
       'Host git.home.example.com\n  Port 2222\n  User git\n  IdentityFile /credentials/credential-1.key\n  IdentitiesOnly yes',
     );
     expect(sshConfig).toContain('StrictHostKeyChecking yes');
-    expect(sshConfig).toContain('ProxyCommand node /credentials/connect.mjs %h %p');
+    expect(sshConfig).toContain('ProxyCommand node --no-warnings /credentials/connect.mjs %h %p');
     const knownHosts = read('known_hosts');
     expect(knownHosts).toContain(`github.com ${githubHostKeys[0]}`);
     expect(knownHosts).toContain(`[ssh.github.com]:443 ${githubHostKeys[0]}`);
