@@ -12,9 +12,9 @@ import {
   newestBuiltImage,
 } from './claude-image.js';
 import { RunnerClient } from './client.js';
-import { ensureEgress } from './egress.js';
+import { egressContainer, ensureEgress } from './egress.js';
 import { removeLeftoverCredentials } from './credential-files.js';
-import { codingMemory, MemoryGate } from './memory-gate.js';
+import { codingMemory, codingNeedsBytes, MemoryGate } from './memory-gate.js';
 import { Runner } from './runner.js';
 import { runtime } from './container-runtime.js';
 import { readRunnerConfig, type RunnerConfig } from './runner-config.js';
@@ -96,24 +96,34 @@ export async function startRunner(options: StartRunnerOptions) {
   const sizing = codingMemory(config.coding.memory, await runtime.memoryBytes());
   const codingLimits = { ...config.coding, memory: sizing.memory };
   const client = new RunnerClient(options.baseUrl, options.machineToken);
-  const reportCapacity = (forkIds: string[]) =>
-    client
-      .capacity(
-        config.coding.enabled ? { slots: sizing.slots, memory: sizing.memory, forkIds } : null,
-      )
-      .catch((error: Error) => options.log(`Runner: ${error.message}`));
   const capabilities = capabilitiesReport(configured, sizing, codingOff ?? sizing.refusal);
   const reportCapabilities = () =>
     client
       .capabilities(capabilities)
       .catch((error: Error) => options.log(`Runner: ${error.message}`));
-  const memoryGate = new MemoryGate(sizing, reportCapacity);
-  // Repeated, so the backend stops counting a runner that went away.
-  setInterval(() => {
-    void reportCapacity(memoryGate.forkIds);
-    void reportCapabilities();
-  }, 30_000).unref();
-  void reportCapacity([]);
+  const memoryGate = new MemoryGate(
+    sizing,
+    () => runtime.availableMemoryBytes(egressContainer(options.port)),
+    () => void reportCapacity(),
+  );
+  const reportCapacity = async () => {
+    const capacity = config.coding.enabled
+      ? {
+          memory: sizing.memory,
+          availableBytes: await memoryGate.availableBytes(),
+          neededBytes: codingNeedsBytes,
+          forkIds: memoryGate.forkIds,
+        }
+      : null;
+    await client
+      .capacity(capacity)
+      .catch((error: Error) => options.log(`Runner: ${error.message}`));
+  };
+  // Repeated, so the page sees memory as it frees, and the backend stops counting a runner that
+  // went away.
+  setInterval(() => void reportCapacity(), 15_000).unref();
+  setInterval(() => void reportCapabilities(), 30_000).unref();
+  void reportCapacity();
   void reportCapabilities();
   const enginePaths = {
     forksPath: join(options.runnerPath, 'forks'),
@@ -151,7 +161,7 @@ export async function startRunner(options: StartRunnerOptions) {
   runner.start();
   const coding = sizing.refusal
     ? `allowed, but ${sizing.refusal}`
-    : `allowed (${sizing.memory} memory each, ${sizing.slots} at once; ${config.coding.processes} processes, ${config.coding.cpus ?? 'all'} CPUs)`;
+    : `allowed (up to ${sizing.memory} memory each, started while Docker has memory free; ${config.coding.processes} processes, ${config.coding.cpus ?? 'all'} CPUs)`;
   options.log(`Runner started with ${image}, coding ${config.coding.enabled ? coding : 'off'}.`);
   return runner;
 }

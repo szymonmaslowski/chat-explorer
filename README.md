@@ -174,7 +174,7 @@ The runner's config also sets this machine's limits for coding containers. Leave
 
 | Field              | Default | Meaning                                                                             |
 | ------------------ | ------- | ----------------------------------------------------------------------------------- |
-| `memory`           | sized   | memory per container, such as `"8g"` or `"512m"`; see below                         |
+| `memory`           | sized   | memory cap per container, such as `"8g"` or `"512m"`; see below                     |
 | `processes`        | `512`   | processes per container                                                             |
 | `cpus`             | all     | caps the CPUs per container, such as `6` or `1.5`; busy containers share the rest   |
 | `workspaceLimitGb` | `10`    | a workspace over this shows a warning; past 1.5 times it, the run stops             |
@@ -182,7 +182,7 @@ The runner's config also sets this machine's limits for coding containers. Leave
 
 Restart the daemon after changing the file, so the runner reads it again.
 
-**Memory.** Coding containers together never get more memory than Docker can spare: Docker's memory minus 1.5 GB for the egress proxy and chat forks. Without `memory` in the config, one coding container gets all of that, so one coding fork runs at a time. With a cap, as many run as fit: `"3g"` on an 8 GB Docker runs two. A coding fork with no room waits, shown as waiting for memory, and starts when another one goes idle; the page says so above the reply box before you send. To run more at once, set a smaller `memory`, or give Docker more memory in Docker Desktop's settings and restart the daemon. If Docker still runs out, it ends a coding process first, never the proxy.
+**Memory.** A coding container starts while Docker has memory free for it: the runner reads the free memory in Docker's VM (`MemAvailable`, which counts file cache the kernel can drop as free) and starts the container if 2.5 GB would be free, 1.5 GB kept for the egress proxy and chat forks plus 1 GB for the new container to start. A container started in the last minute counts as using that 1 GB, since the reading may not show it yet. The caps aren't added up: a fork writing code uses a few hundred megabytes, and only commands like installs, builds and test runs grow it. So several coding forks can run at once, each with a cap of `memory` (without it, all Docker can spare, so one fork can still run a big build). A coding fork with no room waits, shown as waiting for memory, and the runner checks again every 10 seconds and whenever a coding fork lets its container go; the page says so above the reply box before you send. If forks grow at once and Docker runs out, its kernel ends the biggest process in a coding container, usually the command that grew, never the proxy or a chat fork. To fit more, give Docker more memory in Docker Desktop's settings and restart the daemon.
 
 **Network.** A container reaches the outside only through the egress proxy, over HTTPS, to the hosts its fork allows. Under the coding switch, tick the package registries the fork needs, each on its own (npm, PyPI, Rust's crates.io with rustup, Go modules), or list other hosts as `name:port`, one per line. A change applies to the next connection, without a new container. Addresses on your own network are refused even when a name on the list points there. Each fork's allowed and denied connections are logged in `~/.chat-explorer/runner/egress/logs/<fork>.log`.
 

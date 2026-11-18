@@ -71,6 +71,18 @@ interface SetupExtras {
   credentials?: Credential[];
 }
 
+// Docker with memory free for one coding container: it uses most of what's free once it runs.
+function memoryForOne() {
+  const gigabyte = 1024 ** 3;
+  const gate: MemoryGate = new MemoryGate(
+    { memory: '6656m', refusal: null },
+    async () => (gate.forkIds.length === 0 ? 3 * gigabyte : 0.8 * gigabyte),
+    undefined,
+    { recheckMs: 50, startingMs: 0 },
+  );
+  return gate;
+}
+
 function setup(timings = {}, coding = false, extras: SetupExtras = {}) {
   const { diskGuard, memoryGate, credentials = [] } = extras;
   const context = createTestApp();
@@ -326,7 +338,7 @@ describe('the runner', () => {
   });
 
   it('holds a coding fork while Docker has no memory for it, and starts it once room frees', async () => {
-    const gate = new MemoryGate({ memory: '6656m', slots: 1, refusal: null });
+    const gate = memoryForOne();
     const { runner, engineRuns, store, explorationId, mainForkId } = setup({}, true, {
       memoryGate: gate,
     });
@@ -343,7 +355,7 @@ describe('the runner', () => {
     store.submit(other.explorationId, other.mainForkId, 'Build the second');
     await until(() => runOf(other.mainForkId)?.status === 'waiting_memory');
     expect(runOf(other.mainForkId)?.statusDetail).toBe(
-      'Another coding fork is using the memory Docker has for coding (6656m).',
+      'Docker has 0.8 GB of memory free, and a coding fork needs 2.5 GB free to start.',
     );
     expect(engineRuns).toHaveLength(1);
 
@@ -359,7 +371,7 @@ describe('the runner', () => {
   });
 
   it('starts the waiting coding fork when the other one lets its container go', async () => {
-    const gate = new MemoryGate({ memory: '6656m', slots: 1, refusal: null });
+    const gate = memoryForOne();
     const { runner, engineRuns, store, explorationId, mainForkId } = setup(
       { idleCloseMs: 100 },
       true,
@@ -387,7 +399,7 @@ describe('the runner', () => {
   });
 
   it('lets the reader stop a coding fork that waits for memory, its message handled', async () => {
-    const gate = new MemoryGate({ memory: '6656m', slots: 1, refusal: null });
+    const gate = memoryForOne();
     const { runner, engineRuns, store, explorationId, mainForkId, runs } = setup({}, true, {
       memoryGate: gate,
     });

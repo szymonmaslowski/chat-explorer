@@ -8,7 +8,7 @@ import {
   type RunInput,
 } from '@chat-explorer/shared/protocol.js';
 import type { DiskGuard } from './disk-guard.js';
-import { waitingForMemory, type MemoryGate } from './memory-gate.js';
+import type { MemoryGate } from './memory-gate.js';
 import type { RunnerConfig } from './runner-config.js';
 import { checkedAccess, checkedRunSpec, RunRefusedError } from './run-spec.js';
 
@@ -211,9 +211,10 @@ class ForkWorker {
       });
       const { diskGuard, memoryGate } = this.options;
       if (spec.coding && memoryGate) {
-        const reason = waitingForMemory(memoryGate.sizing);
-        this.releaseMemory = await memoryGate.acquire(this.lease.forkId, this.abort.signal, () =>
-          this.report(() => client.waitingForMemory(this.lease, reason)),
+        this.releaseMemory = await memoryGate.acquire(
+          this.lease.forkId,
+          this.abort.signal,
+          (reason) => this.report(() => client.waitingForMemory(this.lease, reason)),
         );
       }
       if (spec.coding && diskGuard) {

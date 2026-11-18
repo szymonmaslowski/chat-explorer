@@ -24,6 +24,9 @@ export interface ContainerRuntime {
   freeBytes(container: string): Promise<number | null>;
   // All the memory containers share. With Docker Desktop that is its VM's, set in its settings.
   memoryBytes(): Promise<number | null>;
+  // Memory free for containers now, as the kernel counts it: file cache it can drop counts as free.
+  // Read inside a running container, which sees the memory of the machine or VM it runs on.
+  availableMemoryBytes(container: string): Promise<number | null>;
   // Which runtime answers, and whether coding forks have been tested on it.
   identify(): Promise<{ name: string; supported: boolean }>;
 }
@@ -66,6 +69,13 @@ export const dockerRuntime: ContainerRuntime = {
     const result = await dockerCommand(['info', '--format', '{{.MemTotal}}']);
     const bytes = Number(result.output.trim());
     return result.code === 0 && bytes > 0 ? bytes : null;
+  },
+  async availableMemoryBytes(container) {
+    const result = await dockerCommand(['exec', container, 'cat', '/proc/meminfo'], {
+      timeoutMs: 30_000,
+    });
+    const kilobytes = Number(/^MemAvailable:\s+(\d+) kB$/m.exec(result.output)?.[1]);
+    return result.code === 0 && kilobytes > 0 ? kilobytes * 1024 : null;
   },
   async identify() {
     const result = await dockerCommand(['info', '--format', '{{.OperatingSystem}}']);

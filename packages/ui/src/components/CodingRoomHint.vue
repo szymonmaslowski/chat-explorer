@@ -3,8 +3,8 @@ import type { CodingCapacity, Fork, ForkRun } from '@shared/types';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { api } from '../api';
 
-// Before you send in a coding fork: whether Docker's memory has room for its container, or the
-// message will wait until another coding fork lets its container go.
+// Before you send in a coding fork: whether Docker has memory free for its container, or the
+// message will wait until it has.
 const props = defineProps<{ fork: Fork; run: ForkRun | null }>();
 
 const capacityRefreshMs = 20_000;
@@ -35,23 +35,19 @@ watch(
 );
 onBeforeUnmount(() => clearInterval(timer));
 
-const full = computed(() => {
+const shown = (bytes: number) => `${(Math.max(bytes, 0) / 1024 ** 3).toFixed(1)} GB`;
+const short = computed(() => {
   const room = capacity.value;
-  if (!room || room.slots === 0 || props.run?.status === 'waiting_memory') return false;
-  return !room.forkIds.includes(props.fork.id) && room.forkIds.length >= room.slots;
-});
-const running = computed(() => {
-  const room = capacity.value!;
-  return room.slots === 1
-    ? `another coding fork is using it (${room.memory})`
-    : `${room.slots} coding forks are using it (${room.memory} each)`;
+  if (!room || room.availableBytes === null || props.run?.status === 'waiting_memory') return null;
+  if (room.forkIds.includes(props.fork.id) || room.availableBytes >= room.neededBytes) return null;
+  return { free: shown(room.availableBytes), needed: shown(room.neededBytes) };
 });
 </script>
 
 <template>
-  <p v-if="full" class="coding-room muted" role="status">
-    Docker's memory for coding is taken: {{ running }}. A message sent now waits until one of them
-    goes idle.
+  <p v-if="short" class="coding-room muted" role="status">
+    Docker is low on memory: {{ short.free }} free, and a coding fork needs {{ short.needed }} to
+    start. A message sent now waits until there's room.
   </p>
 </template>
 

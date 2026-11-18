@@ -442,7 +442,7 @@ describe('coding forks: security acceptance checklist', () => {
       },
     };
     const report = JSON.stringify(
-      capabilitiesReport(config, { memory: '4g', slots: 1, refusal: null }, null),
+      capabilitiesReport(config, { memory: '4g', refusal: null }, null),
     );
     expect(report).not.toMatch(/secret/i);
     expect(report).not.toContain('/runner/secrets');

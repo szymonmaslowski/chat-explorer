@@ -25,14 +25,21 @@ describe('runner API', () => {
     const { runner, request, clock } = setup();
     const shown = async () => (await (await request('/api/coding-capacity')).json()).capacity;
     expect(await shown()).toBeNull();
-    const capacity = { slots: 2, memory: '3g', forkIds: ['fork_000000000a'] };
+    const capacity = {
+      memory: '6656m',
+      availableBytes: 3 * 1024 ** 3,
+      neededBytes: 2.5 * 1024 ** 3,
+      forkIds: ['fork_000000000a'],
+    };
     expect((await runner('capacity', { capacity })).status).toBe(200);
     expect(await shown()).toEqual(capacity);
     clock.now += 60_000;
     expect(await shown()).toEqual(capacity);
     clock.now += 60_000;
     expect(await shown()).toBeNull();
-    expect((await runner('capacity', { capacity: { slots: -1 } })).status).toBe(400);
+    expect((await runner('capacity', { capacity: { memory: '3g', neededBytes: -1 } })).status).toBe(
+      400,
+    );
   });
 
   it('waits for a submit, claims its fork, delivers the message and stores the answer', async () => {

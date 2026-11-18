@@ -223,7 +223,6 @@ export interface RunnerCapabilities {
   credentials: { name: string; type: 'token' | 'ssh-key'; hosts: string[] }[];
   limits: {
     memory: string;
-    slots: number;
     cpus: number | null;
     processes: number;
     workspaceLimitGb: number;
@@ -240,8 +239,13 @@ export interface CapabilitiesReport {
 }
 
 export interface CodingCapacity {
-  slots: number;
+  // Each coding container's cap.
   memory: string;
+  // Memory free in Docker now, or null when the runner couldn't measure it.
+  availableBytes: number | null;
+  // What a new coding container needs free to start.
+  neededBytes: number;
+  // Forks whose coding containers run.
   forkIds: string[];
 }
 

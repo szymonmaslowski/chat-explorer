@@ -41,7 +41,6 @@ export function capabilitiesReport(
       })),
     limits: {
       memory: sizing.memory,
-      slots: sizing.slots,
       cpus: coding.cpus ?? null,
       processes: coding.processes,
       workspaceLimitGb: coding.workspaceLimitGb,

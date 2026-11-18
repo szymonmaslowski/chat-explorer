@@ -130,20 +130,26 @@ test('says before sending when a coding fork would wait for memory, and while it
     waitMs: 5_000,
   });
   await request.patch(`/api/forks/${lease.forkId}/coding`, { data: { coding: true } });
-  const capacity = { slots: 1, memory: '6656m', forkIds: ['fork_0therf0rk'] };
+  const gigabyte = 1024 ** 3;
+  const capacity = {
+    memory: '6656m',
+    availableBytes: Math.round(0.8 * gigabyte),
+    neededBytes: 2.5 * gigabyte,
+    forkIds: ['fork_0therf0rk'],
+  };
   await runner.call('capacity', { capacity });
 
   await page.goto(`/e/${explorationId}`);
   const hint = page.locator('.coding-room');
   await expect(hint).toHaveText(
-    "Docker's memory for coding is taken: another coding fork is using it (6656m). A message sent now waits until one of them goes idle.",
+    "Docker is low on memory: 0.8 GB free, and a coding fork needs 2.5 GB to start. A message sent now waits until there's room.",
   );
 
   const fork = `forks/${lease.forkId}`;
-  const reason = 'Another coding fork is using the memory Docker has for coding (6656m).';
+  const reason = 'Docker has 0.8 GB of memory free, and a coding fork needs 2.5 GB free to start.';
   await runner.call(`${fork}/waiting-memory`, { leaseId: lease.leaseId, reason });
   await expect(page.locator('.run-status')).toContainText(
-    `Waiting for memory: ${reason} It starts once a coding fork goes idle.`,
+    `Waiting for memory: ${reason} It starts once Docker has room.`,
   );
   await expect(page.locator('.exploration-header .status')).toHaveText('waiting for memory');
   await expect(hint).toHaveCount(0);
@@ -174,7 +180,7 @@ test("offers a coding fork the runner's credentials and hosts, and restarts its 
       credentials: [
         { name: 'GitHub token', type: 'token', hosts: ['github.com:443', 'api.github.com:443'] },
       ],
-      limits: { memory: '6656m', slots: 1, cpus: null, processes: 512, workspaceLimitGb: 10 },
+      limits: { memory: '6656m', cpus: null, processes: 512, workspaceLimitGb: 10 },
       configHash: 'abc',
     },
   });

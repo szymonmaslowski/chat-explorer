@@ -44,7 +44,7 @@ async function act(action: (forkId: string) => Promise<unknown>) {
     Waiting for the usage limit{{ until }}.
   </p>
   <p v-else-if="run?.status === 'waiting_memory'" class="run-status muted">
-    Waiting for memory: {{ run.statusDetail }} It starts once a coding fork goes idle.
+    Waiting for memory: {{ run.statusDetail }} It starts once Docker has room.
     <button
       type="button"
       :disabled="busy || offline"

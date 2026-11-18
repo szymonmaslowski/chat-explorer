@@ -60,7 +60,6 @@ const capabilitiesBody = z.object({
       .max(100),
     limits: z.object({
       memory: z.string(),
-      slots: z.number().int().min(0),
       cpus: z.number().positive().nullable(),
       processes: z.number().int().positive(),
       workspaceLimitGb: z.number().positive(),
@@ -71,8 +70,9 @@ const capabilitiesBody = z.object({
 const capacityBody = z.object({
   capacity: z
     .object({
-      slots: z.number().int().min(0),
       memory: z.string().min(1),
+      availableBytes: z.number().int().nullable(),
+      neededBytes: z.number().int().positive(),
       forkIds: z.array(z.string()),
     })
     .nullable(),
