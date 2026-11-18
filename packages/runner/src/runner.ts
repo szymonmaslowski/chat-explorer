@@ -125,6 +125,7 @@ export class Runner {
         if (todo.length === 0 && notes.length > 0) await sleep(this.timings.claimWaitMs);
         for (const note of todo) {
           try {
+            await engine.ready?.();
             const topic = await engine.complete(noteTopicPrompt(note.description));
             await client.setNoteTopic(note.noteId, shortTopic(topic));
           } catch (error) {
@@ -225,6 +226,7 @@ class ForkWorker {
           this.timings.diskCheckMs,
         );
       }
+      await engine.ready?.();
       const engineRun = engine.start(spec);
       this.engineRun = engineRun;
       this.exited = new Promise((resolve) =>

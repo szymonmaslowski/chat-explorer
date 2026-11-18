@@ -57,4 +57,7 @@ export interface Engine {
   start(spec: EngineRunSpec): EngineRun;
   // A single answer without tools or a session, for small jobs like naming a note.
   complete(prompt: string): Promise<string>;
+  // Brings back what the engine's containers go out through, if it stopped since the runner
+  // started. Awaited before each start and completion.
+  ready?(): Promise<void>;
 }

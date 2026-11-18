@@ -25,12 +25,18 @@ interface FakeRun {
 function fakeEngine() {
   const runs: FakeRun[] = [];
   const prompts: string[] = [];
+  const calls: string[] = [];
   const engine: Engine = {
+    ready: async () => {
+      calls.push('ready');
+    },
     complete: async (prompt) => {
+      calls.push('complete');
       prompts.push(prompt);
       return '"Redis keys"';
     },
     start(spec) {
+      calls.push('start');
       const listeners: ((event: EngineEvent) => void)[] = [];
       const exitListeners: ((result: { code: number | null; error?: string }) => void)[] = [];
       const run: FakeRun = {
@@ -54,7 +60,7 @@ function fakeEngine() {
       };
     },
   };
-  return { engine, runs, prompts };
+  return { engine, runs, prompts, calls };
 }
 
 const until = async (condition: () => boolean, timeoutMs = 3_000) => {
@@ -93,7 +99,7 @@ function setup(timings = {}, coding = false, extras: SetupExtras = {}) {
       headers: { ...Object.fromEntries(new Headers(init.headers)), host: '127.0.0.1:4999' },
     }),
   );
-  const { engine, runs: engineRuns, prompts } = fakeEngine();
+  const { engine, runs: engineRuns, prompts, calls: engineCalls } = fakeEngine();
   const errors: unknown[] = [];
   const runner = new Runner({
     client,
@@ -112,7 +118,16 @@ function setup(timings = {}, coding = false, extras: SetupExtras = {}) {
     onError: (error) => errors.push(error),
   });
   const messages = () => context.store.readFork(conversation.mainForkId).messages;
-  return { ...context, ...conversation, runner, engineRuns, prompts, errors, messages };
+  return {
+    ...context,
+    ...conversation,
+    runner,
+    engineRuns,
+    engineCalls,
+    prompts,
+    errors,
+    messages,
+  };
 }
 
 const sessionId = '11111111-2222-3333-4444-555555555555';
@@ -148,6 +163,26 @@ describe('the runner', () => {
     });
     await runner.stop();
     expect(errors).toEqual([]);
+  });
+
+  it('readies the engine before each container, so a stopped proxy comes back first', async () => {
+    const { runner, engineRuns, engineCalls, store, explorationId, mainForkId } = setup({
+      idleCloseMs: 50,
+    });
+    runner.start();
+    store.submit(explorationId, mainForkId, 'What about Redis?');
+    await until(() => engineRuns[0]?.sent.length === 1);
+    engineRuns[0]!.emit({
+      type: 'turn-finished',
+      answer: 'Yes.',
+      failed: false,
+      contextWindow: 1e6,
+    });
+    await until(() => engineRuns[0]!.stopped);
+    store.submit(explorationId, mainForkId, 'And Postgres?');
+    await until(() => engineRuns[1]?.sent.length === 1);
+    expect(engineCalls).toEqual(['ready', 'start', 'ready', 'start']);
+    await runner.stop();
   });
 
   it('refuses a coding fork when its own config does not allow coding', async () => {

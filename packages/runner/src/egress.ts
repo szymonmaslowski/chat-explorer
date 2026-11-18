@@ -105,12 +105,40 @@ async function required(args: string[], what: string) {
   if (result.code !== 0) throw new Error(`Could not ${what}: ${result.output.trim()}`);
 }
 
+interface EgressOptions {
+  image: string;
+  port: number;
+  egressPath: string;
+}
+
 // Starts the network and a fresh proxy, replacing one left from an earlier run. Passes left from
 // that run are removed too, since their containers are gone.
-export async function ensureEgress(options: { image: string; port: number; egressPath: string }) {
+export async function ensureEgress(options: EgressOptions) {
+  const { policies } = egressFolders(options.egressPath);
+  rmSync(policies, { recursive: true, force: true });
+  await runtime.command(['rm', '--force', egressContainer(options.port)]);
+  await startEgress(options);
+}
+
+// A proxy stopped by hand stays stopped, as Docker's restart policy leaves it, and every fork would
+// lose the network until the runner restarted. Checked before each container, and started again
+// without touching the passes of forks already running.
+export async function keepEgressRunning(options: EgressOptions) {
+  const state = await runtime.command([
+    'inspect',
+    '--format',
+    '{{.State.Running}}',
+    egressContainer(options.port),
+  ]);
+  if (state.code !== 0) return startEgress(options);
+  if (state.output.trim() !== 'true') {
+    await required(['start', egressContainer(options.port)], 'start the egress proxy again');
+  }
+}
+
+async function startEgress(options: EgressOptions) {
   const { image, port, egressPath } = options;
   const folders = egressFolders(egressPath);
-  rmSync(folders.policies, { recursive: true, force: true });
   mkdirSync(folders.policies, { recursive: true });
   mkdirSync(folders.secrets, { recursive: true });
   mkdirSync(folders.logs, { recursive: true });
@@ -120,7 +148,6 @@ export async function ensureEgress(options: { image: string; port: number; egres
       'create the sandbox network',
     );
   }
-  await runtime.command(['rm', '--force', egressContainer(port)]);
   const proxyOptions = {
     policiesPath: '/egress/policies',
     secretsPath: '/egress/secrets',

@@ -9,7 +9,7 @@ import {
   removeCredentialFiles,
   writeCredentialFiles,
 } from './credential-files.js';
-import { openEgressPass, sandboxArguments, writeModelToken } from './egress.js';
+import { keepEgressRunning, openEgressPass, sandboxArguments, writeModelToken } from './egress.js';
 import {
   noHosts,
   type Engine,
@@ -221,7 +221,17 @@ export const claudeCompletionArguments = (prompt: string, image: string) => [
 ];
 
 export function claudeCodeEngine(options: ClaudeEngineOptions): Engine {
+  // Shared by runs that start together, so they never both create the proxy.
+  let egressCheck: Promise<void> | null = null;
   return {
+    ready() {
+      egressCheck ??= keepEgressRunning({
+        image: options.image(),
+        port: options.port,
+        egressPath: options.egressPath,
+      }).finally(() => (egressCheck = null));
+      return egressCheck;
+    },
     complete(prompt) {
       return new Promise((resolve, reject) => {
         writeModelToken(options.egressPath, options.oauthToken());
