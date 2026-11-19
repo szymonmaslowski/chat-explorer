@@ -254,7 +254,11 @@ const layout = computed(() => {
 }
 
 .top {
+  position: sticky;
+  top: 0;
+  z-index: 6;
   margin-bottom: 1rem;
+  background: var(--background);
 }
 
 .show-archived {
