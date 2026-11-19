@@ -473,6 +473,66 @@ test('submits only the selected drafts, and selects the left-out one again after
   expect(question.text).not.toContain('Keep this');
 });
 
+test('asks before a message takes drafted comments along, and lets them be left out', async ({
+  page,
+  request,
+}) => {
+  const explorationId = await answeredChat(request);
+  const snapshot = await (await request.get(`/api/explorations/${explorationId}`)).json();
+  const message = snapshot.messages.at(-1);
+  for (const body of ['Forgotten one', 'Forgotten two']) {
+    await request.post(`/api/explorations/${explorationId}/comments`, {
+      data: {
+        messageId: message.id,
+        viewForkId: message.forkId,
+        quote: '',
+        startOffset: 0,
+        endOffset: 0,
+        body,
+      },
+    });
+  }
+  await page.goto(`/e/${explorationId}`);
+  const reply = page.getByPlaceholder('Reply to Claude');
+  const banner = page.locator('.drafts-banner');
+  await expect(banner).toHaveCount(0);
+  await reply.fill('A general message');
+  await expect(banner).toContainText('2 drafted comments will be sent with this message');
+
+  const dialog = page.getByRole('dialog');
+  await page.getByRole('button', { name: 'Submit' }).click();
+  await expect(dialog).toContainText('Forgotten one');
+  await expect(dialog).toContainText('Forgotten two');
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator('.queued-submission')).toHaveCount(0);
+  await expect(reply).toHaveValue('A general message');
+
+  await page.getByRole('button', { name: 'Submit' }).click();
+  const save = saved(page, '/comments/');
+  await dialog.getByRole('checkbox').nth(1).uncheck();
+  await save;
+  await expect(banner).toContainText('1 drafted comment will be sent');
+  await dialog.getByRole('button', { name: 'Send' }).click();
+  await expect(page.locator('.queued-submission')).toBeVisible();
+
+  await attachFakeSession(request, explorationId);
+  const feedback = await deliverAndAnswer(request, explorationId, 'Done.');
+  await detachFakeSession(request);
+  const [question] = feedback.forks[0].userMessages;
+  expect(question.text).toContain('Forgotten one');
+  expect(question.text).not.toContain('Forgotten two');
+});
+
+test('sends a message with no drafts without asking', async ({ page, request }) => {
+  const explorationId = await answeredChat(request);
+  await page.goto(`/e/${explorationId}`);
+  await page.getByPlaceholder('Reply to Claude').fill('Just a message');
+  await page.getByRole('button', { name: 'Submit' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('.queued-submission')).toBeVisible();
+});
+
 test('leaves a sent comment in place when clicked, so its text can be selected', async ({
   page,
   request,

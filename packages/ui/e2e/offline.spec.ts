@@ -31,6 +31,7 @@ test('keeps comments and a submit made offline and sends them when the connectio
 
   await page.getByPlaceholder('Reply to Claude').fill('And this too');
   await page.getByRole('button', { name: 'Submit' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Send' }).click();
   await expect(page.locator('.queued-submission')).toContainText('will send when online');
   await expect(page.locator('.status')).toContainText(/\d waiting/);
   expect((await snapshotOf(request, explorationId)).comments).toEqual([]);

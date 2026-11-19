@@ -199,7 +199,39 @@ let history = atDraft();
 const endHistoryWalk = () => (history = atDraft());
 watch(() => props.forkId, endHistoryWalk);
 
+// A message that takes drafted comments along asks first, since the drafts are easy to forget.
+const confirming = ref(false);
+const sendsDraftsWithMessage = computed(
+  () => text.value.trim() !== '' && readyDrafts.value.length > 0,
+);
+const typeLabel = { inline: 'Comment', fork: 'Fork', note: 'Note' } as const;
+const excerpt = (draft: Comment) => {
+  const body = draft.body.replace(/\s+/g, ' ').trim();
+  return body.length > 120 ? `${body.slice(0, 120)}…` : body;
+};
+const toggleDraft = (draft: Comment) =>
+  outbox.add({
+    type: 'comment.update',
+    explorationId: props.explorationId,
+    commentId: draft.id,
+    changes: { selected: !draft.selected },
+  });
+// The drafts may be ticked off or removed from another page while the question is open.
+watch(sendsDraftsWithMessage, (sends) => {
+  if (!sends) confirming.value = false;
+});
+
 function submit() {
+  if (!canSubmit.value) return;
+  if (sendsDraftsWithMessage.value) {
+    confirming.value = true;
+    return;
+  }
+  send();
+}
+
+function send() {
+  confirming.value = false;
   if (!canSubmit.value) return;
   const { explorationId, forkId } = props;
   const submission = {
@@ -316,6 +348,12 @@ function onKeydown(event: KeyboardEvent) {
         @show-only="emit('showOnlyDrafts')"
       />
     </div>
+    <p v-if="sendsDraftsWithMessage" class="drafts-banner">
+      <RouterLink :to="{ hash: `#c-${readyDrafts[0]!.id}` }">{{
+        plural(readyDrafts.length, 'drafted comment')
+      }}</RouterLink>
+      will be sent with this message.
+    </p>
     <textarea
       ref="textarea"
       v-model="text"
@@ -350,6 +388,31 @@ function onKeydown(event: KeyboardEvent) {
         <MediaIcon name="comment" />
       </button>
       <button type="submit" class="primary" :disabled="!canSubmit">Submit</button>
+    </div>
+    <div
+      v-if="confirming"
+      class="confirm-backdrop"
+      @click.self="confirming = false"
+      @keydown.esc="confirming = false"
+    >
+      <div class="confirm" role="dialog" aria-modal="true" aria-label="Send with drafted comments">
+        <p class="confirm-title">
+          Send your message with {{ plural(readyDrafts.length, 'drafted comment') }}?
+        </p>
+        <ul class="confirm-list">
+          <li v-for="draft in drafts.filter((d) => d.editBody === null)" :key="draft.id">
+            <label>
+              <input type="checkbox" :checked="draft.selected" @change="toggleDraft(draft)" />
+              <span class="confirm-kind">{{ typeLabel[draft.type] }}</span>
+              <span class="confirm-text">{{ excerpt(draft) }}</span>
+            </label>
+          </li>
+        </ul>
+        <div class="confirm-actions">
+          <button type="button" @click="confirming = false">Cancel</button>
+          <button type="button" class="primary" autofocus @click="send">Send</button>
+        </div>
+      </div>
     </div>
   </form>
 </template>
@@ -464,5 +527,76 @@ function onKeydown(event: KeyboardEvent) {
 .summary.beside {
   flex-shrink: 0;
   max-width: 50%;
+}
+
+.drafts-banner {
+  margin: 0;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 0.85rem;
+}
+
+.confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgb(0 0 0 / 0.4);
+}
+
+.confirm {
+  display: grid;
+  gap: 0.75rem;
+  width: min(32rem, 100%);
+  max-height: 80vh;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+}
+
+.confirm-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.confirm-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.confirm-list label {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.confirm-kind {
+  flex: none;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: var(--muted, inherit);
+}
+
+.confirm-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }
 </style>
