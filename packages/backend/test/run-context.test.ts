@@ -42,6 +42,21 @@ describe('the context of a new engine session', () => {
   });
 });
 
+describe('the chat title line', () => {
+  it('asks for a title while the chat has none, and stops once it has one', () => {
+    const { store } = createTestStore();
+    const { exploration, mainFork } = store.createExploration({
+      messages: [{ role: 'user', content: 'Hello' }],
+    });
+    const history = () =>
+      buildRunContext(store, mainFork.id, { resume: false, pendingIds: new Set() }).history;
+    expect(history()).toContain('This chat has no title yet');
+    expect(history()).toContain('set_chat_summary');
+    store.updateExploration({ explorationId: exploration.id, title: 'Caching' });
+    expect(history()).not.toContain('This chat has no title yet');
+  });
+});
+
 describe("the fork's coding switch", () => {
   it('is off for a new fork, and the context carries it once it is turned on', () => {
     const { store } = createTestStore();

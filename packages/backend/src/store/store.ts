@@ -569,6 +569,10 @@ export class ChatStore {
     return this.publishExplorationUpdate(explorationId);
   }
 
+  chatTitle(explorationId: string) {
+    return this.requireExplorationRow(explorationId).title;
+  }
+
   backgroundSession(explorationId: string) {
     const row = this.requireExplorationRow(explorationId);
     return { model: row.model, sessionId: row.background_session_id };
@@ -665,6 +669,13 @@ export class ChatStore {
     );
     const fork = toFork(this.requireForkRow(input.forkId));
     this.publish([[row.exploration_id, { type: 'fork.updated', fork }]]);
+    // The main fork's summary names a chat that has no title yet. A real title is never replaced.
+    if (row.parent_fork_id === null) {
+      const exploration = this.requireExplorationRow(row.exploration_id);
+      if (exploration.title.trim() === '') {
+        this.updateExploration({ explorationId: row.exploration_id, title: input.summary });
+      }
+    }
     return fork;
   }
 

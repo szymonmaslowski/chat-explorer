@@ -76,6 +76,30 @@ describe('job tools', () => {
     expect(snapshot.notes[0]).toMatchObject({ topic: 'Redis', sourceMessageId: question.id });
   });
 
+  it("uses the main fork's summary as the title only while the chat has none", async () => {
+    const { connect, call, lease, store, explorationId } = await setup();
+    const client = await connect(lease.toolsToken);
+    store.updateExploration({ explorationId, title: '' });
+    expect(store.snapshot(explorationId).exploration.title).toBe('');
+    await call(client, 'set_fork_summary', { summary: 'Caching notes' });
+    expect(store.snapshot(explorationId).exploration.title).toBe('Caching notes');
+    await call(client, 'set_fork_summary', { summary: 'Something else' });
+    expect(store.snapshot(explorationId).exploration.title).toBe('Caching notes');
+  });
+
+  it('sets the title and summary with set_chat_summary, and the old name is gone', async () => {
+    const { connect, call, lease, store, explorationId } = await setup();
+    const client = await connect(lease.toolsToken);
+    const tools = (await client.listTools()).tools.map((tool) => tool.name);
+    expect(tools).toContain('set_chat_summary');
+    expect(tools).not.toContain('update_chat');
+    await call(client, 'set_chat_summary', { title: 'Caching', summary: 'How to cache.' });
+    expect(store.snapshot(explorationId).exploration).toMatchObject({
+      title: 'Caching',
+      summary: 'How to cache.',
+    });
+  });
+
   it('lists notes as an index, reads them by id and finds them by their words', async () => {
     const { connect, call, lease, store, explorationId } = await setup();
     const group = store.createNoteGroup(explorationId, { name: 'Facts' });

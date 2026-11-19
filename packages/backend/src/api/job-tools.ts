@@ -72,9 +72,10 @@ function toolsFor(job: Job, { store, runs }: JobToolsOptions) {
   );
 
   server.registerTool(
-    'update_chat',
+    'set_chat_summary',
     {
-      description: "Set the chat's title and its one-sentence summary.",
+      description:
+        "Set the chat's title and its one-sentence summary. Use it when you are told the chat has no title, and again when the chat's topic shifts.",
       inputSchema: { title: z.string().optional(), summary: z.string().optional() },
     },
     tool((changes: { title?: string | undefined; summary?: string | undefined }) =>

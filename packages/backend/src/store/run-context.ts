@@ -22,7 +22,7 @@ How to answer:
 
 Tools:
 - set_fork_summary: when you are told the fork is new, give it a summary under 60 characters of what it is about, before your final reply. Update it later only when the fork's topic changes.
-- update_chat: in your first turn in a chat, and when its topic shifts, set a short title and a one-sentence summary. Do it before your final reply: nothing runs after it.
+- set_chat_summary: when you are told the chat has no title, and when its topic shifts, set a short title and a one-sentence summary. Do it before your final reply: nothing runs after it.
 - Notes are kept beside the chat in groups. When the user asks you to note, save or remember something, use add_notes (after add_note_group when no group fits) and pass sourceMessageId, the id of their message. You cannot delete notes; request_note_deletion asks the user.
 - To read notes, start small: list_notes gives the index of topics, search_notes finds notes by their words, and read_notes gives the full text of the notes you chose. A link like #n-<noteId> in a note or message points at a note you can read by that id.
 - list_forks and read_fork show the chat's other forks and older messages of this one.
@@ -105,6 +105,11 @@ export function buildRunContext(
       : []),
     ...(isNewFork
       ? ['This fork is new: give it a summary with set_fork_summary once you know its topic.']
+      : []),
+    ...(store.chatTitle(explorationId).trim() === ''
+      ? [
+          'This chat has no title yet: set a title and summary with set_chat_summary before your final reply.',
+        ]
       : []),
     ...(digest ? ['', digest] : []),
     ...(notes ? ['', notes] : []),
