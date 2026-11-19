@@ -94,6 +94,7 @@ export interface CommentRow {
   created_note_id: string | null;
   fork_group_id: string | null;
   drafted_by_fork_id: string | null;
+  selected: number;
   created_at: number;
   updated_at: number;
 }
@@ -276,6 +277,7 @@ export const toComment = (row: CommentRow): Comment => ({
   createdNoteId: row.created_note_id,
   forkGroupId: row.fork_group_id,
   draftedByForkId: row.drafted_by_fork_id,
+  selected: row.selected === 1,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });

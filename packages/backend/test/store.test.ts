@@ -106,6 +106,27 @@ describe('submission queue', () => {
     expect(snapshot.queuedSubmissions).toHaveLength(1);
   });
 
+  it('submits only the selected drafts and selects the others again for the next Submit', () => {
+    const { store, explorationId, mainForkId, answer } = setup();
+    const on = { messageId: answer.id, viewForkId: mainForkId };
+    const sent = draft(store, explorationId, { ...on, body: 'sent' });
+    const kept = draft(store, explorationId, { ...on, body: 'kept' });
+    expect(kept.selected).toBe(true);
+    store.updateComment(kept.id, { selected: false, editBody: 'kept, being edited' });
+
+    store.submit(explorationId, mainForkId, '');
+    const comments = new Map(
+      store.snapshot(explorationId).comments.map((comment) => [comment.id, comment]),
+    );
+    expect(comments.get(sent.id)).toMatchObject({ status: 'queued' });
+    expect(comments.get(kept.id)).toMatchObject({ status: 'draft', selected: true });
+
+    store.updateComment(kept.id, { selected: false, editBody: null });
+    expect(() => store.submit(explorationId, mainForkId, '')).toThrow(
+      expect.objectContaining({ code: 'invalid' }),
+    );
+  });
+
   it('rejects an empty submit', () => {
     const { store, explorationId, mainForkId } = setup();
     expect(() => store.submit(explorationId, mainForkId, '  ')).toThrow(

@@ -50,9 +50,12 @@ const newFork = computed({
 const insertDictation = (dictated: string) => insertAtCursor(textarea.value, text, dictated);
 const files = useFileDrafts(() => replyFilesOwner(props.forkId));
 const fileCount = computed(() => files.readyIds.value.length);
-const beingEdited = computed(() => props.drafts.filter((draft) => draft.editBody !== null));
+// Only the selected drafts go with Submit; the others wait for the next one.
+const selectedDrafts = computed(() => props.drafts.filter((draft) => draft.selected));
+const leftOutCount = computed(() => props.drafts.length - selectedDrafts.value.length);
+const beingEdited = computed(() => selectedDrafts.value.filter((draft) => draft.editBody !== null));
 const editingCount = computed(() => beingEdited.value.length);
-const readyDrafts = computed(() => props.drafts.filter((draft) => draft.editBody === null));
+const readyDrafts = computed(() => selectedDrafts.value.filter((draft) => draft.editBody === null));
 const hasQuotedDrafts = computed(() => props.drafts.some((draft) => draft.quote !== ''));
 // A comment in a fork group belongs to the group's fork, which counts once.
 const countOf = (type: CommentType) =>
@@ -84,7 +87,12 @@ const summary = computed(() => {
     .filter(Boolean)
     .join(', ');
 });
-const hasSummary = computed(() => editingCount.value > 0 || summary.value !== '');
+const summaryWithLeftOut = computed(() =>
+  [summary.value, leftOutCount.value ? `${plural(leftOutCount.value, 'draft')} left out` : '']
+    .filter(Boolean)
+    .join(', '),
+);
+const hasSummary = computed(() => editingCount.value > 0 || summaryWithLeftOut.value !== '');
 const hasAttachments = computed(() => files.drafts.value.length > 0);
 const replyEmpty = computed(
   () => inlineCount.value === 0 && !text.value.trim() && fileCount.value === 0,
@@ -257,7 +265,7 @@ function onKeydown(event: KeyboardEvent) {
           :to="{ hash: `#c-${beingEdited[0]!.id}` }"
           title="Save or cancel it to submit"
           >{{ plural(editingCount, 'comment') }} being edited</RouterLink
-        ><template v-if="editingCount && summary">, </template>{{ summary }}
+        ><template v-if="editingCount && summaryWithLeftOut">, </template>{{ summaryWithLeftOut }}
       </p>
       <button
         v-if="draftsOnly"

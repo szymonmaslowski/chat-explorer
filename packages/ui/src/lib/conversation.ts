@@ -80,6 +80,7 @@ export function sentMessageComment(message: Message, viewForkId: string) {
     createdNoteId: null,
     forkGroupId: null,
     draftedByForkId: null,
+    selected: true,
     createdAt: message.createdAt,
     updatedAt: message.createdAt,
   };

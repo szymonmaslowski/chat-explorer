@@ -87,6 +87,23 @@ const answer = computed(() =>
     : null,
 );
 
+// A sent comment leads to Claude's answer, or else to the fork, note or message it made.
+const opensTo = computed(() => {
+  const { status, createdForkId, createdNoteId, replyMessageId } = props.comment;
+  if (status !== 'submitted') return null;
+  if (answer.value) return { label: 'Show the answer', title: "Show Claude's answer to it" };
+  if (createdForkId) return { label: 'Open the fork', title: 'Open the fork it started' };
+  if (createdNoteId) return { label: 'Open the note', title: 'Open the note it became' };
+  if (replyMessageId)
+    return { label: 'Go to the message', title: 'Go to the message it went with' };
+  return null;
+});
+function open() {
+  if (answer.value) goToAnswer();
+  else emit('open', props.comment);
+}
+const toggleSelected = () => update({ selected: !props.comment.selected });
+
 // To the answer's card of this comment when it is on the page, or else to the answer.
 function goToAnswer() {
   const message = answer.value;
@@ -238,9 +255,13 @@ function onEditorKeydown(event: KeyboardEvent) {
     ref="card"
     class="comment-card"
     :data-comment-id="comment.id"
-    :class="[shownType, comment.status, joinRole, { expanded, 'picked-to-join': pickedToJoin }]"
+    :class="[
+      shownType,
+      comment.status,
+      joinRole,
+      { expanded, 'picked-to-join': pickedToJoin, 'left-out': isDraft && !comment.selected },
+    ]"
     :style="expandedStyle ?? undefined"
-    @click="comment.status === 'submitted' && emit('open', comment)"
   >
     <template v-if="editing">
       <textarea
@@ -273,8 +294,18 @@ function onEditorKeydown(event: KeyboardEvent) {
     </template>
     <template v-else>
       <div class="top">
+        <input
+          v-if="isDraft && joinRole === null"
+          type="checkbox"
+          class="select"
+          :checked="comment.selected"
+          aria-label="Include in Submit"
+          :title="comment.selected ? 'Goes with the next Submit' : 'Left out of the next Submit'"
+          @change="toggleSelected"
+        />
         <div class="label">
           {{ typeLabels[shownType] }}
+          <span v-if="isDraft && !comment.selected">· left out</span>
           <span v-if="comment.status === 'queued'">· queued</span>
           <span v-if="comment.status === 'submitted'">
             · {{ comment.type === 'note' ? 'saved' : 'sent' }}
@@ -316,14 +347,14 @@ function onEditorKeydown(event: KeyboardEvent) {
         <input type="checkbox" :checked="pickedToJoin" @change="togglePicked(comment.id)" />
         Join into one fork
       </label>
-      <div v-else-if="(isDraft || bodyClipped || answer) && joinRole === null" class="actions">
+      <div v-else-if="(isDraft || bodyClipped || opensTo) && joinRole === null" class="actions">
         <button
-          v-if="answer"
+          v-if="opensTo"
           type="button"
           class="to-answer"
-          aria-label="Show the answer"
-          title="Show Claude's answer to it"
-          @click.stop="goToAnswer"
+          :aria-label="opensTo.label"
+          :title="opensTo.title"
+          @click.stop="open"
         >
           <MediaIcon name="to-answer" />
         </button>
@@ -454,14 +485,28 @@ function onEditorKeydown(event: KeyboardEvent) {
   box-shadow: none;
   background: var(--surface-muted);
   color: var(--text-muted);
-  cursor: pointer;
   padding: 0.2rem 0.5rem;
+}
+
+.comment-card.left-out {
+  border-left-style: dashed;
+}
+
+.left-out .body,
+.left-out .quote,
+.left-out .drafted-by {
+  opacity: 0.55;
 }
 
 .top {
   display: flex;
   align-items: flex-start;
   gap: 0.4rem;
+}
+
+.top .select {
+  margin: 0.1rem 0 0;
+  accent-color: var(--accent);
 }
 
 /* Into the card's padding, so the label row stays about as tall as the label. */

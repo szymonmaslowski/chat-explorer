@@ -413,6 +413,7 @@ export function applyChange(state: ExplorationState, change: Change) {
         createdNoteId: null,
         forkGroupId: existing?.forkGroupId ?? null,
         draftedByForkId: existing?.draftedByForkId ?? null,
+        selected: change.comment.selected ?? existing?.selected ?? true,
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
       });
@@ -420,7 +421,7 @@ export function applyChange(state: ExplorationState, change: Change) {
     }
     case 'comment.update': {
       const comment = state.comments.get(change.commentId);
-      const { body, editBody, type, noteGroupId } = change.changes;
+      const { body, editBody, type, noteGroupId, selected } = change.changes;
       if (!comment) break;
       if (type === 'note') leaveGroup(state, comment);
       put(state.comments, comment.id, {
@@ -429,6 +430,7 @@ export function applyChange(state: ExplorationState, change: Change) {
         editBody: editBody === undefined ? comment.editBody : editBody,
         type: type ?? comment.type,
         noteGroupId: noteGroupId === undefined ? comment.noteGroupId : noteGroupId,
+        selected: selected ?? comment.selected,
         updatedAt: now,
       });
       break;
@@ -465,9 +467,13 @@ export function applyChange(state: ExplorationState, change: Change) {
       break;
     case 'submit': {
       const { id, forkId, globalMessage, newFork, files } = change.submission;
-      const drafts = [...state.comments.values()].filter(
+      const allDrafts = [...state.comments.values()].filter(
         (comment) => comment.viewForkId === forkId && comment.status === 'draft',
       );
+      const drafts = allDrafts.filter((comment) => comment.selected);
+      for (const comment of allDrafts) {
+        if (!comment.selected) put(state.comments, comment.id, { ...comment, selected: true });
+      }
       // Note comments become notes without Claude; they wait here only for the daemon.
       for (const comment of drafts) {
         const isNote = comment.type === 'note';

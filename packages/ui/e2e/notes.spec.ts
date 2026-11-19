@@ -294,7 +294,7 @@ test('turns a note comment into a note on Submit', async ({ page, request }) => 
   await expect(card).toContainText('saved');
   await expect(page.locator('.queued-submission')).toHaveCount(0);
 
-  await card.click();
+  await card.getByRole('button', { name: 'Open the note' }).click();
   await expect(page).toHaveURL(new RegExp(`/e/${explorationId}/notes\\?group=.*#n-`));
   await expect(page.getByRole('tab', { name: 'Backlog' })).toHaveAttribute('aria-selected', 'true');
   const note = page.locator('.note.selected');

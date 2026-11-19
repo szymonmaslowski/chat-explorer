@@ -402,4 +402,8 @@ export const migrations = [
   -- A draft another fork's Claude wrote here, for the user to edit and send.
   ALTER TABLE comments ADD COLUMN drafted_by_fork_id TEXT;
   `,
+  `
+  -- A draft left out of the next Submit; it is selected again once that Submit is done.
+  ALTER TABLE comments ADD COLUMN selected INTEGER NOT NULL DEFAULT 1;
+  `,
 ];

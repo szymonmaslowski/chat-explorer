@@ -1032,9 +1032,9 @@ export class ChatStore {
   ) {
     this.db.run(
       `INSERT INTO comments (id, exploration_id, message_id, view_fork_id, quote, start_offset,
-         end_offset, body, edit_body, type, note_group_id, drafted_by_fork_id, status, created_at,
-         updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
+         end_offset, body, edit_body, type, note_group_id, drafted_by_fork_id, selected, status,
+         created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
       id,
       explorationId,
       input.messageId,
@@ -1047,6 +1047,7 @@ export class ChatStore {
       input.type ?? 'inline',
       input.noteGroupId ?? null,
       draftedByForkId,
+      input.selected === false ? 0 : 1,
       createdAt,
       createdAt,
     );
@@ -1102,12 +1103,14 @@ export class ChatStore {
       for (const file of addedFiles)
         this.attachFileToComment(file.id, commentId, row.exploration_id);
       this.db.run(
-        `UPDATE comments SET body = ?, edit_body = ?, type = ?, note_group_id = ?, updated_at = ?
+        `UPDATE comments SET body = ?, edit_body = ?, type = ?, note_group_id = ?, selected = ?,
+           updated_at = ?
          WHERE id = ?`,
         changes.body?.trim() ?? row.body,
         changes.editBody === undefined ? row.edit_body : changes.editBody,
         changes.type ?? row.type,
         changes.noteGroupId === undefined ? row.note_group_id : changes.noteGroupId,
+        changes.selected === undefined ? row.selected : Number(changes.selected),
         this.now(),
         commentId,
       );
@@ -1243,7 +1246,9 @@ export class ChatStore {
       : null;
     if (existing) return toQueuedSubmission(existing);
     const fork = this.requireWritableFork(forkId, explorationId);
-    const drafts = this.draftsIn(forkId);
+    const allDrafts = this.draftsIn(forkId);
+    const drafts = allDrafts.filter((draft) => draft.selected === 1);
+    const leftOut = allDrafts.filter((draft) => draft.selected === 0);
     const files = fileIds.map((fileId) => this.requireDraftFile(fileId));
     const message = globalMessage.trim();
     if (drafts.length === 0 && !message && files.length === 0) {
@@ -1279,9 +1284,14 @@ export class ChatStore {
       }
       this.db.run('UPDATE files SET draft_fork_id = NULL WHERE draft_fork_id = ?', forkId);
       this.db.run('DELETE FROM reply_drafts WHERE fork_id = ?', forkId);
+      this.selectAgain(leftOut);
       return this.notesFromComments(noteDrafts);
     });
     this.publish(noteEvents);
+    this.publishCommentUpdates(
+      explorationId,
+      leftOut.map((draft) => draft.id),
+    );
     this.publishReplyDraft(forkId);
     if (!forClaude) return toQueuedSubmission(this.requireSubmissionRow(id));
     const submission = this.publishSubmission(explorationId, id, claudeDrafts);
@@ -2806,6 +2816,18 @@ export class ChatStore {
     );
     this.publish([[explorationId, { type: 'submission.queued', submission }]]);
     return submission;
+  }
+
+  // Drafts left out of a Submit go with the next one, unless the user leaves them out again.
+  private selectAgain(drafts: CommentRow[]) {
+    const updatedAt = this.now();
+    for (const draft of drafts) {
+      this.db.run(
+        'UPDATE comments SET selected = 1, updated_at = ? WHERE id = ?',
+        updatedAt,
+        draft.id,
+      );
+    }
   }
 
   private draftsIn(forkId: string) {

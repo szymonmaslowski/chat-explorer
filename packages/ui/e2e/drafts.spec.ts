@@ -429,3 +429,91 @@ test('opens every comment on the clicked text after its own quote', async ({ pag
   });
   expect(order).toEqual(['middle card', 'last sentence', 'section card']);
 });
+
+test('submits only the selected drafts, and selects the left-out one again afterwards', async ({
+  page,
+  request,
+}) => {
+  const explorationId = await answeredChat(request);
+  const snapshot = await (await request.get(`/api/explorations/${explorationId}`)).json();
+  const message = snapshot.messages.at(-1);
+  for (const body of ['Send this', 'Keep this']) {
+    await request.post(`/api/explorations/${explorationId}/comments`, {
+      data: {
+        messageId: message.id,
+        viewForkId: message.forkId,
+        quote: '',
+        startOffset: 0,
+        endOffset: 0,
+        body,
+      },
+    });
+  }
+  await page.goto(`/e/${explorationId}`);
+  const kept = page.locator('.comment-card', { hasText: 'Keep this' });
+  const include = kept.getByRole('checkbox', { name: 'Include in Submit' });
+  await expect(include).toBeChecked();
+  const save = saved(page, '/comments/');
+  await include.uncheck();
+  await save;
+  await expect(kept).toContainText('left out');
+  await expect(page.locator('.reply-bar .summary')).toHaveText('1 comment, 1 draft left out');
+
+  await page.getByRole('button', { name: 'Submit' }).click();
+  await expect(page.locator('.queued-submission')).toBeVisible();
+  await expect(include).toBeChecked();
+  await expect(kept).not.toContainText('left out');
+  await expect(page.locator('.reply-bar .summary')).toHaveText('1 comment');
+
+  await attachFakeSession(request, explorationId);
+  const feedback = await deliverAndAnswer(request, explorationId, 'Done.');
+  await detachFakeSession(request);
+  const [question] = feedback.forks[0].userMessages;
+  expect(question.text).toContain('Send this');
+  expect(question.text).not.toContain('Keep this');
+});
+
+test('leaves a sent comment in place when clicked, so its text can be selected', async ({
+  page,
+  request,
+}) => {
+  const explorationId = await answeredChat(request);
+  const snapshot = await (await request.get(`/api/explorations/${explorationId}`)).json();
+  const message = snapshot.messages.at(-1);
+  await request.post(`/api/explorations/${explorationId}/comments`, {
+    data: {
+      messageId: message.id,
+      viewForkId: message.forkId,
+      quote: '',
+      startOffset: 0,
+      endOffset: 0,
+      body: 'What is it used for?',
+    },
+  });
+  await request.post(`/api/explorations/${explorationId}/submit`, {
+    data: { forkId: message.forkId, globalMessage: '' },
+  });
+  await attachFakeSession(request, explorationId);
+  await deliverAndAnswer(request, explorationId, 'Speed.');
+  await detachFakeSession(request);
+
+  await page.goto(`/e/${explorationId}`);
+  const sent = page.locator('.message-comments .comment-card.submitted', {
+    hasText: 'What is it used for?',
+  });
+  const url = page.url();
+  await sent.locator('.body').click();
+  await expect(page).toHaveURL(url);
+  await sent.locator('.body').evaluate((body) => {
+    const range = document.createRange();
+    range.setStart(body.firstChild!, 0);
+    range.setEnd(body.firstChild!, 4);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+    body.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+  await page.waitForTimeout(400);
+  await expect(page.locator('.selection-actions')).toHaveCount(0);
+  expect(await page.evaluate(() => window.getSelection()!.toString())).toBe('What');
+  await expect(sent.getByRole('button', { name: 'Go to the message' })).toBeVisible();
+});

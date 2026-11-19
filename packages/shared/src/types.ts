@@ -125,6 +125,8 @@ export interface Comment {
   forkGroupId: string | null;
   // The fork whose Claude drafted it, for the user to edit and send; null for the user's own.
   draftedByForkId: string | null;
+  // A draft goes with the next Submit only when selected.
+  selected: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -407,6 +409,7 @@ export interface NewComment {
   type?: CommentType;
   noteGroupId?: string | null;
   fileIds?: string[];
+  selected?: boolean;
 }
 
 export interface CommentChanges {
@@ -416,6 +419,7 @@ export interface CommentChanges {
   noteGroupId?: string | null;
   // All the comment's files: new uploads join it, files left out are let go.
   fileIds?: string[];
+  selected?: boolean;
 }
 
 export interface NewBookmark {

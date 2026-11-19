@@ -146,6 +146,8 @@ const anchorRootOf = (node: Node) =>
   (node instanceof Element ? node : node.parentElement)?.closest<HTMLElement>(
     '[data-anchor-root]',
   ) ?? null;
+const insertedAround = (node: Node) =>
+  (node instanceof Element ? node : node.parentElement)?.closest(`[${insertedAttribute}]`) != null;
 const firstLineRect = (range: Range) => range.getClientRects()[0] ?? range.getBoundingClientRect();
 
 const relative = (rect: DOMRect, base = layer.value!.getBoundingClientRect()) => ({
@@ -405,6 +407,11 @@ function showCommentButton() {
     return;
   }
   const selected = current.getRangeAt(0);
+  // Text selected inside a card is the user's to copy, not a new comment's quote.
+  if (insertedAround(selected.commonAncestorContainer)) {
+    selection.value = null;
+    return;
+  }
   const root = anchorRootOf(selected.startContainer) ?? anchorRootOf(selected.endContainer);
   if (!root || !container()?.contains(root)) {
     selection.value = null;
