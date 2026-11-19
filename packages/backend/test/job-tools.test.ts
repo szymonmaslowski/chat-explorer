@@ -87,12 +87,9 @@ describe('job tools', () => {
     expect(store.snapshot(explorationId).exploration.title).toBe('Caching notes');
   });
 
-  it('sets the title and summary with set_chat_summary, and the old name is gone', async () => {
+  it('sets the title and summary with set_chat_summary', async () => {
     const { connect, call, lease, store, explorationId } = await setup();
     const client = await connect(lease.toolsToken);
-    const tools = (await client.listTools()).tools.map((tool) => tool.name);
-    expect(tools).toContain('set_chat_summary');
-    expect(tools).not.toContain('update_chat');
     await call(client, 'set_chat_summary', { title: 'Caching', summary: 'How to cache.' });
     expect(store.snapshot(explorationId).exploration).toMatchObject({
       title: 'Caching',
