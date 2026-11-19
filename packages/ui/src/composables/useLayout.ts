@@ -2,7 +2,7 @@ import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useMediaQuery } from './useMediaQuery';
 
-export type LayoutPage = 'chats' | 'map' | 'notes' | 'fork';
+export type LayoutPage = 'chats' | 'map' | 'notes' | 'settings' | 'fork';
 
 // A wide screen keeps the chats list beside an open chat, and a medium one the map beside an open
 // fork. The page the URL names takes the rest; narrower screens show only that page.
@@ -18,9 +18,12 @@ export function useLayout() {
     if (!explorationId.value) return 'chats';
     if (route.path.endsWith('/map')) return 'map';
     if (route.path.endsWith('/notes')) return 'notes';
+    if (route.path.endsWith('/settings')) return 'settings';
     return 'fork';
   });
   const chatsColumn = computed(() => wide.value && page.value !== 'chats');
-  const mapColumn = computed(() => medium.value && page.value === 'fork');
+  const mapColumn = computed(
+    () => medium.value && (page.value === 'fork' || page.value === 'settings'),
+  );
   return { explorationId, page, chatsColumn, mapColumn };
 }

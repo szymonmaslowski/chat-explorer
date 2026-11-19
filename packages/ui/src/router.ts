@@ -7,6 +7,7 @@ import ExplorationsList from './views/ExplorationsList.vue';
 import ForkMap from './views/ForkMap.vue';
 import ForkView from './views/ForkView.vue';
 import NotesView from './views/NotesView.vue';
+import SettingsView from './views/SettingsView.vue';
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -29,6 +30,8 @@ export const router = createRouter({
       }),
     },
     { path: '/e/:explorationId/notes', component: NotesView, props: true },
+    { path: '/e/:explorationId/settings', component: SettingsView, props: true },
+    { path: '/e/:explorationId/f/:forkId/settings', component: SettingsView, props: true },
   ],
   async scrollBehavior(to, from, savedPosition) {
     if (savedPosition) {

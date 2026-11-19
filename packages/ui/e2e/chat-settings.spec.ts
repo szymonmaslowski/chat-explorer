@@ -23,6 +23,10 @@ test('opens a chat on the page its settings name, and shows the fork model there
   const settings = page.getByRole('region', { name: 'Chat settings' });
   await expect(settings).toHaveCount(0);
   await page.getByRole('button', { name: 'Chat settings' }).click();
+  // A page of its own, in place of the conversation and the reply box.
+  await expect(page).toHaveURL(new RegExp(`/e/${explorationId}/f/fork_\\w+/settings$`));
+  await expect(page.locator('.reply-bar')).toHaveCount(0);
+  await expect(page.locator('.message')).toHaveCount(0);
   await expect(settings.locator('code').first()).toHaveText(explorationId);
   await settings.getByRole('button', { name: 'Copy Chat ID' }).click();
   await expect(settings.getByRole('button', { name: 'Copied' })).toBeVisible();
@@ -64,6 +68,9 @@ test('opens a chat on the page its settings name, and shows the fork model there
   });
   await expect(forkSettings.getByRole('button', { name: 'Save hosts' })).toHaveCount(0);
   await settings.getByLabel('Default page').selectOption('notes');
+  await page.getByRole('button', { name: 'Chat settings' }).click();
+  await expect(page).toHaveURL(`/e/${explorationId}`);
+  await expect(page.locator('.reply-bar')).toBeVisible();
 
   await page.getByRole('link', { name: 'Chats' }).click();
   await expect(page).toHaveURL('/');

@@ -27,26 +27,29 @@ async function setDefaultPage(explorationId: string, defaultPage: ChatDefaultPag
 
 <template>
   <section class="chat-settings" aria-label="Chat settings">
-    <CopyableId label="Chat ID" :id="exploration.id" />
-    <label class="setting">
-      Default page
-      <select
-        :disabled="offline"
-        :value="exploration.defaultPage"
-        @change="
-          setDefaultPage(
-            exploration.id,
-            ($event.target as HTMLSelectElement).value as ChatDefaultPage,
-          )
-        "
-      >
-        <option value="map">Chat</option>
-        <option value="notes">Notes</option>
-      </select>
-    </label>
-    <p v-if="failed" class="error" role="alert">Could not save the setting.</p>
-    <ForkModelInfo v-if="fork" :fork="fork" :run="run" />
-    <section class="device" aria-label="This device">
+    <section class="card" aria-label="This chat">
+      <h2>This chat</h2>
+      <CopyableId label="Chat ID" :id="exploration.id" />
+      <label class="setting">
+        Default page
+        <select
+          :disabled="offline"
+          :value="exploration.defaultPage"
+          @change="
+            setDefaultPage(
+              exploration.id,
+              ($event.target as HTMLSelectElement).value as ChatDefaultPage,
+            )
+          "
+        >
+          <option value="map">Chat</option>
+          <option value="notes">Notes</option>
+        </select>
+      </label>
+      <p v-if="failed" class="error" role="alert">Could not save the setting.</p>
+    </section>
+    <ForkModelInfo v-if="fork" class="card" :fork="fork" :run="run" />
+    <section class="card device" aria-label="This device">
       <h2>This device</h2>
       <p class="muted">
         Every chat, its images and the app are kept here for offline use. Removing them leaves
@@ -64,12 +67,24 @@ async function setDefaultPage(explorationId: string, defaultPage: ChatDefaultPag
 .chat-settings {
   display: flex;
   flex-direction: column;
+  gap: 1rem;
+  padding-bottom: 2rem;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 0.5rem;
-  margin-top: 0.5rem;
-  padding: 0.6rem 0.75rem;
+  padding: 0.9rem 1rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
+}
+
+.card h2 {
+  margin: 0;
+  font-size: 1rem;
 }
 
 .setting {
@@ -83,22 +98,8 @@ async function setDefaultPage(explorationId: string, defaultPage: ChatDefaultPag
   color: var(--danger);
 }
 
-.device {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.4rem;
-  padding-top: 0.5rem;
-  border-top: 1px solid var(--border);
-}
-
-.device h2 {
-  margin: 0;
-  font-size: 0.9rem;
-}
-
 .device p {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
 }
 </style>

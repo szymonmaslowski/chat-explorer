@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import type { Fork } from '@shared/types';
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
+import { useRouter } from 'vue-router';
 import { api } from '../api';
 import { useLayout, type LayoutPage } from '../composables/useLayout';
 import { forkLineage, forkTitle } from '../lib/conversation';
 import { awaitsAnswer } from '../lib/read-state';
 import type { ExplorationState } from '../stores/exploration';
-import ChatSettings from './ChatSettings.vue';
 import ConfirmButton from './ConfirmButton.vue';
 import MediaIcon from './MediaIcon.vue';
 import OutboxFailures from './OutboxFailures.vue';
@@ -37,7 +37,18 @@ const links = computed(() => {
   ].filter((link) => link !== null);
 });
 
-const settingsOpen = ref(false);
+const router = useRouter();
+const onSettings = computed(() => props.page === 'settings');
+const pageUrl = computed(() => {
+  const chat = `/e/${props.state.explorationId}`;
+  return props.fork ? `${chat}/f/${props.fork.id}` : chat;
+});
+// Settings open as a page of their own; the same button goes back to where they were opened.
+function toggleSettings() {
+  if (!onSettings.value) return router.push(`${pageUrl.value}/settings`);
+  if (window.history.state?.back) return router.back();
+  return router.push(pageUrl.value);
+}
 const forkRun = computed(() => (props.fork ? props.state.forkRuns.get(props.fork.id) : undefined));
 // A fork the runner answers shows its own state; a fork the terminal holds shows the terminal
 // session's.
@@ -88,22 +99,16 @@ const forksBetween = computed(() =>
           v-if="state.exploration"
           type="button"
           class="icon-button"
-          :aria-expanded="settingsOpen"
+          :aria-pressed="onSettings"
           aria-label="Chat settings"
           title="Chat settings"
-          @click="settingsOpen = !settingsOpen"
+          @click="toggleSettings"
         >
           <MediaIcon name="settings" />
         </button>
         <ThemeSwitch />
       </div>
     </div>
-    <ChatSettings
-      v-if="settingsOpen && state.exploration && !side"
-      :exploration="state.exploration"
-      :fork="fork"
-      :run="forkRun"
-    />
     <template v-if="state.exploration">
       <p v-if="fork" class="fork-path">
         <RouterLink v-if="fork.parentForkId" :to="`/e/${state.explorationId}`">
