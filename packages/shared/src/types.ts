@@ -123,6 +123,8 @@ export interface Comment {
   createdNoteId: string | null;
   // Fork comments in the same group start one fork together; null for a comment on its own.
   forkGroupId: string | null;
+  // The fork whose Claude drafted it, for the user to edit and send; null for the user's own.
+  draftedByForkId: string | null;
   createdAt: number;
   updatedAt: number;
 }

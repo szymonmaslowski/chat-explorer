@@ -972,7 +972,7 @@ export class ChatStore {
     return toMessage(message);
   }
 
-  createComment(explorationId: string, input: NewComment) {
+  createComment(explorationId: string, input: NewComment, draftedByForkId: string | null = null) {
     const existing = input.id
       ? this.existingRow<CommentRow>('comments', input.id, explorationId)
       : null;
@@ -994,7 +994,7 @@ export class ChatStore {
     const id = input.id ?? newId();
     const createdAt = this.now();
     this.db.transaction(() => {
-      this.insertComment(id, explorationId, input, createdAt);
+      this.insertComment(id, explorationId, input, createdAt, draftedByForkId);
       for (const file of files) this.attachFileToComment(file.id, id, explorationId);
     });
     const comment = toComment(this.requireCommentRow(id));
@@ -1003,11 +1003,38 @@ export class ChatStore {
     return comment;
   }
 
-  private insertComment(id: string, explorationId: string, input: NewComment, createdAt: number) {
+  // A general comment in another fork of the chat, drafted by this fork's Claude. Only the user
+  // can send it, so forks never start talking to each other on their own.
+  draftComment(fromForkId: string, input: { forkId: string; messageId?: string; body: string }) {
+    const from = this.requireForkRow(fromForkId);
+    if (input.forkId === fromForkId) {
+      throw new StoreError('invalid', 'Draft comments go to another fork; answer in this one.');
+    }
+    const fork = this.requireWritableFork(input.forkId, from.exploration_id);
+    const messageId = input.messageId ?? fork.tip_message_id;
+    if (!messageId) {
+      throw new StoreError('invalid', `Fork ${input.forkId} has no message to comment on yet.`);
+    }
+    const general = { quote: '', startOffset: 0, endOffset: 0 };
+    return this.createComment(
+      from.exploration_id,
+      { messageId, viewForkId: input.forkId, ...general, body: input.body },
+      fromForkId,
+    );
+  }
+
+  private insertComment(
+    id: string,
+    explorationId: string,
+    input: NewComment,
+    createdAt: number,
+    draftedByForkId: string | null,
+  ) {
     this.db.run(
       `INSERT INTO comments (id, exploration_id, message_id, view_fork_id, quote, start_offset,
-         end_offset, body, edit_body, type, note_group_id, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
+         end_offset, body, edit_body, type, note_group_id, drafted_by_fork_id, status, created_at,
+         updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
       id,
       explorationId,
       input.messageId,
@@ -1019,6 +1046,7 @@ export class ChatStore {
       input.editBody ?? null,
       input.type ?? 'inline',
       input.noteGroupId ?? null,
+      draftedByForkId,
       createdAt,
       createdAt,
     );

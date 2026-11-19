@@ -185,6 +185,12 @@ function cancelEditing() {
 
 // A general comment quotes nothing: it is about the whole conversation, and can become a note.
 const isGeneral = computed(() => props.comment.quote === '');
+const draftedBy = computed(() => {
+  const forkId = props.comment.draftedByForkId;
+  if (!forkId) return null;
+  const fork = openExploration(props.comment.explorationId).forks.get(forkId);
+  return fork?.summary || forkId;
+});
 const firstNoteGroupId = () =>
   sortedGroups(openExploration(props.comment.explorationId).noteGroups)[0]?.id ?? null;
 function toggleType(target: 'fork' | 'note') {
@@ -298,6 +304,7 @@ function onEditorKeydown(event: KeyboardEvent) {
         <span class="arrow" aria-hidden="true">↑</span>
         <span class="quoted">{{ comment.quote }}</span>
       </button>
+      <p v-if="draftedBy" class="drafted-by muted">Drafted by the fork: {{ draftedBy }}</p>
       <p ref="bodyElement" class="body">{{ comment.body }}</p>
       <FileLinks :files="savedFiles" />
       <div v-if="joinRole === 'start'" class="actions">
@@ -489,6 +496,11 @@ function onEditorKeydown(event: KeyboardEvent) {
 
 .submitted .label {
   color: var(--text-muted);
+}
+
+.drafted-by {
+  margin: 0 0 0.25rem;
+  font-size: 0.8em;
 }
 
 .quote {

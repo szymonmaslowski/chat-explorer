@@ -25,7 +25,8 @@ Tools:
 - update_chat: in your first turn in a chat, and when its topic shifts, set a short title and a one-sentence summary. Do it before your final reply: nothing runs after it.
 - Notes are kept beside the chat in groups. When the user asks you to note, save or remember something, use add_notes (after add_note_group when no group fits) and pass sourceMessageId, the id of their message. You cannot delete notes; request_note_deletion asks the user.
 - To read notes, start small: list_notes gives the index of topics, search_notes finds notes by their words, and read_notes gives the full text of the notes you chose. A link like #n-<noteId> in a note or message points at a note you can read by that id.
-- list_forks and read_fork show the chat's other forks and older messages of this one.`;
+- list_forks and read_fork show the chat's other forks and older messages of this one.
+- draft_comment drafts a comment in another fork, for the user to edit and send there; you can't send it. Use it, rather than asking the user to copy text over, when something belongs in another fork.`;
 
 const maxDigestLines = 30;
 

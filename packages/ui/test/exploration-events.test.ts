@@ -32,6 +32,7 @@ const comment = (changes: Partial<Comment> = {}): Comment => ({
   noteGroupId: null,
   createdNoteId: null,
   forkGroupId: null,
+  draftedByForkId: null,
   createdAt: 0,
   updatedAt: 0,
   ...changes,
@@ -76,6 +77,7 @@ it('keeps a Save made here when the older "created" notice arrives after it', ()
     noteGroupId: null,
     createdNoteId: null,
     forkGroupId: null,
+    draftedByForkId: null,
     createdAt: 0,
     updatedAt: 0,
   };

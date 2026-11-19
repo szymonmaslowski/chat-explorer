@@ -94,6 +94,36 @@ function toolsFor(job: Job, { store, runs }: JobToolsOptions) {
       },
       tool(() => ({ forks: store.forkMap(job.explorationId) })),
     );
+    server.registerTool(
+      'draft_comment',
+      {
+        description:
+          "Draft a comment in another fork of this chat, for the user to read, edit and send there. You can't send it: it stays a draft until the user does. Use it when something you found belongs in another fork's conversation.",
+        inputSchema: {
+          forkId: z.string(),
+          text: z.string().min(1),
+          messageId: z
+            .string()
+            .optional()
+            .describe("The message it comments on; the fork's newest one by default"),
+        },
+      },
+      tool(
+        ({
+          forkId,
+          text,
+          messageId,
+        }: {
+          forkId: string;
+          text: string;
+          messageId?: string | undefined;
+        }) => {
+          sameChat(job, store.forkExplorationId(forkId), `Fork ${forkId}`);
+          const comment = store.draftComment(job.forkId, { forkId, messageId, body: text });
+          return { commentId: comment.id, forkId, messageId: comment.messageId };
+        },
+      ),
+    );
   }
 
   server.registerTool(

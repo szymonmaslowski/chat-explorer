@@ -166,6 +166,43 @@ describe('job tools', () => {
     await expect(connect(lease.toolsToken)).rejects.toThrow();
   });
 
+  it('drafts a comment in another fork for the user to send, never in its own', async () => {
+    const { connect, call, lease, store, runs, explorationId, mainForkId, answer } = await setup();
+    const side = store.forkAtAnswer(answer.id);
+    const empty = await call(await connect(lease.toolsToken), 'draft_comment', {
+      forkId: side.id,
+      text: 'Too early',
+    });
+    expect(empty).toMatchObject({ isError: true, value: expect.stringContaining('no message') });
+    store.submit(explorationId, side.id, 'Side question');
+    const sideLease = runs.claim(side.id, 'runner-b')!;
+    const [sideQuestion] = runs.pendingInput(side.id, sideLease.leaseId);
+    const other = store.createExploration({ title: 'Other' });
+    const client = await connect(lease.toolsToken);
+
+    const drafted = await call(client, 'draft_comment', {
+      forkId: side.id,
+      text: 'From the main fork: check this.',
+    });
+    expect(drafted.isError).toBe(false);
+    const comment = store
+      .snapshot(explorationId)
+      .comments.find((each) => each.id === drafted.value.commentId);
+    expect(comment).toMatchObject({
+      viewForkId: side.id,
+      messageId: sideQuestion!.id,
+      quote: '',
+      body: 'From the main fork: check this.',
+      status: 'draft',
+      draftedByForkId: mainForkId,
+    });
+
+    const own = await call(client, 'draft_comment', { forkId: mainForkId, text: 'Hi' });
+    expect(own).toMatchObject({ isError: true, value: expect.stringContaining('another fork') });
+    const foreign = await call(client, 'draft_comment', { forkId: other.mainFork.id, text: 'Hi' });
+    expect(foreign).toMatchObject({ isError: true, value: expect.stringContaining('not found') });
+  });
+
   it('lets a separate fork read only itself', async () => {
     const { connect, call, lease, store, mainForkId, answer } = await setup();
     const side = store.forkAtAnswer(answer.id);
@@ -173,6 +210,7 @@ describe('job tools', () => {
     const client = await connect(lease.toolsToken);
     const tools = (await client.listTools()).tools.map((tool) => tool.name);
     expect(tools).not.toContain('list_forks');
+    expect(tools).not.toContain('draft_comment');
     expect(await call(client, 'read_fork', { forkId: side.id })).toMatchObject({ isError: true });
     expect(await call(client, 'read_fork', { forkId: mainForkId })).toMatchObject({
       isError: false,

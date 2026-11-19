@@ -412,6 +412,7 @@ export function applyChange(state: ExplorationState, change: Change) {
         noteGroupId: change.comment.noteGroupId ?? existing?.noteGroupId ?? null,
         createdNoteId: null,
         forkGroupId: existing?.forkGroupId ?? null,
+        draftedByForkId: existing?.draftedByForkId ?? null,
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
       });

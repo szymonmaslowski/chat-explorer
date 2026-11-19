@@ -216,3 +216,66 @@ test("offers a coding fork the runner's credentials and hosts, and restarts its 
     'No container is running. Your next message starts a fresh one.',
   );
 });
+
+test("shows a comment another fork's Claude drafted, as a draft the user sends", async ({
+  page,
+  request,
+}) => {
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'Research caching' } })
+  ).json();
+  const runner = fakeRunner(request);
+  // A fork that only waits to start a new one is claimed empty: the claim creates the new fork,
+  // and the next claim takes it, as the runner's loop does.
+  const claim = async () => {
+    let lease = null;
+    for (let attempt = 0; attempt < 3 && !lease; attempt += 1) {
+      ({ lease } = await runner.call('claim', {
+        runnerId: 'e2e-runner',
+        explorationId,
+        waitMs: 5_000,
+      }));
+    }
+    const { messages } = await runner.call(`forks/${lease.forkId}/input`, {
+      leaseId: lease.leaseId,
+    });
+    return { lease, messages };
+  };
+  const main = await claim();
+  const mainForkId = main.lease.forkId;
+  const mainFork = `forks/${mainForkId}`;
+  await runner.call(`${mainFork}/turn/start`, { leaseId: main.lease.leaseId });
+  await runner.call(`${mainFork}/answer`, { leaseId: main.lease.leaseId, content: 'Use Redis.' });
+  await runner.call(`${mainFork}/turn/finish`, {
+    leaseId: main.lease.leaseId,
+    upToMessageId: main.messages.at(-1).id,
+  });
+  await runner.call(`${mainFork}/release`, { leaseId: main.lease.leaseId });
+  await request.post(`/api/explorations/${explorationId}/submit`, {
+    data: { forkId: mainForkId, globalMessage: 'Side topic', newFork: true },
+  });
+  const side = await claim();
+  expect(side.lease.forkId).not.toBe(mainForkId);
+
+  const drafted = await request.post('/api/tools/mcp', {
+    headers: {
+      authorization: `Bearer ${side.lease.toolsToken}`,
+      accept: 'application/json, text/event-stream',
+    },
+    data: {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'draft_comment',
+        arguments: { forkId: mainForkId, text: 'From the side fork: compare with Memcached.' },
+      },
+    },
+  });
+  expect((await drafted.json()).result.isError).toBeFalsy();
+
+  await page.goto(`/e/${explorationId}/f/${mainForkId}`);
+  const card = page.locator('.comment-card.draft');
+  await expect(card).toContainText('From the side fork: compare with Memcached.');
+  await expect(card.locator('.drafted-by')).toHaveText('Drafted by the fork: Side topic');
+});

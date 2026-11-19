@@ -398,4 +398,8 @@ export const migrations = [
   -- A JSON array of credential names from the runner's config.
   ALTER TABLE forks ADD COLUMN credentials TEXT NOT NULL DEFAULT '[]';
   `,
+  `
+  -- A draft another fork's Claude wrote here, for the user to edit and send.
+  ALTER TABLE comments ADD COLUMN drafted_by_fork_id TEXT;
+  `,
 ];
