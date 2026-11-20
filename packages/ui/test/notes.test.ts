@@ -256,6 +256,40 @@ describe('categories', () => {
     expect(state.notes.get('n')?.category).toBeNull();
   });
 
+  it('renames a category on all its notes and keeps them where they are', () => {
+    const state = stateWith(
+      [group('g', 'One', 1), group('h', 'Two', 2)],
+      [
+        note('a', 'g', 1, 'Dairy'),
+        note('b', 'g', 2, 'Fruit'),
+        note('c', 'g', 3, 'Dairy'),
+        note('d', 'h', 1, 'Dairy'),
+      ],
+    );
+    applyChange(state, {
+      type: 'note-group.rename-category',
+      explorationId,
+      groupId: 'g',
+      from: 'Dairy',
+      to: ' Nabiał ',
+    });
+    expect(topicsIn(state, 'g')).toEqual(['a', 'b', 'c']);
+    expect(['a', 'b', 'c', 'd'].map((id) => state.notes.get(id)?.category)).toEqual([
+      'Nabiał',
+      'Fruit',
+      'Nabiał',
+      'Dairy',
+    ]);
+    applyChange(state, {
+      type: 'note-group.rename-category',
+      explorationId,
+      groupId: 'g',
+      from: 'Nabiał',
+      to: null,
+    });
+    expect(state.notes.get('a')?.category).toBeNull();
+  });
+
   it('takes a note out of its category when it moves to another group', () => {
     const state = stateWith(
       [group('g', 'One', 1), group('h', 'Two', 2)],

@@ -107,15 +107,15 @@ function toggleCategory(name: string) {
 // Every note of the category takes the new name; one that is folded stays folded.
 function renameCategory(from: string, to: string) {
   const groupId = activeGroup.value?.id;
-  for (const note of notes.value.filter((each) => each.category === from)) {
-    outbox.add({
-      type: 'note.update',
-      explorationId: props.explorationId,
-      noteId: note.id,
-      changes: { category: to },
-    });
-  }
-  if (groupId && collapsedCategories.value.includes(from)) {
+  if (!groupId) return;
+  outbox.add({
+    type: 'note-group.rename-category',
+    explorationId: props.explorationId,
+    groupId,
+    from,
+    to,
+  });
+  if (collapsedCategories.value.includes(from)) {
     collapsedCategories.value = collapsedCategories.value.map((each) =>
       each === from ? to : each,
     );

@@ -85,6 +85,13 @@ export type Change =
       groupId: string;
       afterGroupId: string | null;
     }
+  | {
+      type: 'note-group.rename-category';
+      explorationId: string;
+      groupId: string;
+      from: string;
+      to: string | null;
+    }
   | { type: 'note.create'; explorationId: string; note: NewNote & { id: string } }
   | { type: 'note.update'; explorationId: string; noteId: string; changes: NoteChanges }
   | { type: 'note.delete'; explorationId: string; noteId: string }
@@ -191,6 +198,7 @@ export const subjectOf = (change: Change) => {
     case 'note-group.update':
     case 'note-group.delete':
     case 'note-group.reorder':
+    case 'note-group.rename-category':
     case 'fork-group.ungroup':
       return change.groupId;
     case 'note.create':
@@ -320,6 +328,8 @@ function send(change: Change) {
       return api.deleteNoteGroup(change.groupId, keepalive);
     case 'note-group.reorder':
       return api.reorderNoteGroup(change.groupId, change.afterGroupId, keepalive);
+    case 'note-group.rename-category':
+      return api.renameNoteCategory(change.groupId, change.from, change.to, keepalive);
     case 'note.create':
       return api.createNote(change.explorationId, change.note, keepalive);
     case 'note.update':

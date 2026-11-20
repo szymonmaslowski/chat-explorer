@@ -607,6 +607,15 @@ export function applyChange(state: ExplorationState, change: Change) {
       applyOrder(state.noteGroups, reorderedIds(groupIds, change.groupId, change.afterGroupId));
       break;
     }
+    // A rename keeps the notes where they are, so the section does not move.
+    case 'note-group.rename-category': {
+      const to = change.to?.trim() || null;
+      for (const note of notesInGroup(state.notes, change.groupId)) {
+        if (note.category === change.from.trim())
+          put(state.notes, note.id, { ...note, category: to });
+      }
+      break;
+    }
     case 'note.create': {
       const { id, groupId, topic, description, category } = change.note;
       const existing = state.notes.get(id);

@@ -2236,40 +2236,45 @@ export class ChatStore {
 
   // Every note of the group with the category takes the new name, or loses its category with no
   // name. The notes keep their order, so the section stays where it is.
-  renameNoteCategory(groupId: string, from: string, to: string | null) {
+  renameNoteCategory(
+    groupId: string,
+    from: string,
+    to: string | null,
+    device: string | null = null,
+  ) {
     const group = this.requireNoteGroupRow(groupId);
     this.requireExplorationRow(group.exploration_id);
     const source = categoryName(from);
     const target = categoryName(to);
     if (!source) throw new StoreError('invalid', 'Name the category to rename.');
+    const noteIds = this.db
+      .all<{ id: string }>(
+        'SELECT id FROM notes WHERE group_id = ? AND category = ? ORDER BY position, rowid',
+        groupId,
+        source,
+      )
+      .map(({ id }) => id);
+    if (noteIds.length === 0) {
+      throw new StoreError('not_found', `The group has no category ${source}.`);
+    }
     const events = this.db.transaction(() => {
-      const ids = this.db
-        .all<{ id: string }>(
-          'SELECT id FROM notes WHERE group_id = ? AND category = ? ORDER BY position, rowid',
-          groupId,
-          source,
-        )
-        .map(({ id }) => id);
-      if (ids.length === 0) {
-        throw new StoreError('not_found', `The group has no category ${source}.`);
-      }
       const updatedAt = this.now();
-      for (const id of ids) {
+      return noteIds.map((id): PendingEvent => {
         this.db.run(
           'UPDATE notes SET category = ?, updated_at = ?, updated_device = ? WHERE id = ?',
           target,
           updatedAt,
-          'claude',
+          device,
           id,
         );
-      }
-      return ids.map((id): PendingEvent => [
-        group.exploration_id,
-        { type: 'note.updated', note: toNote(this.requireNoteRow(id)) },
-      ]);
+        return [
+          group.exploration_id,
+          { type: 'note.updated', note: toNote(this.requireNoteRow(id)) },
+        ];
+      });
     });
     this.publish(events);
-    return { noteIds: events.map(([, event]) => (event as { note: { id: string } }).note.id) };
+    return { noteIds };
   }
 
   deleteNote(noteId: string) {

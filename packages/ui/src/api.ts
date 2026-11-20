@@ -242,6 +242,11 @@ export const api = {
       json: { afterGroupId },
       keepalive,
     }),
+  renameNoteCategory: (groupId: string, from: string, to: string | null, keepalive = false) =>
+    call<{ noteIds: string[] }>(`/api/note-groups/${groupId}/rename-category`, {
+      json: { from, to },
+      keepalive,
+    }),
   createNote: (explorationId: string, note: NewNote, keepalive = false) =>
     call<Note>(`/api/explorations/${explorationId}/notes`, { json: note, keepalive }),
   updateNote: (noteId: string, changes: NoteChanges, keepalive = false) =>

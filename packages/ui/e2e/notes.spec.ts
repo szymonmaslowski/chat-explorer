@@ -567,3 +567,82 @@ test('shows every group in expanded mode and drags one to the start', async ({ p
   await expect(chips).toHaveText(['Ideas', 'Shopping', 'Work']);
   await expect(page.getByRole('button', { name: 'Show all groups' })).toBeVisible();
 });
+
+test('shows categories as sections that fold, rename and hide, keeping their place', async ({
+  page,
+  request,
+}) => {
+  const explorationId = await newChat(request);
+  const group = await (
+    await request.post(`/api/explorations/${explorationId}/note-groups`, {
+      data: { name: 'Shopping' },
+    })
+  ).json();
+  const ids: Record<string, string> = {};
+  for (const [topic, category] of [
+    ['Milk', 'Dairy'],
+    ['Apple', 'Fruit'],
+    ['Cheese', 'Dairy'],
+    ['Bread', undefined],
+  ] as const) {
+    const created = await (
+      await request.post(`/api/explorations/${explorationId}/notes`, {
+        data: { groupId: group.id, topic, category },
+      })
+    ).json();
+    ids[topic] = created.id;
+  }
+  await request.post(`/api/notes/${ids.Milk}/reorder`, { data: { afterNoteId: null } });
+  const headings = page.locator('.category-heading .name');
+
+  await page.goto(`/e/${explorationId}/notes`);
+  await expect(headings).toHaveText(['Dairy', 'Fruit']);
+  await expect(topics(page)).toHaveText(['Bread', 'Milk', 'Cheese', 'Apple']);
+
+  await page.getByRole('button', { name: 'Hide category Dairy' }).click();
+  await expect(topics(page)).toHaveText(['Bread', 'Apple']);
+  await page.reload();
+  await expect(topics(page)).toHaveText(['Bread', 'Apple']);
+  await page.getByRole('button', { name: 'Show category Dairy' }).click();
+
+  await page.getByRole('button', { name: '+ New note' }).click();
+  await page.getByLabel('Topic').fill('Yoghurt');
+  await page.getByLabel('Category', { exact: true }).fill('Dairy');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(headings).toHaveText(['Dairy', 'Fruit']);
+  await expect(topics(page)).toHaveText(['Bread', 'Yoghurt', 'Milk', 'Cheese', 'Apple']);
+
+  await page
+    .locator('.category-heading', { hasText: 'Dairy' })
+    .getByRole('button', {
+      name: 'Rename',
+    })
+    .click();
+  await page.getByLabel('Category name').fill('Nabiał');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(headings).toHaveText(['Nabiał', 'Fruit']);
+  await expect(topics(page)).toHaveText(['Bread', 'Yoghurt', 'Milk', 'Cheese', 'Apple']);
+  await page.reload();
+  await expect(headings).toHaveText(['Nabiał', 'Fruit']);
+  await expect(topics(page)).toHaveText(['Bread', 'Yoghurt', 'Milk', 'Cheese', 'Apple']);
+
+  await page.locator('.note', { hasText: 'Cheese' }).click();
+  const handle = page.getByRole('button', { name: 'Drag to reorder' });
+  const box = (await handle.boundingBox())!;
+  const top = (await page.locator('.note', { hasText: 'Yoghurt' }).boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, top.y + 4, { steps: 8 });
+  await expect(page.locator('.drop-line')).toBeVisible();
+  await page.mouse.up();
+  await expect(topics(page)).toHaveText(['Bread', 'Cheese', 'Yoghurt', 'Milk', 'Apple']);
+  await expect(headings).toHaveText(['Nabiał', 'Fruit']);
+
+  await page.getByRole('button', { name: 'Hide categories' }).click();
+  await expect(headings).toHaveCount(0);
+  await expect(topics(page)).toHaveText(['Cheese', 'Yoghurt', 'Milk', 'Bread', 'Apple']);
+  await page.reload();
+  await expect(headings).toHaveCount(0);
+  await page.getByRole('button', { name: 'Hide categories' }).click();
+  await expect(headings).toHaveText(['Nabiał', 'Fruit']);
+});

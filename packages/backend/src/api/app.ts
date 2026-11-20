@@ -181,6 +181,7 @@ const noteChangesBody = z.object({
 });
 const noteReorderBody = z.object({ afterNoteId: z.string().nullable() });
 const noteGroupReorderBody = z.object({ afterGroupId: z.string().nullable() });
+const categoryRenameBody = z.object({ from: z.string(), to: z.string().nullable() });
 const noteGroupBody = z.object({ groupId: z.string() });
 const uploadBody = z.object({ file: z.instanceof(File) });
 // Multipart framing around a file at the size limit.
@@ -248,10 +249,7 @@ const claudeNotesBody = shimBody.extend({
   sourceMessageId: z.string().optional(),
 });
 const claudeNoteChangesBody = shimBody.extend(noteChangesBody.shape);
-const claudeCategoryRenameBody = shimBody.extend({
-  from: z.string(),
-  to: z.string().nullable(),
-});
+const claudeCategoryRenameBody = shimBody.extend(categoryRenameBody.shape);
 const claudeNoteReorderBody = shimBody.extend(noteReorderBody.shape);
 const claudeNoteGroupReorderBody = shimBody.extend(noteGroupReorderBody.shape);
 const claudeNoteGroupChangeBody = shimBody.extend(noteGroupBody.shape);
@@ -673,6 +671,13 @@ export function createApp(options: AppOptions) {
   app.post('/api/note-groups/:id/reorder', async (context) => {
     const { afterGroupId } = noteGroupReorderBody.parse(await context.req.json());
     return context.json(store.reorderNoteGroup(context.req.param('id'), afterGroupId));
+  });
+
+  app.post('/api/note-groups/:id/rename-category', async (context) => {
+    const { from, to } = categoryRenameBody.parse(await context.req.json());
+    return context.json(
+      store.renameNoteCategory(context.req.param('id'), from, to, deviceOf(context)),
+    );
   });
 
   app.post('/api/notes/:id/reorder', async (context) => {
