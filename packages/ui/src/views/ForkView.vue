@@ -279,10 +279,8 @@ const queuedSubmissions = computed(() =>
     (submission) => submission.forkId === fork.value?.id,
   ),
 );
-const replyForksAt = (messageId: string) =>
-  (lookups.value.childForksByBaseMessage.value.get(messageId) ?? []).filter(
-    (child) => child.archivedAt === null && child.id !== fork.value?.id,
-  );
+const forksAt = (messageId: string) =>
+  lookups.value.childForksByBaseMessage.value.get(messageId) ?? [];
 const filesOfSubmission = (submissionId: string) =>
   lookups.value.filesBySubmission.value.get(submissionId) ?? noItems;
 const commentCountOf = (submissionId: string) =>
@@ -504,15 +502,25 @@ watch(
             @load="loadSteps(group)"
           />
           <div :id="`comments-${message.id}`" class="message-comments" />
-          <RouterLink
-            v-for="child in replyForksAt(message.id)"
-            :key="child.id"
-            :to="`/e/${explorationId}/f/${child.id}`"
-            class="reply-fork"
-          >
-            ↳ Fork: {{ forkTitle(child) }}
-            <AttentionDot v-if="attention.get(child.id)" :attention="attention.get(child.id)!" />
-          </RouterLink>
+          <template v-for="child in forksAt(message.id)" :key="child.id">
+            <RouterLink
+              v-if="child.archivedAt === null && child.id !== fork.id"
+              :to="`/e/${explorationId}/f/${child.id}`"
+              class="reply-fork"
+            >
+              ↳ Fork: {{ forkTitle(child) }}
+              <AttentionDot v-if="attention.get(child.id)" :attention="attention.get(child.id)!" />
+            </RouterLink>
+            <!-- The steps Claude took after the fork was made there. -->
+            <ActivityGroup
+              v-for="group in activityGroups.get(child.id) ?? []"
+              :key="`${child.id}-${group.summary.attempt}`"
+              :summary="group.summary"
+              :activities="group.activities"
+              :working="isWorking(group)"
+              @load="loadSteps(group)"
+            />
+          </template>
         </template>
         <CommentLayer
           :key="fork.id"

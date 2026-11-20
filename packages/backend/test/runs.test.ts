@@ -175,14 +175,17 @@ describe('steps after an answer posted in the middle of a turn', () => {
     text,
   });
 
-  it('go under that answer, and under the reader’s next message once one arrives', () => {
-    const { runs, ask, store, explorationId, mainForkId } = setup();
+  it('go under that answer, under a fork made at it, and under the reader’s next message', () => {
+    const { runs, ask, store, clock, explorationId, mainForkId } = setup();
     const question = ask('A question');
     const lease = runs.claim(mainForkId, 'runner-a')!;
     runs.addActivity(mainForkId, lease.leaseId, step('Before', question.id));
     const first = runs.answer(mainForkId, lease.leaseId, 'Started.');
     runs.addActivity(mainForkId, lease.leaseId, step('After one', question.id));
     runs.addActivity(mainForkId, lease.leaseId, step('After two', question.id));
+    clock.now += 1000;
+    const fork = store.forkAtAnswer(first.id);
+    runs.addActivity(mainForkId, lease.leaseId, step('After the fork', question.id));
     const second = runs.answer(mainForkId, lease.leaseId, 'Halfway.');
     runs.addActivity(mainForkId, lease.leaseId, step('After the second', question.id));
     const reply = ask('Also this');
@@ -195,6 +198,7 @@ describe('steps after an answer posted in the middle of a turn', () => {
       ['Before', question.id],
       ['After one', first.id],
       ['After two', first.id],
+      ['After the fork', fork.id],
       ['After the second', second.id],
       ['For the reply', reply.id],
     ]);

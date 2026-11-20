@@ -71,13 +71,15 @@ export class RunStore {
   // feedback again, so its steps show under the answer: the answer's id and the last step's time.
   private readonly followUps = new Map<string, { answerId: string; lastStepAt: number }>();
 
-  // Per runner fork: the message its steps are stored under, and, after an answer posted in the
-  // middle of a turn, that answer. The steps that follow go below it, not above it. `from` is
-  // the message the runner kept reporting steps under; a new one (a message from the reader)
-  // ends the redirect.
+  // Per runner fork, where its steps are stored: under the message the runner reports, or, once
+  // the run posted an answer mid-turn or the reader forked at that message, under that answer or
+  // fork, so the steps that follow show below it. `from` is the message the runner reports steps
+  // under; a new one (the reader sent a message) starts over. `base` is the message the current
+  // section hangs under, `target` its id (a message, or a fork made there), `seenAt` when the
+  // newest fork there was made.
   private readonly stepAnchors = new Map<
     string,
-    { leaseId: string; from?: string; answerId?: string }
+    { leaseId: string; from?: string; base: string; target: string; seenAt: number }
   >();
 
   constructor(
@@ -330,25 +332,33 @@ export class RunStore {
     this.stepAnchors.set(forkId, {
       leaseId,
       from: anchor?.leaseId === leaseId ? anchor.from : undefined,
-      answerId: message.id,
+      base: message.id,
+      target: message.id,
+      seenAt: this.now(),
     });
     return message;
   }
 
-  // Steps after an answer posted mid-turn belong below that answer.
+  // Steps after an answer posted mid-turn, or after a fork made at the message, belong below it.
   private anchorStep(forkId: string, leaseId: string, reported: string) {
-    const anchor = this.stepAnchors.get(forkId);
-    if (!anchor || anchor.leaseId !== leaseId) {
-      this.stepAnchors.set(forkId, { leaseId, from: reported });
-      return reported;
+    let anchor = this.stepAnchors.get(forkId);
+    if (!anchor || anchor.leaseId !== leaseId || (anchor.from && anchor.from !== reported)) {
+      anchor = { leaseId, base: reported, target: reported, seenAt: this.now() };
     }
-    if (anchor.from === undefined) anchor.from = reported;
-    if (anchor.from !== reported) {
-      // The reader sent a message: the work now answers that one.
-      this.stepAnchors.set(forkId, { leaseId, from: reported });
-      return reported;
+    anchor.from ??= reported;
+    const fork = this.db.get<{ id: string; created_at: number }>(
+      `SELECT id, created_at FROM forks WHERE base_message_id = ? AND id != ? AND created_at > ?
+       ORDER BY created_at DESC, rowid DESC LIMIT 1`,
+      anchor.base,
+      forkId,
+      anchor.seenAt,
+    );
+    if (fork) {
+      anchor.target = fork.id;
+      anchor.seenAt = fork.created_at;
     }
-    return anchor.answerId ?? reported;
+    this.stepAnchors.set(forkId, anchor);
+    return anchor.target;
   }
 
   addActivity(

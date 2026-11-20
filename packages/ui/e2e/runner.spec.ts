@@ -94,7 +94,7 @@ test('shows what the runner does in a fork, its usage, and stops it on request',
   await expect(status).toHaveCount(0);
 });
 
-test('shows the steps after an answer posted mid-turn below that answer, in a new section', async ({
+test('shows the steps after a mid-turn answer, or a fork made at it, in a new section below it', async ({
   page,
   request,
 }) => {
@@ -118,27 +118,35 @@ test('shows the steps after an answer posted mid-turn below that answer, in a ne
       text,
     });
   await step('Cloning the repo');
-  await runner.call(`${fork}/answer`, { leaseId: lease.leaseId, content: 'Started: cloned.' });
+  const answer = await runner.call(`${fork}/answer`, {
+    leaseId: lease.leaseId,
+    content: 'Started: cloned.',
+  });
   await step('Editing the backend');
   await step('Running the tests');
+  await request.post(`/api/messages/${answer.id}/fork`, { data: {} });
+  await step('Writing the docs');
 
   await page.goto(`/e/${explorationId}`);
   const groups = page.locator('.activity-group');
-  await expect(groups).toHaveCount(2);
+  await expect(groups).toHaveCount(3);
   await expect(groups.nth(0)).toContainText('Worked');
   await expect(groups.nth(0)).toContainText('1 step');
-  await expect(groups.nth(1)).toContainText('Working · 2 steps');
+  await expect(groups.nth(1)).toContainText('Worked');
+  await expect(groups.nth(2)).toContainText('Working · 1 step');
+  await groups.nth(1).getByRole('button').click();
   await expect(groups.nth(1).locator('li')).toHaveText([
     'Editing the backend',
     'Running the tests',
   ]);
-  const order = await page.locator('.activity-group, .message').evaluateAll((nodes) =>
+  const order = await page.locator('.activity-group, .message, .reply-fork').evaluateAll((nodes) =>
     nodes.map((node) => {
       if (node.classList.contains('activity-group')) return 'steps';
+      if (node.classList.contains('reply-fork')) return 'fork';
       return node.textContent?.includes('Started: cloned.') ? 'answer' : 'question';
     }),
   );
-  expect(order).toEqual(['question', 'steps', 'answer', 'steps']);
+  expect(order).toEqual(['question', 'steps', 'answer', 'steps', 'fork', 'steps']);
 });
 
 test('offers Retry on a fork whose runner failed too often', async ({ page, request }) => {

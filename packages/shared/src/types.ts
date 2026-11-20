@@ -278,7 +278,8 @@ export interface Activity {
   id: string;
   explorationId: string;
   forkId: string;
-  // The newest user message of the turn it belongs to.
+  // What the step shows under: the newest user message of its turn, or, once the run answered
+  // mid-turn or the reader forked there, that answer or that fork's id.
   afterMessageId: string;
   attempt: number;
   kind: ActivityKind;
