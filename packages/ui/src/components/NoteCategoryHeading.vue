@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { nextTick, ref } from 'vue';
+import MediaIcon from './MediaIcon.vue';
 
 const props = defineProps<{
   name: string;
@@ -53,49 +54,85 @@ function save() {
         <span class="name">{{ name }}</span>
         <span class="count">{{ ticked === null ? count : `${ticked}/${count}` }}</span>
       </button>
-      <button type="button" class="rename-button" @click="startRename">Rename</button>
+      <span class="rule" aria-hidden="true" />
+      <button
+        type="button"
+        class="rename-button"
+        aria-label="Rename category"
+        title="Rename category"
+        @click="startRename"
+      >
+        <MediaIcon name="edit" />
+      </button>
     </template>
   </div>
 </template>
 
 <style scoped>
+/* A delicate marker between groups of notes, not another item: small, muted, with a hairline. */
 .category-heading {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  margin-top: 0.6rem;
+  margin-top: 0.7rem;
+  min-height: 1.5rem;
+  color: var(--text-muted);
 }
 
 .toggle {
-  flex: 1;
   display: flex;
   align-items: baseline;
-  gap: 0.4rem;
+  gap: 0.35rem;
   text-align: left;
   border: none;
   background: none;
-  padding: 0.2rem 0.1rem;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--text);
+  padding: 0.1rem 0.1rem 0.1rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  color: inherit;
 }
 
 .chevron {
-  width: 1em;
-  color: var(--text-muted);
+  width: 0.9em;
+  font-size: 0.7rem;
+  opacity: 0.8;
 }
 
 .count {
   font-weight: 400;
-  font-size: 0.8rem;
-  color: var(--text-muted);
+  font-size: 0.7rem;
+  opacity: 0.8;
+}
+
+.rule {
+  flex: 1;
+  border-top: 1px solid var(--border);
 }
 
 .rename-button {
-  font-size: 0.8rem;
-  padding: 0.1rem 0.5rem;
-  color: var(--text-muted);
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: none;
   background: none;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.rename-button .media-icon {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+@media (hover: hover) {
+  .toggle:hover,
+  .rename-button:hover {
+    color: var(--text);
+    opacity: 1;
+  }
 }
 
 .rename {
