@@ -36,6 +36,9 @@ defineProps<{
     | 'plus'
     | 'split'
     | 'eye'
+    | 'categories'
+    | 'list'
+    | 'unchecked-first'
     | 'home'
     | 'settings';
 }>();
@@ -101,6 +104,12 @@ defineProps<{
       v-else-if="name === 'settings'"
       d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4"
     />
+    <path v-else-if="name === 'categories'" d="M4 5h7M7 10h13M7 14h13M7 18h13" />
+    <path v-else-if="name === 'list'" d="M4 6h16M4 12h16M4 18h16" />
+    <path
+      v-else-if="name === 'unchecked-first'"
+      d="M4 4h6v6H4zM14 7h6M5.5 17l1.5 1.5 3-3M14 17h6"
+    />
     <path
       v-else-if="name === 'eye'"
       d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 1 0 0-6z"
@@ -148,6 +157,9 @@ defineProps<{
 .media-icon.home,
 .media-icon.settings,
 .media-icon.read,
+.media-icon.categories,
+.media-icon.list,
+.media-icon.unchecked-first,
 .media-icon.eye {
   fill: none;
   stroke: currentColor;

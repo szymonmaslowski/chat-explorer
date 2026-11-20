@@ -5,6 +5,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import ConfirmButton from '../components/ConfirmButton.vue';
 import ExplorationHeader from '../components/ExplorationHeader.vue';
+import MediaIcon from '../components/MediaIcon.vue';
 import NoteCategoryHeading from '../components/NoteCategoryHeading.vue';
 import NoteEditor from '../components/NoteEditor.vue';
 import NoteGroupForm from '../components/NoteGroupForm.vue';
@@ -386,27 +387,43 @@ watch(
         />
       </section>
 
-      <div v-if="categories.length > 0" class="checklist-order view-option">
-        <button type="button" :aria-pressed="categoriesHidden" @click="toggleCategoriesHidden">
-          Hide categories
-        </button>
-      </div>
-
-      <div v-if="activeGroup?.checklist && notes.length > 0" class="checklist-order">
+      <div
+        v-if="categories.length > 0 || (activeGroup?.checklist && notes.length > 0)"
+        class="filters"
+      >
         <button
+          v-if="categories.length > 0"
           type="button"
-          :aria-pressed="checklistOrder === 'original'"
-          @click="setChecklistOrder('original')"
+          class="icon-button"
+          aria-label="Hide categories"
+          title="Hide categories"
+          :aria-pressed="categoriesHidden"
+          @click="toggleCategoriesHidden"
         >
-          Original order
+          <MediaIcon name="categories" />
         </button>
-        <button
-          type="button"
-          :aria-pressed="checklistOrder === 'unchecked-first'"
-          @click="setChecklistOrder('unchecked-first')"
-        >
-          Unchecked first
-        </button>
+        <div v-if="activeGroup?.checklist && notes.length > 0" class="segmented">
+          <button
+            type="button"
+            class="icon-button"
+            aria-label="Original order"
+            title="Original order"
+            :aria-pressed="checklistOrder === 'original'"
+            @click="setChecklistOrder('original')"
+          >
+            <MediaIcon name="list" />
+          </button>
+          <button
+            type="button"
+            class="icon-button"
+            aria-label="Unchecked first"
+            title="Unchecked first"
+            :aria-pressed="checklistOrder === 'unchecked-first'"
+            @click="setChecklistOrder('unchecked-first')"
+          >
+            <MediaIcon name="unchecked-first" />
+          </button>
+        </div>
       </div>
 
       <section ref="notesList" class="notes">
@@ -514,37 +531,31 @@ watch(
   margin-top: 0.5rem;
 }
 
-.checklist-order {
-  display: inline-flex;
+/* Switches for how the group is shown, icons only, at the right. */
+.filters {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.5rem;
   margin-bottom: 0.5rem;
 }
 
-.checklist-order button {
-  font-size: 0.8rem;
-  padding: 0.15rem 0.6rem;
+.filters button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
 }
 
-.checklist-order button:first-child {
+.segmented {
+  display: inline-flex;
+}
+
+.segmented button:first-child {
   border-radius: 6px 0 0 6px;
 }
 
-.checklist-order button:last-child {
+.segmented button:last-child {
   border-left: none;
   border-radius: 0 6px 6px 0;
-}
-
-.view-option {
-  margin-right: 0.5rem;
-}
-
-.checklist-order.view-option button {
-  border-left: 1px solid var(--border);
-  border-radius: 6px;
-}
-
-.checklist-order button[aria-pressed='true'] {
-  background: var(--accent-soft);
-  border-color: var(--accent);
 }
 
 .notes {
