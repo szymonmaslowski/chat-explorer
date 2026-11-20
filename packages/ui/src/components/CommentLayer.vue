@@ -12,6 +12,7 @@ import {
   textNodes,
   type TextAnchor,
 } from '../lib/anchoring';
+import { sitsApartFromText } from '../lib/comment-placement';
 import { lineBoxes, nestingLevels, outlinePath } from '../lib/outlines';
 import { useCopied } from '../composables/useCopied';
 import { blockClipboardText } from '../lib/clipboard';
@@ -69,6 +70,8 @@ interface OpenedPlace {
   actionsMount: HTMLElement;
   editorMount: HTMLElement;
   cardsMount: HTMLElement;
+  // After a table or code block, away from its text: its cards show their quotes.
+  apart: boolean;
 }
 const openedPlaces = shallowRef<OpenedPlace[]>([]);
 // The opened place a picked block's buttons sit in, between its text and the cards.
@@ -530,6 +533,7 @@ function openPlace(messageId: string, anchor: TextAnchor, range: Range, ids: str
     actionsMount,
     editorMount,
     cardsMount,
+    apart: sitsApartFromText(range),
   };
   openedPlaces.value = [...openedPlaces.value, place];
   return place;
@@ -948,7 +952,7 @@ watch(
           v-else
           :comment="entry.first"
           closable
-          :show-quote="draftsOnly"
+          :show-quote="draftsOnly || place.apart"
           @open="openSubmitted"
           @jump="(comment) => jumpToText(comment.id)"
           @close="closeCards(place, entry.comments)"
