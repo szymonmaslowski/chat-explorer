@@ -252,6 +252,8 @@ test("offers a coding fork the runner's credentials and hosts, and restarts its 
   await expect(forkSettings).toContainText(
     'This runner allows registry.npmjs.org:443, *.githubusercontent.com:443.',
   );
+  await expect(forkSettings.getByLabel('GitHub not allowed by this runner')).toBeVisible();
+  await expect(forkSettings.getByLabel('npm', { exact: true })).toBeVisible();
   await forkSettings.getByLabel(/Other allowed hosts/).fill('github.com:443');
   await expect(forkSettings.getByRole('alert')).toHaveText(
     'Not allowed by this runner, unless it keeps them hidden: github.com:443',

@@ -41,6 +41,14 @@ const outsideCeiling = computed(() => {
   );
 });
 
+// Whether a ticked box would be refused: one of its hosts is outside the runner's list. The box
+// stays usable, as the runner decides.
+const outsideRunner = (name: RegistryName) =>
+  ceiling.value !== null &&
+  packageRegistries[name].hosts.some(
+    (host) => !ceiling.value!.some((pattern) => matchesHostPattern(pattern, host)),
+  );
+
 async function save(network: Fork['network']) {
   saving.value = true;
   try {
@@ -73,6 +81,7 @@ const saveHosts = () => save({ ...props.fork.network, hosts: entries.value });
           @change="setRegistry(name, ($event.target as HTMLInputElement).checked)"
         />
         {{ packageRegistries[name].label }}
+        <small v-if="outsideRunner(name)" class="outside">not allowed by this runner</small>
       </label>
     </fieldset>
     <label class="hosts">
@@ -157,6 +166,10 @@ p {
 .error {
   color: var(--danger);
   font-size: 0.85em;
+}
+
+.outside {
+  color: var(--danger);
 }
 
 .hint {
