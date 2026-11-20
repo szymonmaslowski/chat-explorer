@@ -273,6 +273,26 @@ test("offers a coding fork the runner's credentials and hosts, and restarts its 
   );
 });
 
+test('restarts the container of a fork with coding off, while its runner holds one', async ({
+  page,
+  request,
+}) => {
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'Research caching' } })
+  ).json();
+  const runner = fakeRunner(request);
+  await page.goto(`/e/${explorationId}`);
+  await page.getByRole('button', { name: 'Chat settings' }).click();
+  const forkSettings = page.getByRole('region', { name: 'This fork' });
+  const restart = forkSettings.getByRole('button', { name: 'Restart container' });
+  await restart.click();
+  await expect(forkSettings.getByRole('status')).toContainText('No container is running.');
+
+  await runner.call('claim', { runnerId: 'e2e-runner', explorationId, waitMs: 5_000 });
+  await restart.click();
+  await expect(forkSettings.getByRole('status')).toContainText('closes once no answer is running');
+});
+
 test("shows a comment another fork's Claude drafted, as a draft the user sends", async ({
   page,
   request,

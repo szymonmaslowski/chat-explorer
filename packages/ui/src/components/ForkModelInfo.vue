@@ -57,7 +57,7 @@ async function restartContainer() {
   restartNote.value = '';
   const { restarting } = await api.restartContainer(props.fork.id);
   restartNote.value = restarting
-    ? 'The container closes once no answer is running. Your next message starts a fresh one and the conversation continues; anything running in the old one, such as a dev server, stops.'
+    ? 'The container closes once no answer is running. Your next message starts a fresh one and the conversation continues; anything running in the old one, such as a dev server or a background task, stops.'
     : 'No container is running. Your next message starts a fresh one.';
 }
 </script>
@@ -106,13 +106,13 @@ async function restartContainer() {
       </p>
       <ForkNetworkSettings :fork="fork" :report="report" />
       <ForkCredentialSettings :fork="fork" :report="report" />
-      <p>
-        <button type="button" :disabled="saving" @click="restartContainer">
-          Restart container
-        </button>
-      </p>
-      <p v-if="restartNote" class="hint" role="status">{{ restartNote }}</p>
     </template>
+    <p>
+      <button type="button" :disabled="saving" @click="restartContainer">
+        Restart container
+      </button>
+    </p>
+    <p v-if="restartNote" class="hint" role="status">{{ restartNote }}</p>
   </section>
 </template>
 
