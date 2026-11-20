@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import MediaIcon from './MediaIcon.vue';
 
 const props = defineProps<{
@@ -11,6 +11,11 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ toggle: []; rename: [name: string] }>();
 
+// A name made only of invisible characters would leave a heading with nothing to read or press.
+const shownName = computed(() =>
+  // eslint-disable-next-line no-misleading-character-class
+  /^[\s\u200b-\u200f\u2060\ufeff\u3164]*$/.test(props.name) ? '(no name)' : props.name,
+);
 const renaming = ref(false);
 const draft = ref('');
 const input = ref<HTMLInputElement | null>(null);
@@ -51,13 +56,12 @@ function save() {
         @click="emit('toggle')"
       >
         <span class="chevron" aria-hidden="true">{{ collapsed ? '▸' : '▾' }}</span>
-        <span class="name">{{ name }}</span>
+        <span class="name">{{ shownName }}</span>
         <span class="count">{{ ticked === null ? count : `${ticked}/${count}` }}</span>
       </button>
-      <span class="rule" aria-hidden="true" />
       <button
         type="button"
-        class="rename-button"
+        class="icon-button"
         aria-label="Rename category"
         title="Rename category"
         @click="startRename"
@@ -69,24 +73,27 @@ function save() {
 </template>
 
 <style scoped>
-/* A delicate marker between groups of notes, not another item: small, muted, with a hairline. */
+/* A delicate marker between groups of notes, not another item: small and muted. The name and
+   count are one button across the row, so pressing anywhere but the rename button folds it. */
 .category-heading {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  margin-top: 0.7rem;
-  min-height: 1.5rem;
+  margin-top: 0.5rem;
   color: var(--text-muted);
 }
 
 .toggle {
+  flex: 1;
+  min-width: 0;
+  align-self: stretch;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.35rem;
   text-align: left;
   border: none;
   background: none;
-  padding: 0.1rem 0.1rem 0.1rem 0.75rem;
+  padding: 0 0.1rem 0 0.75rem;
   font-size: 0.75rem;
   font-weight: 500;
   letter-spacing: 0.03em;
@@ -105,33 +112,9 @@ function save() {
   opacity: 0.8;
 }
 
-.rule {
-  flex: 1;
-  border-top: 1px solid var(--border);
-}
-
-.rename-button {
-  display: grid;
-  place-items: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  padding: 0;
-  border: none;
-  background: none;
-  color: inherit;
-  opacity: 0.7;
-}
-
-.rename-button .media-icon {
-  width: 0.8rem;
-  height: 0.8rem;
-}
-
 @media (hover: hover) {
-  .toggle:hover,
-  .rename-button:hover {
+  .toggle:hover {
     color: var(--text);
-    opacity: 1;
   }
 }
 
