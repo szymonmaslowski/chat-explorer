@@ -135,7 +135,14 @@ const {
 
 const selectedNoteId = ref<string | null>(null);
 const editingNoteId = ref<string | null>(null);
+// Where a note is being written: at the top of the group (null), or in a category.
 const creatingNote = ref(false);
+const creatingCategory = ref<string | null>(null);
+
+function startNote(category: string | null) {
+  creatingCategory.value = category;
+  creatingNote.value = true;
+}
 const groupForm = ref<'new' | 'edit' | null>(null);
 const groupActionsShown = ref(false);
 const deleteDialog = ref<HTMLDialogElement | null>(null);
@@ -405,14 +412,12 @@ watch(
       <section ref="notesList" class="notes">
         <p v-if="notes.length === 0 && !creatingNote" class="muted empty">No notes yet.</p>
         <NoteEditor
-          v-if="creatingNote"
+          v-if="creatingNote && creatingCategory === null"
           :categories="categories"
           @save="createNote"
           @cancel="creatingNote = false"
         />
-        <button v-else type="button" class="new-note" @click="creatingNote = true">
-          + New note
-        </button>
+        <button v-else type="button" class="new-note" @click="startNote(null)">+ New note</button>
         <template v-for="section in sections" :key="section.name ?? ''">
           <NoteCategoryHeading
             v-if="section.name !== null"
@@ -426,6 +431,24 @@ watch(
             @rename="renameCategory(section.name, $event)"
           />
           <template v-if="!section.collapsed">
+            <template v-if="section.name !== null">
+              <NoteEditor
+                v-if="creatingNote && creatingCategory === section.name"
+                :category="section.name"
+                :categories="categories"
+                @save="createNote"
+                @cancel="creatingNote = false"
+              />
+              <button
+                v-else
+                type="button"
+                class="new-note"
+                :aria-label="`New note in ${section.name}`"
+                @click="startNote(section.name)"
+              >
+                + New note
+              </button>
+            </template>
             <template v-for="note in section.notes" :key="note.id">
               <NoteEditor
                 v-if="editingNoteId === note.id"
