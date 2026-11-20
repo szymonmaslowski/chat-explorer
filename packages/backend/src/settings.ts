@@ -14,8 +14,8 @@ const settingsSchema = z
       .transform((url) => (url ? new URL(url).origin : null)),
     defaultModel: z.enum(claudeModels).default(defaultClaudeModel),
     // Settings of the removed background sessions; still accepted so an old config.json loads.
-    idleMinutes: z.unknown().optional(),
-    maxSessions: z.unknown().optional(),
+    idleMinutes: z.number().optional(),
+    maxSessions: z.number().optional(),
     // The runner next to the daemon answers forks.
     runner: z
       .object({

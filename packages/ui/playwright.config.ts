@@ -10,7 +10,7 @@ const cli = '../cli/dist';
 const fakeWhisper = resolve('e2e/fake-whisper');
 const microphoneAudio = join(tmpdir(), 'chat-explorer-e2e-microphone.wav');
 // Node alone, not its whole folder: a global npm install puts `claude` beside node, as in the coding
-// image, and the tests need it missing.
+// image, and the daemon under test must not run the real Claude Code.
 const nodeOnly = join(tmpdir(), 'chat-explorer-e2e-node');
 const nodeLink = join(nodeOnly, 'node');
 // Each test worker loads this file again while the daemon runs, so the link is replaced only when
@@ -74,7 +74,6 @@ export default defineConfig({
   webServer: {
     command: `rm -rf "${home}" && mkdir -p "${home}/models" && touch "${home}/models/ggml-large-v3-turbo-q5_0.bin" && node ${backend}/dev/seed.js && node ${cli}/daemon/main.js`,
     url: `http://127.0.0.1:${port}/api/health`,
-    // Without `claude` on PATH, background sessions fail to start instead of running Claude.
     // A fake whisper-cli stands in for Whisper, with an empty model file next to it.
     env: {
       CHAT_EXPLORER_HOME: home,
