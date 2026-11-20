@@ -571,6 +571,14 @@ watch(
 </style>
 
 <style scoped>
+/* At least the screen's height, so the reply box stays at its bottom in a short chat: otherwise it
+   follows the text, and moves when a tap on Submit closes the buttons of a picked block. */
+.fork-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
 .split-error {
   color: var(--danger);
 }
@@ -638,6 +646,7 @@ watch(
 }
 
 .dock {
+  margin-top: auto;
   position: sticky;
   bottom: 0;
   z-index: 5;

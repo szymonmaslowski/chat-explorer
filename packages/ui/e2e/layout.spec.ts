@@ -135,3 +135,15 @@ test.describe('on a medium screen', () => {
     await expect(page.locator('.main-column .fork-box')).toHaveCount(2);
   });
 });
+
+test('keeps the reply box at the bottom of the screen in a short chat', async ({
+  page,
+  request,
+}) => {
+  await page.goto(`/e/${await answeredChat(request)}`);
+  const submit = page.getByRole('button', { name: 'Submit' });
+  await expect(submit).toBeVisible();
+  const viewport = page.viewportSize()!;
+  const box = (await submit.boundingBox())!;
+  expect(viewport.height - (box.y + box.height)).toBeLessThan(40);
+});
