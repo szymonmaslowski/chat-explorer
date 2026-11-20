@@ -144,10 +144,28 @@ const activityGroups = computed<Map<string, AttemptGroup[]>>((previous) => {
     ),
   );
 });
-const isWorking = ({ summary }: AttemptGroup) =>
-  forkRun.value?.status === 'answering' &&
-  summary.attempt === forkRun.value.attempt &&
-  !summary.interrupted;
+// A run that posted answers in the middle has a group under each; only the newest is working.
+const isWorking = ({ summary }: AttemptGroup) => {
+  if (
+    forkRun.value?.status !== 'answering' ||
+    summary.attempt !== forkRun.value.attempt ||
+    summary.interrupted
+  ) {
+    return false;
+  }
+  for (const groups of activityGroups.value.values()) {
+    for (const other of groups) {
+      if (
+        other.summary.attempt === summary.attempt &&
+        !other.summary.interrupted &&
+        other.summary.lastAt > summary.lastAt
+      ) {
+        return false;
+      }
+    }
+  }
+  return true;
+};
 const loadSteps = (group: AttemptGroup) => void loadAttemptActivities(state.value, group.summary);
 const lastAnswer = computed(() => path.value.findLast((message) => message.role === 'assistant'));
 const lastUnread = computed(() => path.value.findLast(isUnread));

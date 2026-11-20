@@ -71,6 +71,15 @@ export class RunStore {
   // feedback again, so its steps show under the answer: the answer's id and the last step's time.
   private readonly followUps = new Map<string, { answerId: string; lastStepAt: number }>();
 
+  // Per runner fork: the message its steps are stored under, and, after an answer posted in the
+  // middle of a turn, that answer. The steps that follow go below it, not above it. `from` is
+  // the message the runner kept reporting steps under; a new one (a message from the reader)
+  // ends the redirect.
+  private readonly stepAnchors = new Map<
+    string,
+    { leaseId: string; from?: string; answerId?: string }
+  >();
+
   constructor(
     private readonly db: Database,
     private readonly bus: EventBus,
@@ -316,7 +325,30 @@ export class RunStore {
 
   answer(forkId: string, leaseId: string, content: string) {
     this.requireLease(forkId, leaseId);
-    return this.chats.addRunnerAnswer(forkId, content);
+    const message = this.chats.addRunnerAnswer(forkId, content);
+    const anchor = this.stepAnchors.get(forkId);
+    this.stepAnchors.set(forkId, {
+      leaseId,
+      from: anchor?.leaseId === leaseId ? anchor.from : undefined,
+      answerId: message.id,
+    });
+    return message;
+  }
+
+  // Steps after an answer posted mid-turn belong below that answer.
+  private anchorStep(forkId: string, leaseId: string, reported: string) {
+    const anchor = this.stepAnchors.get(forkId);
+    if (!anchor || anchor.leaseId !== leaseId) {
+      this.stepAnchors.set(forkId, { leaseId, from: reported });
+      return reported;
+    }
+    if (anchor.from === undefined) anchor.from = reported;
+    if (anchor.from !== reported) {
+      // The reader sent a message: the work now answers that one.
+      this.stepAnchors.set(forkId, { leaseId, from: reported });
+      return reported;
+    }
+    return anchor.answerId ?? reported;
   }
 
   addActivity(
@@ -326,6 +358,7 @@ export class RunStore {
   ) {
     const row = this.requireLease(forkId, leaseId);
     const id = newId();
+    const afterMessageId = this.anchorStep(forkId, leaseId, input.afterMessageId);
     this.db.run(
       `INSERT INTO activities (id, exploration_id, fork_id, after_message_id, attempt, kind, text,
          created_at)
@@ -333,7 +366,7 @@ export class RunStore {
       id,
       row.exploration_id,
       forkId,
-      input.afterMessageId,
+      afterMessageId,
       row.attempt,
       input.kind,
       input.text,

@@ -168,6 +168,39 @@ describe('what a turn reports', () => {
   });
 });
 
+describe('steps after an answer posted in the middle of a turn', () => {
+  const step = (text: string, afterMessageId: string) => ({
+    afterMessageId,
+    kind: 'tool' as const,
+    text,
+  });
+
+  it('go under that answer, and under the reader’s next message once one arrives', () => {
+    const { runs, ask, store, explorationId, mainForkId } = setup();
+    const question = ask('A question');
+    const lease = runs.claim(mainForkId, 'runner-a')!;
+    runs.addActivity(mainForkId, lease.leaseId, step('Before', question.id));
+    const first = runs.answer(mainForkId, lease.leaseId, 'Started.');
+    runs.addActivity(mainForkId, lease.leaseId, step('After one', question.id));
+    runs.addActivity(mainForkId, lease.leaseId, step('After two', question.id));
+    const second = runs.answer(mainForkId, lease.leaseId, 'Halfway.');
+    runs.addActivity(mainForkId, lease.leaseId, step('After the second', question.id));
+    const reply = ask('Also this');
+    runs.addActivity(mainForkId, lease.leaseId, step('For the reply', reply.id));
+
+    const placed = store
+      .snapshot(explorationId)
+      .activities.map((activity) => [activity.text, activity.afterMessageId]);
+    expect(placed).toEqual([
+      ['Before', question.id],
+      ['After one', first.id],
+      ['After two', first.id],
+      ['After the second', second.id],
+      ['For the reply', reply.id],
+    ]);
+  });
+});
+
 describe('status from the runner', () => {
   it('is listening while a runner is around, working while a fork is answered', () => {
     const { runs, ask, clock, explorationId, mainForkId } = setup();
