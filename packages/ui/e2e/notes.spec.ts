@@ -640,7 +640,7 @@ test('shows categories as sections that fold, rename and hide, keeping their pla
 
   await page.getByRole('button', { name: 'Hide categories' }).click();
   await expect(headings).toHaveCount(0);
-  await expect(topics(page)).toHaveText(['Yoghurt', 'Milk', 'Apple', 'Cheese', 'Bread']);
+  await expect(topics(page)).toHaveText(['Yoghurt', 'Milk', 'Cheese', 'Apple', 'Bread']);
   await page.reload();
   await expect(headings).toHaveCount(0);
   await page.getByRole('button', { name: 'Hide categories' }).click();
@@ -668,16 +668,16 @@ test('adds a note inside a category from its own button, and folds from anywhere
   }
 
   await page.goto(`/e/${explorationId}/notes`);
-  await expect(topics(page)).toHaveText(['Bread', 'Apple', 'Milk']);
+  await expect(topics(page)).toHaveText(['Bread', 'Milk', 'Apple']);
   await expect(page.getByRole('button', { name: '+ New note' })).toHaveCount(1);
 
   await page.getByRole('button', { name: 'New note in Fruit' }).click();
   await expect(page.getByLabel('Category', { exact: true })).toHaveValue('Fruit');
   await page.getByLabel('Topic').fill('Pear');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(topics(page)).toHaveText(['Bread', 'Pear', 'Apple', 'Milk']);
+  await expect(topics(page)).toHaveText(['Bread', 'Milk', 'Apple', 'Pear']);
   await page.reload();
-  await expect(topics(page)).toHaveText(['Bread', 'Pear', 'Apple', 'Milk']);
+  await expect(topics(page)).toHaveText(['Bread', 'Milk', 'Apple', 'Pear']);
 
   const fruit = page.getByRole('button', { name: 'Hide category Fruit' });
   const row = (await fruit.boundingBox())!;
@@ -685,5 +685,5 @@ test('adds a note inside a category from its own button, and folds from anywhere
   await expect(topics(page)).toHaveText(['Bread', 'Milk']);
   await expect(page.getByRole('button', { name: 'New note in Fruit' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Show category Fruit' }).click();
-  await expect(topics(page)).toHaveText(['Bread', 'Pear', 'Apple', 'Milk']);
+  await expect(topics(page)).toHaveText(['Bread', 'Milk', 'Apple', 'Pear']);
 });
