@@ -33,21 +33,13 @@ const tooMany = computed(() => entries.value.length > maxAllowedHosts);
 const changed = computed(() => entries.value.join('\n') !== savedHosts.value);
 const ceiling = computed(() => props.report?.capabilities.allowedHosts ?? null);
 // Not blocking: a host the runner keeps hidden isn't in its report, and the runner decides.
-const outsideCeiling = computed(() => {
-  const allowed = ceiling.value;
-  if (!allowed) return [];
-  return entries.value.filter(
-    (entry) => isHostPort(entry) && !allowed.some((pattern) => matchesHostPattern(pattern, entry)),
-  );
-});
-
-// Whether a ticked box would be refused: one of its hosts is outside the runner's list. The box
-// stays usable, as the runner decides.
-const outsideRunner = (name: RegistryName) =>
-  ceiling.value !== null &&
-  packageRegistries[name].hosts.some(
-    (host) => !ceiling.value!.some((pattern) => matchesHostPattern(pattern, host)),
-  );
+const outsideCeiling = (hostPort: string) =>
+  ceiling.value !== null && !ceiling.value.some((pattern) => matchesHostPattern(pattern, hostPort));
+const typedOutsideCeiling = computed(() =>
+  entries.value.filter((entry) => isHostPort(entry) && outsideCeiling(entry)),
+);
+const registryOutsideCeiling = (name: RegistryName) =>
+  packageRegistries[name].hosts.some(outsideCeiling);
 
 async function save(network: Fork['network']) {
   saving.value = true;
@@ -81,7 +73,9 @@ const saveHosts = () => save({ ...props.fork.network, hosts: entries.value });
           @change="setRegistry(name, ($event.target as HTMLInputElement).checked)"
         />
         {{ packageRegistries[name].label }}
-        <small v-if="outsideRunner(name)" class="outside">not allowed by this runner</small>
+        <small v-if="registryOutsideCeiling(name)" class="outside"
+          >not allowed by this runner</small
+        >
       </label>
     </fieldset>
     <label class="hosts">
@@ -106,8 +100,8 @@ const saveHosts = () => save({ ...props.fork.network, hosts: entries.value });
     >
       Save hosts
     </button>
-    <p v-if="outsideCeiling.length > 0" class="error" role="alert">
-      Not allowed by this runner, unless it keeps them hidden: {{ outsideCeiling.join(', ') }}
+    <p v-if="typedOutsideCeiling.length > 0" class="error" role="alert">
+      Not allowed by this runner, unless it keeps them hidden: {{ typedOutsideCeiling.join(', ') }}
     </p>
     <p class="hint">
       <template v-if="report && ceiling">This runner allows {{ ceiling.join(', ') }}. </template>
