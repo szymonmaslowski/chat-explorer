@@ -602,7 +602,7 @@ export function applyChange(state: ExplorationState, change: Change) {
       break;
     }
     case 'note.create': {
-      const { id, groupId, topic, description } = change.note;
+      const { id, groupId, topic, description, category } = change.note;
       const existing = state.notes.get(id);
       put(state.notes, id, {
         id,
@@ -610,6 +610,7 @@ export function applyChange(state: ExplorationState, change: Change) {
         groupId,
         topic: topic?.trim() || null,
         description: description?.trim() ?? '',
+        category: category?.trim() || null,
         checked: existing?.checked ?? false,
         position: existing?.position ?? 0,
         sourceForkId: null,
@@ -627,12 +628,13 @@ export function applyChange(state: ExplorationState, change: Change) {
     case 'note.update': {
       const note = state.notes.get(change.noteId);
       if (!note) break;
-      const { topic, description, checked } = change.changes;
+      const { topic, description, category, checked } = change.changes;
       // The time stays the daemon's: the next edit is based on it.
       put(state.notes, note.id, {
         ...note,
         topic: topic === undefined ? note.topic : topic.trim() || null,
         description: description?.trim() ?? note.description,
+        category: category === undefined ? note.category : category?.trim() || null,
         checked: checked ?? note.checked,
       });
       break;
@@ -655,7 +657,13 @@ export function applyChange(state: ExplorationState, change: Change) {
     case 'note.change-group': {
       const note = state.notes.get(change.noteId);
       if (!note || note.groupId === change.groupId) break;
-      put(state.notes, note.id, { ...note, groupId: change.groupId, position: 0, updatedAt: now });
+      put(state.notes, note.id, {
+        ...note,
+        groupId: change.groupId,
+        category: null,
+        position: 0,
+        updatedAt: now,
+      });
       renumberGroup(state.notes, note.groupId);
       renumberGroup(state.notes, change.groupId);
       break;

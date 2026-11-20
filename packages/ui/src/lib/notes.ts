@@ -50,16 +50,58 @@ export const uncheckedFirst = (notes: Note[]) => [
   ...notes.filter((note) => note.checked),
 ];
 
-// Where a dragged note may land among the other shown notes. With unchecked notes first it stays
-// in its own part, so a drag never ticks or unticks it.
+export interface NoteSection {
+  // Null for the notes with no category, which come first and have no heading.
+  name: string | null;
+  notes: Note[];
+}
+
+// The notes of a group in the order they are shown: those with no category first, then each
+// category where its first note stands, the notes in each keeping their order. Takes the notes in
+// their stored order.
+export function noteSections(notes: Note[]): NoteSection[] {
+  const sections = new Map<string | null, Note[]>([[null, []]]);
+  for (const note of notes) {
+    const section = sections.get(note.category);
+    if (section) section.push(note);
+    else sections.set(note.category, [note]);
+  }
+  return [...sections]
+    .filter(([, each]) => each.length > 0)
+    .map(([name, each]) => ({ name, notes: each }));
+}
+
+const collapsedKey = (groupId: string) => `chat-explorer.collapsed-categories.${groupId}`;
+
+// Folding is a choice of the device, so it is kept here and not with the notes.
+export function readCollapsedCategories(groupId: string): string[] {
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(collapsedKey(groupId)) ?? '[]');
+    return Array.isArray(stored) ? stored.filter((name) => typeof name === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function storeCollapsedCategories(groupId: string, names: string[]) {
+  try {
+    if (names.length === 0) localStorage.removeItem(collapsedKey(groupId));
+    else localStorage.setItem(collapsedKey(groupId), JSON.stringify(names));
+  } catch {}
+}
+
+// Where a dragged note may land among the other shown notes. It stays in its own category, and
+// with unchecked notes first in its own part of it, so a drag never moves it to another category
+// or ticks or unticks it.
 export function dropRange(shown: Note[], noteId: string, keepsParts: boolean) {
   const others = shown.filter((note) => note.id !== noteId);
   const dragged = shown.find((note) => note.id === noteId);
-  if (!keepsParts || !dragged) return { first: 0, last: others.length };
-  const uncheckedCount = others.filter((note) => !note.checked).length;
-  return dragged.checked
-    ? { first: uncheckedCount, last: others.length }
-    : { first: 0, last: uncheckedCount };
+  if (!dragged) return { first: 0, last: others.length };
+  const together = (note: Note) =>
+    note.category === dragged.category && (!keepsParts || note.checked === dragged.checked);
+  const first = others.findIndex(together);
+  if (first === -1) return { first: shown.indexOf(dragged), last: shown.indexOf(dragged) };
+  return { first, last: first + others.filter(together).length };
 }
 
 // The note to put the dragged one after, in the stored order, for a drop at `index` among the

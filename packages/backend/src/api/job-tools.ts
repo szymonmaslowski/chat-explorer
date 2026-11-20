@@ -214,11 +214,17 @@ function toolsFor(job: Job, { store, runs }: JobToolsOptions) {
     'add_notes',
     {
       description:
-        "Add notes to a group, first in the group in the order given. Each needs a topic (a short title) or a description (markdown). Pass sourceMessageId, the id of the user's message that asked for them, so each note links back to it.",
+        "Add notes to a group, first in the group in the order given. Each needs a topic (a short title) or a description (markdown), and may name a category: a section of the group, shown as a heading above its notes. Pass sourceMessageId, the id of the user's message that asked for them, so each note links back to it.",
       inputSchema: {
         groupId: z.string(),
         notes: z
-          .array(z.object({ topic: z.string().optional(), description: z.string().optional() }))
+          .array(
+            z.object({
+              topic: z.string().optional(),
+              description: z.string().optional(),
+              category: z.string().optional(),
+            }),
+          )
           .min(1),
         sourceMessageId: z.string().optional(),
       },
@@ -226,7 +232,11 @@ function toolsFor(job: Job, { store, runs }: JobToolsOptions) {
     tool(
       (input: {
         groupId: string;
-        notes: { topic?: string | undefined; description?: string | undefined }[];
+        notes: {
+          topic?: string | undefined;
+          description?: string | undefined;
+          category?: string | undefined;
+        }[];
         sourceMessageId?: string | undefined;
       }) => store.addNotes({ explorationId: job.explorationId, ...input }),
     ),
@@ -236,11 +246,12 @@ function toolsFor(job: Job, { store, runs }: JobToolsOptions) {
     'update_note',
     {
       description:
-        "Change a note's topic or description, or tick it (checked) in a checklist group.",
+        "Change a note's topic, description or category (null removes it), or tick it (checked) in a checklist group.",
       inputSchema: {
         noteId: z.string(),
         topic: z.string().optional(),
         description: z.string().optional(),
+        category: z.string().nullable().optional(),
         checked: z.boolean().optional(),
       },
     },
@@ -252,6 +263,7 @@ function toolsFor(job: Job, { store, runs }: JobToolsOptions) {
         noteId: string;
         topic?: string | undefined;
         description?: string | undefined;
+        category?: string | null | undefined;
         checked?: boolean | undefined;
       }) => store.updateNote(noteInChat(noteId), changes),
     ),

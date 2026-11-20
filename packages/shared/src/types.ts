@@ -162,6 +162,8 @@ export interface Note {
   // Null until Claude writes one for a note that has only a description.
   topic: string | null;
   description: string;
+  // The section of its group the note sits under; null for none.
+  category: string | null;
   checked: boolean;
   position: number;
   sourceForkId: string | null;
@@ -449,11 +451,14 @@ export interface NewNote {
   groupId: string;
   topic?: string;
   description?: string;
+  category?: string;
 }
 
 export interface NoteChanges {
   topic?: string;
   description?: string;
+  // An empty name or null takes the note out of its category.
+  category?: string | null;
   checked?: boolean;
   // When the editing device last saw the note, and when its edit was made: an edit from another
   // device in between is a conflict, and the older edit is kept as a copy.

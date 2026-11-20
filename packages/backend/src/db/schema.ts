@@ -406,4 +406,8 @@ export const migrations = [
   -- A draft left out of the next Submit; it is selected again once that Submit is done.
   ALTER TABLE comments ADD COLUMN selected INTEGER NOT NULL DEFAULT 1;
   `,
+  `
+  -- A category is a name on the notes that share it, inside one group; no name, no category.
+  ALTER TABLE notes ADD COLUMN category TEXT;
+  `,
 ];

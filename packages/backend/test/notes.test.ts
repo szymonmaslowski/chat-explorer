@@ -223,6 +223,94 @@ describe('changing a note group', () => {
   });
 });
 
+describe('note categories', () => {
+  const categoryOf = (context: ReturnType<typeof seedNotes>, noteId: string) =>
+    context.store.snapshot(context.explorationId).notes.find((note) => note.id === noteId)
+      ?.category;
+
+  it('sets, changes and clears the category of a note', () => {
+    const context = seedNotes(['Milk']);
+    const [milk] = context.notes;
+    expect(categoryOf(context, milk!.id)).toBeNull();
+    context.store.updateNote(milk!.id, { category: ' Dairy ' });
+    expect(categoryOf(context, milk!.id)).toBe('Dairy');
+    context.store.updateNote(milk!.id, { topic: 'Milk 2%' });
+    expect(categoryOf(context, milk!.id)).toBe('Dairy');
+    context.store.updateNote(milk!.id, { category: '' });
+    expect(categoryOf(context, milk!.id)).toBeNull();
+    context.store.updateNote(milk!.id, { category: 'Dairy' });
+    context.store.updateNote(milk!.id, { category: null });
+    expect(categoryOf(context, milk!.id)).toBeNull();
+  });
+
+  it('refuses a very long name', () => {
+    const context = seedNotes(['Milk']);
+    expect(() =>
+      context.store.updateNote(context.notes[0]!.id, { category: 'x'.repeat(81) }),
+    ).toThrow(/at most 80/);
+  });
+
+  it('lets Claude name a category when adding notes, and lists it', () => {
+    const context = seedNotes([]);
+    const { noteIds } = context.store.addNotes({
+      explorationId: context.explorationId,
+      groupId: context.group.id,
+      notes: [{ topic: 'Milk', category: 'Dairy' }, { topic: 'Salt' }],
+    });
+    expect(categoryOf(context, noteIds[0]!)).toBe('Dairy');
+    expect(categoryOf(context, noteIds[1]!)).toBeNull();
+    const listed = context.store.listNotes(context.explorationId).groups[0]!.notes;
+    expect(listed.map((note) => note.category)).toEqual(['Dairy', null]);
+  });
+
+  it('takes a note out of its category when it moves to another group', () => {
+    const context = seedNotes(['Milk']);
+    const other = context.store.createNoteGroup(context.explorationId, {});
+    context.store.updateNote(context.notes[0]!.id, { category: 'Dairy' });
+    context.store.changeNoteGroup(context.notes[0]!.id, other.id);
+    expect(categoryOf(context, context.notes[0]!.id)).toBeNull();
+  });
+
+  it('keeps the category on the copy made from an overtaken edit', () => {
+    const context = seedNotes(['Milk']);
+    const milk = context.notes[0]!;
+    context.store.updateNote(milk.id, { category: 'Dairy' });
+    const updated = context.store
+      .snapshot(context.explorationId)
+      .notes.find((n) => n.id === milk.id)!;
+    context.store.updateNote(milk.id, { topic: 'Elsewhere' }, 'phone');
+    context.store.updateNote(
+      milk.id,
+      { topic: 'Late', baseUpdatedAt: updated.updatedAt - 1, editedAt: updated.updatedAt - 1 },
+      'laptop',
+    );
+    const copy = context.store
+      .snapshot(context.explorationId)
+      .notes.find((note) => note.topic?.endsWith('(other version)'));
+    expect(copy?.category).toBe('Dairy');
+  });
+
+  it('accepts a category over REST', async () => {
+    const { request, store } = createTestApp();
+    const { explorationId } = seedConversation(store);
+    const send = (path: string, method: string, body: object) =>
+      request(path, { method, json: body });
+    const group = await (
+      await send(`/api/explorations/${explorationId}/note-groups`, 'POST', {})
+    ).json();
+    const note = await (
+      await send(`/api/explorations/${explorationId}/notes`, 'POST', {
+        groupId: group.id,
+        topic: 'Milk',
+        category: 'Dairy',
+      })
+    ).json();
+    expect(note.category).toBe('Dairy');
+    const cleared = await send(`/api/notes/${note.id}`, 'PATCH', { category: null });
+    expect((await cleared.json()).category).toBeNull();
+  });
+});
+
 describe('notes API', () => {
   it('creates, changes, reorders and deletes through REST', async () => {
     const { request, store } = createTestApp();
@@ -556,8 +644,8 @@ describe('Claude and notes', () => {
           name: 'General',
           checklist: false,
           notes: [
-            { id: notes[0]!.id, topic: 'A', checked: false },
-            { id: notes[1]!.id, topic: 'B', checked: false },
+            { id: notes[0]!.id, topic: 'A', category: null, checked: false },
+            { id: notes[1]!.id, topic: 'B', category: null, checked: false },
           ],
         },
       ],

@@ -5,6 +5,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import ConfirmButton from '../components/ConfirmButton.vue';
 import ExplorationHeader from '../components/ExplorationHeader.vue';
+import NoteCategoryHeading from '../components/NoteCategoryHeading.vue';
 import NoteEditor from '../components/NoteEditor.vue';
 import NoteGroupForm from '../components/NoteGroupForm.vue';
 import NoteGroupStrip from '../components/NoteGroupStrip.vue';
@@ -17,10 +18,13 @@ import { scrollToAndFlash } from '../lib/flash';
 import {
   dropAnchor,
   dropRange,
+  noteSections,
   notesInGroup,
   readChecklistOrder,
+  readCollapsedCategories,
   sortedGroups,
   storeChecklistOrder,
+  storeCollapsedCategories,
   uncheckedFirst,
   type ChecklistOrder,
 } from '../lib/notes';
@@ -56,7 +60,57 @@ watch(
 const keepsParts = computed(
   () => Boolean(activeGroup.value?.checklist) && checklistOrder.value === 'unchecked-first',
 );
-const shownNotes = computed(() => (keepsParts.value ? uncheckedFirst(notes.value) : notes.value));
+const collapsedCategories = ref<string[]>([]);
+watch(
+  () => activeGroup.value?.id,
+  (groupId) => {
+    collapsedCategories.value = groupId ? readCollapsedCategories(groupId) : [];
+  },
+  { immediate: true },
+);
+const categories = computed(() =>
+  noteSections(notes.value).flatMap((section) => (section.name === null ? [] : [section.name])),
+);
+// The notes by category, in the order they are shown.
+const sections = computed(() =>
+  noteSections(notes.value).map((section) => ({
+    name: section.name,
+    notes: keepsParts.value ? uncheckedFirst(section.notes) : section.notes,
+    collapsed: section.name !== null && collapsedCategories.value.includes(section.name),
+  })),
+);
+// What is on the page: the notes of a folded category are not.
+const shownNotes = computed(() =>
+  sections.value.flatMap((section) => (section.collapsed ? [] : section.notes)),
+);
+
+function toggleCategory(name: string) {
+  const groupId = activeGroup.value?.id;
+  if (!groupId) return;
+  collapsedCategories.value = collapsedCategories.value.includes(name)
+    ? collapsedCategories.value.filter((each) => each !== name)
+    : [...collapsedCategories.value, name];
+  storeCollapsedCategories(groupId, collapsedCategories.value);
+}
+
+// Every note of the category takes the new name; one that is folded stays folded.
+function renameCategory(from: string, to: string) {
+  const groupId = activeGroup.value?.id;
+  for (const note of notes.value.filter((each) => each.category === from)) {
+    outbox.add({
+      type: 'note.update',
+      explorationId: props.explorationId,
+      noteId: note.id,
+      changes: { category: to },
+    });
+  }
+  if (groupId && collapsedCategories.value.includes(from)) {
+    collapsedCategories.value = collapsedCategories.value.map((each) =>
+      each === from ? to : each,
+    );
+    storeCollapsedCategories(groupId, collapsedCategories.value);
+  }
+}
 const notesList = ref<HTMLElement | null>(null);
 const {
   draggedId,
@@ -132,7 +186,7 @@ function deleteGroup() {
   void router.replace({ query: {}, hash: '' });
 }
 
-function createNote(note: { topic: string; description: string }) {
+function createNote(note: { topic: string; description: string; category: string }) {
   const groupId = activeGroup.value?.id ?? addGroup();
   outbox.add({
     type: 'note.create',
@@ -149,7 +203,10 @@ watch(editingNoteId, (noteId) => {
   const note = noteId ? state.value.notes.get(noteId) : undefined;
   if (note) editBase.set(note.id, note.updatedAt);
 });
-function updateNote(noteId: string, changes: { topic: string; description: string }) {
+function updateNote(
+  noteId: string,
+  changes: { topic: string; description: string; category: string },
+) {
   outbox.add({
     type: 'note.update',
     explorationId: props.explorationId,
@@ -323,35 +380,57 @@ watch(
 
       <section ref="notesList" class="notes">
         <p v-if="notes.length === 0 && !creatingNote" class="muted empty">No notes yet.</p>
-        <NoteEditor v-if="creatingNote" @save="createNote" @cancel="creatingNote = false" />
+        <NoteEditor
+          v-if="creatingNote"
+          :categories="categories"
+          @save="createNote"
+          @cancel="creatingNote = false"
+        />
         <button v-else type="button" class="new-note" @click="creatingNote = true">
           + New note
         </button>
-        <template v-for="note in shownNotes" :key="note.id">
-          <NoteEditor
-            v-if="editingNoteId === note.id"
-            :topic="note.topic ?? ''"
-            :description="note.description"
-            @save="updateNote(note.id, $event)"
-            @cancel="editingNoteId = null"
+        <template v-for="section in sections" :key="section.name ?? ''">
+          <NoteCategoryHeading
+            v-if="section.name !== null"
+            :name="section.name"
+            :count="section.notes.length"
+            :ticked="
+              activeGroup?.checklist ? section.notes.filter((note) => note.checked).length : null
+            "
+            :collapsed="section.collapsed"
+            @toggle="toggleCategory(section.name)"
+            @rename="renameCategory(section.name, $event)"
           />
-          <NoteItem
-            v-else
-            :note="note"
-            :selected="selectedNoteId === note.id"
-            :checklist="activeGroup?.checklist ?? false"
-            :other-groups="otherGroups"
-            :data-drag-id="note.id"
-            :class="{ dragged: draggedId === note.id }"
-            @toggle-selected="toggleSelected(note.id)"
-            @toggle-checked="toggleChecked(note)"
-            @drag-start="startDrag($event, note.id)"
-            @edit="editingNoteId = note.id"
-            @delete="deleteNote(note.id)"
-            @keep="keepNote(note.id)"
-            @change-group="changeNoteGroup(note.id, $event)"
-            @fork="forkFromNote(note.id, $event)"
-          />
+          <template v-if="!section.collapsed">
+            <template v-for="note in section.notes" :key="note.id">
+              <NoteEditor
+                v-if="editingNoteId === note.id"
+                :topic="note.topic ?? ''"
+                :description="note.description"
+                :category="note.category ?? ''"
+                :categories="categories"
+                @save="updateNote(note.id, $event)"
+                @cancel="editingNoteId = null"
+              />
+              <NoteItem
+                v-else
+                :note="note"
+                :selected="selectedNoteId === note.id"
+                :checklist="activeGroup?.checklist ?? false"
+                :other-groups="otherGroups"
+                :data-drag-id="note.id"
+                :class="{ dragged: draggedId === note.id }"
+                @toggle-selected="toggleSelected(note.id)"
+                @toggle-checked="toggleChecked(note)"
+                @drag-start="startDrag($event, note.id)"
+                @edit="editingNoteId = note.id"
+                @delete="deleteNote(note.id)"
+                @keep="keepNote(note.id)"
+                @change-group="changeNoteGroup(note.id, $event)"
+                @fork="forkFromNote(note.id, $event)"
+              />
+            </template>
+          </template>
         </template>
         <div v-if="indicatorTop !== null" class="drop-line" :style="{ top: `${indicatorTop}px` }" />
       </section>

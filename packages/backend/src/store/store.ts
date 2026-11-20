@@ -136,9 +136,24 @@ const cutText = (text: string, maxChars: number) =>
 const notesFoundLimit = 20;
 const snippetLength = 200;
 
+const categoryNameLength = 80;
+
+// A category is a name: blanks around it do not count, and no name means no category.
+function categoryName(name: string | null | undefined) {
+  const trimmed = name?.trim() ?? '';
+  if (trimmed.length > categoryNameLength) {
+    throw new StoreError(
+      'invalid',
+      `A category name has at most ${categoryNameLength} characters.`,
+    );
+  }
+  return trimmed || null;
+}
+
 const noteFacts = (note: NoteRow) => ({
   id: note.id,
   topic: note.topic,
+  category: note.category,
   checked: note.checked === 1,
   createdBy: note.created_by,
   deletionRequested: note.deletion_requested_at !== null,
@@ -2139,6 +2154,7 @@ export class ChatStore {
         groupId: group.id,
         topic: topic || null,
         description,
+        category: categoryName(input.category),
         createdBy: 'user',
       }),
     );
@@ -2174,13 +2190,15 @@ export class ChatStore {
       description = row.description;
     }
     const checked = changes.checked === undefined ? row.checked : changes.checked ? 1 : 0;
+    const category = changes.category === undefined ? row.category : categoryName(changes.category);
     const events = this.db.transaction(() => {
       this.db.run(
-        `UPDATE notes SET topic = ?, description = ?, checked = ?, updated_at = ?,
+        `UPDATE notes SET topic = ?, description = ?, checked = ?, category = ?, updated_at = ?,
            updated_device = ? WHERE id = ?`,
         topic,
         description,
         checked,
+        category,
         this.now(),
         device,
         noteId,
@@ -2191,6 +2209,7 @@ export class ChatStore {
         groupId: row.group_id,
         topic: `${copy.topic ?? 'Note'} (other version)`,
         description: copy.description,
+        category: row.category,
         createdBy: 'user',
       });
     });
@@ -2229,7 +2248,7 @@ export class ChatStore {
     const noteIds = this.db.transaction(() => {
       if (group.id === row.group_id) return this.noteIdsIn(group.id);
       this.db.run(
-        'UPDATE notes SET group_id = ?, position = 0, updated_at = ? WHERE id = ?',
+        'UPDATE notes SET group_id = ?, category = NULL, position = 0, updated_at = ? WHERE id = ?',
         group.id,
         this.now(),
         noteId,
@@ -2246,7 +2265,11 @@ export class ChatStore {
   addNotes(input: {
     explorationId: string;
     groupId: string;
-    notes: { topic?: string | undefined; description?: string | undefined }[];
+    notes: {
+      topic?: string | undefined;
+      description?: string | undefined;
+      category?: string | undefined;
+    }[];
     sourceMessageId?: string | undefined;
   }) {
     const { explorationId } = input;
@@ -2256,6 +2279,7 @@ export class ChatStore {
       id: newPrefixedId('note'),
       topic: note.topic?.trim() ?? '',
       description: note.description?.trim() ?? '',
+      category: categoryName(note.category),
     }));
     if (notes.some((note) => !note.topic && !note.description)) {
       throw new StoreError('invalid', 'Every note needs a topic or a description.');
@@ -2281,6 +2305,7 @@ export class ChatStore {
           groupId: group.id,
           topic: note.topic || null,
           description: note.description,
+          category: note.category,
           createdBy: 'claude',
           source,
         }),
@@ -2308,6 +2333,7 @@ export class ChatStore {
         notes: notes.map((note) => ({
           id: note.id,
           topic: note.topic,
+          category: note.category,
           checked: note.checked === 1,
         })),
       })),
@@ -2454,6 +2480,7 @@ export class ChatStore {
     groupId: string;
     topic: string | null;
     description: string;
+    category?: string | null;
     createdBy: NoteAuthor;
     source?: {
       forkId: string;
@@ -2469,8 +2496,8 @@ export class ChatStore {
     this.db.run(
       `INSERT INTO notes (id, exploration_id, group_id, topic, description, position,
          source_fork_id, source_message_id, source_quote, source_start_offset, source_end_offset,
-         source_comment_id, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         source_comment_id, created_by, created_at, updated_at, category)
+       VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       input.id,
       group.exploration_id,
       group.id,
@@ -2485,6 +2512,7 @@ export class ChatStore {
       input.createdBy,
       createdAt,
       createdAt,
+      input.category ?? null,
     );
     const noteIds = this.renumberNotes(group.id);
     const note = toNote(this.requireNoteRow(input.id));

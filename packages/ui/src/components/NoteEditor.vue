@@ -5,11 +5,23 @@ import { insertAtCursor } from '../lib/insert-text';
 import DictationButton from './DictationButton.vue';
 import ExpandButton from './ExpandButton.vue';
 
-const props = defineProps<{ topic?: string; description?: string }>();
-const emit = defineEmits<{ save: [note: { topic: string; description: string }]; cancel: [] }>();
+const props = defineProps<{
+  topic?: string;
+  description?: string;
+  category?: string;
+  // The categories of the group, offered while typing one.
+  categories?: string[];
+}>();
+const emit = defineEmits<{
+  save: [note: { topic: string; description: string; category: string }];
+  cancel: [];
+}>();
+
+const categoryListId = `categories-${Math.random().toString(36).slice(2)}`;
 
 const topic = ref(props.topic ?? '');
 const description = ref(props.description ?? '');
+const category = ref(props.category ?? '');
 const topicInput = ref<HTMLInputElement | null>(null);
 const descriptionInput = ref<HTMLTextAreaElement | null>(null);
 const expanded = ref(false);
@@ -20,7 +32,12 @@ const insertDictation = (text: string) => insertAtCursor(descriptionInput.value,
 onMounted(() => topicInput.value?.focus());
 
 function save() {
-  if (canSave.value) emit('save', { topic: topic.value, description: description.value });
+  if (canSave.value)
+    emit('save', {
+      topic: topic.value,
+      description: description.value,
+      category: category.value,
+    });
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -59,6 +76,18 @@ function onTopicKeydown(event: KeyboardEvent) {
       aria-label="Description"
       @keydown="onKeydown"
     />
+    <input
+      v-model="category"
+      class="category"
+      placeholder="Category (optional)"
+      aria-label="Category"
+      maxlength="80"
+      :list="categoryListId"
+      @keydown="onKeydown"
+    />
+    <datalist :id="categoryListId">
+      <option v-for="name in categories ?? []" :key="name" :value="name" />
+    </datalist>
     <div class="actions">
       <DictationButton :hint="topic" @text="insertDictation" />
       <ExpandButton v-model="expanded" />
@@ -86,7 +115,8 @@ function onTopicKeydown(event: KeyboardEvent) {
 }
 
 .topic,
-.description {
+.description,
+.category {
   font: inherit;
   color: inherit;
   background: none;
@@ -102,6 +132,11 @@ function onTopicKeydown(event: KeyboardEvent) {
 .description {
   font-size: 0.9rem;
   resize: vertical;
+}
+
+.category {
+  font-size: 0.85rem;
+  color: var(--text-muted);
 }
 
 .description:focus {

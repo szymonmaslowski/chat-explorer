@@ -20,7 +20,15 @@ vi.mock('../src/api', async (importOriginal) => {
 
 const { applyChange, applyServerEvent } = await import('../src/stores/exploration');
 const { outbox } = await import('../src/stores/outbox');
-const { dropAnchor, dropRange, notesInGroup, uncheckedFirst } = await import('../src/lib/notes');
+const {
+  dropAnchor,
+  dropRange,
+  noteSections,
+  notesInGroup,
+  readCollapsedCategories,
+  storeCollapsedCategories,
+  uncheckedFirst,
+} = await import('../src/lib/notes');
 
 const explorationId = 'e';
 
@@ -34,12 +42,18 @@ const group = (id: string, name: string, position: number): NoteGroup => ({
   updatedAt: 0,
 });
 
-const note = (id: string, groupId: string, position: number): Note => ({
+const note = (
+  id: string,
+  groupId: string,
+  position: number,
+  category: string | null = null,
+): Note => ({
   id,
   explorationId,
   groupId,
   topic: id,
   description: '',
+  category,
   checked: false,
   position,
   sourceForkId: null,
@@ -172,5 +186,80 @@ describe('dragging a note', () => {
     expect(topicsIn(state, 'g1')).toEqual(['c', 'a', 'b']);
     applyServerEvent(state, { type: 'notes.reordered', groupId: 'g1', noteIds: ['a', 'b', 'c'] });
     expect(topicsIn(state, 'g1')).toEqual(['c', 'a', 'b']);
+  });
+});
+
+describe('categories', () => {
+  const stored = [
+    note('a', 'g', 1, 'Dairy'),
+    note('b', 'g', 2),
+    note('c', 'g', 3, 'Fruit'),
+    note('d', 'g', 4, 'Dairy'),
+  ];
+
+  it('shows notes with no category first, then each category where its first note is', () => {
+    expect(noteSections(stored).map((each) => [each.name, each.notes.map((n) => n.id)])).toEqual([
+      [null, ['b']],
+      ['Dairy', ['a', 'd']],
+      ['Fruit', ['c']],
+    ]);
+  });
+
+  it('leaves out the section of notes with no category when there are none', () => {
+    expect(noteSections([note('a', 'g', 1, 'Dairy')]).map((each) => each.name)).toEqual(['Dairy']);
+  });
+
+  it('keeps a dragged note in its category', () => {
+    const shown = noteSections(stored).flatMap((each) => each.notes);
+    // Shown: b, a, d, c. Another note of Dairy is at 1 among the others (b, d, c).
+    expect(dropRange(shown, 'a', false)).toEqual({ first: 1, last: 2 });
+    expect(dropRange(shown, 'c', false)).toEqual({ first: 3, last: 3 });
+  });
+
+  it('drops first in a category before its first note in the stored order', () => {
+    const shown = noteSections(stored).flatMap((each) => each.notes);
+    // d to the top of Dairy: after the note stored before a, which is none.
+    expect(dropAnchor(shown, stored, 'd', 1, false)).toBeNull();
+  });
+
+  it('keeps which categories are folded on this device, per group', () => {
+    storeCollapsedCategories('g', ['Dairy']);
+    expect(readCollapsedCategories('g')).toEqual(['Dairy']);
+    expect(readCollapsedCategories('other')).toEqual([]);
+    storeCollapsedCategories('g', []);
+    expect(readCollapsedCategories('g')).toEqual([]);
+  });
+
+  it('shows a category set on a new or edited note, and clears it with an empty name', () => {
+    const state = stateWith([group('g', 'One', 1)], []);
+    applyChange(state, {
+      type: 'note.create',
+      explorationId,
+      note: { id: 'n', groupId: 'g', topic: 'Milk', category: ' Dairy ' },
+    });
+    expect(state.notes.get('n')?.category).toBe('Dairy');
+    applyChange(state, {
+      type: 'note.update',
+      explorationId,
+      noteId: 'n',
+      changes: { topic: 'Milk 2%' },
+    });
+    expect(state.notes.get('n')?.category).toBe('Dairy');
+    applyChange(state, {
+      type: 'note.update',
+      explorationId,
+      noteId: 'n',
+      changes: { category: '' },
+    });
+    expect(state.notes.get('n')?.category).toBeNull();
+  });
+
+  it('takes a note out of its category when it moves to another group', () => {
+    const state = stateWith(
+      [group('g', 'One', 1), group('h', 'Two', 2)],
+      [note('a', 'g', 1, 'Dairy')],
+    );
+    applyChange(state, { type: 'note.change-group', explorationId, noteId: 'a', groupId: 'h' });
+    expect(state.notes.get('a')?.category).toBeNull();
   });
 });

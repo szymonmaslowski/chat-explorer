@@ -153,6 +153,7 @@ export interface NoteRow {
   created_at: number;
   updated_at: number;
   updated_device: string | null;
+  category: string | null;
 }
 
 export interface ForkRunRow {
@@ -321,6 +322,7 @@ export const toNote = (row: NoteRow): Note => ({
   groupId: row.group_id,
   topic: row.topic,
   description: row.description,
+  category: row.category,
   checked: row.checked === 1,
   position: row.position,
   sourceForkId: row.source_fork_id,

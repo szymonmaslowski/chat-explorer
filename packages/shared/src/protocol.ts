@@ -109,13 +109,14 @@ export interface NotesIndex {
     id: string;
     name: string;
     checklist: boolean;
-    notes: { id: string; topic: string | null; checked: boolean }[];
+    notes: { id: string; topic: string | null; category: string | null; checked: boolean }[];
   }[];
 }
 
 export interface NoteFacts {
   id: string;
   topic: string | null;
+  category: string | null;
   checked: boolean;
   createdBy: NoteAuthor;
   deletionRequested: boolean;

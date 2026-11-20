@@ -169,10 +169,12 @@ const newNoteBody = z.object({
   groupId: z.string(),
   topic: z.string().optional(),
   description: z.string().optional(),
+  category: z.string().optional(),
 });
 const noteChangesBody = z.object({
   topic: z.string().optional(),
   description: z.string().optional(),
+  category: z.string().nullable().optional(),
   checked: z.boolean().optional(),
   baseUpdatedAt: z.number().int().optional(),
   editedAt: z.number().int().optional(),
@@ -235,7 +237,13 @@ const claudeNoteGroupBody = shimBody.extend({
 const claudeNotesBody = shimBody.extend({
   groupId: z.string(),
   notes: z
-    .array(z.object({ topic: z.string().optional(), description: z.string().optional() }))
+    .array(
+      z.object({
+        topic: z.string().optional(),
+        description: z.string().optional(),
+        category: z.string().optional(),
+      }),
+    )
     .min(1),
   sourceMessageId: z.string().optional(),
 });
