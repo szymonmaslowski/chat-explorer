@@ -35,4 +35,8 @@ test("starts an empty fork after one of Claude's answers and replies there", asy
 
   await page.getByRole('link', { name: 'Chat', exact: true }).click();
   await expect(page.locator('.fork-box')).toHaveCount(2);
+  const box = page.locator(`.fork-box[href$="/f/${forkId}"]`);
+  await expect(box.locator('.fork-id')).toHaveText(forkId);
+  await expect(box).toHaveClass(/awaiting-box/);
+  await expect(page.locator('.fork-box.awaiting-box')).toHaveCount(1);
 });
