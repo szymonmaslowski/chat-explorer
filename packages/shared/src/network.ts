@@ -1,4 +1,4 @@
-export const registryNames = ['npm', 'pypi', 'rust', 'go'] as const;
+export const registryNames = ['github', 'npm', 'pypi', 'rust', 'go'] as const;
 export type RegistryName = (typeof registryNames)[number];
 
 // What a coding fork's container may reach, besides the model and the chat tools: hosts the
@@ -48,6 +48,9 @@ export function matchesHostPattern(pattern: string, hostPort: string) {
 // over several hosts, each is needed: PyPI's index and its files, Go's modules and the checksum
 // database that verifies them, Cargo's index and its downloads.
 export const packageRegistries: Record<RegistryName, { label: string; hosts: string[] }> = {
+  // Not a registry, but it is ticked the same way: git clones over HTTPS. Downloads of release files
+  // and archives use other GitHub hosts, which stay for the reader to add.
+  github: { label: 'GitHub', hosts: ['github.com:443'] },
   npm: { label: 'npm', hosts: ['registry.npmjs.org:443'] },
   pypi: { label: 'Python: PyPI', hosts: ['pypi.org:443', 'files.pythonhosted.org:443'] },
   // rustup's hosts too, since the image has no Rust: it installs the toolchain itself.

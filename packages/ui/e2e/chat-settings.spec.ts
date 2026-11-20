@@ -55,6 +55,10 @@ test('opens a chat on the page its settings name, and shows the fork model there
   await expect.poll(network).toMatchObject({ registries: ['rust', 'npm'] });
   await forkSettings.getByLabel('Rust: crates.io and rustup').uncheck();
   await expect.poll(network).toMatchObject({ registries: ['npm'] });
+  await forkSettings.getByLabel('GitHub', { exact: true }).check();
+  await expect.poll(network).toMatchObject({ registries: ['npm', 'github'] });
+  await forkSettings.getByLabel('GitHub', { exact: true }).uncheck();
+  await expect.poll(network).toMatchObject({ registries: ['npm'] });
   const hosts = forkSettings.getByLabel(/Other allowed hosts/);
   await hosts.fill('GitHub.com:443\n192.168.1.1:22');
   await expect(forkSettings.getByRole('alert')).toHaveText('Not a host and port: 192.168.1.1:22');

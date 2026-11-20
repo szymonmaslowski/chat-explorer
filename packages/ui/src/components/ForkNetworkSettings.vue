@@ -60,7 +60,7 @@ const saveHosts = () => save({ ...props.fork.network, hosts: entries.value });
 <template>
   <div class="network">
     <fieldset>
-      <legend>Package registries</legend>
+      <legend>Common hosts</legend>
       <label
         v-for="name in registryNames"
         :key="name"
@@ -82,7 +82,7 @@ const saveHosts = () => save({ ...props.fork.network, hosts: entries.value });
         rows="3"
         spellcheck="false"
         autocapitalize="off"
-        placeholder="github.com:443"
+        placeholder="example.com:443"
       />
     </label>
     <p v-if="invalid.length > 0" class="error" role="alert">

@@ -39,4 +39,11 @@ describe("a fork's allowed hosts", () => {
     expect(withRustAndGo).toEqual([...packageRegistries.rust.hosts, ...packageRegistries.go.hosts]);
     expect(withRustAndGo).not.toContain('registry.npmjs.org:443');
   });
+
+  it('lets the GitHub box allow github.com:443 and nothing else, without repeating a typed entry', () => {
+    expect(networkHosts({ hosts: [], registries: ['github'] })).toEqual(['github.com:443']);
+    expect(networkHosts({ hosts: ['github.com:443'], registries: ['github'] })).toEqual([
+      'github.com:443',
+    ]);
+  });
 });
