@@ -73,11 +73,7 @@ onBeforeUnmount(() => {
 });
 
 const attentionOf = (exploration: ExplorationListItem) =>
-  exploration.sessionError && exploration.awaitingAnswer
-    ? 'failed'
-    : exploration.hasUnread
-      ? 'unread'
-      : null;
+  exploration.hasUnread ? 'unread' : null;
 
 async function removeFromList(explorationId: string, change: (id: string) => Promise<object>) {
   await change(explorationId);

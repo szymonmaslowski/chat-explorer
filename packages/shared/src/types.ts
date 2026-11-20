@@ -8,7 +8,7 @@ export type ForkKind = 'soft' | 'hard';
 export type ForkAwareness = 'aware' | 'separate';
 export type CommentType = 'inline' | 'fork' | 'note';
 export type CommentStatus = 'draft' | 'queued' | 'submitted';
-export type SessionStatus = 'starting' | 'listening' | 'answering' | 'attached' | 'detached';
+export type SessionStatus = 'listening' | 'answering' | 'attached' | 'detached';
 
 export interface Exploration {
   id: string;
@@ -32,7 +32,6 @@ export interface ExplorationListItem extends Exploration {
   sessionStatus: SessionStatus;
   hasUnread: boolean;
   awaitingAnswer: boolean;
-  sessionError: string | null;
 }
 
 // What a split changed: the new fork, the old one and the forks moved under the new one, and
@@ -314,7 +313,6 @@ export interface Snapshot {
   forkRuns: ForkRun[];
   activities: Activity[];
   sessionStatus: SessionStatus;
-  sessionError: string | null;
 }
 
 // The chat without message texts and with runner steps only counted, except for the attempts
@@ -361,7 +359,6 @@ export interface ChangeSet {
   deleted: { kind: ChangeKind; id: string }[];
   // The log keeps no session state, so a chat caught up from it gets the current one.
   sessionStatus: SessionStatus;
-  sessionError: string | null;
 }
 
 export type ExplorationEvent =
@@ -396,8 +393,7 @@ export type ExplorationEvent =
   | { type: 'activity.added'; activity: Activity }
   | { type: 'activities.interrupted'; forkId: string; attempt: number }
   | { type: 'session.attached'; shimId: string }
-  | { type: 'session.status'; status: SessionStatus }
-  | { type: 'session.error'; message: string | null };
+  | { type: 'session.status'; status: SessionStatus };
 
 export interface NewComment {
   // Made by the page when it queues the comment, so a repeated request creates it only once.

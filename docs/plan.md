@@ -404,7 +404,7 @@ Every key is optional. `CHAT_EXPLORER_PUBLIC_URL` overrides `publicUrl`. An inva
 - When the port is already held by a chat-explorer daemon, a new daemon exits with 0 instead of 3, so launchd does not retry forever.
 - The Mac must stay awake on the charger. The README says how. There is no fix for a sleeping Mac.
 
-**Background sessions.** When nobody is attached, the daemon runs Claude Code itself:
+**Background sessions.** _Removed (Phase 1 step 11); the runner answers forks now. Kept as history._ When nobody is attached, the daemon runs Claude Code itself:
 
 ```
 claude -p "/explore-chat <id>" --model <model> (--session-id <uuid> | --resume <uuid>)

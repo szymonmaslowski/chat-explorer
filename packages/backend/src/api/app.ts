@@ -11,7 +11,6 @@ import { dictationHint, type Transcriber } from '../dictation/transcriber.js';
 import type { FileStorage } from '../files/file-storage.js';
 import { maxFileBytes } from '../files/kinds.js';
 import { findTranscript, readTranscript } from '../import/transcript.js';
-import type { BackgroundSessions } from '../sessions/background-sessions.js';
 import type { Speaker } from '../speech/speaker.js';
 import { prefixedIdPattern } from '@chat-explorer/shared/ids.js';
 import { withLegacyIdsPrefixed } from './legacy-ids.js';
@@ -47,7 +46,6 @@ export interface AppOptions {
   store: ChatStore;
   hub: FeedbackHub;
   bus: EventBus;
-  sessions: BackgroundSessions;
   runs: RunStore;
   machineToken: string;
   transcriber: Transcriber;
@@ -276,7 +274,7 @@ function eventStream(context: Context, subscribe: (send: SendEvent) => () => voi
 
 export function createApp(options: AppOptions) {
   const progressLines = new ProgressLines();
-  const { store, hub, bus, sessions, transcriber, speaker, fileStorage, port } = options;
+  const { store, hub, bus, transcriber, speaker, fileStorage, port } = options;
   const localUrl = `http://127.0.0.1:${port}`;
   const explorationUrls = (explorationId: string) => ({
     url: `${options.publicUrl ?? localUrl}/e/${explorationId}`,
@@ -419,7 +417,6 @@ export function createApp(options: AppOptions) {
     const explorations: ExplorationListItem[] = store.listExplorations(view).map((exploration) => ({
       ...exploration,
       sessionStatus: view === 'deleted' ? 'detached' : hub.status(exploration.id),
-      sessionError: view === 'deleted' ? null : sessions.error(exploration.id),
     }));
     return context.json(explorations);
   });
@@ -475,14 +472,12 @@ export function createApp(options: AppOptions) {
       const light: LightSnapshot = {
         ...store.lightSnapshot(explorationId),
         sessionStatus: hub.status(explorationId),
-        sessionError: sessions.error(explorationId),
       };
       return context.json(light);
     }
     const snapshot: Snapshot = {
       ...store.snapshot(explorationId),
       sessionStatus: hub.status(explorationId),
-      sessionError: sessions.error(explorationId),
     };
     return context.json(snapshot);
   });
@@ -493,7 +488,6 @@ export function createApp(options: AppOptions) {
     const changes: ChangeSet = {
       ...store.changesSince(explorationId, after),
       sessionStatus: hub.status(explorationId),
-      sessionError: sessions.error(explorationId),
     };
     return context.json(changes);
   });
@@ -516,14 +510,8 @@ export function createApp(options: AppOptions) {
       : undefined;
     if (settings.model) {
       exploration = store.setModel(explorationId, settings.model);
-      sessions.restart(explorationId);
     }
     return context.json(exploration);
-  });
-
-  app.post('/api/explorations/:id/session', (context) => {
-    sessions.start(context.req.param('id'));
-    return context.json({ ok: true }, 201);
   });
 
   app.post('/api/explorations/:id/archive', (context) =>

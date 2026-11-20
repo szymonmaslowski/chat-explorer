@@ -9,7 +9,7 @@ import {
   test,
 } from './helpers';
 
-test('starts a new exploration and reports a Claude that cannot start', async ({ page }) => {
+test('starts a new exploration', async ({ page }) => {
   await page.goto('/');
   await page.getByPlaceholder('Start a new chat').fill('Why is the sky blue?');
   await page.getByTitle('Model').selectOption('opus');
@@ -17,7 +17,6 @@ test('starts a new exploration and reports a Claude that cannot start', async ({
 
   await expect(page).toHaveURL(/\/e\/chat_[a-z0-9]+$/);
   await expect(page.locator('.queued-submission')).toContainText('Why is the sky blue?');
-  await expect(page.getByRole('alert')).toContainText('Claude could not be started');
   const explorationId = page.url().split('/').at(-1);
   const snapshot = await (await page.request.get(`/api/explorations/${explorationId}`)).json();
   expect(snapshot.exploration.model).toBe('opus');

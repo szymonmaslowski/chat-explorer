@@ -18,7 +18,6 @@ import NoteDeletionNotice from '../components/NoteDeletionNotice.vue';
 import ConversationMessage from '../components/ConversationMessage.vue';
 import QueuedSubmissionCard from '../components/QueuedSubmissionCard.vue';
 import ReplyBar from '../components/ReplyBar.vue';
-import SessionError from '../components/SessionError.vue';
 import SpeechPlayer from '../components/SpeechPlayer.vue';
 import ActivityGroup from '../components/ActivityGroup.vue';
 import AttentionDot from '../components/AttentionDot.vue';
@@ -441,11 +440,6 @@ watch(
     </ExplorationHeader>
 
     <NoteDeletionNotice :exploration-id="explorationId" :notes="state.notes" />
-    <SessionError
-      v-if="state.sessionError"
-      :exploration-id="explorationId"
-      :message="state.sessionError"
-    />
 
     <p v-if="state.status === 'loading'" class="muted">Loading…</p>
     <p v-else-if="state.status === 'missing'" class="muted">This chat does not exist.</p>

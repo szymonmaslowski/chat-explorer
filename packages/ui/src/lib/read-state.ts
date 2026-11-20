@@ -1,6 +1,6 @@
 import type { Fork, ForkRun, MessageHead } from '@shared/types';
 
-export type Attention = 'unread' | 'failed';
+export type Attention = 'unread';
 
 export const isUnread = (message: Pick<MessageHead, 'role' | 'readAt'>) =>
   message.role === 'assistant' && message.readAt === null;
@@ -16,21 +16,13 @@ export function awaitsAnswer(
   return last?.role === 'user' && last.id !== run?.handledUpTo;
 }
 
-// A fork needs the reader when Claude answered there unseen, or when Claude could not be
-// started while the fork waits for an answer.
+// A fork needs the reader when Claude answered there unseen.
 export function forkAttention(input: {
   forks: Map<string, Fork>;
   messages: Map<string, MessageHead>;
   forkRuns: Map<string, ForkRun>;
-  sessionError: string | null;
 }) {
   const attention = new Map<string, Attention>();
-  if (input.sessionError) {
-    for (const fork of input.forks.values()) {
-      if (awaitsAnswer(fork, input.messages, input.forkRuns.get(fork.id)))
-        attention.set(fork.id, 'failed');
-    }
-  }
   for (const message of input.messages.values()) {
     if (isUnread(message) && !attention.has(message.forkId)) {
       attention.set(message.forkId, 'unread');

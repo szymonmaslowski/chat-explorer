@@ -6,13 +6,11 @@ import { Database } from '../src/db/database.js';
 import type { DictationAvailability } from '../src/dictation/availability.js';
 import { Transcriber } from '../src/dictation/transcriber.js';
 import type { WhisperRun } from '../src/dictation/whisper.js';
-import { BackgroundSessions } from '../src/sessions/background-sessions.js';
 import { FileStorage } from '../src/files/file-storage.js';
 import type { SpeechEngine, SpeechEngineName } from '../src/speech/engines.js';
 import { Speaker } from '../src/speech/speaker.js';
 import { SpeechCache } from '../src/speech/speech-cache.js';
 import { chooseVoice, type SpeechInspection } from '../src/speech/voices.js';
-import type { LaunchSpec, SessionProcess } from '../src/sessions/launch-claude.js';
 import type { ExplorationEvent } from '@chat-explorer/shared/types.js';
 import { EventBus } from '../src/store/event-bus.js';
 import { FeedbackHub } from '../src/store/feedback-hub.js';
@@ -30,61 +28,9 @@ export function createTestStore() {
   const events: ExplorationEvent[] = [];
   bus.subscribe((_explorationId, event) => events.push(event));
   const store = new ChatStore(database, bus, now);
-  const { sessions, launches } = createTestSessions({
-    store,
-    bus,
-    now,
-    onStatusChange: (explorationId) => hub.refreshStatus(explorationId),
-  });
-  const hub = new FeedbackHub(store, bus, now, sessions);
+  const hub = new FeedbackHub(store, bus, now);
   const runs = new RunStore(database, bus, store, now);
-  return { clock, database, bus, store, hub, sessions, runs, launches, events };
-}
-
-export function createTestSessions(input: {
-  store: ChatStore;
-  bus: EventBus;
-  now?: () => number;
-  onStatusChange: (explorationId: string) => void;
-}) {
-  const launches: FakeLaunch[] = [];
-  const sessions = new BackgroundSessions({
-    ...input,
-    settings: { idleMinutes: 60, maxSessions: 2 },
-    sessionsPath: mkdtempSync(join(tmpdir(), 'chat-explorer-sessions-')),
-    launch: (spec) => {
-      const launch = fakeLaunch(spec);
-      launches.push(launch);
-      return launch.process;
-    },
-    canResume: () => true,
-  });
-  return { sessions, launches };
-}
-
-export interface FakeLaunch {
-  spec: LaunchSpec;
-  process: SessionProcess;
-  stopped: boolean;
-  exit: (code: number | null, error?: string) => void;
-}
-
-function fakeLaunch(spec: LaunchSpec): FakeLaunch {
-  const listeners: ((result: { code: number | null; error?: string }) => void)[] = [];
-  const launch: FakeLaunch = {
-    spec,
-    stopped: false,
-    process: {
-      stop: () => {
-        launch.stopped = true;
-      },
-      onExit: (listener) => listeners.push(listener),
-    },
-    exit: (code, error) => {
-      for (const listener of listeners) listener(error ? { code, error } : { code });
-    },
-  };
-  return launch;
+  return { clock, database, bus, store, hub, runs, events };
 }
 
 export interface FakeWhisperCall {
@@ -186,7 +132,6 @@ export function createTestApp(options: { publicUrl?: string; sessionLeases?: boo
         context.store,
         context.bus,
         () => context.clock.now,
-        context.sessions,
         context.runs,
       )
     : context.hub;
@@ -201,7 +146,6 @@ export function createTestApp(options: { publicUrl?: string; sessionLeases?: boo
     store: context.store,
     hub,
     bus: context.bus,
-    sessions: context.sessions,
     runs: context.runs,
     machineToken: testMachineToken,
     transcriber,

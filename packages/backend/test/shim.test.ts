@@ -14,7 +14,6 @@ import { FeedbackHub } from '../src/store/feedback-hub.js';
 import { RunStore } from '../src/store/runs.js';
 import { ChatStore } from '../src/store/store.js';
 import {
-  createTestSessions,
   createTestSpeaker,
   createTestTranscriber,
   testMachineToken,
@@ -32,17 +31,11 @@ beforeEach(async () => {
   const bus = new EventBus();
   const database = new Database(':memory:');
   const store = new ChatStore(database, bus);
-  const { sessions } = createTestSessions({
-    store,
-    bus,
-    onStatusChange: (explorationId) => hub.refreshStatus(explorationId),
-  });
-  hub = new FeedbackHub(store, bus, Date.now, sessions);
+  hub = new FeedbackHub(store, bus, Date.now);
   const app = createApp({
     store,
     hub,
     bus,
-    sessions,
     runs: new RunStore(database, bus, store),
     machineToken: testMachineToken,
     transcriber: createTestTranscriber().transcriber,

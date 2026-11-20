@@ -25,12 +25,15 @@ describe('settings', () => {
     expect(loadSettings(loadConfig())).toEqual({
       publicUrl: null,
       defaultModel: 'sonnet',
-      idleMinutes: 60,
-      maxSessions: 3,
       runner: { enabled: false, maxParallel: 5, idleMinutes: 10 },
       dictation: { model: 'large-v3-turbo-q5_0', language: 'auto' },
       speech: { engine: 'chatterbox', cacheMegabytes: 1024 },
     });
+  });
+
+  it('still loads a file with the settings of the removed background sessions', () => {
+    writeSettings('{ "idleMinutes": 60, "maxSessions": 3 }');
+    expect(loadSettings(loadConfig())).toMatchObject({ defaultModel: 'sonnet' });
   });
 
   it('reads the file and keeps only the origin of the public URL', () => {

@@ -125,8 +125,6 @@ export const api = {
     return call<MessageFile>('/api/files', { form });
   },
   deleteFile: (fileId: string) => call<{ ok: true }>(`/api/files/${fileId}`, { method: 'DELETE' }),
-  startSession: (explorationId: string) =>
-    call<{ ok: true }>(`/api/explorations/${explorationId}/session`, { method: 'POST' }),
   submit: (
     explorationId: string,
     forkId: string,

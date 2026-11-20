@@ -11,7 +11,6 @@ function setup() {
     context.store,
     context.bus,
     () => context.clock.now,
-    context.sessions,
     context.runs,
   );
   context.store.attach({

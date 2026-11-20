@@ -13,9 +13,10 @@ const settingsSchema = z
       .default(null)
       .transform((url) => (url ? new URL(url).origin : null)),
     defaultModel: z.enum(claudeModels).default(defaultClaudeModel),
-    idleMinutes: z.number().positive().default(60),
-    maxSessions: z.number().int().positive().default(3),
-    // The agent loop: a runner next to the daemon answers forks, in place of Claude Code sessions.
+    // Settings of the removed background sessions; still accepted so an old config.json loads.
+    idleMinutes: z.unknown().optional(),
+    maxSessions: z.unknown().optional(),
+    // The runner next to the daemon answers forks.
     runner: z
       .object({
         enabled: z.boolean().default(false),

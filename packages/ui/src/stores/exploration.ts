@@ -74,7 +74,6 @@ export interface ExplorationState {
   // Every attempt, counted, by attemptKey.
   activitySummaries: Map<string, ActivitySummary>;
   sessionStatus: SessionStatus;
-  sessionError: string | null;
   connected: boolean;
 }
 
@@ -109,7 +108,6 @@ const eventTypes: ExplorationEvent['type'][] = [
   'exploration.updated',
   'exploration.deleted',
   'session.status',
-  'session.error',
 ];
 
 const sameValue = <Value>(shown: Value, next: Value) =>
@@ -295,9 +293,6 @@ export function applyEvent(state: ExplorationState, event: ExplorationEvent) {
       break;
     case 'session.status':
       state.sessionStatus = event.status;
-      break;
-    case 'session.error':
-      state.sessionError = event.message;
       break;
     case 'session.attached':
       break;
@@ -746,7 +741,6 @@ export function applySnapshot(
   // Steps opened earlier stay loaded; the light load sends only those of running attempts.
   for (const activity of snapshot.activities) put(state.activities, activity.id, activity);
   state.sessionStatus = snapshot.sessionStatus;
-  state.sessionError = snapshot.sessionError;
   state.status = 'ready';
   if (options.withPending) applyPending(state);
 }
@@ -822,7 +816,6 @@ export function applyChangeSet(
   }
   for (const { kind, id } of changes.deleted) removeChanged(state, kind, id);
   state.sessionStatus = changes.sessionStatus;
-  state.sessionError = changes.sessionError;
   state.seq = changes.seq;
   state.status = state.exploration ? 'ready' : state.status;
   if (options.withPending) applyPending(state);
@@ -865,7 +858,6 @@ export const emptyState = (explorationId: string): ExplorationState => ({
   activities: new Map(),
   activitySummaries: new Map(),
   sessionStatus: 'detached',
-  sessionError: null,
   connected: false,
 });
 

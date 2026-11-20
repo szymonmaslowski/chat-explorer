@@ -65,7 +65,6 @@ const collapse = (fork: Fork) => change(api.collapseFork(fork.id));
 const expandChildren = (fork: Fork) => change(api.expandCollapsedChildren(fork.id));
 
 function strongestAttention(attentions: (Attention | undefined)[]) {
-  if (attentions.includes('failed')) return 'failed' as const;
   return attentions.includes('unread') ? ('unread' as const) : undefined;
 }
 

@@ -35,7 +35,7 @@ In a Claude Code session, run `/explore-chat`. It imports the conversation so fa
 
 - **Comment:** select text in a message, or tap a paragraph, and click **Comment**. Pick **Fork** to start a new branch from it, **Note** to keep it as a note in the group you choose, or leave **Comment** to continue the current one.
 - **Reply:** write in the box at the bottom. **Submit** sends your comments and message together: each fork comment becomes a new fork, and the inline comments and message become one reply in the current fork. Tick **New fork** to send the message and inline comments to a new fork instead, starting from the end of the current one. The current fork stays as it was, and a **↳ Fork** link under its last message leads to the new one.
-- **Files:** paste an image, drop files on the reply box or the new-chat box, or pick them with 📎 (on the iPhone: photos, the camera or Files). Images, PDFs and text or code files, up to 10 MB each. They are stored in `~/.chat-explorer/files/`, and Claude gets their paths and opens them with its Read tool. Background sessions may read that folder and nothing else.
+- **Files:** paste an image, drop files on the reply box or the new-chat box, or pick them with 📎 (on the iPhone: photos, the camera or Files). Images, PDFs and text or code files, up to 10 MB each. They are stored in `~/.chat-explorer/files/`, and Claude gets their paths and opens them with its Read tool. Forks may read that folder and nothing else.
 - **Unsaved text:** the reply box (with its **New fork** tick and files), a new comment and an edit of a comment are saved to the daemon as you type: a second after you stop, at least every 5 seconds, and when the page goes to the background. A reloaded page, or another device, opens them again where you left off. **Cancel** on a new comment deletes it; on an edit it goes back to the saved text. **Submit** waits until no comment of the fork is open in an editor. The new-chat box is not saved.
 - **Offline:** without a connection to the daemon, comments, edits, the reply box, **Submit** and **Cancel** still work. The page shows them at once and keeps them in the browser, marked "not sent yet" and counted in the status ("Reconnecting… · 3 changes waiting"), and sends them in order once the daemon answers again, even if the page was closed meanwhile. A change the daemon refuses, for example in a fork archived meanwhile, is shown under the title. Files cannot be uploaded and chats cannot be started offline.
 - **Expand:** the arrows button next to the microphone grows the reply box, or a comment being written or edited, into the free space: a comment fills the room between the header and the reply box, the reply box everything below the header. It shrinks back with the same button, and the reply box after **Submit**.
@@ -68,21 +68,9 @@ The daemon can run Claude Code itself, so the phone only needs to reach the daem
 
 On the phone, open the address. Start a new exploration from the explorations page, or continue an existing one. Comments are listed under their message instead of floating over the text; tap a comment's quote (↑) to scroll to the text it quotes.
 
-### Background sessions
+### Who answers
 
-When feedback is waiting and no session is attached, the daemon runs:
-
-```
-claude -p "/explore-chat <id>" --model <model> --tools WebSearch ...
-```
-
-- The session can search the web and use the chat-explorer tools. It cannot read or write files or run commands, and anything that would need a permission prompt is denied.
-- It runs in `~/.chat-explorer/sessions/`, logging to `sessions/<id>.log`.
-- The model picker in the status bar (Sonnet or Opus) sets the model for these sessions. Changing it restarts a running session, which keeps its conversation.
-- After `idleMinutes` with nothing to answer, the session stops. Your next submit resumes it with the same conversation, which takes a few seconds.
-- At most `maxSessions` run at once. To start another, chat-explorer stops the one idle longest.
-- If Claude cannot start, for example because it is not logged in, the page shows the end of its log and a Retry button.
-- Running `/explore-chat <id>` in a terminal takes the exploration over. The background session then exits.
+The runner, which the daemon starts when `runner.enabled` is set, answers forks in containers. The model picker in the status bar (Sonnet or Opus) sets the model. Running `/explore-chat <id>` in a terminal attaches that session to the chat instead.
 
 ### Dictation
 
@@ -155,8 +143,6 @@ chat-explorer dictation install|uninstall   download or delete the Whisper model
 | -------------- | ---------- | -------------------------------------------------------- |
 | `publicUrl`    | `null`     | Address the phone uses, e.g. a Tailscale Serve address   |
 | `defaultModel` | `"sonnet"` | Model for new explorations (`"sonnet"` or `"opus"`)      |
-| `idleMinutes`  | `60`       | Stop a background session after this long with no work   |
-| `maxSessions`  | `3`        | Background sessions running at once                      |
 | `dictation`    | see below  | `{ "model": "large-v3-turbo-q5_0", "language": "auto" }` |
 | `speech`       | see below  | `{ "engine": "chatterbox", "cacheMegabytes": 1024 }`     |
 
@@ -256,7 +242,7 @@ The design and its decisions are in [docs/plan.md](docs/plan.md).
 
 - Forks share one Claude context. Claude is told to answer each fork only from its own messages, but what it read in other forks can still influence it. Forks answered by separate subagents are planned.
 - Claude Code only (CLI and the Desktop Code tab), not regular Claude Desktop chat.
-- Background sessions can't touch files or run commands. Sessions in isolated containers with those tools are planned.
+- Chat forks can't touch files or run commands. Coding forks, which can, run in isolated containers.
 - `service install` is macOS only.
 - Dictation shows no words while you speak; the text arrives once you stop.
 
@@ -277,7 +263,7 @@ The code is in packages that reach each other only along these lines, which `pnp
 | Package            | Holds                                                                       | May import       |
 | ------------------ | --------------------------------------------------------------------------- | ---------------- |
 | `packages/shared`  | Protocol and chat types, markdown, speech blocks, config, the daemon client | nothing          |
-| `packages/backend` | Store, API, background sessions, dictation and speech, serves the web UI    | shared           |
+| `packages/backend` | Store, API, dictation and speech, serves the web UI    | shared           |
 | `packages/runner`  | Claims forks and answers them with an engine in Docker                      | shared           |
 | `packages/mcp`     | The plugin's MCP server and hooks                                           | shared           |
 | `packages/cli`     | The `chat-explorer` command and the daemon around the backend               | all of the above |

@@ -256,7 +256,7 @@ export class ChatStore {
 
   listExplorations(
     view: ExplorationView = 'active',
-  ): Omit<ExplorationListItem, 'sessionStatus' | 'sessionError'>[] {
+  ): Omit<ExplorationListItem, 'sessionStatus'>[] {
     const filters: Record<ExplorationView, string> = {
       active: 'deleted_at IS NULL AND archived_at IS NULL ORDER BY updated_at DESC',
       archived: 'deleted_at IS NULL AND archived_at IS NOT NULL ORDER BY archived_at DESC',
@@ -289,7 +289,7 @@ export class ChatStore {
       }));
   }
 
-  snapshot(explorationId: string): Omit<Snapshot, 'sessionStatus' | 'sessionError'> {
+  snapshot(explorationId: string): Omit<Snapshot, 'sessionStatus'> {
     const exploration = toExploration(this.requireExplorationRow(explorationId));
     return {
       exploration,
@@ -353,7 +353,7 @@ export class ChatStore {
 
   // The chat with its messages as heads, without their texts, and with only the runner steps of
   // attempts still running; the rest is counted.
-  lightSnapshot(explorationId: string): Omit<LightSnapshot, 'sessionStatus' | 'sessionError'> {
+  lightSnapshot(explorationId: string): Omit<LightSnapshot, 'sessionStatus'> {
     const seq = this.latestChangeSeq();
     const { messages, activities: _activities, ...rest } = this.snapshot(explorationId);
     return {
@@ -412,11 +412,11 @@ export class ChatStore {
   changesSince(
     explorationId: string,
     after: number,
-  ): Omit<ChangeSet, 'sessionStatus' | 'sessionError'> {
+  ): Omit<ChangeSet, 'sessionStatus'> {
     this.requireExplorationRow(explorationId);
     const seq = this.latestChangeSeq();
     const { floor } = this.db.get<{ floor: number }>('SELECT floor FROM change_log')!;
-    const empty: Omit<ChangeSet, 'sessionStatus' | 'sessionError'> = {
+    const empty: Omit<ChangeSet, 'sessionStatus'> = {
       seq,
       reset: after < floor,
       exploration: null,
@@ -450,7 +450,7 @@ export class ChatStore {
 
   // Adds what a change log row names, as it is now; false when it is gone from the chat.
   private addCurrent(
-    set: Omit<ChangeSet, 'sessionStatus' | 'sessionError'>,
+    set: Omit<ChangeSet, 'sessionStatus'>,
     explorationId: string,
     kind: ChangeKind,
     id: string,
@@ -588,17 +588,8 @@ export class ChatStore {
     return this.requireExplorationRow(explorationId).title;
   }
 
-  backgroundSession(explorationId: string) {
-    const row = this.requireExplorationRow(explorationId);
-    return { model: row.model, sessionId: row.background_session_id };
-  }
-
-  setBackgroundSessionId(explorationId: string, sessionId: string) {
-    this.db.run(
-      'UPDATE explorations SET background_session_id = ? WHERE id = ?',
-      sessionId,
-      explorationId,
-    );
+  explorationModel(explorationId: string) {
+    return this.requireExplorationRow(explorationId).model;
   }
 
   archiveExploration(explorationId: string) {
@@ -1646,21 +1637,6 @@ export class ChatStore {
     };
   }
 
-  // Queued submissions, and notes waiting for a topic from Claude.
-  explorationsAwaitingClaude() {
-    return this.db
-      .all<{ exploration_id: string }>(
-        `SELECT DISTINCT waiting.exploration_id FROM (
-           SELECT exploration_id FROM submissions WHERE status = 'queued'
-           UNION
-           SELECT exploration_id FROM notes WHERE topic IS NULL
-         ) AS waiting
-         JOIN explorations ON explorations.id = waiting.exploration_id
-         WHERE deleted_at IS NULL`,
-      )
-      .map((row) => row.exploration_id);
-  }
-
   queuedSubmissions(explorationId: string): QueuedSubmission[] {
     return this.queuedSubmissionRows(explorationId).map(toQueuedSubmission);
   }
@@ -1854,14 +1830,6 @@ export class ChatStore {
       shimId,
     );
     return explorationIds;
-  }
-
-  // A new daemon has no background sessions yet, so attachments left by earlier ones are stale.
-  releaseBackgroundAttachments() {
-    this.db.run(
-      `UPDATE explorations SET ${clearAttachment}
-       WHERE attached_session_id = background_session_id`,
-    );
   }
 
   heartbeat(shimId: string) {

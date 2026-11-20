@@ -13,7 +13,6 @@ export function loadConfig() {
     databasePath: join(home, 'chat-explorer.db'),
     logPath: join(home, 'daemon.log'),
     settingsPath: join(home, 'config.json'),
-    sessionsPath: join(home, 'sessions'),
     modelsPath: join(home, 'models'),
     filesPath: join(home, 'files'),
     // A coding fork's project, per chat and fork: real files the user can open.

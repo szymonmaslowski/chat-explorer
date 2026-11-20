@@ -651,14 +651,6 @@ describe('archive and delete', () => {
     expect(listed(store).active).toEqual([explorationId]);
   });
 
-  it('leaves the queued feedback of an archived exploration to Claude', () => {
-    const { store, explorationId, mainForkId } = setup();
-    store.detach('shim-a');
-    store.archiveExploration(explorationId);
-    store.submit(explorationId, mainForkId, 'later');
-    expect(store.explorationsAwaitingClaude()).toEqual([explorationId]);
-  });
-
   it('creates an exploration already archived', () => {
     const { store, clock } = setup();
     const { exploration } = store.createExploration({ archived: true });

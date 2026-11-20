@@ -9,10 +9,6 @@ interface Waiter {
   settle: (result: FeedbackResult) => void;
 }
 
-export interface StartingSessions {
-  isStarting(explorationId: string): boolean;
-}
-
 // With a runner in use, the attached session is a runner for its chat: it claims forks with
 // leases, and the chat's status without a session follows the runner.
 export interface SessionLeases {
@@ -40,7 +36,6 @@ export class FeedbackHub {
     private readonly store: ChatStore,
     private readonly bus: EventBus,
     private readonly now: () => number = Date.now,
-    private readonly startingSessions: StartingSessions = { isStarting: () => false },
     private readonly leases: SessionLeases | null = null,
   ) {
     bus.subscribe((explorationId, event) => {
@@ -103,7 +98,7 @@ export class FeedbackHub {
     const attachment = this.store.attachment(explorationId);
     if (!attachment?.live) {
       if (this.leases) return this.leases.status(explorationId);
-      return this.startingSessions.isStarting(explorationId) ? 'starting' : 'detached';
+      return 'detached';
     }
     if (this.isListening(explorationId)) return 'listening';
     if (this.store.pendingForks(explorationId).length > 0) return 'answering';

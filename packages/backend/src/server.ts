@@ -13,10 +13,7 @@ import { whisperModelPath } from './dictation/models.js';
 import { Transcriber } from './dictation/transcriber.js';
 import { runWhisper } from './dictation/whisper.js';
 import { FileStorage } from './files/file-storage.js';
-import { findTranscript } from './import/transcript.js';
 import { prefixLegacyNames } from './legacy-names.js';
-import { BackgroundSessions } from './sessions/background-sessions.js';
-import { claudeLauncher } from './sessions/launch-claude.js';
 import type { Settings } from './settings.js';
 import { chatterboxEngine } from './speech/chatterbox.js';
 import { inspectSpeech, sayEngine } from './speech/macos.js';
@@ -40,26 +37,14 @@ export function startBackend(options: {
   const { config, settings } = options;
   const database = new Database(config.databasePath);
   prefixLegacyNames(join(config.runnerPath, 'forks'), 'fork');
-  prefixLegacyNames(config.sessionsPath, 'chat', '.log');
   const bus = new EventBus();
   const store = new ChatStore(database, bus);
   const runs = new RunStore(database, bus, store);
-  const sessions = new BackgroundSessions({
-    store,
-    bus,
-    settings,
-    sessionsPath: config.sessionsPath,
-    launch: claudeLauncher(config),
-    canResume: (sessionId) => findTranscript(sessionId) !== null,
-    onStatusChange: (explorationId) => hub.refreshStatus(explorationId),
-    autoStart: !settings.runner.enabled,
-  });
   const machineToken = ensureMachineToken(config.machineTokenPath);
   const hub = new FeedbackHub(
     store,
     bus,
     Date.now,
-    sessions,
     settings.runner.enabled ? runs : null,
   );
   const modelPath = whisperModelPath(config.modelsPath, settings.dictation.model);
@@ -95,7 +80,6 @@ export function startBackend(options: {
 
   const shutdown = async () => {
     await options.beforeShutdown();
-    sessions.stopAll();
     chatterbox.stop();
     hub.stop();
     server.close();
@@ -108,7 +92,6 @@ export function startBackend(options: {
     store,
     hub,
     bus,
-    sessions,
     runs,
     machineToken,
     transcriber,

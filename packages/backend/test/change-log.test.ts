@@ -107,7 +107,6 @@ describe('change log', () => {
     const seq = store.latestChangeSeq();
     expect(await changesAfter(request, explorationId, seq)).toMatchObject({
       sessionStatus: 'detached',
-      sessionError: null,
     });
 
     store.attach({ explorationId, shimId: 'shim-a', sessionId: 'session-a', takeover: false });

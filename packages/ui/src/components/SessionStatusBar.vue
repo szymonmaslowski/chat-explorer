@@ -35,7 +35,6 @@ const runState = computed<RunState | null>(() => {
 });
 
 const labels: Record<SessionStatus, string> = {
-  starting: 'starting',
   listening: 'listening',
   answering: 'working',
   attached: 'paused',
@@ -43,7 +42,6 @@ const labels: Record<SessionStatus, string> = {
 };
 
 const explanations: Record<SessionStatus, string> = {
-  starting: 'Claude is starting',
   listening: 'Claude is listening',
   answering: 'Claude is answering',
   attached: 'A session is attached, but Claude is not listening',
@@ -111,10 +109,6 @@ const title = computed(() => {
 
 .answering .dot,
 .waiting .dot,
-.starting .dot {
-  background: var(--warning);
-  animation: pulse 1.2s ease-in-out infinite;
-}
 
 .stopped {
   color: var(--warning);

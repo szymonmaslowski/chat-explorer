@@ -793,15 +793,4 @@ describe('Claude and notes', () => {
     expect(store.notesNeedingTopic(explorationId)).toEqual([]);
     hub.stop();
   });
-
-  it('starts a background session for a note without a topic', () => {
-    const { store, explorationId, launches } = setup();
-    const group = store.createNoteGroup(explorationId, {});
-    store.createNote(explorationId, { groupId: group.id, topic: 'Has one' });
-    expect(launches).toHaveLength(0);
-    expect(store.explorationsAwaitingClaude()).toEqual([]);
-    store.createNote(explorationId, { groupId: group.id, description: 'Needs one' });
-    expect(launches).toHaveLength(1);
-    expect(store.explorationsAwaitingClaude()).toEqual([explorationId]);
-  });
 });

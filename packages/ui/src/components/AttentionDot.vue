@@ -9,8 +9,8 @@ defineProps<{ attention: Attention }>();
     class="attention-dot"
     :class="attention"
     role="img"
-    :aria-label="attention === 'unread' ? 'New answer' : 'Claude could not answer'"
-    :title="attention === 'unread' ? 'New answer' : 'Claude could not answer'"
+    aria-label="New answer"
+    title="New answer"
   />
 </template>
 
@@ -22,9 +22,5 @@ defineProps<{ attention: Attention }>();
   height: 0.6rem;
   border-radius: 50%;
   background: var(--accent);
-}
-
-.attention-dot.failed {
-  background: var(--danger);
 }
 </style>
