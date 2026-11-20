@@ -35,19 +35,25 @@ function writeToneWav(path: string, seconds: number, sampleRate = 48_000) {
 
 writeToneWav(microphoneAudio, 5);
 
+// In a coding fork's container, the image sets this to its Chromium: there is no Google Chrome
+// there. Its sandbox needs privileges the container drops, and /dev/shm is small.
+const containerChrome = process.env.CHAT_EXPLORER_CHROME;
+
 export default defineConfig({
   testDir: 'e2e',
   workers: 1,
   use: {
     baseURL: `http://127.0.0.1:${port}`,
-    channel: 'chrome',
+    ...(containerChrome ? {} : { channel: 'chrome' as const }),
     // Page routes do not reach requests a service worker makes, so tests run without one, except
     // those about it.
     serviceWorkers: 'block',
     viewport: { width: 1100, height: 700 },
     permissions: ['microphone'],
     launchOptions: {
+      ...(containerChrome ? { executablePath: containerChrome } : {}),
       args: [
+        ...(containerChrome ? ['--no-sandbox', '--disable-dev-shm-usage'] : []),
         '--use-fake-ui-for-media-stream',
         '--use-fake-device-for-media-stream',
         `--use-file-for-fake-audio-capture=${microphoneAudio}`,

@@ -185,7 +185,15 @@ describe('starting Claude Code in Docker', () => {
     expect(dockerfile).toContain('DISABLE_AUTOUPDATER=1');
     expect(dockerfile).toMatch(/apt-get install .*\bgit\b.*\bopenssh-client\b/);
     expect(dockerfile.indexOf('apt-get install')).toBeLessThan(dockerfile.indexOf('claude-code@'));
-    expect(dockerfile).toContain('chat-explorer.image-recipe="2"');
+    expect(dockerfile).toContain('chat-explorer.image-recipe="3"');
+  });
+
+  it('has pnpm and a browser for end-to-end tests, before Claude Code so a new version reuses the layers', () => {
+    const dockerfile = claudeDockerfile('2.1.319');
+    expect(dockerfile).toMatch(/apt-get install .*\bchromium\b/);
+    expect(dockerfile).toContain('npm install -g pnpm@10.4.1');
+    expect(dockerfile).toContain('CHAT_EXPLORER_CHROME=/usr/bin/chromium');
+    expect(dockerfile.indexOf('pnpm@')).toBeLessThan(dockerfile.indexOf('claude-code@'));
   });
 });
 

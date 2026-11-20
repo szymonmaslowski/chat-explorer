@@ -11,14 +11,16 @@ export const imageRepository = 'chat-explorer-claude';
 export const versionLabel = 'chat-explorer.claude-code-version';
 // Raised whenever the Dockerfile below changes, so an image built from an older one is rebuilt.
 export const recipeLabel = 'chat-explorer.image-recipe';
-export const imageRecipe = '2';
+export const imageRecipe = '3';
 
 // The tools a coding fork works with. Installed before Claude Code, so a new Claude Code version
 // reuses this layer from the build cache. apt checks the packages against Debian's signing keys;
 // the versions follow the base image's release, not pinned one by one.
 const codingPackages = [
   'ca-certificates',
+  'chromium',
   'curl',
+  'fonts-liberation',
   'g++',
   'git',
   'jq',
@@ -30,16 +32,25 @@ const codingPackages = [
   'unzip',
 ];
 
+// The pnpm this repo pins in `packageManager`. A repo that pins another version gets it from pnpm
+// itself, through the registry, when the npm hosts are allowed.
+export const pnpmVersion = '10.4.1';
+// The browser for end-to-end tests. Playwright's own download host isn't reachable from the container,
+// and Google Chrome has no Linux arm64 build, so Debian's Chromium is used. The e2e config reads this
+// variable (see packages/ui/playwright.config.ts).
+export const chromePath = '/usr/bin/chromium';
+
 // The image a fork's engine runs in: Claude Code at the version the user has, as an unprivileged
 // user, with the tools for coding. The updater is off: the container is thrown away and could not
 // reach the download hosts.
 export const claudeDockerfile = (version: string) => `FROM ${baseImage}
 RUN apt-get update && apt-get install --yes --no-install-recommends ${codingPackages.join(' ')} \
   && rm -rf /var/lib/apt/lists/* && useradd --create-home agent
+RUN npm install -g pnpm@${pnpmVersion}
 RUN npm install -g @anthropic-ai/claude-code@${version}
 USER agent
 WORKDIR /home/agent
-ENV DISABLE_AUTOUPDATER=1
+ENV DISABLE_AUTOUPDATER=1 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 CHAT_EXPLORER_CHROME=${chromePath}
 LABEL ${versionLabel}="${version}" ${recipeLabel}="${imageRecipe}"
 `;
 

@@ -148,6 +148,10 @@ This fork is a coding fork. You run in a Linux container with Bash and file tool
 
 The network goes out only through a proxy, over HTTPS or SSH, to the hosts the user allowed for this fork. At the start of this session those were: ${shownHosts(spec.network)}. A connection the proxy refuses fails with a 403 or "Blocked by the sandbox". When you need a host that isn't allowed, tell the user which host:port to add under the fork's allowed hosts in Chat settings. Don't try to get around the proxy.
 
+The image has git, pnpm, Node, Python, make, g++ and Chromium. Run the e2e tests with CHAT_EXPLORER_CHROME already set (the Playwright config reads it), after pnpm build; don't download browsers. When tests are skipped, name them in your report, so skipped isn't read as passed.
+
+To bring your work onto a newer main, use git rebase. If it conflicts, run git rebase --abort, say which files conflict, and leave the branch as it was. Never leave a rebase half done.
+
 ${credentialsPrompt(spec)}`;
 
 function claudeArguments(spec: EngineRunSpec, options: ContainerOptions) {
