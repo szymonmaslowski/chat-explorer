@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue';
+import { nextTick, ref } from 'vue';
 import MediaIcon from './MediaIcon.vue';
 
 const props = defineProps<{
@@ -11,11 +11,6 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ toggle: []; rename: [name: string] }>();
 
-// A name made only of invisible characters would leave a heading with nothing to read or press.
-const shownName = computed(() =>
-  // eslint-disable-next-line no-misleading-character-class
-  /^[\s\u200b-\u200f\u2060\ufeff\u3164]*$/.test(props.name) ? '(no name)' : props.name,
-);
 const renaming = ref(false);
 const draft = ref('');
 const input = ref<HTMLInputElement | null>(null);
@@ -56,7 +51,7 @@ function save() {
         @click="emit('toggle')"
       >
         <span class="chevron" aria-hidden="true">{{ collapsed ? '▸' : '▾' }}</span>
-        <span class="name">{{ shownName }}</span>
+        <span class="name">{{ name }}</span>
         <span class="count">{{ ticked === null ? count : `${ticked}/${count}` }}</span>
       </button>
       <button

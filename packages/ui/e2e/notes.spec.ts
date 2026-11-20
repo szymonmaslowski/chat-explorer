@@ -646,3 +646,44 @@ test('shows categories as sections that fold, rename and hide, keeping their pla
   await page.getByRole('button', { name: 'Hide categories' }).click();
   await expect(headings).toHaveText(['Nabiał', 'Fruit']);
 });
+
+test('adds a note inside a category from its own button, and folds from anywhere on its row', async ({
+  page,
+  request,
+}) => {
+  const explorationId = await newChat(request);
+  const group = await (
+    await request.post(`/api/explorations/${explorationId}/note-groups`, {
+      data: { name: 'Shopping' },
+    })
+  ).json();
+  for (const [topic, category] of [
+    ['Milk', 'Dairy'],
+    ['Apple', 'Fruit'],
+    ['Bread', undefined],
+  ] as const) {
+    await request.post(`/api/explorations/${explorationId}/notes`, {
+      data: { groupId: group.id, topic, category },
+    });
+  }
+
+  await page.goto(`/e/${explorationId}/notes`);
+  await expect(topics(page)).toHaveText(['Bread', 'Apple', 'Milk']);
+  await expect(page.getByRole('button', { name: '+ New note' })).toHaveCount(1);
+
+  await page.getByRole('button', { name: 'New note in Fruit' }).click();
+  await expect(page.getByLabel('Category', { exact: true })).toHaveValue('Fruit');
+  await page.getByLabel('Topic').fill('Pear');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(topics(page)).toHaveText(['Bread', 'Pear', 'Apple', 'Milk']);
+  await page.reload();
+  await expect(topics(page)).toHaveText(['Bread', 'Pear', 'Apple', 'Milk']);
+
+  const fruit = page.getByRole('button', { name: 'Hide category Fruit' });
+  const row = (await fruit.boundingBox())!;
+  await page.mouse.click(row.x + row.width - 8, row.y + row.height / 2);
+  await expect(topics(page)).toHaveText(['Bread', 'Milk']);
+  await expect(page.getByRole('button', { name: 'New note in Fruit' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Show category Fruit' }).click();
+  await expect(topics(page)).toHaveText(['Bread', 'Pear', 'Apple', 'Milk']);
+});

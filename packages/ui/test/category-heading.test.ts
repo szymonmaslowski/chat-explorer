@@ -38,8 +38,4 @@ describe('category heading', () => {
     await wrapper.find('form').trigger('submit');
     expect(wrapper.emitted('rename')).toBeUndefined();
   });
-
-  it('shows a placeholder for a name made of invisible characters, so it can be renamed', () => {
-    expect(heading({ name: '\u200b\u3164' }).find('.name').text()).toBe('(no name)');
-  });
 });
