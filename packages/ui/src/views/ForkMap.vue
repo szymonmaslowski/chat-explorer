@@ -15,7 +15,7 @@ const props = defineProps<{ explorationId: string; currentForkId?: string; side?
 
 // Narrow enough that the main fork and its children fit side by side on a phone.
 const boxWidth = 160;
-const boxHeight = 86;
+const boxHeight = 98;
 // Boxes grow by a line once any fork of the chat has bookmarks, so all stay the same height.
 const bookmarksLineHeight = 16;
 const depthGap = 32;
@@ -184,7 +184,11 @@ const layout = computed(() => {
           :key="box.fork.id"
           :to="forkUrl(box.fork)"
           class="fork-box"
-          :class="{ current: box.fork.id === currentForkId, archived: box.archived }"
+          :class="{
+            current: box.fork.id === currentForkId,
+            archived: box.archived,
+            'awaiting-box': box.awaitingAnswer,
+          }"
           :style="{
             left: `${box.left}px`,
             top: `${box.top}px`,
@@ -193,6 +197,7 @@ const layout = computed(() => {
           }"
         >
           <AttentionDot v-if="box.attention" :attention="box.attention" class="dot" />
+          <span class="fork-id">{{ box.fork.id }}</span>
           <span class="summary">{{ forkTitle(box.fork) }}</span>
           <span class="meta">
             {{ box.messageCount }} message{{ box.messageCount === 1 ? '' : 's' }}
@@ -319,10 +324,35 @@ const layout = computed(() => {
   border: 2px solid var(--accent);
 }
 
+@keyframes box-pulse {
+  50% {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+}
+
+.fork-box.awaiting-box {
+  animation: box-pulse 2.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fork-box.awaiting-box {
+    animation: none;
+    border-color: var(--accent);
+  }
+}
+
 .dot {
   position: absolute;
   top: 0.4rem;
   right: 0.4rem;
+}
+
+.fork-id {
+  font-size: 0.65rem;
+  line-height: 1.2;
+  color: var(--text-muted);
+  opacity: 0.8;
 }
 
 .summary {
