@@ -3,10 +3,15 @@ import type { Note, NoteGroup } from '@shared/types';
 export const sortedGroups = (groups: Map<string, NoteGroup>) =>
   [...groups.values()].sort((first, second) => first.position - second.position);
 
+// A note kept on this device before categories existed has no category field: it has none.
+const withCategory = (note: Note): Note =>
+  note.category === undefined ? { ...note, category: null } : note;
+
 export const notesInGroup = (notes: Map<string, Note>, groupId: string) =>
   [...notes.values()]
     .filter((note) => note.groupId === groupId)
-    .sort((first, second) => first.position - second.position);
+    .sort((first, second) => first.position - second.position)
+    .map(withCategory);
 
 // Positions of notes or groups follow the given order; the ones it does not list keep theirs.
 export function applyOrder<Item extends { position: number }>(

@@ -356,4 +356,13 @@ describe('categories', () => {
     storeCategoriesHidden('g', false);
     expect(readCategoriesHidden('g')).toBe(false);
   });
+
+  it('treats a note kept before categories existed as having none', () => {
+    const old = { ...note('a', 'g', 1) } as Partial<Note>;
+    delete old.category;
+    const state = stateWith([group('g', 'One', 1)], [old as Note]);
+    const shown = notesInGroup(state.notes, 'g');
+    expect(shown[0]!.category).toBeNull();
+    expect(noteSections(shown).map((each) => each.name)).toEqual([null]);
+  });
 });
