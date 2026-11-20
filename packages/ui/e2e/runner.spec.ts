@@ -94,6 +94,53 @@ test('shows what the runner does in a fork, its usage, and stops it on request',
   await expect(status).toHaveCount(0);
 });
 
+test('shows the steps after an answer posted mid-turn below that answer, in a new section', async ({
+  page,
+  request,
+}) => {
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'Build it' } })
+  ).json();
+  const runner = fakeRunner(request);
+  const { lease } = await runner.call('claim', {
+    runnerId: 'e2e-runner',
+    explorationId,
+    waitMs: 5_000,
+  });
+  const fork = `forks/${lease.forkId}`;
+  const { messages } = await runner.call(`${fork}/input`, { leaseId: lease.leaseId });
+  await runner.call(`${fork}/turn/start`, { leaseId: lease.leaseId });
+  const step = (text: string) =>
+    runner.call(`${fork}/activity`, {
+      leaseId: lease.leaseId,
+      afterMessageId: messages[0].id,
+      kind: 'tool',
+      text,
+    });
+  await step('Cloning the repo');
+  await runner.call(`${fork}/answer`, { leaseId: lease.leaseId, content: 'Started: cloned.' });
+  await step('Editing the backend');
+  await step('Running the tests');
+
+  await page.goto(`/e/${explorationId}`);
+  const groups = page.locator('.activity-group');
+  await expect(groups).toHaveCount(2);
+  await expect(groups.nth(0)).toContainText('Worked');
+  await expect(groups.nth(0)).toContainText('1 step');
+  await expect(groups.nth(1)).toContainText('Working · 2 steps');
+  await expect(groups.nth(1).locator('li')).toHaveText([
+    'Editing the backend',
+    'Running the tests',
+  ]);
+  const order = await page.locator('.activity-group, .message').evaluateAll((nodes) =>
+    nodes.map((node) => {
+      if (node.classList.contains('activity-group')) return 'steps';
+      return node.textContent?.includes('Started: cloned.') ? 'answer' : 'question';
+    }),
+  );
+  expect(order).toEqual(['question', 'steps', 'answer', 'steps']);
+});
+
 test('offers Retry on a fork whose runner failed too often', async ({ page, request }) => {
   const { explorationId } = await (
     await request.post('/api/explorations', { data: { message: 'Fail please' } })
