@@ -448,24 +448,6 @@ watch(
             @rename="renameCategory(section.name, $event)"
           />
           <template v-if="!section.collapsed">
-            <template v-if="section.name !== null">
-              <NoteEditor
-                v-if="creatingNote && creatingCategory === section.name"
-                :category="section.name"
-                :categories="categories"
-                @save="createNote"
-                @cancel="creatingNote = false"
-              />
-              <button
-                v-else
-                type="button"
-                class="new-note"
-                :aria-label="`New note in ${section.name}`"
-                @click="startNote(section.name)"
-              >
-                + New note
-              </button>
-            </template>
             <template v-for="note in section.notes" :key="note.id">
               <NoteEditor
                 v-if="editingNoteId === note.id"
@@ -494,6 +476,24 @@ watch(
                 @fork="forkFromNote(note.id, $event)"
               />
             </template>
+          </template>
+          <template v-if="section.name !== null && !section.collapsed">
+            <NoteEditor
+              v-if="creatingNote && creatingCategory === section.name"
+              :category="section.name"
+              :categories="categories"
+              @save="createNote"
+              @cancel="creatingNote = false"
+            />
+            <button
+              v-else
+              type="button"
+              class="new-note"
+              :aria-label="`New note in ${section.name}`"
+              @click="startNote(section.name)"
+            >
+              + New note
+            </button>
           </template>
         </template>
         <div v-if="indicatorTop !== null" class="drop-line" :style="{ top: `${indicatorTop}px` }" />
