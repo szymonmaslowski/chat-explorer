@@ -250,6 +250,45 @@ describe('note categories', () => {
     ).toThrow(/at most 80/);
   });
 
+  it('puts a note at the top of its category, and one with no category at the top of the group', () => {
+    const context = seedNotes([]);
+    const add = (topic: string, category?: string) =>
+      context.store.createNote(context.explorationId, {
+        groupId: context.group.id,
+        topic,
+        ...(category ? { category } : {}),
+      });
+    const order = () =>
+      context.store
+        .snapshot(context.explorationId)
+        .notes.filter((note) => note.groupId === context.group.id)
+        .map((note) => note.topic);
+    add('Apple', 'Fruit');
+    add('Cheese', 'Dairy');
+    add('Milk', 'Dairy');
+    // Cheese has no category of its own yet, so it goes to the top; Milk joins above it.
+    expect(order()).toEqual(['Milk', 'Cheese', 'Apple']);
+    add('Salt');
+    add('Bread', 'Bakery');
+    expect(order()).toEqual(['Bread', 'Salt', 'Milk', 'Cheese', 'Apple']);
+  });
+
+  it('puts a note that joins a category at the top of it, and tells the pages', () => {
+    const context = seedNotes(['Apple', 'Salt', 'Milk']);
+    const [apple, salt, milk] = context.notes;
+    context.store.updateNote(apple!.id, { category: 'Fruit' });
+    context.store.updateNote(milk!.id, { category: 'Dairy' });
+    context.events.length = 0;
+    context.store.updateNote(salt!.id, { category: 'Dairy' });
+    expect(context.order()).toEqual(['Apple', 'Salt', 'Milk']);
+    context.store.updateNote(apple!.id, { category: 'Dairy' });
+    expect(context.order()).toEqual(['Apple', 'Salt', 'Milk']);
+    expect(context.events.map((event) => event.type)).toContain('notes.reordered');
+    // An edit that leaves the category alone moves nothing.
+    context.store.updateNote(milk!.id, { topic: 'Milk 2%' });
+    expect(context.order()).toEqual(['Apple', 'Salt', 'Milk 2%']);
+  });
+
   it('lets Claude name a category when adding notes, and lists it', () => {
     const context = seedNotes([]);
     const { noteIds } = context.store.addNotes({

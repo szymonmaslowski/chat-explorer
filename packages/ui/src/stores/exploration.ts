@@ -39,7 +39,13 @@ import {
   type StoredChat,
 } from '../lib/local-store';
 import { forkPath } from '../lib/conversation';
-import { applyOrder, notesInGroup, renumberGroup, sortedGroups } from '../lib/notes';
+import {
+  applyOrder,
+  moveToTopOfCategory,
+  notesInGroup,
+  renumberGroup,
+  sortedGroups,
+} from '../lib/notes';
 import { outbox, subjectOf, type Change } from './outbox';
 
 export interface ExplorationState {
@@ -622,7 +628,7 @@ export function applyChange(state: ExplorationState, change: Change) {
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
       });
-      renumberGroup(state.notes, groupId);
+      if (!moveToTopOfCategory(state.notes, id)) renumberGroup(state.notes, groupId);
       break;
     }
     case 'note.update': {
@@ -637,6 +643,9 @@ export function applyChange(state: ExplorationState, change: Change) {
         category: category === undefined ? note.category : category?.trim() || null,
         checked: checked ?? note.checked,
       });
+      if (state.notes.get(note.id)?.category !== note.category) {
+        moveToTopOfCategory(state.notes, note.id);
+      }
       break;
     }
     case 'note.delete':

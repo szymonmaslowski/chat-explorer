@@ -21,9 +21,11 @@ import {
   noteSections,
   notesInGroup,
   readChecklistOrder,
+  readCategoriesHidden,
   readCollapsedCategories,
   sortedGroups,
   storeChecklistOrder,
+  storeCategoriesHidden,
   storeCollapsedCategories,
   uncheckedFirst,
   type ChecklistOrder,
@@ -60,11 +62,13 @@ watch(
 const keepsParts = computed(
   () => Boolean(activeGroup.value?.checklist) && checklistOrder.value === 'unchecked-first',
 );
+const categoriesHidden = ref(false);
 const collapsedCategories = ref<string[]>([]);
 watch(
   () => activeGroup.value?.id,
   (groupId) => {
     collapsedCategories.value = groupId ? readCollapsedCategories(groupId) : [];
+    categoriesHidden.value = groupId ? readCategoriesHidden(groupId) : false;
   },
   { immediate: true },
 );
@@ -73,16 +77,23 @@ const categories = computed(() =>
 );
 // The notes by category, in the order they are shown.
 const sections = computed(() =>
-  noteSections(notes.value).map((section) => ({
-    name: section.name,
-    notes: keepsParts.value ? uncheckedFirst(section.notes) : section.notes,
-    collapsed: section.name !== null && collapsedCategories.value.includes(section.name),
-  })),
+  (categoriesHidden.value ? [{ name: null, notes: notes.value }] : noteSections(notes.value)).map(
+    (section) => ({
+      name: section.name,
+      notes: keepsParts.value ? uncheckedFirst(section.notes) : section.notes,
+      collapsed: section.name !== null && collapsedCategories.value.includes(section.name),
+    }),
+  ),
 );
 // What is on the page: the notes of a folded category are not.
 const shownNotes = computed(() =>
   sections.value.flatMap((section) => (section.collapsed ? [] : section.notes)),
 );
+
+function toggleCategoriesHidden() {
+  categoriesHidden.value = !categoriesHidden.value;
+  if (activeGroup.value) storeCategoriesHidden(activeGroup.value.id, categoriesHidden.value);
+}
 
 function toggleCategory(name: string) {
   const groupId = activeGroup.value?.id;
@@ -118,7 +129,7 @@ const {
   start: startDrag,
 } = useDragSort({
   container: notesList,
-  range: (noteId) => dropRange(shownNotes.value, noteId, keepsParts.value),
+  range: (noteId) => dropRange(shownNotes.value, noteId, keepsParts.value, !categoriesHidden.value),
   onDrop: reorderNote,
 });
 
@@ -241,7 +252,14 @@ function reorderGroup(groupId: string, afterGroupId: string | null) {
 }
 
 function reorderNote(noteId: string, index: number) {
-  const afterNoteId = dropAnchor(shownNotes.value, notes.value, noteId, index, keepsParts.value);
+  const afterNoteId = dropAnchor(
+    shownNotes.value,
+    notes.value,
+    noteId,
+    index,
+    keepsParts.value,
+    !categoriesHidden.value,
+  );
   const noteIds = notes.value.map((note) => note.id);
   if (reorderedIds(noteIds, noteId, afterNoteId).join() === noteIds.join()) return;
   outbox.add({ type: 'note.reorder', explorationId: props.explorationId, noteId, afterNoteId });
@@ -360,6 +378,12 @@ watch(
           @cancel="groupForm = null"
         />
       </section>
+
+      <div v-if="categories.length > 0" class="checklist-order view-option">
+        <button type="button" :aria-pressed="categoriesHidden" @click="toggleCategoriesHidden">
+          Hide categories
+        </button>
+      </div>
 
       <div v-if="activeGroup?.checklist && notes.length > 0" class="checklist-order">
         <button
@@ -484,6 +508,15 @@ watch(
 .checklist-order button:last-child {
   border-left: none;
   border-radius: 0 6px 6px 0;
+}
+
+.view-option {
+  margin-right: 0.5rem;
+}
+
+.checklist-order.view-option button {
+  border-left: 1px solid var(--border);
+  border-radius: 6px;
 }
 
 .checklist-order button[aria-pressed='true'] {

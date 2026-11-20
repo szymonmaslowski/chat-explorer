@@ -2191,6 +2191,7 @@ export class ChatStore {
     }
     const checked = changes.checked === undefined ? row.checked : changes.checked ? 1 : 0;
     const category = changes.category === undefined ? row.category : categoryName(changes.category);
+    let reordered: string[] | null = null;
     const events = this.db.transaction(() => {
       this.db.run(
         `UPDATE notes SET topic = ?, description = ?, checked = ?, category = ?, updated_at = ?,
@@ -2203,6 +2204,10 @@ export class ChatStore {
         device,
         noteId,
       );
+      // A note moved into a category joins the top of it.
+      if (category !== row.category) {
+        reordered = this.moveToTopOfCategory(row.group_id, noteId, category);
+      }
       if (!copy) return [];
       return this.insertNote({
         id: newPrefixedId('note'),
@@ -2214,7 +2219,18 @@ export class ChatStore {
       });
     });
     const note = toNote(this.requireNoteRow(noteId));
-    this.publish([[row.exploration_id, { type: 'note.updated', note }], ...events]);
+    this.publish([
+      [row.exploration_id, { type: 'note.updated', note }],
+      ...(reordered
+        ? [
+            [
+              row.exploration_id,
+              { type: 'notes.reordered', groupId: row.group_id, noteIds: reordered },
+            ] as PendingEvent,
+          ]
+        : []),
+      ...events,
+    ]);
     return note;
   }
 
@@ -2514,7 +2530,9 @@ export class ChatStore {
       createdAt,
       input.category ?? null,
     );
-    const noteIds = this.renumberNotes(group.id);
+    const noteIds =
+      this.moveToTopOfCategory(group.id, input.id, input.category ?? null) ??
+      this.renumberNotes(group.id);
     const note = toNote(this.requireNoteRow(input.id));
     return [
       [group.exploration_id, { type: 'note.created', note }],
@@ -2600,6 +2618,25 @@ export class ChatStore {
         index + 1,
       );
     });
+  }
+
+  // A note that joins a category goes right before the first note of that category, so the
+  // sections of a group keep their order. Returns the new order of the group, or null when the note
+  // has no category or is the first of its category, and stays where it is.
+  private moveToTopOfCategory(groupId: string, noteId: string, category: string | null) {
+    if (!category) return null;
+    const first = this.db.get<{ id: string }>(
+      `SELECT id FROM notes WHERE group_id = ? AND category = ? AND id != ?
+       ORDER BY position, rowid LIMIT 1`,
+      groupId,
+      category,
+      noteId,
+    );
+    if (!first) return null;
+    const others = this.noteIdsIn(groupId).filter((id) => id !== noteId);
+    others.splice(others.indexOf(first.id), 0, noteId);
+    this.writeNoteOrder(others);
+    return others;
   }
 
   private renumberNotes(groupId: string) {

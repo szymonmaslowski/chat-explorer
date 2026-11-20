@@ -25,7 +25,9 @@ const {
   dropRange,
   noteSections,
   notesInGroup,
+  readCategoriesHidden,
   readCollapsedCategories,
+  storeCategoriesHidden,
   storeCollapsedCategories,
   uncheckedFirst,
 } = await import('../src/lib/notes');
@@ -261,5 +263,63 @@ describe('categories', () => {
     );
     applyChange(state, { type: 'note.change-group', explorationId, noteId: 'a', groupId: 'h' });
     expect(state.notes.get('a')?.category).toBeNull();
+  });
+
+  it('puts a new note at the top of its category, and at the top of the group with none', () => {
+    const state = stateWith(
+      [group('g', 'One', 1)],
+      [note('a', 'g', 1, 'Fruit'), note('b', 'g', 2, 'Dairy'), note('c', 'g', 3, 'Dairy')],
+    );
+    const create = (id: string, category?: string) =>
+      applyChange(state, {
+        type: 'note.create',
+        explorationId,
+        note: { id, groupId: 'g', topic: id, category },
+      });
+    create('x', 'Dairy');
+    expect(topicsIn(state, 'g')).toEqual(['a', 'x', 'b', 'c']);
+    create('y');
+    expect(topicsIn(state, 'g')).toEqual(['y', 'a', 'x', 'b', 'c']);
+    create('z', 'Bread');
+    expect(topicsIn(state, 'g')).toEqual(['z', 'y', 'a', 'x', 'b', 'c']);
+  });
+
+  it('puts a note that joins a category at the top of it', () => {
+    const state = stateWith(
+      [group('g', 'One', 1)],
+      [note('a', 'g', 1, 'Fruit'), note('b', 'g', 2), note('c', 'g', 3, 'Dairy')],
+    );
+    applyChange(state, {
+      type: 'note.update',
+      explorationId,
+      noteId: 'b',
+      changes: { category: 'Dairy' },
+    });
+    expect(topicsIn(state, 'g')).toEqual(['a', 'b', 'c']);
+    applyChange(state, {
+      type: 'note.update',
+      explorationId,
+      noteId: 'a',
+      changes: { category: 'Dairy' },
+    });
+    expect(topicsIn(state, 'g')).toEqual(['a', 'b', 'c']);
+    applyChange(state, {
+      type: 'note.update',
+      explorationId,
+      noteId: 'c',
+      changes: { topic: 'c2' },
+    });
+    expect(topicsIn(state, 'g')).toEqual(['a', 'b', 'c2']);
+  });
+
+  it('moves notes freely in the plain list, and keeps the choice per group', () => {
+    const shown = [note('a', 'g', 1, 'Dairy'), note('b', 'g', 2, 'Fruit'), note('c', 'g', 3)];
+    expect(dropRange(shown, 'a', false, false)).toEqual({ first: 0, last: 2 });
+    expect(dropAnchor(shown, shown, 'a', 2, false, false)).toBe('c');
+    storeCategoriesHidden('g', true);
+    expect(readCategoriesHidden('g')).toBe(true);
+    expect(readCategoriesHidden('other')).toBe(false);
+    storeCategoriesHidden('g', false);
+    expect(readCategoriesHidden('g')).toBe(false);
   });
 });

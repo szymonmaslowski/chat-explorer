@@ -25,6 +25,23 @@ export const renumberGroup = (notes: Map<string, Note>, groupId: string) =>
     notesInGroup(notes, groupId).map((note) => note.id),
   );
 
+// A note that joins a category goes right before the first note of it, so the sections of a group
+// keep their order. Returns whether it moved: with no category, or as the first of its category,
+// the note stays where it is.
+export function moveToTopOfCategory(notes: Map<string, Note>, noteId: string) {
+  const note = notes.get(noteId);
+  if (!note?.category) return false;
+  const ids = notesInGroup(notes, note.groupId).map((each) => each.id);
+  const first = notesInGroup(notes, note.groupId).find(
+    (each) => each.id !== noteId && each.category === note.category,
+  );
+  if (!first) return false;
+  const others = ids.filter((id) => id !== noteId);
+  others.splice(others.indexOf(first.id), 0, noteId);
+  applyOrder(notes, others);
+  return true;
+}
+
 export const checklistOrders = ['original', 'unchecked-first'] as const;
 export type ChecklistOrder = (typeof checklistOrders)[number];
 
@@ -71,6 +88,24 @@ export function noteSections(notes: Note[]): NoteSection[] {
     .map(([name, each]) => ({ name, notes: each }));
 }
 
+const categoriesHiddenKey = (groupId: string) => `chat-explorer.categories-hidden.${groupId}`;
+
+// Whether this device shows a group as one plain list, with no category headings.
+export function readCategoriesHidden(groupId: string) {
+  try {
+    return localStorage.getItem(categoriesHiddenKey(groupId)) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function storeCategoriesHidden(groupId: string, hidden: boolean) {
+  try {
+    if (hidden) localStorage.setItem(categoriesHiddenKey(groupId), 'true');
+    else localStorage.removeItem(categoriesHiddenKey(groupId));
+  } catch {}
+}
+
 const collapsedKey = (groupId: string) => `chat-explorer.collapsed-categories.${groupId}`;
 
 // Folding is a choice of the device, so it is kept here and not with the notes.
@@ -93,12 +128,13 @@ export function storeCollapsedCategories(groupId: string, names: string[]) {
 // Where a dragged note may land among the other shown notes. It stays in its own category, and
 // with unchecked notes first in its own part of it, so a drag never moves it to another category
 // or ticks or unticks it.
-export function dropRange(shown: Note[], noteId: string, keepsParts: boolean) {
+export function dropRange(shown: Note[], noteId: string, keepsParts: boolean, byCategory = true) {
   const others = shown.filter((note) => note.id !== noteId);
   const dragged = shown.find((note) => note.id === noteId);
   if (!dragged) return { first: 0, last: others.length };
   const together = (note: Note) =>
-    note.category === dragged.category && (!keepsParts || note.checked === dragged.checked);
+    (!byCategory || note.category === dragged.category) &&
+    (!keepsParts || note.checked === dragged.checked);
   const first = others.findIndex(together);
   if (first === -1) return { first: shown.indexOf(dragged), last: shown.indexOf(dragged) };
   return { first, last: first + others.filter(together).length };
@@ -112,9 +148,11 @@ export function dropAnchor(
   noteId: string,
   index: number,
   keepsParts: boolean,
+  byCategory = true,
 ) {
   const others = shown.filter((note) => note.id !== noteId);
-  if (index > dropRange(shown, noteId, keepsParts).first) return others[index - 1]?.id ?? null;
+  if (index > dropRange(shown, noteId, keepsParts, byCategory).first)
+    return others[index - 1]?.id ?? null;
   const storedOthers = stored.filter((note) => note.id !== noteId);
   const below = others[index];
   if (!below) return storedOthers.at(-1)?.id ?? null;
