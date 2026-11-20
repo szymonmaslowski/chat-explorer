@@ -108,9 +108,7 @@ async function restartContainer() {
       <ForkCredentialSettings :fork="fork" :report="report" />
     </template>
     <p>
-      <button type="button" :disabled="saving" @click="restartContainer">
-        Restart container
-      </button>
+      <button type="button" :disabled="saving" @click="restartContainer">Restart container</button>
     </p>
     <p v-if="restartNote" class="hint" role="status">{{ restartNote }}</p>
   </section>

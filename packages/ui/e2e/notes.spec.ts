@@ -45,13 +45,13 @@ test('adds, edits and deletes notes, starting the General group', async ({ page,
   await page.getByRole('button', { name: '+ New note' }).click();
   await page.getByLabel('Description').fill('Only a description');
   await page.getByLabel('Description').press('Meta+Enter');
-  await expect(topics(page)).toHaveText(['Preparing topic…', 'Milk']);
+  await expect(topics(page)).toHaveText(['Milk', 'Preparing topic…']);
 
   await page.locator('.note', { hasText: 'Milk' }).click();
   await page.getByRole('button', { name: 'Edit' }).click();
   await page.getByLabel('Topic').fill('Oat milk');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(topics(page)).toHaveText(['Preparing topic…', 'Oat milk']);
+  await expect(topics(page)).toHaveText(['Oat milk', 'Preparing topic…']);
 
   const oatMilk = page.locator('.note', { hasText: 'Oat milk' });
   await oatMilk.click();
@@ -217,7 +217,7 @@ test('ticks checklist notes, sorts them and drags them into place', async ({
       data: { name: 'Shopping', checklist: true },
     })
   ).json();
-  for (const topic of ['Chocolate', 'Milk', 'Lemon']) {
+  for (const topic of ['Lemon', 'Milk', 'Chocolate']) {
     await request.post(`/api/explorations/${explorationId}/notes`, {
       data: { groupId: group.id, topic, description: topic === 'Lemon' ? 'Two, unwaxed.' : '' },
     });
@@ -342,7 +342,7 @@ test('shows the topic Claude writes and its requests to delete', async ({ page, 
   const doomed = await create({ topic: 'Old idea' });
   const kept = await create({ topic: 'Keeper' });
   await page.goto(`/e/${explorationId}/notes`);
-  await expect(topics(page)).toHaveText(['Keeper', 'Old idea', 'Preparing topic…']);
+  await expect(topics(page)).toHaveText(['Preparing topic…', 'Old idea', 'Keeper']);
 
   await attachFakeSession(request, explorationId);
   const asClaude = (path: string, data: object, method = 'POST') =>
@@ -352,7 +352,7 @@ test('shows the topic Claude writes and its requests to delete', async ({ page, 
   await asClaude(`/notes/${kept.id}/deletion-request`, {});
   await detachFakeSession(request);
 
-  await expect(topics(page)).toHaveText(['Keeper', 'Old idea', 'Bread']);
+  await expect(topics(page)).toHaveText(['Bread', 'Old idea', 'Keeper']);
   await expect(page.locator('.deletion-notice')).toContainText('Claude asks to delete 2 notes.');
   const keeper = page.locator('.note', { hasText: 'Keeper' });
   await keeper.getByRole('button', { name: 'Keep' }).click();
@@ -360,7 +360,7 @@ test('shows the topic Claude writes and its requests to delete', async ({ page, 
   const oldIdea = page.locator('.note', { hasText: 'Old idea' });
   await oldIdea.getByRole('button', { name: 'Delete' }).click();
   await oldIdea.getByRole('button', { name: 'Confirm' }).click();
-  await expect(topics(page)).toHaveText(['Keeper', 'Bread']);
+  await expect(topics(page)).toHaveText(['Bread', 'Keeper']);
   await expect(page.locator('.deletion-notice')).toHaveCount(0);
 });
 
@@ -510,7 +510,7 @@ test('drops a dragged note where the finger is, with the note faded in its place
   const group = await (
     await request.post(`/api/explorations/${explorationId}/note-groups`, { data: {} })
   ).json();
-  for (const topic of ['Third', 'Second', 'First']) {
+  for (const topic of ['First', 'Second', 'Third']) {
     await request.post(`/api/explorations/${explorationId}/notes`, {
       data: {
         groupId: group.id,
@@ -610,7 +610,7 @@ test('shows categories as sections that fold, rename and hide, keeping their pla
   await page.getByLabel('Category', { exact: true }).fill('Dairy');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(headings).toHaveText(['Dairy', 'Fruit']);
-  await expect(topics(page)).toHaveText(['Bread', 'Yoghurt', 'Milk', 'Cheese', 'Apple']);
+  await expect(topics(page)).toHaveText(['Bread', 'Milk', 'Cheese', 'Yoghurt', 'Apple']);
 
   await page
     .locator('.category-heading', { hasText: 'Dairy' })
@@ -621,26 +621,26 @@ test('shows categories as sections that fold, rename and hide, keeping their pla
   await page.getByLabel('Category name').fill('Nabiał');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(headings).toHaveText(['Nabiał', 'Fruit']);
-  await expect(topics(page)).toHaveText(['Bread', 'Yoghurt', 'Milk', 'Cheese', 'Apple']);
+  await expect(topics(page)).toHaveText(['Bread', 'Milk', 'Cheese', 'Yoghurt', 'Apple']);
   await page.reload();
   await expect(headings).toHaveText(['Nabiał', 'Fruit']);
-  await expect(topics(page)).toHaveText(['Bread', 'Yoghurt', 'Milk', 'Cheese', 'Apple']);
+  await expect(topics(page)).toHaveText(['Bread', 'Milk', 'Cheese', 'Yoghurt', 'Apple']);
 
-  await page.locator('.note', { hasText: 'Cheese' }).click();
+  await page.locator('.note', { hasText: 'Yoghurt' }).click();
   const handle = page.getByRole('button', { name: 'Drag to reorder' });
   const box = (await handle.boundingBox())!;
-  const top = (await page.locator('.note', { hasText: 'Yoghurt' }).boundingBox())!;
+  const top = (await page.locator('.note', { hasText: 'Milk' }).boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   await page.mouse.move(box.x + box.width / 2, top.y + 4, { steps: 8 });
   await expect(page.locator('.drop-line')).toBeVisible();
   await page.mouse.up();
-  await expect(topics(page)).toHaveText(['Bread', 'Cheese', 'Yoghurt', 'Milk', 'Apple']);
+  await expect(topics(page)).toHaveText(['Bread', 'Yoghurt', 'Milk', 'Cheese', 'Apple']);
   await expect(headings).toHaveText(['Nabiał', 'Fruit']);
 
   await page.getByRole('button', { name: 'Hide categories' }).click();
   await expect(headings).toHaveCount(0);
-  await expect(topics(page)).toHaveText(['Cheese', 'Yoghurt', 'Milk', 'Bread', 'Apple']);
+  await expect(topics(page)).toHaveText(['Yoghurt', 'Milk', 'Apple', 'Cheese', 'Bread']);
   await page.reload();
   await expect(headings).toHaveCount(0);
   await page.getByRole('button', { name: 'Hide categories' }).click();

@@ -17,11 +17,10 @@ function setup() {
 function seedNotes(topics: string[]) {
   const context = setup();
   const group = context.store.createNoteGroup(context.explorationId, {});
-  // Each new note goes first, so they are added in reverse to read in the given order.
-  const notes = topics
-    .toReversed()
-    .map((topic) => context.store.createNote(context.explorationId, { groupId: group.id, topic }))
-    .toReversed();
+  // Each new note goes last, so they are added in the given order.
+  const notes = topics.map((topic) =>
+    context.store.createNote(context.explorationId, { groupId: group.id, topic }),
+  );
   const order = () =>
     context.store
       .snapshot(context.explorationId)
@@ -79,10 +78,10 @@ describe('note groups', () => {
 });
 
 describe('notes', () => {
-  it('puts a new note first and announces the order', () => {
+  it('puts a new note last and announces the order', () => {
     const { store, explorationId, group, events, order } = seedNotes(['A', 'B']);
     const note = store.createNote(explorationId, { groupId: group.id, topic: 'New' });
-    expect(order()).toEqual(['New', 'A', 'B']);
+    expect(order()).toEqual(['A', 'B', 'New']);
     expect(events.slice(-2)).toEqual([
       { type: 'note.created', note },
       {
@@ -175,7 +174,7 @@ describe('reordering notes', () => {
     store.reorderNote(c!.id, null);
     store.createNote(explorationId, { groupId: group.id, topic: 'New' });
     store.reorderNote(a!.id, b!.id);
-    expect(order()).toEqual(['New', 'C', 'B', 'A']);
+    expect(order()).toEqual(['C', 'B', 'A', 'New']);
   });
 
   it('leaves the order alone when the anchor is gone', () => {
@@ -250,7 +249,7 @@ describe('note categories', () => {
     ).toThrow(/at most 80/);
   });
 
-  it('puts a note at the top of its category, and one with no category at the top of the group', () => {
+  it('puts a note at the bottom of its category, and one with no category at the end of the group', () => {
     const context = seedNotes([]);
     const add = (topic: string, category?: string) =>
       context.store.createNote(context.explorationId, {
@@ -266,27 +265,27 @@ describe('note categories', () => {
     add('Apple', 'Fruit');
     add('Cheese', 'Dairy');
     add('Milk', 'Dairy');
-    // Cheese has no category of its own yet, so it goes to the top; Milk joins above it.
-    expect(order()).toEqual(['Milk', 'Cheese', 'Apple']);
+    // Milk joins Cheese's category below it.
+    expect(order()).toEqual(['Apple', 'Cheese', 'Milk']);
     add('Salt');
     add('Bread', 'Bakery');
-    expect(order()).toEqual(['Bread', 'Salt', 'Milk', 'Cheese', 'Apple']);
+    expect(order()).toEqual(['Apple', 'Cheese', 'Milk', 'Salt', 'Bread']);
   });
 
-  it('puts a note that joins a category at the top of it, and tells the pages', () => {
+  it('puts a note that joins a category at the bottom of it, and tells the pages', () => {
     const context = seedNotes(['Apple', 'Salt', 'Milk']);
     const [apple, salt, milk] = context.notes;
     context.store.updateNote(apple!.id, { category: 'Fruit' });
     context.store.updateNote(milk!.id, { category: 'Dairy' });
     context.events.length = 0;
     context.store.updateNote(salt!.id, { category: 'Dairy' });
-    expect(context.order()).toEqual(['Apple', 'Salt', 'Milk']);
+    expect(context.order()).toEqual(['Apple', 'Milk', 'Salt']);
     context.store.updateNote(apple!.id, { category: 'Dairy' });
-    expect(context.order()).toEqual(['Apple', 'Salt', 'Milk']);
+    expect(context.order()).toEqual(['Milk', 'Salt', 'Apple']);
     expect(context.events.map((event) => event.type)).toContain('notes.reordered');
     // An edit that leaves the category alone moves nothing.
     context.store.updateNote(milk!.id, { topic: 'Milk 2%' });
-    expect(context.order()).toEqual(['Apple', 'Salt', 'Milk 2%']);
+    expect(context.order()).toEqual(['Milk 2%', 'Salt', 'Apple']);
   });
 
   it('renames a category for all its notes and keeps their order', () => {
@@ -672,7 +671,7 @@ describe('Claude and notes', () => {
     return context;
   }
 
-  it('adds notes first in the group, in order, linked to the message that asked', () => {
+  it('adds notes last in the group, in order, linked to the message that asked', () => {
     const { store, explorationId, mainForkId, answer } = attached();
     const group = store.createNoteGroup(explorationId, { name: 'Shopping', checklist: true });
     store.createNote(explorationId, { groupId: group.id, topic: 'Old' });
@@ -683,9 +682,9 @@ describe('Claude and notes', () => {
       sourceMessageId: answer.id,
     });
     const notes = store.snapshot(explorationId).notes;
-    expect(notes.map((note) => note.topic)).toEqual(['Lemon', 'Milk', 'Old']);
-    expect(notes.map((note) => note.id).slice(0, 2)).toEqual(noteIds);
-    expect(notes[0]).toMatchObject({
+    expect(notes.map((note) => note.topic)).toEqual(['Old', 'Lemon', 'Milk']);
+    expect(notes.map((note) => note.id).slice(1)).toEqual(noteIds);
+    expect(notes[1]).toMatchObject({
       createdBy: 'claude',
       sourceForkId: mainForkId,
       sourceMessageId: answer.id,

@@ -2136,7 +2136,7 @@ export class ChatStore {
     this.publish([[row.exploration_id, { type: 'note-group.deleted', groupId }]]);
   }
 
-  // A new note goes first in its group.
+  // A new note goes at the end of its category, or of the group.
   createNote(explorationId: string, input: NewNote) {
     const id = input.id ? withPrefix('note', input.id) : newPrefixedId('note');
     const existing = input.id ? this.existingRow<NoteRow>('notes', id, explorationId) : null;
@@ -2204,9 +2204,9 @@ export class ChatStore {
         device,
         noteId,
       );
-      // A note moved into a category joins the top of it.
-      if (category !== row.category) {
-        reordered = this.moveToTopOfCategory(row.group_id, noteId, category);
+      // A note moved into a category joins the bottom of it.
+      if (category !== row.category && category) {
+        reordered = this.moveToBottomOfCategory(row.group_id, noteId, category, 'stay');
       }
       if (!copy) return [];
       return this.insertNote({
@@ -2320,7 +2320,8 @@ export class ChatStore {
     return { note, noteIds };
   }
 
-  // Claude's notes go first in the group in the order given, linked to the message that asked.
+  // Claude's notes go at the end of the group, or of their category, in the order given, linked to
+  // the message that asked.
   addNotes(input: {
     explorationId: string;
     groupId: string;
@@ -2358,7 +2359,7 @@ export class ChatStore {
         }
       : undefined;
     const events = this.db.transaction(() =>
-      notes.toReversed().flatMap((note) =>
+      notes.flatMap((note) =>
         this.insertNote({
           id: note.id,
           groupId: group.id,
@@ -2533,7 +2534,7 @@ export class ChatStore {
     return this.requireNoteGroupRow(id);
   }
 
-  // Goes first in its group. Returns the events to publish once the transaction is over.
+  // Goes at the end of its category or group. Returns the events to publish once the transaction is over.
   private insertNote(input: {
     id: string;
     groupId: string;
@@ -2573,9 +2574,7 @@ export class ChatStore {
       createdAt,
       input.category ?? null,
     );
-    const noteIds =
-      this.moveToTopOfCategory(group.id, input.id, input.category ?? null) ??
-      this.renumberNotes(group.id);
+    const noteIds = this.moveToBottomOfCategory(group.id, input.id, input.category ?? null, 'end')!;
     const note = toNote(this.requireNoteRow(input.id));
     return [
       [group.exploration_id, { type: 'note.created', note }],
@@ -2663,23 +2662,27 @@ export class ChatStore {
     });
   }
 
-  // A note that joins a category goes right before the first note of that category, so the
-  // sections of a group keep their order. Returns the new order of the group, or null when the note
-  // has no category or is the first of its category, and stays where it is.
-  private moveToTopOfCategory(groupId: string, noteId: string, category: string | null) {
-    if (!category) return null;
-    const first = this.db.get<{ id: string }>(
-      `SELECT id FROM notes WHERE group_id = ? AND category = ? AND id != ?
-       ORDER BY position, rowid LIMIT 1`,
+  // A note goes after the last note of its category, or at the end of the group when it has none
+  // or its category is new, so sections keep their order and a list reads in the order it grew.
+  // `alone` is what a note does when no other note has its category: go to the end, or stay.
+  // Returns the new order of the group, or null when the note stays where it is.
+  private moveToBottomOfCategory(
+    groupId: string,
+    noteId: string,
+    category: string | null,
+    alone: 'end' | 'stay',
+  ) {
+    const rows = this.db.all<{ id: string; category: string | null }>(
+      'SELECT id, category FROM notes WHERE group_id = ? AND id != ? ORDER BY position, rowid',
       groupId,
-      category,
       noteId,
     );
-    if (!first) return null;
-    const others = this.noteIdsIn(groupId).filter((id) => id !== noteId);
-    others.splice(others.indexOf(first.id), 0, noteId);
-    this.writeNoteOrder(others);
-    return others;
+    const last = category ? rows.findLastIndex((row) => row.category === category) : -1;
+    if (last === -1 && alone === 'stay') return null;
+    const ids = rows.map((row) => row.id);
+    ids.splice(last === -1 ? ids.length : last + 1, 0, noteId);
+    this.writeNoteOrder(ids);
+    return ids;
   }
 
   private renumberNotes(groupId: string) {

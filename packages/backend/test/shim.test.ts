@@ -199,8 +199,8 @@ describe('MCP shim', () => {
     });
     await call('update_note', { noteId: userNote.id, topic: 'Bread' });
     expect((await call('list_notes', { groupId: group.id })).value.groups[0].notes).toMatchObject([
-      { topic: 'Bread' },
       { topic: 'Milk' },
+      { topic: 'Bread' },
     ]);
   });
 

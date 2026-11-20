@@ -82,7 +82,7 @@ const topicsIn = (state: ExplorationState, groupId: string) =>
 beforeEach(() => localStorage.clear());
 
 describe('notes shown before the daemon has them', () => {
-  it('names a new group and puts a new note first', () => {
+  it('names a new group and puts a new note last', () => {
     const state = stateWith([], []);
     applyChange(state, {
       type: 'note-group.create',
@@ -101,7 +101,7 @@ describe('notes shown before the daemon has them', () => {
       explorationId,
       note: { id: 'n', groupId: 'g1', description: 'Only words' },
     });
-    expect(topicsIn(state, 'g1')).toEqual([null, 'a']);
+    expect(topicsIn(state, 'g1')).toEqual(['a', null]);
   });
 
   it('moves a note first into its new group and closes the gap', () => {
@@ -299,7 +299,7 @@ describe('categories', () => {
     expect(state.notes.get('a')?.category).toBeNull();
   });
 
-  it('puts a new note at the top of its category, and at the top of the group with none', () => {
+  it('puts a new note at the bottom of its category, and at the end of the group with none', () => {
     const state = stateWith(
       [group('g', 'One', 1)],
       [note('a', 'g', 1, 'Fruit'), note('b', 'g', 2, 'Dairy'), note('c', 'g', 3, 'Dairy')],
@@ -311,14 +311,14 @@ describe('categories', () => {
         note: { id, groupId: 'g', topic: id, category },
       });
     create('x', 'Dairy');
-    expect(topicsIn(state, 'g')).toEqual(['a', 'x', 'b', 'c']);
+    expect(topicsIn(state, 'g')).toEqual(['a', 'b', 'c', 'x']);
     create('y');
-    expect(topicsIn(state, 'g')).toEqual(['y', 'a', 'x', 'b', 'c']);
+    expect(topicsIn(state, 'g')).toEqual(['a', 'b', 'c', 'x', 'y']);
     create('z', 'Bread');
-    expect(topicsIn(state, 'g')).toEqual(['z', 'y', 'a', 'x', 'b', 'c']);
+    expect(topicsIn(state, 'g')).toEqual(['a', 'b', 'c', 'x', 'y', 'z']);
   });
 
-  it('puts a note that joins a category at the top of it', () => {
+  it('puts a note that joins a category at the bottom of it', () => {
     const state = stateWith(
       [group('g', 'One', 1)],
       [note('a', 'g', 1, 'Fruit'), note('b', 'g', 2), note('c', 'g', 3, 'Dairy')],
@@ -329,21 +329,29 @@ describe('categories', () => {
       noteId: 'b',
       changes: { category: 'Dairy' },
     });
-    expect(topicsIn(state, 'g')).toEqual(['a', 'b', 'c']);
+    expect(topicsIn(state, 'g')).toEqual(['a', 'c', 'b']);
     applyChange(state, {
       type: 'note.update',
       explorationId,
       noteId: 'a',
       changes: { category: 'Dairy' },
     });
-    expect(topicsIn(state, 'g')).toEqual(['a', 'b', 'c']);
+    expect(topicsIn(state, 'g')).toEqual(['c', 'b', 'a']);
+    // Into a category nobody else has: it stays.
+    applyChange(state, {
+      type: 'note.update',
+      explorationId,
+      noteId: 'c',
+      changes: { category: 'Bread' },
+    });
+    expect(topicsIn(state, 'g')).toEqual(['c', 'b', 'a']);
     applyChange(state, {
       type: 'note.update',
       explorationId,
       noteId: 'c',
       changes: { topic: 'c2' },
     });
-    expect(topicsIn(state, 'g')).toEqual(['a', 'b', 'c2']);
+    expect(topicsIn(state, 'g')).toEqual(['c2', 'b', 'a']);
   });
 
   it('moves notes freely in the plain list, and keeps the choice per group', () => {

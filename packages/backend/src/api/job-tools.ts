@@ -214,7 +214,7 @@ function toolsFor(job: Job, { store, runs }: JobToolsOptions) {
     'add_notes',
     {
       description:
-        "Add notes to a group, first in the group in the order given. Each needs a topic (a short title) or a description (markdown), and may name a category: a section of the group, shown as a heading above its notes. Pass sourceMessageId, the id of the user's message that asked for them, so each note links back to it.",
+        "Add notes to a group, at the end of the group (or of their category) in the order given. Each needs a topic (a short title) or a description (markdown), and may name a category: a section of the group, shown as a heading above its notes. Pass sourceMessageId, the id of the user's message that asked for them, so each note links back to it.",
       inputSchema: {
         groupId: z.string(),
         notes: z

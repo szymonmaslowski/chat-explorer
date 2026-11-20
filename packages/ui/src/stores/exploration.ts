@@ -41,7 +41,7 @@ import {
 import { forkPath } from '../lib/conversation';
 import {
   applyOrder,
-  moveToTopOfCategory,
+  moveToBottomOfCategory,
   notesInGroup,
   renumberGroup,
   sortedGroups,
@@ -637,7 +637,7 @@ export function applyChange(state: ExplorationState, change: Change) {
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
       });
-      if (!moveToTopOfCategory(state.notes, id)) renumberGroup(state.notes, groupId);
+      moveToBottomOfCategory(state.notes, id, 'end');
       break;
     }
     case 'note.update': {
@@ -652,8 +652,11 @@ export function applyChange(state: ExplorationState, change: Change) {
         category: category === undefined ? note.category : category?.trim() || null,
         checked: checked ?? note.checked,
       });
-      if (state.notes.get(note.id)?.category !== note.category) {
-        moveToTopOfCategory(state.notes, note.id);
+      if (
+        state.notes.get(note.id)?.category &&
+        state.notes.get(note.id)?.category !== note.category
+      ) {
+        moveToBottomOfCategory(state.notes, note.id, 'stay');
       }
       break;
     }

@@ -136,7 +136,7 @@ const {
 
 const selectedNoteId = ref<string | null>(null);
 const editingNoteId = ref<string | null>(null);
-// Where a note is being written: at the top of the group (null), or in a category.
+// Where a note is being written: in the group (null), or in a category.
 const creatingNote = ref(false);
 const creatingCategory = ref<string | null>(null);
 

@@ -30,20 +30,22 @@ export const renumberGroup = (notes: Map<string, Note>, groupId: string) =>
     notesInGroup(notes, groupId).map((note) => note.id),
   );
 
-// A note that joins a category goes right before the first note of it, so the sections of a group
-// keep their order. Returns whether it moved: with no category, or as the first of its category,
-// the note stays where it is.
-export function moveToTopOfCategory(notes: Map<string, Note>, noteId: string) {
+// A note goes after the last note of its category, or at the end of the group when it has none or
+// its category is new, so sections keep their order. `alone` is what the note does when no other
+// note has its category: go to the end, or stay. Returns whether the order was set.
+export function moveToBottomOfCategory(
+  notes: Map<string, Note>,
+  noteId: string,
+  alone: 'end' | 'stay',
+) {
   const note = notes.get(noteId);
-  if (!note?.category) return false;
-  const ids = notesInGroup(notes, note.groupId).map((each) => each.id);
-  const first = notesInGroup(notes, note.groupId).find(
-    (each) => each.id !== noteId && each.category === note.category,
-  );
-  if (!first) return false;
-  const others = ids.filter((id) => id !== noteId);
-  others.splice(others.indexOf(first.id), 0, noteId);
-  applyOrder(notes, others);
+  if (!note) return false;
+  const others = notesInGroup(notes, note.groupId).filter((each) => each.id !== noteId);
+  const last = note.category ? others.findLastIndex((each) => each.category === note.category) : -1;
+  if (last === -1 && alone === 'stay') return false;
+  const ids = others.map((each) => each.id);
+  ids.splice(last === -1 ? ids.length : last + 1, 0, noteId);
+  applyOrder(notes, ids);
   return true;
 }
 
