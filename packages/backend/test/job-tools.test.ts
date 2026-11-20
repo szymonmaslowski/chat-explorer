@@ -97,6 +97,40 @@ describe('job tools', () => {
     });
   });
 
+  it('files notes under a category, renames it and lists it', async () => {
+    const { connect, call, lease, store, explorationId } = await setup();
+    const client = await connect(lease.toolsToken);
+    const group = await call(client, 'add_note_group', { name: 'Shopping' });
+    await call(client, 'add_notes', {
+      groupId: group.value.id,
+      notes: [{ topic: 'Milk', category: 'Dairy' }, { topic: 'Salt' }],
+    });
+    const [milk] = store.snapshot(explorationId).notes.filter((note) => note.topic === 'Milk');
+    expect(milk!.category).toBe('Dairy');
+    expect(
+      (
+        await call(client, 'rename_note_category', {
+          groupId: group.value.id,
+          from: 'Dairy',
+          to: 'Nabiał',
+        })
+      ).value.noteIds,
+    ).toEqual([milk!.id]);
+    expect(
+      (await call(client, 'update_note', { noteId: milk!.id, category: 'Dairy' })).value.category,
+    ).toBe('Dairy');
+    const listed = await call(client, 'list_notes', {});
+    expect(
+      listed.value.groups[0].notes.map((note: { category: string | null }) => note.category),
+    ).toEqual(['Dairy', null]);
+    const missing = await call(client, 'rename_note_category', {
+      groupId: group.value.id,
+      from: 'Bread',
+      to: 'Bakery',
+    });
+    expect(missing.isError).toBe(true);
+  });
+
   it('lists notes as an index, reads them by id and finds them by their words', async () => {
     const { connect, call, lease, store, explorationId } = await setup();
     const group = store.createNoteGroup(explorationId, { name: 'Facts' });

@@ -270,6 +270,19 @@ function toolsFor(job: Job, { store, runs }: JobToolsOptions) {
   );
 
   server.registerTool(
+    'rename_note_category',
+    {
+      description:
+        'Rename a category of a note group for all its notes at once, or remove it with `to` null (the notes stay in the group). Renaming to a name already used there merges the two.',
+      inputSchema: { groupId: z.string(), from: z.string(), to: z.string().nullable() },
+    },
+    tool(({ groupId, from, to }: { groupId: string; from: string; to: string | null }) => {
+      sameChat(job, store.noteGroupExplorationId(groupId), `Note group ${groupId}`);
+      return store.renameNoteCategory(groupId, from, to);
+    }),
+  );
+
+  server.registerTool(
     'reorder_note',
     {
       description:

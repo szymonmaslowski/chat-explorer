@@ -519,6 +519,23 @@ export function createShim(options: ShimOptions) {
   );
 
   server.registerTool(
+    'rename_note_category',
+    {
+      description:
+        'Rename a category of a note group for all its notes at once, or remove it with `to` null (the notes stay in the group). Renaming to a name already used there merges the two.',
+      inputSchema: { groupId: z.string(), from: z.string(), to: z.string().nullable() },
+    },
+    tool(async ({ groupId, from, to }: { groupId: string; from: string; to: string | null }) => {
+      requireAttachment();
+      return json(
+        await request(`/api/internal/note-groups/${groupId}/rename-category`, {
+          json: { shimId, from, to },
+        }),
+      );
+    }),
+  );
+
+  server.registerTool(
     'reorder_note_group',
     {
       description:

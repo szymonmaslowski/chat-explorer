@@ -248,6 +248,10 @@ const claudeNotesBody = shimBody.extend({
   sourceMessageId: z.string().optional(),
 });
 const claudeNoteChangesBody = shimBody.extend(noteChangesBody.shape);
+const claudeCategoryRenameBody = shimBody.extend({
+  from: z.string(),
+  to: z.string().nullable(),
+});
 const claudeNoteReorderBody = shimBody.extend(noteReorderBody.shape);
 const claudeNoteGroupReorderBody = shimBody.extend(noteGroupReorderBody.shape);
 const claudeNoteGroupChangeBody = shimBody.extend(noteGroupBody.shape);
@@ -898,6 +902,13 @@ export function createApp(options: AppOptions) {
     return context.json(
       store.updateNote(attachedNoteId(context.req.param('id'), shimId), changes, 'claude'),
     );
+  });
+
+  internal.post('/note-groups/:id/rename-category', async (context) => {
+    const { shimId, from, to } = claudeCategoryRenameBody.parse(await context.req.json());
+    const groupId = context.req.param('id');
+    store.requireAttachedShim(store.noteGroupExplorationId(groupId), shimId);
+    return context.json(store.renameNoteCategory(groupId, from, to));
   });
 
   internal.post('/note-groups/:id/reorder', async (context) => {

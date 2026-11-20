@@ -289,6 +289,35 @@ describe('note categories', () => {
     expect(context.order()).toEqual(['Apple', 'Salt', 'Milk 2%']);
   });
 
+  it('renames a category for all its notes and keeps their order', () => {
+    const context = seedNotes(['Milk', 'Salt', 'Cheese']);
+    const [milk, salt, cheese] = context.notes;
+    context.store.updateNote(cheese!.id, { category: 'Dairy' });
+    context.store.updateNote(milk!.id, { category: 'Dairy' });
+    context.store.updateNote(salt!.id, { category: 'Spices' });
+    const before = context.order();
+    context.events.length = 0;
+    const { noteIds } = context.store.renameNoteCategory(context.group.id, 'Dairy', ' Nabiał ');
+    expect(noteIds).toHaveLength(2);
+    expect(context.events.filter((event) => event.type === 'note.updated')).toHaveLength(2);
+    expect(context.order()).toEqual(before);
+    expect(categoryOf(context, milk!.id)).toBe('Nabiał');
+    expect(categoryOf(context, cheese!.id)).toBe('Nabiał');
+    expect(categoryOf(context, salt!.id)).toBe('Spices');
+    context.store.renameNoteCategory(context.group.id, 'Nabiał', null);
+    expect(categoryOf(context, milk!.id)).toBeNull();
+  });
+
+  it('refuses to rename a category the group does not have', () => {
+    const context = seedNotes(['Milk']);
+    expect(() => context.store.renameNoteCategory(context.group.id, 'Dairy', 'Nabiał')).toThrow(
+      /no category/,
+    );
+    expect(() => context.store.renameNoteCategory(context.group.id, ' ', 'Nabiał')).toThrow(
+      /Name the category/,
+    );
+  });
+
   it('lets Claude name a category when adding notes, and lists it', () => {
     const context = seedNotes([]);
     const { noteIds } = context.store.addNotes({
