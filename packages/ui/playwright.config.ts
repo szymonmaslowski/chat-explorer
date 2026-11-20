@@ -1,6 +1,6 @@
-import { writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { defineConfig } from '@playwright/test';
 
 const port = 4519;
@@ -9,6 +9,17 @@ const backend = '../backend/dist';
 const cli = '../cli/dist';
 const fakeWhisper = resolve('e2e/fake-whisper');
 const microphoneAudio = join(tmpdir(), 'chat-explorer-e2e-microphone.wav');
+// Node alone, not its whole folder: a global npm install puts `claude` beside node, as in the coding
+// image, and the tests need it missing.
+const nodeOnly = join(tmpdir(), 'chat-explorer-e2e-node');
+const nodeLink = join(nodeOnly, 'node');
+// Each test worker loads this file again while the daemon runs, so the link is replaced only when
+// it points elsewhere.
+mkdirSync(nodeOnly, { recursive: true });
+if (!existsSync(nodeLink) || readlinkSync(nodeLink) !== process.execPath) {
+  rmSync(nodeLink, { force: true });
+  symlinkSync(process.execPath, nodeLink);
+}
 
 // Chrome's fake microphone plays this file: a tone loud enough to count as speech.
 function writeToneWav(path: string, seconds: number, sampleRate = 48_000) {
@@ -68,7 +79,7 @@ export default defineConfig({
     env: {
       CHAT_EXPLORER_HOME: home,
       CHAT_EXPLORER_PORT: String(port),
-      PATH: `${fakeWhisper}:${dirname(process.execPath)}:/usr/bin:/bin`,
+      PATH: `${fakeWhisper}:${nodeOnly}:/usr/bin:/bin`,
     },
     reuseExistingServer: false,
   },
