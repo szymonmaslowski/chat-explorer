@@ -21,6 +21,7 @@ test('the card of a comment on a table cell shows its quote, one on a paragraph 
   await detachFakeSession(request);
   await page.goto(`/e/${explorationId}`);
   const message = page.locator('.message.assistant');
+  await expect(message.locator('table')).toBeVisible();
 
   const comment = async (quoted: string, body: string) => {
     await page.evaluate((text) => {
@@ -31,6 +32,7 @@ test('the card of a comment on a table cell shows its quote, one on a paragraph 
         if (at === -1) continue;
         node.parentElement!.scrollIntoView({ block: 'center' });
         window.getSelection()!.setBaseAndExtent(node, at, node, at + text.length);
+        node.parentElement!.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
         return;
       }
       throw new Error(`"${text}" not found`);

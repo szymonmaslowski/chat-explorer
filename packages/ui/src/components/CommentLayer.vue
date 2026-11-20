@@ -12,7 +12,7 @@ import {
   textNodes,
   type TextAnchor,
 } from '../lib/anchoring';
-import { sitsApartFromText } from '../lib/comment-placement';
+import { sitsApartFromText, wholeBlockAround } from '../lib/comment-placement';
 import { lineBoxes, nestingLevels, outlinePath } from '../lib/outlines';
 import { useCopied } from '../composables/useCopied';
 import { blockClipboardText } from '../lib/clipboard';
@@ -589,9 +589,9 @@ function fitToMessageWidth(mount: HTMLElement) {
 function insertAfterRange(range: Range, mount: HTMLElement) {
   const end = range.endContainer;
   const element = end instanceof Element ? end : end.parentElement!;
+  const whole = wholeBlockAround(range);
+  if (whole) return whole.after(mount);
   const root = element.closest('[data-anchor-root]')!;
-  const whole = element.closest('pre, table');
-  if (whole && root.contains(whole)) return whole.after(mount);
   const block =
     element.closest('p, li, h1, h2, h3, h4, h5, h6, blockquote, dd, dt, th, td') ?? root;
   let outermostInline: Element | null = null;
