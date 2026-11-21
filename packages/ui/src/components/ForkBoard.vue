@@ -440,7 +440,7 @@ async function onDrop(columnId: string | null, cards: Fork[]) {
 
 .main-row {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 1rem;
 }
