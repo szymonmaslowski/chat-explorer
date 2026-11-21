@@ -238,6 +238,7 @@ test('saves the reply box text as a general comment, sent with the next Submit',
   await expect(page.locator('.reply-bar .summary')).toHaveText('1 note, 1 comment');
 
   await page.getByRole('button', { name: 'Submit' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Send' }).click();
   await expect(page.locator('.queued-submission')).toBeVisible();
   await page.goto(`/e/${explorationId}/notes`);
   await expect(page.locator('.note .description')).toContainText('Save this for later');
@@ -460,6 +461,7 @@ test('submits only the selected drafts, and selects the left-out one again after
   await expect(page.locator('.reply-bar .summary')).toHaveText('1 comment, 1 draft left out');
 
   await page.getByRole('button', { name: 'Submit' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Send' }).click();
   await expect(page.locator('.queued-submission')).toBeVisible();
   await expect(include).toBeChecked();
   await expect(kept).not.toContainText('left out');
@@ -524,12 +526,37 @@ test('asks before a message takes drafted comments along, and lets them be left 
   expect(question.text).not.toContain('Forgotten two');
 });
 
-test('sends a message with no drafts without asking', async ({ page, request }) => {
+test('asks before drafts alone are sent, and not for a message with no drafts', async ({
+  page,
+  request,
+}) => {
   const explorationId = await answeredChat(request);
+  const snapshot = await (await request.get(`/api/explorations/${explorationId}`)).json();
+  const message = snapshot.messages.at(-1);
   await page.goto(`/e/${explorationId}`);
   await page.getByPlaceholder('Reply to Claude').fill('Just a message');
   await page.getByRole('button', { name: 'Submit' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('.queued-submission')).toBeVisible();
+  await page.locator('.queued-submission').getByRole('button', { name: 'Cancel' }).click();
+  await page.getByPlaceholder('Reply to Claude').fill('');
+
+  await request.post(`/api/explorations/${explorationId}/comments`, {
+    data: {
+      messageId: message.id,
+      viewForkId: message.forkId,
+      quote: '',
+      startOffset: 0,
+      endOffset: 0,
+      body: 'Only a draft',
+    },
+  });
+  await page.reload();
+  await page.getByRole('button', { name: 'Submit' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('Send 1 drafted comment?');
+  await expect(dialog).toContainText('Only a draft');
+  await dialog.getByRole('button', { name: 'Send' }).click();
   await expect(page.locator('.queued-submission')).toBeVisible();
 });
 

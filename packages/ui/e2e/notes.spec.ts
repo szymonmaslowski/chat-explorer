@@ -291,6 +291,7 @@ test('turns a note comment into a note on Submit', async ({ page, request }) => 
   await expect(card).toContainText('Note');
   await expect(page.locator('.reply-bar .summary')).toHaveText('1 note');
   await page.getByRole('button', { name: 'Submit' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Send' }).click();
   await expect(card).toContainText('saved');
   await expect(page.locator('.queued-submission')).toHaveCount(0);
 
@@ -323,6 +324,7 @@ test('makes the new group a note comment asks for only on Submit', async ({ page
   expect(await groupNames()).toEqual(['Facts']);
 
   await page.getByRole('button', { name: 'Submit' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Send' }).click();
   await expect(page.locator('.comment-card.note')).toContainText('saved');
   expect(await groupNames()).toEqual(['Facts', 'Group 2']);
 });

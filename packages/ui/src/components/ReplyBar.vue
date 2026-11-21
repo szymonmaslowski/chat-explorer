@@ -201,9 +201,18 @@ watch(() => props.forkId, endHistoryWalk);
 
 // A message that takes drafted comments along asks first, since the drafts are easy to forget.
 const confirming = ref(false);
+// Any draft, ticked or left out, makes Submit ask; a left-out one can still be ticked there.
+const listedDrafts = computed(() => props.drafts.filter((draft) => draft.editBody === null));
 const sendsDraftsWithMessage = computed(
   () => text.value.trim() !== '' && readyDrafts.value.length > 0,
 );
+const confirmTitle = computed(() => {
+  const ticked = readyDrafts.value.length;
+  const message = text.value.trim() !== '';
+  if (message && ticked) return `Send your message with ${plural(ticked, 'drafted comment')}?`;
+  if (ticked) return `Send ${plural(ticked, 'drafted comment')}?`;
+  return 'Send your message? All drafted comments are left out.';
+});
 const typeLabel = { inline: 'Comment', fork: 'Fork', note: 'Note' } as const;
 const excerpt = (draft: Comment) => {
   const body = draft.body.replace(/\s+/g, ' ').trim();
@@ -217,13 +226,16 @@ const toggleDraft = (draft: Comment) =>
     changes: { selected: !draft.selected },
   });
 // The drafts may be ticked off or removed from another page while the question is open.
-watch(sendsDraftsWithMessage, (sends) => {
-  if (!sends) confirming.value = false;
-});
+watch(
+  () => listedDrafts.value.length,
+  (count) => {
+    if (count === 0) confirming.value = false;
+  },
+);
 
 function submit() {
   if (!canSubmit.value) return;
-  if (sendsDraftsWithMessage.value) {
+  if (listedDrafts.value.length > 0) {
     confirming.value = true;
     return;
   }
@@ -396,11 +408,9 @@ function onKeydown(event: KeyboardEvent) {
       @keydown.esc="confirming = false"
     >
       <div class="confirm" role="dialog" aria-modal="true" aria-label="Send with drafted comments">
-        <p class="confirm-title">
-          Send your message with {{ plural(readyDrafts.length, 'drafted comment') }}?
-        </p>
+        <p class="confirm-title">{{ confirmTitle }}</p>
         <ul class="confirm-list">
-          <li v-for="draft in drafts.filter((d) => d.editBody === null)" :key="draft.id">
+          <li v-for="draft in listedDrafts" :key="draft.id">
             <label>
               <input type="checkbox" :checked="draft.selected" @change="toggleDraft(draft)" />
               <span class="confirm-kind">{{ typeLabel[draft.type] }}</span>
