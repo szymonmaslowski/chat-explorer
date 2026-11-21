@@ -108,7 +108,11 @@ const title = computed(() => {
 }
 
 .answering .dot,
-.waiting .dot,
+.waiting .dot {
+  background: var(--warning);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
 .stopped {
   color: var(--warning);
 }

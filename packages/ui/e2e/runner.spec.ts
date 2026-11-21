@@ -54,6 +54,18 @@ test('shows what the runner does in a fork, its usage, and stops it on request',
   await page.goto(`/e/${explorationId}`);
   const status = page.locator('.exploration-header .status');
   await expect(status).toHaveText('working');
+  // The dot of a working fork pulses in the warning colour.
+  const warning = await page.evaluate(() => {
+    const probe = document.createElement('span');
+    probe.style.background = 'var(--warning)';
+    document.body.append(probe);
+    const colour = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return colour;
+  });
+  const dot = status.locator('.dot');
+  await expect(dot).toHaveCSS('background-color', warning);
+  await expect(dot).toHaveCSS('animation-name', /pulse/);
   const activity = page.locator('.activity-group');
   await expect(activity).toContainText('Working · 2 steps');
   await expect(activity.locator('li')).toHaveText([
