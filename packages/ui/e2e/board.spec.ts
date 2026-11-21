@@ -288,7 +288,7 @@ test('the card menu is not cut off by the columns area', async ({ page, request 
   }
 });
 
-test('columns stretch to the tallest, and an empty column takes the placeholder at its bottom', async ({
+test('columns stretch to the tallest, and an empty column shows the placeholder under the pointer', async ({
   page,
   request,
 }) => {
@@ -309,16 +309,20 @@ test('columns stretch to the tallest, and an empty column takes the placeholder 
   const ux = (await page.locator('[data-column="UX"]').boundingBox())!;
   expect(ux.height).toBeCloseTo(system.height, 0);
 
-  // Drag the ungrouped card over the empty column, low in it: the placeholder is at its bottom.
+  // Drag the ungrouped card into the empty column, low in it: the placeholder is under the pointer,
+  // inside the column.
   const source = (await card(page, 'And Memcached?').boundingBox())!;
   await page.mouse.move(source.x + 30, source.y + 30);
   await page.mouse.down();
-  await page.mouse.move(ux.x + 40, ux.y + ux.height - 20, { steps: 8 });
-  await page.mouse.move(ux.x + 44, ux.y + ux.height - 22, { steps: 3 });
+  const pointerY = ux.y + ux.height - 90;
+  await page.mouse.move(ux.x + 40, pointerY, { steps: 8 });
+  await page.mouse.move(ux.x + 44, pointerY + 2, { steps: 3 });
   const placeholder = page.locator('[data-column="UX"] .drop-placeholder');
   await expect(placeholder).toContainText('And Memcached?');
   const held = (await placeholder.boundingBox())!;
-  expect(held.y + held.height).toBeGreaterThan(ux.y + ux.height - 16);
+  expect(held.y).toBeLessThanOrEqual(pointerY);
+  expect(held.y + held.height).toBeGreaterThanOrEqual(pointerY);
+  expect(held.y + held.height).toBeLessThanOrEqual(ux.y + ux.height + 1);
   await page.mouse.up();
   await expect(page.locator('[data-column="UX"] .board-card')).toContainText('And Memcached?');
 });

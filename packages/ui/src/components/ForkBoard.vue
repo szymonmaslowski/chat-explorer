@@ -143,7 +143,14 @@ const placeholderAt = (columnId: string | null, index: number) =>
   dragged.value !== null &&
   indicator.value?.columnId === columnId &&
   indicator.value.index === index;
-const indicator = ref<{ columnId: string | null; index: number } | null>(null);
+// `pointerY` and `bodyHeight` (px, within the column) let an empty column show the placeholder
+// under the pointer, wherever the column is on the screen.
+const indicator = ref<{
+  columnId: string | null;
+  index: number;
+  pointerY?: number;
+  bodyHeight?: number;
+} | null>(null);
 
 function onDragStart(event: DragEvent, fork: Fork) {
   if (!movable.value) return event.preventDefault();
@@ -167,7 +174,21 @@ function onDragOverCard(event: DragEvent, columnId: string | null, index: number
 function onDragOverBody(event: DragEvent, columnId: string | null, cards: Fork[]) {
   if (!dragged.value) return;
   event.preventDefault();
-  indicator.value = { columnId, index: cards.length };
+  const body = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  indicator.value = {
+    columnId,
+    index: cards.length,
+    pointerY: event.clientY - body.top,
+    bodyHeight: body.height,
+  };
+}
+
+// An empty column's placeholder sits where the pointer entered it, kept inside the column.
+function underPointer() {
+  const { pointerY = 0, bodyHeight = 0 } = indicator.value ?? {};
+  return {
+    marginTop: `min(max(0px, calc(${pointerY}px - 2.75rem)), max(0px, calc(${bodyHeight}px - 5.5rem)))`,
+  };
 }
 
 function endDrag() {
@@ -343,7 +364,7 @@ async function onDrop(columnId: string | null, cards: Fork[]) {
             <div
               v-if="placeholderAt(view.column.id, view.forks.length)"
               class="drop-placeholder"
-              :class="{ 'at-bottom': view.forks.length === 0 }"
+              :style="view.forks.length === 0 ? underPointer() : undefined"
               @dragover.prevent.stop
               @drop.prevent.stop="onDrop(view.column.id, view.forks)"
             >
@@ -611,10 +632,6 @@ async function onDrop(columnId: string | null, cards: Fork[]) {
   position: absolute;
   opacity: 0;
   pointer-events: none;
-}
-
-.column-body > .drop-placeholder.at-bottom {
-  margin-top: auto;
 }
 
 .ungrouped-body > .drop-placeholder {
