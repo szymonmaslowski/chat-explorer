@@ -4,8 +4,10 @@ import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useCopied } from '../composables/useCopied';
 import { usePopover } from '../composables/usePopover';
 import { forkTitle } from '../lib/conversation';
+import { offline } from '../lib/online';
 import type { Attention } from '../lib/read-state';
 import AttentionDot from './AttentionDot.vue';
+import ConfirmButton from './ConfirmButton.vue';
 import MediaIcon from './MediaIcon.vue';
 
 const props = defineProps<{
@@ -27,6 +29,7 @@ const emit = defineEmits<{
   moveTo: [columnId: string | null];
   up: [];
   down: [];
+  archive: [];
 }>();
 
 const { open, closeOnEscape } = usePopover('root');
@@ -58,6 +61,8 @@ watch(open, async (isOpen) => {
   }
 });
 onBeforeUnmount(() => window.removeEventListener('scroll', close, true));
+
+const canArchive = () => !props.archived && !offline.value && props.fork.parentForkId !== null;
 
 function pick(action: () => void) {
   open.value = false;
@@ -110,7 +115,7 @@ function pick(action: () => void) {
     </button>
     <div v-if="open" ref="menu" class="menu" role="menu" :style="menuStyle">
       <button type="button" role="menuitem" @click="pick(() => copy({ plain: props.fork.id }))">
-        Copy id
+        <MediaIcon name="copy" />Copy id
       </button>
       <template v-if="movable">
         <button
@@ -119,7 +124,7 @@ function pick(action: () => void) {
           :disabled="!canMoveUp"
           @click="pick(() => emit('up'))"
         >
-          Move up
+          <MediaIcon name="chevron-up" />Move up
         </button>
         <button
           type="button"
@@ -127,7 +132,7 @@ function pick(action: () => void) {
           :disabled="!canMoveDown"
           @click="pick(() => emit('down'))"
         >
-          Move down
+          <MediaIcon name="chevron-down" />Move down
         </button>
         <p class="menu-label">Move to</p>
         <button
@@ -138,7 +143,7 @@ function pick(action: () => void) {
           :disabled="column.id === fork.boardColumnId"
           @click="pick(() => emit('moveTo', column.id))"
         >
-          {{ column.name }}
+          <MediaIcon name="move" />{{ column.name }}
         </button>
         <button
           type="button"
@@ -146,9 +151,18 @@ function pick(action: () => void) {
           :disabled="fork.boardColumnId === null"
           @click="pick(() => emit('moveTo', null))"
         >
-          Ungrouped
+          <MediaIcon name="unchain" />Ungrouped
         </button>
       </template>
+      <ConfirmButton
+        v-if="canArchive()"
+        role="menuitem"
+        label="Archive"
+        danger
+        @confirm="pick(() => emit('archive'))"
+      >
+        <MediaIcon name="archive" />Archive
+      </ConfirmButton>
     </div>
   </div>
 </template>
@@ -285,6 +299,9 @@ function pick(action: () => void) {
 }
 
 .menu button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   border: none;
   background: transparent;
   text-align: left;

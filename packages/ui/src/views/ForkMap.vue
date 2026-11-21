@@ -228,6 +228,7 @@ const layout = computed(() => {
           :columns="[]"
           :can-move-up="false"
           :can-move-down="false"
+          @archive="change(api.archiveFork(box.fork.id))"
           :style="{
             left: `${box.left}px`,
             top: `${box.top}px`,

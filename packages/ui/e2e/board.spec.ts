@@ -277,8 +277,8 @@ test('the card menu is not cut off by the columns area', async ({ page, request 
   await page.getByRole('button', { name: 'Board view' }).click();
   await card(page, 'What about Redis?').getByRole('button', { name: 'Fork actions' }).click();
   const items = page.getByRole('menuitem');
-  await expect(items).toHaveCount(5);
-  for (const index of [0, 4]) {
+  await expect(items).toHaveCount(6);
+  for (const index of [0, 5]) {
     const box = (await items.nth(index).boundingBox())!;
     const hit = await page.evaluate(
       ({ x, y }) => document.elementFromPoint(x, y)?.closest('[role="menuitem"]')?.textContent,
@@ -325,4 +325,31 @@ test('columns stretch to the tallest, and an empty column shows the placeholder 
   expect(held.y + held.height).toBeLessThanOrEqual(ux.y + ux.height + 1);
   await page.mouse.up();
   await expect(page.locator('[data-column="UX"] .board-card')).toContainText('And Memcached?');
+});
+
+test('the card menu archives a fork after a second press, on the board and the graph', async ({
+  page,
+  request,
+}) => {
+  const { explorationId, redis, memcached } = await chatWithTwoForks(request);
+  const archivedAt = async (forkId: string) =>
+    (
+      (await (await request.get(`/api/explorations/${explorationId}`)).json()) as Snapshot
+    ).forks.find((fork) => fork.id === forkId)!.archivedAt;
+  const archiveFrom = async (box: import('@playwright/test').Locator) => {
+    await box.getByRole('button', { name: 'Fork actions' }).click();
+    await page.getByRole('menuitem', { name: 'Archive', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Confirm' }).click();
+  };
+
+  await page.goto(`/e/${explorationId}/map`);
+  await page.getByRole('button', { name: 'Board view' }).click();
+  await archiveFrom(card(page, 'What about Redis?'));
+  await expect(card(page, 'What about Redis?')).toHaveCount(0);
+  expect(await archivedAt(redis.id)).not.toBeNull();
+
+  await page.getByRole('button', { name: 'Graph view' }).click();
+  await archiveFrom(page.locator('.fork-box', { hasText: 'And Memcached?' }));
+  await expect(page.locator('.fork-box', { hasText: 'And Memcached?' })).toHaveCount(0);
+  expect(await archivedAt(memcached.id)).not.toBeNull();
 });

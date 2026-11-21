@@ -33,6 +33,7 @@ defineProps<{
     | 'to-comment'
     | 'to-answer'
     | 'chevron-up'
+    | 'chevron-down'
     | 'plus'
     | 'split'
     | 'eye'
@@ -101,6 +102,7 @@ defineProps<{
     <path v-else-if="name === 'to-comment'" d="M7 17L17 7M9 7h8v8" />
     <path v-else-if="name === 'to-answer'" d="M7 7l10 10M17 9v8H9" />
     <path v-else-if="name === 'chevron-up'" d="M6 15l6-6 6 6" />
+    <path v-else-if="name === 'chevron-down'" d="M6 9l6 6 6-6" />
     <path v-else-if="name === 'plus'" d="M12 5v14M5 12h14" />
     <path v-else-if="name === 'split'" d="M7 3v8a5 5 0 0 0 5 5h7M16 13l3 3-3 3" />
     <path v-else-if="name === 'home'" d="M3 11l9-8 9 8M5 9.5V20h5v-6h4v6h5V9.5" />
@@ -163,6 +165,7 @@ defineProps<{
 .media-icon.to-comment,
 .media-icon.to-answer,
 .media-icon.chevron-up,
+.media-icon.chevron-down,
 .media-icon.plus,
 .media-icon.split,
 .media-icon.home,

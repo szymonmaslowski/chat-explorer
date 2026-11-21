@@ -368,6 +368,7 @@ async function onDrop(columnId: string | null, cards: Fork[]) {
                 @move-to="moveToColumn(fork, $event)"
                 @up="moveBy(fork, view.forks, -1)"
                 @down="moveBy(fork, view.forks, 1)"
+                @archive="change(api.archiveFork(fork.id))"
               />
             </template>
             <div
@@ -443,6 +444,7 @@ async function onDrop(columnId: string | null, cards: Fork[]) {
             @move-to="moveToColumn(fork, $event)"
             @up="moveBy(fork, layout.ungrouped, -1)"
             @down="moveBy(fork, layout.ungrouped, 1)"
+            @archive="change(api.archiveFork(fork.id))"
           />
         </template>
         <div
