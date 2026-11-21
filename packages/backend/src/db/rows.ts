@@ -99,6 +99,7 @@ export interface CommentRow {
   fork_group_id: string | null;
   drafted_by_fork_id: string | null;
   selected: number;
+  board_column_choice: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -286,6 +287,7 @@ export const toComment = (row: CommentRow): Comment => ({
   forkGroupId: row.fork_group_id,
   draftedByForkId: row.drafted_by_fork_id,
   selected: row.selected === 1,
+  boardColumnChoice: row.board_column_choice,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });

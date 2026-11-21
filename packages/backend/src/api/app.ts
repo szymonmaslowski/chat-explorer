@@ -98,6 +98,7 @@ const newCommentBody = z.object({
   noteGroupId: z.string().min(1).nullable().optional(),
   fileIds: z.array(z.string()).optional(),
   selected: z.boolean().optional(),
+  boardColumnChoice: z.string().min(1).nullable().optional(),
 });
 const forkGroupBody = z.object({ memberIds: z.array(z.string()), groupId: clientId });
 const commentChangesBody = z.object({
@@ -107,6 +108,7 @@ const commentChangesBody = z.object({
   noteGroupId: z.string().min(1).nullable().optional(),
   fileIds: z.array(z.string()).optional(),
   selected: z.boolean().optional(),
+  boardColumnChoice: z.string().min(1).nullable().optional(),
 });
 const replyDraftBody = z.object({ text: z.string(), newFork: z.boolean(), fileIds });
 const submitBody = z.object({

@@ -13,6 +13,7 @@ import { commentFilesOwner, useFileDrafts } from '../stores/file-drafts';
 import { newId, outbox } from '../stores/outbox';
 import AttachButton from './AttachButton.vue';
 import CommentTypePicker from './CommentTypePicker.vue';
+import BoardColumnPicker from './BoardColumnPicker.vue';
 import DictationButton from './DictationButton.vue';
 import ExpandButton from './ExpandButton.vue';
 import FileDraftList from './FileDraftList.vue';
@@ -47,6 +48,11 @@ const pickedGroup = computed({
     chosenGroupId.value = choice === newGroupChoice ? null : choice;
   },
 });
+// Where the fork goes on the board, when this comment starts one. Null: its parent's column.
+const boardColumnChoice = ref<string | null>(null);
+const parentForkId = computed(
+  () => openExploration(props.explorationId).messages.get(props.messageId)?.forkId,
+);
 const textarea = ref<HTMLTextAreaElement | null>(null);
 const expanded = ref(false);
 const expandedStyle = useExpandedArea(expanded, { coverDock: false, marginPx: 8 });
@@ -77,7 +83,12 @@ const autosave = useAutosave(() => {
       type: 'comment.update',
       explorationId,
       commentId,
-      changes: { editBody: body.value, type: type.value, noteGroupId: noteGroupId.value },
+      changes: {
+        editBody: body.value,
+        type: type.value,
+        noteGroupId: noteGroupId.value,
+        boardColumnChoice: boardColumnChoice.value,
+      },
     });
     return;
   }
@@ -92,12 +103,13 @@ const autosave = useAutosave(() => {
       editBody: body.value,
       type: type.value,
       noteGroupId: noteGroupId.value,
+      boardColumnChoice: boardColumnChoice.value,
     },
   });
   created = true;
   emit('created', commentId);
 });
-watch([body, type, noteGroupId], autosave.changed);
+watch([body, type, noteGroupId, boardColumnChoice], autosave.changed);
 
 onMounted(() => textarea.value?.focus());
 
@@ -119,6 +131,7 @@ function addSaved() {
             editBody: null,
             type: type.value,
             noteGroupId: noteGroupId.value,
+            boardColumnChoice: boardColumnChoice.value,
             fileIds: files.readyIds.value,
           },
         }
@@ -131,6 +144,7 @@ function addSaved() {
             body: body.value,
             type: type.value,
             noteGroupId: noteGroupId.value,
+            boardColumnChoice: boardColumnChoice.value,
             fileIds: files.readyIds.value,
           },
         },
@@ -188,6 +202,12 @@ function onKeydown(event: KeyboardEvent) {
         <button type="button" class="primary" :disabled="!canSave" @click="save">Save</button>
       </div>
     </div>
+    <BoardColumnPicker
+      v-if="type === 'fork'"
+      v-model="boardColumnChoice"
+      :exploration-id="explorationId"
+      :parent-fork-id="parentForkId"
+    />
     <div v-if="type === 'note'" class="note-group">
       <select v-model="pickedGroup" aria-label="Note group">
         <option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }}</option>

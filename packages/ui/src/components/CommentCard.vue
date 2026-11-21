@@ -21,6 +21,7 @@ import {
 } from '../stores/fork-joining';
 import { newId, outbox } from '../stores/outbox';
 import AttachButton from './AttachButton.vue';
+import BoardColumnPicker from './BoardColumnPicker.vue';
 import CommentTypePicker from './CommentTypePicker.vue';
 import ConfirmButton from './ConfirmButton.vue';
 import DictationButton from './DictationButton.vue';
@@ -335,6 +336,15 @@ function onEditorKeydown(event: KeyboardEvent) {
         <span class="arrow" aria-hidden="true">↑</span>
         <span class="quoted">{{ comment.quote }}</span>
       </button>
+      <BoardColumnPicker
+        v-if="isDraft && comment.type === 'fork' && !grouped && joinRole === null"
+        :model-value="comment.boardColumnChoice"
+        :exploration-id="comment.explorationId"
+        :parent-fork-id="
+          openExploration(comment.explorationId).messages.get(comment.messageId)?.forkId
+        "
+        @update:model-value="update({ boardColumnChoice: $event })"
+      />
       <p v-if="draftedBy" class="drafted-by muted">Drafted by the fork: {{ draftedBy }}</p>
       <p ref="bodyElement" class="body">{{ comment.body }}</p>
       <FileLinks :files="savedFiles" />

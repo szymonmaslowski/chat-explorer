@@ -426,6 +426,7 @@ export function applyChange(state: ExplorationState, change: Change) {
         forkGroupId: existing?.forkGroupId ?? null,
         draftedByForkId: existing?.draftedByForkId ?? null,
         selected: change.comment.selected ?? existing?.selected ?? true,
+        boardColumnChoice: change.comment.boardColumnChoice ?? existing?.boardColumnChoice ?? null,
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
       });
@@ -433,7 +434,7 @@ export function applyChange(state: ExplorationState, change: Change) {
     }
     case 'comment.update': {
       const comment = state.comments.get(change.commentId);
-      const { body, editBody, type, noteGroupId, selected } = change.changes;
+      const { body, editBody, type, noteGroupId, selected, boardColumnChoice } = change.changes;
       if (!comment) break;
       if (type === 'note') leaveGroup(state, comment);
       put(state.comments, comment.id, {
@@ -443,6 +444,8 @@ export function applyChange(state: ExplorationState, change: Change) {
         type: type ?? comment.type,
         noteGroupId: noteGroupId === undefined ? comment.noteGroupId : noteGroupId,
         selected: selected ?? comment.selected,
+        boardColumnChoice:
+          boardColumnChoice === undefined ? comment.boardColumnChoice : boardColumnChoice,
         updatedAt: now,
       });
       break;

@@ -147,3 +147,62 @@ describe('board columns', () => {
     expect(column(context, null)).toEqual([forkIds[2], forkIds[0], forkIds[1]]);
   });
 });
+
+describe('a fork comment that picks a column', () => {
+  function forkFromComment(context: ReturnType<typeof setup>, choice: string | null) {
+    const { store, explorationId, mainForkId, answer } = context;
+    store.createComment(explorationId, {
+      messageId: answer.id,
+      viewForkId: mainForkId,
+      quote: 'some text',
+      startOffset: 16,
+      endOffset: 25,
+      body: 'Go deeper',
+      type: 'fork',
+      boardColumnChoice: choice,
+    });
+    store.submit(explorationId, mainForkId, '');
+    store.deliverQueued(explorationId);
+    return store.pendingForks(explorationId).at(-1)!.forkId;
+  }
+
+  it('puts the fork in the column it names, at the bottom', () => {
+    const context = setup(1);
+    const { store, explorationId, forkIds } = context;
+    store.addBoardColumn(explorationId, 'system');
+    const [system] = store.snapshot(explorationId).exploration.boardColumns;
+    store.moveFork(forkIds[0]!, system!.id, null);
+    const created = forkFromComment(context, system!.id);
+    expect(column(context, system!.id)).toEqual([forkIds[0], created]);
+  });
+
+  it('leaves the fork ungrouped on request, and in its parent column otherwise', () => {
+    const context = setup(0);
+    const first = forkFromComment(context, 'ungrouped');
+    const second = forkFromComment(context, null);
+    expect(column(context, null)).toEqual([first, second]);
+  });
+
+  it('makes a column for "new" and tells the page about it', () => {
+    const context = setup(0);
+    const created = forkFromComment(context, 'new');
+    const [made] = context.store.snapshot(context.explorationId).exploration.boardColumns;
+    expect(made!.name).toBe('Group 1');
+    expect(column(context, made!.id)).toEqual([created]);
+    expect(
+      context.events.some(
+        (event) =>
+          event.type === 'exploration.updated' && event.exploration.boardColumns.length === 1,
+      ),
+    ).toBe(true);
+  });
+
+  it('ignores a column that was deleted meanwhile', () => {
+    const context = setup(0);
+    context.store.addBoardColumn(context.explorationId, 'system');
+    const [system] = context.store.snapshot(context.explorationId).exploration.boardColumns;
+    context.store.deleteBoardColumn(context.explorationId, system!.id);
+    const created = forkFromComment(context, system!.id);
+    expect(column(context, null)).toEqual([created]);
+  });
+});

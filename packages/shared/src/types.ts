@@ -137,6 +137,9 @@ export interface Comment {
   draftedByForkId: string | null;
   // A draft goes with the next Submit only when selected.
   selected: boolean;
+  // For a comment that starts a fork: the board column the fork goes to. Null is the column of
+  // its parent; otherwise 'ungrouped', 'new' (a column made with the fork) or a column id.
+  boardColumnChoice: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -420,6 +423,7 @@ export interface NewComment {
   noteGroupId?: string | null;
   fileIds?: string[];
   selected?: boolean;
+  boardColumnChoice?: string | null;
 }
 
 export interface CommentChanges {
@@ -430,6 +434,7 @@ export interface CommentChanges {
   // All the comment's files: new uploads join it, files left out are let go.
   fileIds?: string[];
   selected?: boolean;
+  boardColumnChoice?: string | null;
 }
 
 export interface NewBookmark {

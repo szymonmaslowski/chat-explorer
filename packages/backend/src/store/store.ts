@@ -1045,9 +1045,9 @@ export class ChatStore {
   ) {
     this.db.run(
       `INSERT INTO comments (id, exploration_id, message_id, view_fork_id, quote, start_offset,
-         end_offset, body, edit_body, type, note_group_id, drafted_by_fork_id, selected, status,
-         created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
+         end_offset, body, edit_body, type, note_group_id, drafted_by_fork_id, selected,
+         board_column_choice, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
       id,
       explorationId,
       input.messageId,
@@ -1061,6 +1061,7 @@ export class ChatStore {
       input.noteGroupId ?? null,
       draftedByForkId,
       input.selected === false ? 0 : 1,
+      input.boardColumnChoice ?? null,
       createdAt,
       createdAt,
     );
@@ -1117,13 +1118,16 @@ export class ChatStore {
         this.attachFileToComment(file.id, commentId, row.exploration_id);
       this.db.run(
         `UPDATE comments SET body = ?, edit_body = ?, type = ?, note_group_id = ?, selected = ?,
-           updated_at = ?
+           board_column_choice = ?, updated_at = ?
          WHERE id = ?`,
         changes.body?.trim() ?? row.body,
         changes.editBody === undefined ? row.edit_body : changes.editBody,
         changes.type ?? row.type,
         changes.noteGroupId === undefined ? row.note_group_id : changes.noteGroupId,
         changes.selected === undefined ? row.selected : Number(changes.selected),
+        changes.boardColumnChoice === undefined
+          ? row.board_column_choice
+          : changes.boardColumnChoice,
         this.now(),
         commentId,
       );
@@ -1722,7 +1726,13 @@ export class ChatStore {
         forkGroups.set(key, [...(forkGroups.get(key) ?? []), comment]);
       }
       for (const comments of forkGroups.values()) {
-        const { fork, message } = this.createForkFromComments(comments);
+        const { fork, message, columnCreated } = this.createForkFromComments(comments);
+        if (columnCreated) {
+          addEvent({
+            type: 'exploration.updated',
+            exploration: toExploration(this.requireExplorationRow(fork.exploration_id)),
+          });
+        }
         addEvent({ type: 'fork.created', fork: toFork(fork) });
         addEvent({ type: 'message.added', message: toMessage(message), fork: toFork(fork) });
       }
@@ -2749,7 +2759,18 @@ export class ChatStore {
       originCommentId: first.id,
       summary: summaryFrom(first.body),
     });
-    const { message, fork } = this.appendMessage(forkRow, 'user', '', 'live');
+    // The first comment, in text order, that names a column decides; none leaves the fork in
+    // its parent's column.
+    const choice = ordered.find(
+      (comment) => comment.board_column_choice !== null,
+    )?.board_column_choice;
+    const columnCreated = choice ? this.fileForkByChoice(forkRow, choice) : false;
+    const { message, fork } = this.appendMessage(
+      this.requireForkRow(forkRow.id),
+      'user',
+      '',
+      'live',
+    );
     for (const comment of comments) {
       this.db.run(
         `UPDATE comments SET status = 'submitted', reply_message_id = ?, created_fork_id = ?
@@ -2759,7 +2780,34 @@ export class ChatStore {
         comment.id,
       );
     }
-    return { message, fork };
+    return { message, fork, columnCreated };
+  }
+
+  // Files a new fork where its comment asked. A column that is gone leaves the fork where it is.
+  // Returns whether a column was made.
+  private fileForkByChoice(forkRow: ForkRow, choice: string) {
+    const columns = this.boardColumnsOf(forkRow.exploration_id);
+    if (choice === 'ungrouped') {
+      this.placeFork(forkRow.exploration_id, forkRow.id, null, 'last');
+      return false;
+    }
+    if (choice === 'new') {
+      let number = columns.length + 1;
+      while (columns.some((column) => column.name === `Group ${number}`)) number += 1;
+      const column = { id: newId(), name: `Group ${number}` };
+      this.db.run(
+        'UPDATE explorations SET board_columns = ?, updated_at = ? WHERE id = ?',
+        JSON.stringify([...columns, column]),
+        this.now(),
+        forkRow.exploration_id,
+      );
+      this.placeFork(forkRow.exploration_id, forkRow.id, column.id, 'last');
+      return true;
+    }
+    if (columns.some((column) => column.id === choice)) {
+      this.placeFork(forkRow.exploration_id, forkRow.id, choice, 'last');
+    }
+    return false;
   }
 
   private inTextOrder(comments: CommentRow[]) {

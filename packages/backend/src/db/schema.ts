@@ -422,4 +422,9 @@ export const migrations = [
     WHERE older.exploration_id = forks.exploration_id AND older.rowid < forks.rowid
   );
   `,
+  `
+  -- Where the fork a draft comment starts goes on the board: null (its parent's column), 'ungrouped',
+  -- 'new' (a column made when the fork is), or a column id.
+  ALTER TABLE comments ADD COLUMN board_column_choice TEXT;
+  `,
 ];

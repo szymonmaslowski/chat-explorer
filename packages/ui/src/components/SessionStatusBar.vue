@@ -109,7 +109,6 @@ const title = computed(() => {
 
 .answering .dot,
 .waiting .dot,
-
 .stopped {
   color: var(--warning);
 }
