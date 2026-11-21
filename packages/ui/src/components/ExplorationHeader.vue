@@ -125,17 +125,19 @@ const forksBetween = computed(() =>
         </template>
       </p>
       <div class="title-row">
-        <div class="title-group">
-          <h1 class="title" :class="{ 'fork-title': fork }">
-            {{ fork ? forkTitle(fork) : chatTitle }}
-          </h1>
-          <slot name="title-badge" />
+        <div class="title-column">
+          <div class="title-group">
+            <h1 class="title" :class="{ 'fork-title': fork }">
+              {{ fork ? forkTitle(fork) : chatTitle }}
+            </h1>
+            <slot name="title-badge" />
+          </div>
+          <CopyableId v-if="fork" class="fork-id" label="ID" :id="fork.id" />
         </div>
         <div v-if="$slots['title-actions']" class="title-actions">
           <slot name="title-actions" />
         </div>
       </div>
-      <CopyableId v-if="fork" class="fork-id" label="Fork ID" :id="fork.id" />
     </template>
     <p v-if="state.exploration?.archivedAt" class="archived">
       Archived.
@@ -222,9 +224,27 @@ const forksBetween = computed(() =>
   gap: 0.4rem;
 }
 
+/* The title and the fork's ID form one column, so the ID sits right under the name. */
+.title-column {
+  flex: 1;
+  min-width: 0;
+}
+
 .fork-id {
-  margin-top: 0.2rem;
-  font-size: 0.8rem;
+  margin-top: 0.1rem;
+  font-size: 0.7rem;
+}
+
+.fork-id :deep(.icon-button) {
+  width: 1.5rem;
+  height: 1.5rem;
+  min-width: 0;
+  padding: 0;
+}
+
+.fork-id :deep(.icon-button svg) {
+  width: 0.85rem;
+  height: 0.85rem;
 }
 
 .title-row {
@@ -238,7 +258,6 @@ const forksBetween = computed(() =>
 /* A badge sits right after a short title and wraps under a long one. */
 .title-group {
   display: flex;
-  flex: 1;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 0.15rem 0.5rem;

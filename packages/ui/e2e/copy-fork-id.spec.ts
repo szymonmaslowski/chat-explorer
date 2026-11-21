@@ -34,7 +34,7 @@ test('copies a fork id from under its name and from its card on the board', asyn
   await page.goto(`/e/${explorationId}/f/${redis.id}`);
   const idRow = page.locator('.exploration-header .fork-id');
   await expect(idRow.locator('code')).toHaveText(redis.id);
-  await idRow.getByRole('button', { name: 'Copy Fork ID' }).click();
+  await idRow.getByRole('button', { name: 'Copy ID' }).click();
   await expect(idRow.getByRole('button', { name: 'Copied' })).toBeVisible();
   await expect.poll(clipboard).toBe(redis.id);
 
