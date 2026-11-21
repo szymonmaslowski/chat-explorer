@@ -239,3 +239,28 @@ test('a dragged card shows in the proposed place and the other cards make room',
   await expect(page.locator('[data-column="UX"] .board-card')).toContainText('And Memcached?');
   await expect(page.locator('.drop-placeholder')).toHaveCount(0);
 });
+
+test('the card menu is not cut off by the columns area', async ({ page, request }) => {
+  const { explorationId, redis } = await chatWithTwoForks(request);
+  await request.post(`/api/explorations/${explorationId}/board-columns`, {
+    data: { name: 'system' },
+  });
+  const columnId = (
+    (await (await request.get(`/api/explorations/${explorationId}`)).json()) as Snapshot
+  ).exploration.boardColumns[0]!.id;
+  await request.post(`/api/forks/${redis.id}/move`, { data: { columnId, afterForkId: null } });
+  await page.setViewportSize({ width: 390, height: 700 });
+  await page.goto(`/e/${explorationId}/map`);
+  await page.getByRole('button', { name: 'Board view' }).click();
+  await card(page, 'What about Redis?').getByRole('button', { name: 'Move this fork' }).click();
+  const items = page.getByRole('menuitem');
+  await expect(items).toHaveCount(4);
+  for (const index of [0, 3]) {
+    const box = (await items.nth(index).boundingBox())!;
+    const hit = await page.evaluate(
+      ({ x, y }) => document.elementFromPoint(x, y)?.closest('[role="menuitem"]')?.textContent,
+      { x: box.x + box.width / 2, y: box.y + box.height / 2 },
+    );
+    expect(hit?.trim()).toBe((await items.nth(index).textContent())!.trim());
+  }
+});

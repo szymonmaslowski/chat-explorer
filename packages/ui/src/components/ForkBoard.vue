@@ -249,11 +249,14 @@ async function onDrop(columnId: string | null, cards: Fork[]) {
               />
               <div class="form-buttons">
                 <ConfirmButton
-                  class="delete-column"
-                  label="Delete"
+                  class="icon-button delete-column"
+                  label="Delete column"
+                  title="Delete column"
                   danger
                   @confirm="change(api.deleteBoardColumn(explorationId, view.column.id))"
-                />
+                >
+                  <MediaIcon name="trash" /><span class="visually-hidden">Delete column</span>
+                </ConfirmButton>
                 <button type="button" @click="renamingId = null">Cancel</button>
                 <button type="submit" class="primary" :disabled="!renameDraft.trim()">Save</button>
               </div>
@@ -490,6 +493,7 @@ async function onDrop(columnId: string | null, cards: Fork[]) {
   display: flex;
   flex: 1 1 100%;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.25rem;
 }
 
@@ -518,6 +522,17 @@ async function onDrop(columnId: string | null, cards: Fork[]) {
 
 .rename input {
   width: 100%;
+  font: inherit;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.6rem;
+}
+
+.rename input:focus {
+  outline: 2px solid var(--accent-soft);
+  border-color: var(--accent);
 }
 
 .column-body {
@@ -549,11 +564,6 @@ async function onDrop(columnId: string | null, cards: Fork[]) {
 
 .delete-column {
   margin-right: auto;
-}
-
-/* Lighter lines, like the icons of the header. */
-.board :deep(.media-icon:not(.more)) {
-  stroke-width: 1.6;
 }
 
 .ungrouped {

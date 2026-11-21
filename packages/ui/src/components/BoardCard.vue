@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { BoardColumn, Fork } from '@shared/types';
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { usePopover } from '../composables/usePopover';
 import { forkTitle } from '../lib/conversation';
 import type { Attention } from '../lib/read-state';
@@ -28,6 +29,33 @@ const emit = defineEmits<{
 
 const { open, closeOnEscape } = usePopover('root');
 
+// The menu is placed against the screen, not the card, so the scrolling area around the columns
+// can't cut it off. It opens below the button, or above it when there is no room below.
+const menuButton = ref<HTMLButtonElement | null>(null);
+const menu = ref<HTMLElement | null>(null);
+const menuStyle = ref<Record<string, string>>({});
+const close = () => (open.value = false);
+
+watch(open, async (isOpen) => {
+  if (!isOpen) {
+    window.removeEventListener('scroll', close, true);
+    return;
+  }
+  window.addEventListener('scroll', close, true);
+  const anchor = menuButton.value?.getBoundingClientRect();
+  if (!anchor) return;
+  menuStyle.value = {
+    top: `${anchor.bottom + 4}px`,
+    right: `${window.innerWidth - anchor.right}px`,
+  };
+  await nextTick();
+  const height = menu.value?.offsetHeight ?? 0;
+  if (anchor.bottom + 4 + height > window.innerHeight && anchor.top - 4 - height > 0) {
+    menuStyle.value = { ...menuStyle.value, top: `${anchor.top - 4 - height}px` };
+  }
+});
+onBeforeUnmount(() => window.removeEventListener('scroll', close, true));
+
 function pick(action: () => void) {
   open.value = false;
   action();
@@ -54,6 +82,7 @@ function pick(action: () => void) {
     </RouterLink>
     <button
       v-if="movable"
+      ref="menuButton"
       type="button"
       class="icon-button more"
       aria-label="Move this fork"
@@ -63,7 +92,7 @@ function pick(action: () => void) {
     >
       <MediaIcon name="more" />
     </button>
-    <div v-if="open" class="menu" role="menu">
+    <div v-if="open" ref="menu" class="menu" role="menu" :style="menuStyle">
       <button type="button" role="menuitem" :disabled="!canMoveUp" @click="pick(() => emit('up'))">
         Move up
       </button>
@@ -193,10 +222,8 @@ function pick(action: () => void) {
 }
 
 .menu {
-  position: absolute;
-  top: 2rem;
-  right: 0.25rem;
-  z-index: 5;
+  position: fixed;
+  z-index: 20;
   display: flex;
   flex-direction: column;
   min-width: 9rem;
