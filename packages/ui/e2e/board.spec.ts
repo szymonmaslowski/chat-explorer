@@ -67,7 +67,7 @@ test('files forks into columns by menu and by drag, and keeps the board after a 
   }
 
   // Menu: move Redis to "system".
-  await card(page, 'What about Redis?').getByRole('button', { name: 'Move this fork' }).click();
+  await card(page, 'What about Redis?').getByRole('button', { name: 'Fork actions' }).click();
   await page.getByRole('menuitem', { name: 'system', exact: true }).click();
   await expect(page.locator('[data-column="system"] .board-card')).toContainText(
     'What about Redis?',
@@ -80,7 +80,7 @@ test('files forks into columns by menu and by drag, and keeps the board after a 
   await expect(page.locator('.ungrouped')).toHaveCount(0);
 
   // Drag within a column, to change priority: Memcached above Redis, both in "system".
-  await card(page, 'And Memcached?').getByRole('button', { name: 'Move this fork' }).click();
+  await card(page, 'And Memcached?').getByRole('button', { name: 'Fork actions' }).click();
   await page.getByRole('menuitem', { name: 'system', exact: true }).click();
   await expect(page.locator('[data-column="system"] .board-card').first()).toContainText(
     'What about Redis?',
@@ -169,7 +169,7 @@ test('renames, reorders and deletes a column; its forks go to Ungrouped', async 
     .click();
   await expect(page.locator('.column-heading h2')).toHaveText(['UX', 'platform']);
 
-  await card(page, 'What about Redis?').getByRole('button', { name: 'Move this fork' }).click();
+  await card(page, 'What about Redis?').getByRole('button', { name: 'Fork actions' }).click();
   await page.getByRole('menuitem', { name: 'platform', exact: true }).click();
   await expect(page.locator('.ungrouped .board-card')).toHaveCount(1);
   const column = page.locator('[data-column="platform"]');
@@ -209,8 +209,10 @@ test('shows archived forks only, in their own columns, in the board and the grap
     'What about Redis?',
   );
   await expect(page.locator('.ungrouped')).toHaveCount(0);
-  // Archived cards can't be moved.
-  await expect(page.getByRole('button', { name: 'Move this fork' })).toHaveCount(0);
+  // Archived cards can't be moved; their menu only copies the id.
+  await card(page, 'What about Redis?').getByRole('button', { name: 'Fork actions' }).click();
+  await expect(page.getByRole('menuitem')).toHaveText(['Copy id']);
+  await page.keyboard.press('Escape');
 
   await page.getByRole('button', { name: 'Show only archived forks (1)' }).click();
   await expect(page.locator('.board-card.archived')).toHaveCount(0);
@@ -273,10 +275,10 @@ test('the card menu is not cut off by the columns area', async ({ page, request 
   await page.setViewportSize({ width: 390, height: 700 });
   await page.goto(`/e/${explorationId}/map`);
   await page.getByRole('button', { name: 'Board view' }).click();
-  await card(page, 'What about Redis?').getByRole('button', { name: 'Move this fork' }).click();
+  await card(page, 'What about Redis?').getByRole('button', { name: 'Fork actions' }).click();
   const items = page.getByRole('menuitem');
-  await expect(items).toHaveCount(4);
-  for (const index of [0, 3]) {
+  await expect(items).toHaveCount(5);
+  for (const index of [0, 4]) {
     const box = (await items.nth(index).boundingBox())!;
     const hit = await page.evaluate(
       ({ x, y }) => document.elementFromPoint(x, y)?.closest('[role="menuitem"]')?.textContent,

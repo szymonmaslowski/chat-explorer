@@ -8,6 +8,7 @@ import { forkLineage, forkTitle } from '../lib/conversation';
 import { awaitsAnswer } from '../lib/read-state';
 import type { ExplorationState } from '../stores/exploration';
 import ConfirmButton from './ConfirmButton.vue';
+import CopyableId from './CopyableId.vue';
 import MediaIcon from './MediaIcon.vue';
 import OutboxFailures from './OutboxFailures.vue';
 import SessionStatusBar from './SessionStatusBar.vue';
@@ -134,6 +135,7 @@ const forksBetween = computed(() =>
           <slot name="title-actions" />
         </div>
       </div>
+      <CopyableId v-if="fork" class="fork-id" label="Fork ID" :id="fork.id" />
     </template>
     <p v-if="state.exploration?.archivedAt" class="archived">
       Archived.
@@ -218,6 +220,11 @@ const forksBetween = computed(() =>
   flex: none;
   align-items: center;
   gap: 0.4rem;
+}
+
+.fork-id {
+  margin-top: 0.2rem;
+  font-size: 0.8rem;
 }
 
 .title-row {

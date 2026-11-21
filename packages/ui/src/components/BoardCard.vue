@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import type { BoardColumn, Fork } from '@shared/types';
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { useCopied } from '../composables/useCopied';
 import { usePopover } from '../composables/usePopover';
 import { forkTitle } from '../lib/conversation';
 import type { Attention } from '../lib/read-state';
 import AttentionDot from './AttentionDot.vue';
 import MediaIcon from './MediaIcon.vue';
 
-defineProps<{
+const props = defineProps<{
   fork: Fork;
   url: string;
   messageCount: number;
@@ -28,6 +29,7 @@ const emit = defineEmits<{
 }>();
 
 const { open, closeOnEscape } = usePopover('root');
+const { copy } = useCopied();
 
 // The menu is placed against the screen, not the card, so the scrolling area around the columns
 // can't cut it off. It opens below the button, or above it when there is no room below.
@@ -81,48 +83,57 @@ function pick(action: () => void) {
       </span>
     </RouterLink>
     <button
-      v-if="movable"
       ref="menuButton"
       type="button"
       class="icon-button more"
-      aria-label="Move this fork"
-      title="Move this fork"
+      aria-label="Fork actions"
+      title="Fork actions"
       :aria-expanded="open"
       @click="open = !open"
     >
       <MediaIcon name="more" />
     </button>
     <div v-if="open" ref="menu" class="menu" role="menu" :style="menuStyle">
-      <button type="button" role="menuitem" :disabled="!canMoveUp" @click="pick(() => emit('up'))">
-        Move up
+      <button type="button" role="menuitem" @click="pick(() => copy({ plain: props.fork.id }))">
+        Copy id
       </button>
-      <button
-        type="button"
-        role="menuitem"
-        :disabled="!canMoveDown"
-        @click="pick(() => emit('down'))"
-      >
-        Move down
-      </button>
-      <p class="menu-label">Move to</p>
-      <button
-        v-for="column in columns"
-        :key="column.id"
-        type="button"
-        role="menuitem"
-        :disabled="column.id === fork.boardColumnId"
-        @click="pick(() => emit('moveTo', column.id))"
-      >
-        {{ column.name }}
-      </button>
-      <button
-        type="button"
-        role="menuitem"
-        :disabled="fork.boardColumnId === null"
-        @click="pick(() => emit('moveTo', null))"
-      >
-        Ungrouped
-      </button>
+      <template v-if="movable">
+        <button
+          type="button"
+          role="menuitem"
+          :disabled="!canMoveUp"
+          @click="pick(() => emit('up'))"
+        >
+          Move up
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          :disabled="!canMoveDown"
+          @click="pick(() => emit('down'))"
+        >
+          Move down
+        </button>
+        <p class="menu-label">Move to</p>
+        <button
+          v-for="column in columns"
+          :key="column.id"
+          type="button"
+          role="menuitem"
+          :disabled="column.id === fork.boardColumnId"
+          @click="pick(() => emit('moveTo', column.id))"
+        >
+          {{ column.name }}
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          :disabled="fork.boardColumnId === null"
+          @click="pick(() => emit('moveTo', null))"
+        >
+          Ungrouped
+        </button>
+      </template>
     </div>
   </div>
 </template>
