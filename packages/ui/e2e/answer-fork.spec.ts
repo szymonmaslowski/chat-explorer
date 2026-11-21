@@ -39,4 +39,18 @@ test("starts an empty fork after one of Claude's answers and replies there", asy
   await expect(box.locator('.fork-id')).toHaveText(forkId);
   await expect(box).toHaveClass(/awaiting-box/);
   await expect(page.locator('.fork-box.awaiting-box')).toHaveCount(1);
+  // The open fork's box is selected too: its border and inset shadow, which mark the selection,
+  // stay as they are while it pulses.
+  await expect(box).toHaveClass(/current/);
+  const selection = new Set<string>();
+  for (let sample = 0; sample < 6; sample++) {
+    selection.add(
+      await box.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return `${style.borderTopColor} ${style.boxShadow}`;
+      }),
+    );
+    await page.waitForTimeout(250);
+  }
+  expect(selection.size).toBe(1);
 });
