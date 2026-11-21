@@ -350,21 +350,23 @@ const layout = computed(() => {
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
+/* The pulse is an outline, so it never touches the border or the inset
+   shadow that mark the selected box. */
 @keyframes box-pulse {
   50% {
-    border-color: var(--text-muted);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-muted) 35%, transparent);
+    outline-color: color-mix(in srgb, var(--text-muted) 55%, transparent);
   }
 }
 
 .fork-box.awaiting-box {
+  outline: 2px solid transparent;
   animation: box-pulse 2.6s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .fork-box.awaiting-box {
     animation: none;
-    border-color: var(--text-muted);
+    outline-color: color-mix(in srgb, var(--text-muted) 40%, transparent);
   }
 }
 
