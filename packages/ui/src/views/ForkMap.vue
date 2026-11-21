@@ -4,6 +4,16 @@ import { stratify, tree } from 'd3-hierarchy';
 import { computed, ref } from 'vue';
 import { api, ApiError } from '../api';
 import AttentionDot from '../components/AttentionDot.vue';
+import ForkBoard from '../components/ForkBoard.vue';
+import MapToolbar from '../components/MapToolbar.vue';
+import {
+  readArchivedOnly,
+  readMapView,
+  storeArchivedOnly,
+  storeMapView,
+  withAncestors,
+  type MapView,
+} from '../lib/board';
 import ExplorationHeader from '../components/ExplorationHeader.vue';
 import { archivingFork, forkLineage, forkTitle } from '../lib/conversation';
 import { awaitsAnswer, type Attention } from '../lib/read-state';
@@ -35,14 +45,24 @@ const archivedForks = computed(
         .map((fork) => fork.id),
     ),
 );
-// Shown from the start when the map opens from an archived fork, so it is not missing.
-const chosenShowArchived = ref<boolean | null>(null);
+// Only the archived forks, with the forks above them. Shown from the start when the map opens
+// from an archived fork, so it is not missing, unless this device chose otherwise.
+const chosenArchivedOnly = ref<boolean | null>(readArchivedOnly(props.explorationId) ? true : null);
 const showArchived = computed({
   get: () =>
-    chosenShowArchived.value ??
+    chosenArchivedOnly.value ??
     (props.currentForkId !== undefined && archivedForks.value.has(props.currentForkId)),
-  set: (shown) => (chosenShowArchived.value = shown),
+  set: (shown) => {
+    chosenArchivedOnly.value = shown;
+    storeArchivedOnly(props.explorationId, shown);
+  },
 });
+
+const view = ref<MapView>(readMapView(props.explorationId));
+function chooseView(chosen: MapView) {
+  view.value = chosen;
+  storeMapView(props.explorationId, chosen);
+}
 
 // The forks on the way to the open fork stay on the map even when collapsed, so it is not missing.
 const revealedForks = computed(() => {
@@ -72,8 +92,11 @@ const forkUrl = (fork: Fork) =>
   fork.parentForkId ? `/e/${props.explorationId}/f/${fork.id}` : `/e/${props.explorationId}`;
 
 const layout = computed(() => {
-  const shownForks = [...state.value.forks.values()].filter(
-    (fork) => showArchived.value || !archivedForks.value.has(fork.id),
+  const shownIds = showArchived.value
+    ? withAncestors(state.value.forks, archivedForks.value)
+    : null;
+  const shownForks = [...state.value.forks.values()].filter((fork) =>
+    shownIds ? shownIds.has(fork.id) : !archivedForks.value.has(fork.id),
   );
   const childrenOf = new Map<string | null, Fork[]>();
   for (const fork of shownForks) {
@@ -164,14 +187,24 @@ const layout = computed(() => {
   <div class="map-page">
     <ExplorationHeader :state="state" page="map" :side="side" class="top" />
 
-    <label v-if="archivedForks.size > 0" class="show-archived">
-      <input v-model="showArchived" type="checkbox" />
-      Show archived forks ({{ archivedForks.size }})
-    </label>
+    <MapToolbar
+      :view="view"
+      :archived-only="showArchived"
+      :archived-count="archivedForks.size"
+      @view="chooseView"
+      @archived="showArchived = $event"
+    />
 
     <p v-if="error" class="error" role="alert">{{ error }}</p>
     <p v-if="state.status === 'loading'" class="muted">Loading…</p>
     <p v-else-if="state.status !== 'ready'" class="muted">This chat is not available.</p>
+
+    <ForkBoard
+      v-else-if="view === 'board'"
+      :exploration-id="explorationId"
+      :current-fork-id="currentForkId"
+      :archived-only="showArchived"
+    />
 
     <div v-else-if="layout" class="canvas-scroll">
       <div class="canvas" :style="{ width: `${layout.width}px`, height: `${layout.height}px` }">
@@ -263,14 +296,6 @@ const layout = computed(() => {
   z-index: 6;
   margin-bottom: 1rem;
   background: var(--background);
-}
-
-.show-archived {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-bottom: 1rem;
-  font-size: 0.875rem;
 }
 
 /* Down to the bottom of the screen, so a swipe anywhere below a short map scrolls it sideways. */

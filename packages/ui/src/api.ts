@@ -198,6 +198,28 @@ export const api = {
   collapseFork: (forkId: string) => call<Fork>(`/api/forks/${forkId}/collapse`, { method: 'POST' }),
   expandCollapsedChildren: (forkId: string) =>
     call<Fork[]>(`/api/forks/${forkId}/expand-children`, { method: 'POST' }),
+  addBoardColumn: (explorationId: string, name: string) =>
+    call<Exploration>(`/api/explorations/${explorationId}/board-columns`, {
+      method: 'POST',
+      json: { name },
+    }),
+  renameBoardColumn: (explorationId: string, columnId: string, name: string) =>
+    call<Exploration>(`/api/explorations/${explorationId}/board-columns/${columnId}`, {
+      method: 'PATCH',
+      json: { name },
+    }),
+  reorderBoardColumn: (explorationId: string, columnId: string, afterColumnId: string | null) =>
+    call<Exploration>(`/api/explorations/${explorationId}/board-columns/${columnId}/reorder`, {
+      method: 'POST',
+      json: { afterColumnId },
+    }),
+  deleteBoardColumn: (explorationId: string, columnId: string) =>
+    call<{ exploration: Exploration; forks: Fork[] }>(
+      `/api/explorations/${explorationId}/board-columns/${columnId}`,
+      { method: 'DELETE' },
+    ),
+  moveFork: (forkId: string, columnId: string | null, afterForkId: string | null) =>
+    call<Fork>(`/api/forks/${forkId}/move`, { method: 'POST', json: { columnId, afterForkId } }),
   replyDraft: (forkId: string) => call<ReplyDraft>(`/api/forks/${forkId}/reply-draft`),
   saveReplyDraft: (
     forkId: string,

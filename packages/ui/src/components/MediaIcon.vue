@@ -40,6 +40,9 @@ defineProps<{
     | 'list'
     | 'unchecked-first'
     | 'home'
+    | 'graph'
+    | 'board'
+    | 'more'
     | 'settings';
 }>();
 </script>
@@ -105,6 +108,12 @@ defineProps<{
       d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4"
     />
     <path v-else-if="name === 'categories'" d="M4 5h7M7 10h13M7 14h13M7 18h13" />
+    <path
+      v-else-if="name === 'graph'"
+      d="M4 9h5v6H4zM15 4h5v5h-5zM15 15h5v5h-5zM9 12h3M12 6.5v11M12 6.5h3M12 17.5h3"
+    />
+    <path v-else-if="name === 'board'" d="M4 5h4v14H4zM10 5h4v9h-4zM16 5h4v6h-4z" />
+    <path v-else-if="name === 'more'" d="M5 12h.01M12 12h.01M19 12h.01" />
     <path v-else-if="name === 'list'" d="M4 6h16M4 12h16M4 18h16" />
     <path
       v-else-if="name === 'unchecked-first'"
@@ -160,6 +169,9 @@ defineProps<{
 .media-icon.categories,
 .media-icon.list,
 .media-icon.unchecked-first,
+.media-icon.graph,
+.media-icon.board,
+.media-icon.more,
 .media-icon.eye {
   fill: none;
   stroke: currentColor;
@@ -168,7 +180,8 @@ defineProps<{
   stroke-linecap: round;
 }
 
-.media-icon.grip {
+.media-icon.grip,
+.media-icon.more {
   stroke-width: 3.5;
 }
 </style>

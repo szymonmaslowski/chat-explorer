@@ -28,7 +28,9 @@ test('archives a fork out of sight and restores it', async ({ page, request }) =
 
   await page.getByRole('link', { name: 'Chat', exact: true }).click();
   await expect(page.locator('.fork-box.archived')).toContainText('What about Redis?');
-  await page.getByLabel('Show archived forks (1)').uncheck();
+  // Opened from an archived fork, the map shows only archived forks, with the fork above them.
+  await expect(page.locator('.fork-box')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Show only archived forks (1)' }).click();
   await expect(page.locator('.fork-box')).toHaveCount(1);
   await page.getByRole('link', { name: 'Main' }).click();
   await expect(page.locator('.reply-fork')).toHaveCount(0);

@@ -373,6 +373,15 @@ function addNewFork(
   now: number,
 ) {
   if (state.forks.has(fork.forkId)) return;
+  // Joins its parent's board column at the bottom, as the daemon files it; the main fork has none.
+  const parent = fork.parentForkId ? state.forks.get(fork.parentForkId) : undefined;
+  const boardColumnId = parent?.parentForkId ? parent.boardColumnId : null;
+  const boardPosition = Math.max(
+    -1,
+    ...[...state.forks.values()]
+      .filter((each) => each.boardColumnId === boardColumnId)
+      .map((each) => each.boardPosition),
+  );
   put(state.forks, fork.forkId, {
     id: fork.forkId,
     explorationId: state.explorationId,
@@ -390,6 +399,8 @@ function addNewFork(
     archivedAt: null,
     collapsed: false,
     needsSummary: false,
+    boardColumnId,
+    boardPosition: boardPosition + 1,
   });
 }
 
