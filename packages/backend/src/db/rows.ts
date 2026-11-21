@@ -8,6 +8,7 @@ import type {
   Comment,
   CommentStatus,
   CommentType,
+  BoardColumn,
   Exploration,
   FileKind,
   Fork,
@@ -36,6 +37,7 @@ export interface ExplorationRow {
   attached_seen_at: number | null;
   model: ClaudeModel;
   default_page: ChatDefaultPage;
+  board_columns: string;
   background_session_id: string | null;
   archived_at: number | null;
   deleted_at: number | null;
@@ -60,6 +62,8 @@ export interface ForkRow {
   archived_at: number | null;
   collapsed: number;
   needs_summary: number;
+  board_column_id: string | null;
+  board_position: number;
 }
 
 export interface MessageRow {
@@ -218,6 +222,7 @@ export const toExploration = (row: ExplorationRow): Exploration => ({
   summary: row.summary,
   model: row.model,
   defaultPage: row.default_page,
+  boardColumns: JSON.parse(row.board_columns) as BoardColumn[],
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   archivedAt: row.archived_at,
@@ -245,6 +250,8 @@ export const toFork = (row: ForkRow): Fork => ({
   archivedAt: row.archived_at,
   collapsed: row.collapsed === 1,
   needsSummary: row.needs_summary === 1,
+  boardColumnId: row.board_column_id,
+  boardPosition: row.board_position,
 });
 
 export const toMessage = (row: MessageRow): Message => ({

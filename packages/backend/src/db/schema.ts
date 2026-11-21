@@ -410,4 +410,16 @@ export const migrations = [
   -- A category is a name on the notes that share it, inside one group; no name, no category.
   ALTER TABLE notes ADD COLUMN category TEXT;
   `,
+  `
+  -- The columns of a chat's board of forks, in order: a JSON array of { id, name }. A fork with no
+  -- column is in the Ungrouped section; board_position is its place among the forks that share
+  -- its column, archived ones included.
+  ALTER TABLE explorations ADD COLUMN board_columns TEXT NOT NULL DEFAULT '[]';
+  ALTER TABLE forks ADD COLUMN board_column_id TEXT;
+  ALTER TABLE forks ADD COLUMN board_position INTEGER NOT NULL DEFAULT 0;
+  UPDATE forks SET board_position = (
+    SELECT count(*) FROM forks AS older
+    WHERE older.exploration_id = forks.exploration_id AND older.rowid < forks.rowid
+  );
+  `,
 ];

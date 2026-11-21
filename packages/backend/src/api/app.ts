@@ -78,6 +78,12 @@ const newExplorationBody = z
 const explorationSettingsBody = z
   .object({ model: model.optional(), defaultPage: z.enum(chatDefaultPages).optional() })
   .refine((settings) => settings.model || settings.defaultPage, 'Nothing to change');
+const columnNameBody = z.object({ name: z.string() });
+const afterColumnBody = z.object({ afterColumnId: z.string().nullable() });
+const moveForkBody = z.object({
+  columnId: z.string().nullable(),
+  afterForkId: z.string().nullable(),
+});
 const clientId = z.string().regex(prefixedIdPattern).optional();
 const newCommentBody = z.object({
   id: clientId,
@@ -606,6 +612,38 @@ export function createApp(options: AppOptions) {
   app.post('/api/forks/:id/expand-children', (context) =>
     context.json(store.expandCollapsedChildren(context.req.param('id'))),
   );
+
+  app.post('/api/explorations/:id/board-columns', async (context) => {
+    const { name } = columnNameBody.parse(await context.req.json());
+    return context.json(store.addBoardColumn(context.req.param('id'), name), 201);
+  });
+
+  app.patch('/api/explorations/:id/board-columns/:columnId', async (context) => {
+    const { name } = columnNameBody.parse(await context.req.json());
+    return context.json(
+      store.renameBoardColumn(context.req.param('id'), context.req.param('columnId'), name),
+    );
+  });
+
+  app.post('/api/explorations/:id/board-columns/:columnId/reorder', async (context) => {
+    const { afterColumnId } = afterColumnBody.parse(await context.req.json());
+    return context.json(
+      store.reorderBoardColumn(
+        context.req.param('id'),
+        context.req.param('columnId'),
+        afterColumnId,
+      ),
+    );
+  });
+
+  app.delete('/api/explorations/:id/board-columns/:columnId', (context) =>
+    context.json(store.deleteBoardColumn(context.req.param('id'), context.req.param('columnId'))),
+  );
+
+  app.post('/api/forks/:id/move', async (context) => {
+    const { columnId, afterForkId } = moveForkBody.parse(await context.req.json());
+    return context.json(store.moveFork(context.req.param('id'), columnId, afterForkId));
+  });
 
   app.get('/api/forks/:id/reply-draft', (context) =>
     context.json(store.replyDraft(context.req.param('id'))),

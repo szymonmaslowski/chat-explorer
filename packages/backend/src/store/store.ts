@@ -25,6 +25,7 @@ import {
   type SubmissionRow,
 } from '../db/rows.js';
 import type {
+  BoardColumn,
   ChatDefaultPage,
   Comment,
   CommentChanges,
@@ -254,9 +255,7 @@ export class ChatStore {
     };
   }
 
-  listExplorations(
-    view: ExplorationView = 'active',
-  ): Omit<ExplorationListItem, 'sessionStatus'>[] {
+  listExplorations(view: ExplorationView = 'active'): Omit<ExplorationListItem, 'sessionStatus'>[] {
     const filters: Record<ExplorationView, string> = {
       active: 'deleted_at IS NULL AND archived_at IS NULL ORDER BY updated_at DESC',
       archived: 'deleted_at IS NULL AND archived_at IS NOT NULL ORDER BY archived_at DESC',
@@ -409,10 +408,7 @@ export class ChatStore {
     );
   }
 
-  changesSince(
-    explorationId: string,
-    after: number,
-  ): Omit<ChangeSet, 'sessionStatus'> {
+  changesSince(explorationId: string, after: number): Omit<ChangeSet, 'sessionStatus'> {
     this.requireExplorationRow(explorationId);
     const seq = this.latestChangeSeq();
     const { floor } = this.db.get<{ floor: number }>('SELECT floor FROM change_log')!;
@@ -2684,10 +2680,15 @@ export class ChatStore {
   }) {
     const forkId = input.id ? withPrefix('fork', input.id) : newPrefixedId('fork');
     const createdAt = this.now();
+    // A new fork joins its parent's board column, at the bottom; the main fork is not on the board.
+    const parent = this.requireForkRow(input.parentForkId);
+    const columnId = parent.parent_fork_id === null ? null : parent.board_column_id;
     this.db.run(
       `INSERT INTO forks (id, exploration_id, parent_fork_id, base_message_id, origin_comment_id,
-         summary, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         summary, created_at, updated_at, board_column_id, board_position)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,
+         (SELECT coalesce(max(board_position), -1) + 1 FROM forks
+           WHERE exploration_id = ? AND board_column_id IS ?))`,
       forkId,
       input.explorationId,
       input.parentForkId,
@@ -2696,6 +2697,9 @@ export class ChatStore {
       input.summary,
       createdAt,
       createdAt,
+      columnId,
+      input.explorationId,
+      columnId,
     );
     return this.requireForkRow(forkId);
   }
@@ -3007,6 +3011,159 @@ export class ChatStore {
     );
     this.db.run('UPDATE forks SET collapsed = 0 WHERE parent_fork_id = ?', row.id);
     return collapsed.map((child) => this.publishForkUpdate(child.id));
+  }
+
+  // The board of forks: named columns, left to right, with forks in each from top (first) to
+  // bottom. A fork with no column is in the Ungrouped section under them.
+  private boardColumnsOf(explorationId: string) {
+    const row = this.requireExplorationRow(explorationId);
+    return JSON.parse(row.board_columns) as BoardColumn[];
+  }
+
+  private saveBoardColumns(explorationId: string, columns: BoardColumn[]) {
+    this.db.run(
+      'UPDATE explorations SET board_columns = ?, updated_at = ? WHERE id = ?',
+      JSON.stringify(columns),
+      this.now(),
+      explorationId,
+    );
+    return this.publishExplorationUpdate(explorationId);
+  }
+
+  private requireColumnName(name: string, columns: BoardColumn[], exceptId?: string) {
+    const trimmed = name.trim();
+    if (trimmed === '') throw new StoreError('invalid', 'A column needs a name.');
+    if (trimmed.length > 80)
+      throw new StoreError('invalid', 'A column name is at most 80 characters.');
+    if (columns.some((column) => column.id !== exceptId && column.name === trimmed)) {
+      throw new StoreError('invalid', `There is already a column named "${trimmed}".`);
+    }
+    return trimmed;
+  }
+
+  addBoardColumn(explorationId: string, name: string, id?: string) {
+    const columns = this.boardColumnsOf(explorationId);
+    const existing = id ? columns.find((column) => column.id === id) : undefined;
+    if (existing) return toExploration(this.requireExplorationRow(explorationId));
+    const column = { id: id ?? newId(), name: this.requireColumnName(name, columns) };
+    return this.saveBoardColumns(explorationId, [...columns, column]);
+  }
+
+  renameBoardColumn(explorationId: string, columnId: string, name: string) {
+    const columns = this.boardColumnsOf(explorationId);
+    if (!columns.some((column) => column.id === columnId)) {
+      throw new StoreError('not_found', `Column ${columnId} does not exist.`);
+    }
+    const trimmed = this.requireColumnName(name, columns, columnId);
+    return this.saveBoardColumns(
+      explorationId,
+      columns.map((column) => (column.id === columnId ? { ...column, name: trimmed } : column)),
+    );
+  }
+
+  // A null `afterColumnId` puts the column first.
+  reorderBoardColumn(explorationId: string, columnId: string, afterColumnId: string | null) {
+    const columns = this.boardColumnsOf(explorationId);
+    const ids = reorderedIds(
+      columns.map((column) => column.id),
+      columnId,
+      afterColumnId,
+    );
+    if (!columns.some((column) => column.id === columnId)) {
+      throw new StoreError('not_found', `Column ${columnId} does not exist.`);
+    }
+    return this.saveBoardColumns(
+      explorationId,
+      ids.map((id) => columns.find((column) => column.id === id)!),
+    );
+  }
+
+  // The forks of the column go to the Ungrouped section, below those already there.
+  deleteBoardColumn(explorationId: string, columnId: string) {
+    const columns = this.boardColumnsOf(explorationId);
+    if (!columns.some((column) => column.id === columnId)) {
+      throw new StoreError('not_found', `Column ${columnId} does not exist.`);
+    }
+    const moved = this.db.transaction(() => {
+      const ids = this.boardForkIds(explorationId, columnId);
+      for (const id of ids) this.placeFork(explorationId, id, null, 'last');
+      return ids;
+    });
+    const exploration = this.saveBoardColumns(
+      explorationId,
+      columns.filter((column) => column.id !== columnId),
+    );
+    return { exploration, forks: moved.map((id) => this.publishForkUpdate(id)) };
+  }
+
+  private boardForkIds(explorationId: string, columnId: string | null) {
+    return this.db
+      .all<{ id: string }>(
+        `SELECT id FROM forks WHERE exploration_id = ? AND board_column_id IS ?
+         ORDER BY board_position, rowid`,
+        explorationId,
+        columnId,
+      )
+      .map((row) => row.id);
+  }
+
+  // Files a fork under a column (null: Ungrouped), first, last, or after another fork of it.
+  private placeFork(
+    explorationId: string,
+    forkId: string,
+    columnId: string | null,
+    after: 'first' | 'last' | string,
+  ) {
+    this.db.run('UPDATE forks SET board_column_id = ? WHERE id = ?', columnId, forkId);
+    const others = this.boardForkIds(explorationId, columnId).filter((id) => id !== forkId);
+    let at = after === 'first' ? 0 : others.length;
+    if (after !== 'first' && after !== 'last') {
+      const anchor = others.indexOf(after);
+      if (anchor === -1) throw new StoreError('not_found', `Fork ${after} is not in that column.`);
+      at = anchor + 1;
+    }
+    others.splice(at, 0, forkId);
+    others.forEach((id, index) => {
+      this.db.run(
+        'UPDATE forks SET board_position = ? WHERE id = ? AND board_position != ?',
+        index,
+        id,
+        index,
+      );
+    });
+    return others;
+  }
+
+  // `afterForkId` null puts the fork first in the column. The main fork is not on the board.
+  moveFork(forkId: string, columnId: string | null, afterForkId: string | null) {
+    const row = this.requireForkRow(forkId);
+    if (row.parent_fork_id === null) {
+      throw new StoreError('invalid', 'The main fork is not on the board.');
+    }
+    if (
+      columnId !== null &&
+      !this.boardColumnsOf(row.exploration_id).some((c) => c.id === columnId)
+    ) {
+      throw new StoreError('not_found', `Column ${columnId} does not exist.`);
+    }
+    if (afterForkId !== null) {
+      const anchor = this.requireForkRow(afterForkId, row.exploration_id);
+      if ((anchor.board_column_id ?? null) !== columnId) {
+        throw new StoreError('invalid', `Fork ${afterForkId} is not in that column.`);
+      }
+    }
+    const ids = this.db.transaction(() => {
+      const before = row.board_column_id;
+      const ids = this.placeFork(row.exploration_id, forkId, columnId, afterForkId ?? 'first');
+      // The column it left keeps its order, without a gap.
+      const left = before === columnId ? [] : this.boardForkIds(row.exploration_id, before);
+      left.forEach((id, index) => {
+        this.db.run('UPDATE forks SET board_position = ? WHERE id = ?', index, id);
+      });
+      return [...new Set([...ids, ...left])];
+    });
+    const forks = ids.map((id) => this.publishForkUpdate(id));
+    return forks.find((fork) => fork.id === forkId)!;
   }
 
   private publishForkUpdate(forkId: string) {

@@ -16,10 +16,17 @@ export interface Exploration {
   summary: string;
   model: ClaudeModel;
   defaultPage: ChatDefaultPage;
+  // The columns of the board of forks, left to right.
+  boardColumns: BoardColumn[];
   createdAt: number;
   updatedAt: number;
   archivedAt: number | null;
   deletedAt: number | null;
+}
+
+export interface BoardColumn {
+  id: string;
+  name: string;
 }
 
 export const chatDefaultPages = ['map', 'notes'] as const;
@@ -69,6 +76,10 @@ export interface Fork {
   collapsed: boolean;
   // Split off another fork and named after its first message until Claude names it.
   needsSummary: boolean;
+  // The board column the fork is filed under; null puts it in the Ungrouped section.
+  boardColumnId: string | null;
+  // Its place among the forks of the same column, top to bottom.
+  boardPosition: number;
 }
 
 export interface Message {
