@@ -92,6 +92,13 @@ const {
   reveal,
 } = useMessageWindow({ state, fork, path, sentinelRef: 'olderSentinel' });
 const shownIds = computed(() => shownMessages.value.map((message) => message.id).join());
+// What the reader typed in the messages they sent on this path; a submit of comments alone has none.
+const sentTexts = computed(() =>
+  path.value
+    .filter((message) => message.role === 'user')
+    .map((message) => state.value.bodies.get(message.id)?.trim() ?? '')
+    .filter((text) => text !== ''),
+);
 // Claude's answers counted back from the newest, [0], so the user can refer to one as [-2].
 const answerIndexes = computed(() => {
   const answers = path.value.filter((message) => message.role === 'assistant');
@@ -553,6 +560,7 @@ watch(
           :saved-draft="state.replyDrafts.get(fork.id) ?? null"
           :hint="state.exploration?.title ?? ''"
           :last-message-id="path.at(-1)?.id ?? null"
+          :sent-texts="sentTexts"
           @submitted="onSubmitted"
           :drafts-only="draftsOnly"
           @show-drafts="commentLayer?.showDrafts()"

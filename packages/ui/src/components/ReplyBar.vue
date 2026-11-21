@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import type { Comment, CommentType, ReplyDraft } from '@shared/types';
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { api } from '../api';
 import { useAutosave } from '../composables/useAutosave';
 import { useExpandedArea } from '../composables/useExpandedArea';
+import { useMediaQuery } from '../composables/useMediaQuery';
 import { insertAtCursor } from '../lib/insert-text';
+import { atDraft, stepBack, stepForward } from '../lib/reply-history';
 import { transferredFiles } from '../lib/transferred-files';
 import { replyFilesOwner, restoreFileDrafts, useFileDrafts } from '../stores/file-drafts';
 import { newId, outbox } from '../stores/outbox';
@@ -25,6 +27,8 @@ const props = defineProps<{
   hint: string;
   // The message a general comment is written after; null while the fork has none.
   lastMessageId: string | null;
+  // The texts the reader sent on this fork's path, oldest first, for ArrowUp to bring back.
+  sentTexts: string[];
   draftsOnly: boolean;
 }>();
 const emit = defineEmits<{
@@ -188,6 +192,13 @@ async function refreshFromDaemon() {
 onMounted(() => document.addEventListener('visibilitychange', refreshFromDaemon));
 onBeforeUnmount(() => document.removeEventListener('visibilitychange', refreshFromDaemon));
 
+// On a keyboard, ArrowUp on the first line brings back the messages sent in this fork, and
+// ArrowDown on the last line goes forward again, to what was being typed. Typing ends the walk.
+const keyboard = useMediaQuery('(pointer: fine)');
+let history = atDraft();
+const endHistoryWalk = () => (history = atDraft());
+watch(() => props.forkId, endHistoryWalk);
+
 function submit() {
   if (!canSubmit.value) return;
   const { explorationId, forkId } = props;
@@ -201,6 +212,7 @@ function submit() {
   autosave.finish(() => outbox.add({ type: 'submit', explorationId, submission }));
   lastSaved.set(forkId, emptyDraft);
   text.value = '';
+  endHistoryWalk();
   newFork.value = false;
   files.clear();
   expanded.value = false;
@@ -240,7 +252,28 @@ function saveAsComment() {
   files.clear();
 }
 
+function stepThroughHistory(event: KeyboardEvent) {
+  const box = event.target as HTMLTextAreaElement;
+  const plain = !event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey;
+  if (!keyboard.value || !plain || event.isComposing || box.selectionStart !== box.selectionEnd) {
+    return;
+  }
+  const caret = box.selectionStart;
+  const step =
+    event.key === 'ArrowUp' && !box.value.slice(0, caret).includes('\n')
+      ? stepBack(props.sentTexts, history, box.value)
+      : event.key === 'ArrowDown' && !box.value.slice(caret).includes('\n')
+        ? stepForward(props.sentTexts, history)
+        : null;
+  if (!step) return;
+  event.preventDefault();
+  history = step.history;
+  text.value = step.text;
+  void nextTick(() => box.setSelectionRange(step.text.length, step.text.length));
+}
+
 function onKeydown(event: KeyboardEvent) {
+  stepThroughHistory(event);
   if (event.key !== 'Enter' || !(event.metaKey || event.ctrlKey)) return;
   event.preventDefault();
   if (event.shiftKey) saveAsComment();
@@ -289,6 +322,7 @@ function onKeydown(event: KeyboardEvent) {
       rows="2"
       placeholder="Reply to Claude (⌘↵ to send)"
       @keydown="onKeydown"
+      @input="endHistoryWalk"
       @paste="onPaste"
     />
     <div class="actions">
