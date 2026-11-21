@@ -343,6 +343,7 @@ async function onDrop(columnId: string | null, cards: Fork[]) {
             <div
               v-if="placeholderAt(view.column.id, view.forks.length)"
               class="drop-placeholder"
+              :class="{ 'at-bottom': view.forks.length === 0 }"
               @dragover.prevent.stop
               @drop.prevent.stop="onDrop(view.column.id, view.forks)"
             >
@@ -462,14 +463,16 @@ async function onDrop(columnId: string | null, cards: Fork[]) {
 
 .columns {
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 0.75rem;
   width: max-content;
   min-width: 100%;
 }
 
 .column {
+  display: flex;
   flex: none;
+  flex-direction: column;
   width: 13rem;
   padding: 0 0.6rem;
   border-left: 1px dashed var(--border);
@@ -537,6 +540,7 @@ async function onDrop(columnId: string | null, cards: Fork[]) {
 
 .column-body {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 0.5rem;
   min-height: 6rem;
@@ -607,6 +611,10 @@ async function onDrop(columnId: string | null, cards: Fork[]) {
   position: absolute;
   opacity: 0;
   pointer-events: none;
+}
+
+.column-body > .drop-placeholder.at-bottom {
+  margin-top: auto;
 }
 
 .ungrouped-body > .drop-placeholder {

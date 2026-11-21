@@ -287,3 +287,38 @@ test('the card menu is not cut off by the columns area', async ({ page, request 
     expect(hit?.trim()).toBe((await items.nth(index).textContent())!.trim());
   }
 });
+
+test('columns stretch to the tallest, and an empty column takes the placeholder at its bottom', async ({
+  page,
+  request,
+}) => {
+  const { explorationId, redis } = await chatWithTwoForks(request);
+  for (const name of ['system', 'UX']) {
+    await request.post(`/api/explorations/${explorationId}/board-columns`, { data: { name } });
+  }
+  const columns = (
+    (await (await request.get(`/api/explorations/${explorationId}`)).json()) as Snapshot
+  ).exploration.boardColumns;
+  await request.post(`/api/forks/${redis.id}/move`, {
+    data: { columnId: columns[0]!.id, afterForkId: null },
+  });
+  await page.goto(`/e/${explorationId}/map`);
+  await page.getByRole('button', { name: 'Board view' }).click();
+
+  const system = (await page.locator('[data-column="system"]').boundingBox())!;
+  const ux = (await page.locator('[data-column="UX"]').boundingBox())!;
+  expect(ux.height).toBeCloseTo(system.height, 0);
+
+  // Drag the ungrouped card over the empty column, low in it: the placeholder is at its bottom.
+  const source = (await card(page, 'And Memcached?').boundingBox())!;
+  await page.mouse.move(source.x + 30, source.y + 30);
+  await page.mouse.down();
+  await page.mouse.move(ux.x + 40, ux.y + ux.height - 20, { steps: 8 });
+  await page.mouse.move(ux.x + 44, ux.y + ux.height - 22, { steps: 3 });
+  const placeholder = page.locator('[data-column="UX"] .drop-placeholder');
+  await expect(placeholder).toContainText('And Memcached?');
+  const held = (await placeholder.boundingBox())!;
+  expect(held.y + held.height).toBeGreaterThan(ux.y + ux.height - 16);
+  await page.mouse.up();
+  await expect(page.locator('[data-column="UX"] .board-card')).toContainText('And Memcached?');
+});
