@@ -345,7 +345,9 @@ const layout = computed(() => {
 }
 
 .fork-box.current {
-  border: 2px solid var(--accent);
+  /* Same 1px border as other boxes, so selecting never moves the text. */
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 @keyframes box-pulse {
