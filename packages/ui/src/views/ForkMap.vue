@@ -352,8 +352,8 @@ const layout = computed(() => {
 
 @keyframes box-pulse {
   50% {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+    border-color: var(--text-muted);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-muted) 35%, transparent);
   }
 }
 
@@ -364,7 +364,7 @@ const layout = computed(() => {
 @media (prefers-reduced-motion: reduce) {
   .fork-box.awaiting-box {
     animation: none;
-    border-color: var(--accent);
+    border-color: var(--text-muted);
   }
 }
 
