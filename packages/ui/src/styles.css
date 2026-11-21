@@ -256,6 +256,16 @@ html.image-viewer-open {
   display: block;
 }
 
+/* A card on a table cell sits in a row of its own under the cell's row, across all columns. */
+.comment-row > td {
+  border: 0;
+  padding: 0;
+}
+
+.comment-row .opened-comments {
+  margin: 0.25rem 0;
+}
+
 /* Drafts-only view of a fork, see CommentLayer: everything in the conversation but the drafts is
    hidden, and the elements around a draft keep no size, text or decoration of their own. Hiding
    with display: none also spares the browser laying out the long text. */

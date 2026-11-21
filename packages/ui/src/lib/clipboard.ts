@@ -28,10 +28,12 @@ export async function copyToClipboard({ plain, html }: ClipboardText) {
 export function blockClipboardText(element: HTMLElement): ClipboardText {
   if (element.tagName === 'PRE') return { plain: element.textContent ?? '' };
   if (element.tagName === 'TABLE') {
-    const rows = [...element.querySelectorAll('tr')].map((row) =>
+    const rows = [...element.querySelectorAll(`tr:not([${insertedAttribute}])`)].map((row) =>
       [...row.children].map((cell) => (cell.textContent ?? '').trim()).join('\t'),
     );
-    return { plain: rows.join('\n'), html: element.outerHTML };
+    const copy = element.cloneNode(true) as HTMLElement;
+    for (const inserted of copy.querySelectorAll(`[${insertedAttribute}]`)) inserted.remove();
+    return { plain: rows.join('\n'), html: copy.outerHTML };
   }
   const html = document.createElement('div');
   html.append(blockTextRange(element).cloneContents());

@@ -12,7 +12,14 @@ import {
   textNodes,
   type TextAnchor,
 } from '../lib/anchoring';
-import { sitsApartFromText, wholeBlockAround } from '../lib/comment-placement';
+import {
+  fitToTable,
+  insertInTableRow,
+  removeMount,
+  sitsApartFromText,
+  wholeBlockAround,
+  tableCellAt,
+} from '../lib/comment-placement';
 import { lineBoxes, nestingLevels, outlinePath } from '../lib/outlines';
 import { useCopied } from '../composables/useCopied';
 import { blockClipboardText } from '../lib/clipboard';
@@ -521,7 +528,7 @@ function openPlace(messageId: string, anchor: TextAnchor, range: Range, ids: str
     document.createElement('span'),
   ) as [HTMLElement, HTMLElement, HTMLElement];
   mount.append(actionsMount, editorMount, cardsMount);
-  insertAfterRange(range, mount);
+  insertAfterRange(range, mount, anchor.endOffset);
   fitToMessageWidth(mount);
   const { quote, startOffset, endOffset } = anchor;
   const place: OpenedPlace = {
@@ -546,7 +553,7 @@ function restorePlaces(root: HTMLElement) {
     const anchorRoot = root.querySelector<HTMLElement>(`[data-anchor-root="${place.messageId}"]`);
     const range = anchorRoot && locateAnchor(anchorRoot, place.anchor);
     if (!range) return true;
-    insertAfterRange(range, place.mount);
+    insertAfterRange(range, place.mount, place.anchor.endOffset);
     return false;
   });
   for (const place of lost) closePlace(place);
@@ -576,7 +583,7 @@ function openBeingEdited() {
 // Cards inside a list item or a quote span the whole message, not only the indented text.
 function fitToMessageWidth(mount: HTMLElement) {
   const root = mount.closest<HTMLElement>('[data-anchor-root]');
-  if (!root) return;
+  if (!root || fitToTable(mount)) return;
   mount.style.marginLeft = '';
   mount.style.width = '';
   const indent = mount.getBoundingClientRect().left - root.getBoundingClientRect().left;
@@ -586,7 +593,9 @@ function fitToMessageWidth(mount: HTMLElement) {
 
 // After the quote, outside any link or bold text around its end; after a code block or table
 // as a whole, since a card cannot sit inside them.
-function insertAfterRange(range: Range, mount: HTMLElement) {
+function insertAfterRange(range: Range, mount: HTMLElement, endOffset: number) {
+  const cell = tableCellAt(range);
+  if (cell) return insertInTableRow(cell, mount, endOffset);
   const end = range.endContainer;
   const element = end instanceof Element ? end : end.parentElement!;
   const whole = wholeBlockAround(range);
@@ -615,7 +624,7 @@ function closePlace(place: OpenedPlace) {
   }
   editors.value = editors.value.filter((editor) => editor.placeKey !== place.key);
   openedPlaces.value = openedPlaces.value.filter((opened) => opened !== place);
-  place.mount.remove();
+  removeMount(place.mount);
 }
 
 function closeAllPlaces() {

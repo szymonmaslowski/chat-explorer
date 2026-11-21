@@ -54,7 +54,7 @@ function codeBlock(pre: Element): SpeechBlock {
 }
 
 function tableBlock(table: Element): SpeechBlock {
-  const rows = [...table.querySelectorAll('tr')];
+  const rows = [...table.querySelectorAll(`tr:not([${insertedAttribute}])`)];
   const header = table.querySelector('thead') ? 1 : 0;
   return {
     kind: 'table',
