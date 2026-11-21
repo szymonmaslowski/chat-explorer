@@ -1,6 +1,6 @@
 import type { BoardColumn, Fork } from '@shared/types';
 
-export const mapViews = ['graph', 'board'] as const;
+export const mapViews = ['board', 'graph'] as const;
 export type MapView = (typeof mapViews)[number];
 
 const viewKey = (explorationId: string) => `chat-explorer.map-view.${explorationId}`;
@@ -10,9 +10,9 @@ const archivedKey = (explorationId: string) => `chat-explorer.map-archived.${exp
 export function readMapView(explorationId: string): MapView {
   try {
     const stored = localStorage.getItem(viewKey(explorationId));
-    return mapViews.find((view) => view === stored) ?? 'graph';
+    return mapViews.find((view) => view === stored) ?? 'board';
   } catch {
-    return 'graph';
+    return 'board';
   }
 }
 

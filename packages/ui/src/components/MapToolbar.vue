@@ -23,22 +23,22 @@ const emit = defineEmits<{ view: [view: MapView]; archived: [shown: boolean] }>(
       <button
         type="button"
         class="icon-button"
-        aria-label="Graph view"
-        title="Graph view"
-        :aria-pressed="view === 'graph'"
-        @click="emit('view', 'graph')"
-      >
-        <MediaIcon name="graph" />
-      </button>
-      <button
-        type="button"
-        class="icon-button"
         aria-label="Board view"
         title="Board view"
         :aria-pressed="view === 'board'"
         @click="emit('view', 'board')"
       >
         <MediaIcon name="board" />
+      </button>
+      <button
+        type="button"
+        class="icon-button"
+        aria-label="Graph view"
+        title="Graph view"
+        :aria-pressed="view === 'graph'"
+        @click="emit('view', 'graph')"
+      >
+        <MediaIcon name="graph" />
       </button>
     </div>
   </div>

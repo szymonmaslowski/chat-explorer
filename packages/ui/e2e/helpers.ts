@@ -8,7 +8,30 @@ import {
 
 // The page shows a change before the daemon has it. Each test waits until its changes are sent,
 // so the next one starts from what the daemon really holds.
-export const test = base.extend<{ sentChanges: void; allowedByPolicy: void }>({
+export const test = base.extend<{
+  sentChanges: void;
+  allowedByPolicy: void;
+  // The map opens as the board of forks. Most tests are about the graph, so they start there, as if
+  // the reader had picked it; a test about the default turns this off.
+  graphByDefault: boolean;
+  graphChosen: void;
+}>({
+  graphByDefault: [true, { option: true }],
+  graphChosen: [
+    async ({ page, graphByDefault }, use) => {
+      if (graphByDefault) {
+        await page.addInitScript(() => {
+          const read = Storage.prototype.getItem;
+          Storage.prototype.getItem = function (key: string) {
+            const stored = read.call(this, key);
+            return stored === null && key.startsWith('chat-explorer.map-view.') ? 'graph' : stored;
+          };
+        });
+      }
+      await use();
+    },
+    { auto: true },
+  ],
   // Whatever a test does, the Content-Security-Policy must not have to block anything.
   allowedByPolicy: [
     async ({ page }, use) => {

@@ -26,6 +26,27 @@ async function chatWithTwoForks(request: Parameters<typeof attachFakeSession>[0]
 const card = (page: import('@playwright/test').Page, text: string) =>
   page.locator('.board-card', { hasText: text });
 
+test.describe('with nothing chosen yet', () => {
+  test.use({ graphByDefault: false });
+
+  test('the map opens as the board, with its button first', async ({ page, request }) => {
+    const { explorationId } = await chatWithTwoForks(request);
+    await page.goto(`/e/${explorationId}/map`);
+    await expect(page.locator('.board')).toBeVisible();
+    await expect(page.locator('.fork-box')).toHaveCount(0);
+    const buttons = page.locator('.map-toolbar .segmented button');
+    await expect(buttons).toHaveText(['', '']);
+    await expect(buttons.first()).toHaveAccessibleName('Board view');
+    await expect(buttons.first()).toHaveAttribute('aria-pressed', 'true');
+    await expect(buttons.last()).toHaveAccessibleName('Graph view');
+    // Choosing the graph is kept for the next visit.
+    await buttons.last().click();
+    await expect(page.locator('.fork-box')).toHaveCount(3);
+    await page.reload();
+    await expect(page.locator('.fork-box')).toHaveCount(3);
+  });
+});
+
 test('files forks into columns by menu and by drag, and keeps the board after a reload', async ({
   page,
   request,
