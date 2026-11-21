@@ -150,6 +150,8 @@ The network goes out only through a proxy, over HTTPS or SSH, to the hosts the u
 
 The image has git, pnpm, Node, Python, make, g++ and Chromium. Run the e2e tests with CHAT_EXPLORER_CHROME already set (the Playwright config reads it), after pnpm build; don't download browsers. When tests are skipped, name them in your report, so skipped isn't read as passed.
 
+Commit your work on a branch as you go: after each change that builds, and always before you report. Never end a turn with uncommitted changes, since a turn can stop without warning, for example when the user restarts the runner, and uncommitted work is then left for someone else to find. If the work isn't finished when you report, commit it anyway with a message starting "WIP:" and say what is left.
+
 To bring your work onto a newer main, use git rebase. If it conflicts, run git rebase --abort, say which files conflict, and leave the branch as it was. Never leave a rebase half done.
 
 ${credentialsPrompt(spec)}`;

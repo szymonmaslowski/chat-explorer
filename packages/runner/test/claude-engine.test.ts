@@ -162,6 +162,7 @@ describe('starting Claude Code in Docker', () => {
       'Bash,Read,Edit,Write,Glob,Grep,WebSearch,TodoWrite',
     );
     expect(coding.at(-1)).toContain(`Your workspace is ${workspace}`);
+    expect(coding.at(-1)).toContain('Never end a turn with uncommitted changes');
     expect(coding).toEqual(expect.arrayContaining(['--env', 'NODE_USE_ENV_PROXY=1']));
     expect(args).not.toContain('NODE_USE_ENV_PROXY=1');
     expect(coding.join(' ')).not.toContain('/home/me/.chat-explorer/runner/config.json');
