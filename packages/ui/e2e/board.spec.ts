@@ -32,7 +32,7 @@ test.describe('with nothing chosen yet', () => {
   test('the map opens as the board, with its button first', async ({ page, request }) => {
     const { explorationId } = await chatWithTwoForks(request);
     await page.goto(`/e/${explorationId}/map`);
-    await expect(page.locator('.board')).toBeVisible();
+    await expect(page.locator('div.board')).toBeVisible();
     await expect(page.locator('.fork-box')).toHaveCount(0);
     const buttons = page.locator('.map-toolbar .segmented button');
     await expect(buttons).toHaveText(['', '']);
