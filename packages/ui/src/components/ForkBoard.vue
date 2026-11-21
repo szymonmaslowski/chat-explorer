@@ -131,8 +131,8 @@ function moveColumn(column: BoardColumn, step: -1 | 1) {
   );
 }
 
-// Dragging a card: a line shows where it lands. Dropping on a card puts it before or after that
-// card; dropping on the empty part of a column puts it last.
+// Dragging a card: a placeholder shows where it lands. Dropping on a card puts it before or after
+// that card; dropping on the empty part of a column puts it last.
 const dragged = ref<string | null>(null);
 // Set a moment after the drag starts, so the browser has taken its drag image of the card first.
 const dragHidesSource = ref(false);
@@ -493,13 +493,6 @@ async function onDrop(columnId: string | null, cards: Fork[]) {
   gap: 0.25rem;
 }
 
-.delete-column {
-  margin-left: auto;
-  min-height: 1.5rem;
-  padding: 0 0.5rem;
-  font-size: 0.75rem;
-}
-
 .column-heading h2 {
   flex: 1;
   margin: 0;
@@ -554,15 +547,12 @@ async function onDrop(columnId: string | null, cards: Fork[]) {
   margin-top: 0.4rem;
 }
 
-.form-buttons .delete-column {
+.delete-column {
   margin-right: auto;
-  min-height: 0;
-  padding: revert-layer;
-  font-size: inherit;
 }
 
 /* Lighter lines, like the icons of the header. */
-.board :deep(.media-icon) {
+.board :deep(.media-icon:not(.more)) {
   stroke-width: 1.6;
 }
 
