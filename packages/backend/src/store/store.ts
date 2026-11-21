@@ -3144,6 +3144,100 @@ export class ChatStore {
     return { exploration, forks: moved.map((id) => this.publishForkUpdate(id)) };
   }
 
+  // The board as Claude reads it: columns left to right with their forks top to bottom, then the
+  // Ungrouped forks. The main fork is not on the board.
+  boardOverview(explorationId: string) {
+    const columns = this.boardColumnsOf(explorationId);
+    const forks = this.db.all<ForkRow>(
+      `SELECT * FROM forks WHERE exploration_id = ? AND parent_fork_id IS NOT NULL
+       ORDER BY board_position, rowid`,
+      explorationId,
+    );
+    const describe = (row: ForkRow) => ({
+      id: row.id,
+      summary: row.summary,
+      archived: row.archived_at !== null,
+    });
+    return {
+      columns: columns.map((column) => ({
+        ...column,
+        forks: forks.filter((row) => row.board_column_id === column.id).map(describe),
+      })),
+      ungrouped: forks
+        .filter((row) => !columns.some((column) => column.id === row.board_column_id))
+        .map(describe),
+    };
+  }
+
+  // A column named by its id or by its name.
+  private columnByReference(explorationId: string, reference: string) {
+    const columns = this.boardColumnsOf(explorationId);
+    const found =
+      columns.find((column) => column.id === reference) ??
+      columns.find((column) => column.name === reference);
+    if (!found) throw new StoreError('not_found', `There is no column "${reference}".`);
+    return found;
+  }
+
+  // What Claude can do to the board, one action at a time. Columns are named by id or by name;
+  // `afterForkId` left out puts a moved fork last in its column, null first.
+  arrangeBoard(
+    explorationId: string,
+    input: {
+      action: 'add_column' | 'rename_column' | 'delete_column' | 'move_column' | 'move_fork';
+      column?: string | null;
+      name?: string;
+      afterColumn?: string | null;
+      forkId?: string;
+      afterForkId?: string | null;
+    },
+  ) {
+    const need = <Value>(value: Value | undefined, what: string) => {
+      if (value === undefined) throw new StoreError('invalid', `${input.action} needs ${what}.`);
+      return value;
+    };
+    switch (input.action) {
+      case 'add_column':
+        this.addBoardColumn(explorationId, need(input.name, 'a name'));
+        break;
+      case 'rename_column':
+        this.renameBoardColumn(
+          explorationId,
+          this.columnByReference(explorationId, need(input.column ?? undefined, 'a column')).id,
+          need(input.name, 'a name'),
+        );
+        break;
+      case 'delete_column':
+        this.deleteBoardColumn(
+          explorationId,
+          this.columnByReference(explorationId, need(input.column ?? undefined, 'a column')).id,
+        );
+        break;
+      case 'move_column':
+        this.reorderBoardColumn(
+          explorationId,
+          this.columnByReference(explorationId, need(input.column ?? undefined, 'a column')).id,
+          input.afterColumn ? this.columnByReference(explorationId, input.afterColumn).id : null,
+        );
+        break;
+      case 'move_fork': {
+        const forkId = need(input.forkId, 'a forkId');
+        this.requireForkRow(forkId, explorationId);
+        const column = need(input.column, 'a column (null for Ungrouped)');
+        const columnId = column === null ? null : this.columnByReference(explorationId, column).id;
+        const after =
+          input.afterForkId === undefined
+            ? (this.boardForkIds(explorationId, columnId)
+                .filter((id) => id !== forkId)
+                .at(-1) ?? null)
+            : input.afterForkId;
+        this.moveFork(forkId, columnId, after);
+        break;
+      }
+    }
+    return this.boardOverview(explorationId);
+  }
+
   private boardForkIds(explorationId: string, columnId: string | null) {
     return this.db
       .all<{ id: string }>(

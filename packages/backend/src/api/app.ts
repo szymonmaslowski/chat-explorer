@@ -193,6 +193,15 @@ const uploadBody = z.object({ file: z.instanceof(File) });
 // Multipart framing around a file at the size limit.
 const uploadOverheadBytes = 64 * 1024;
 const shimBody = z.object({ shimId: z.string() });
+const arrangeBoardShape = {
+  action: z.enum(['add_column', 'rename_column', 'delete_column', 'move_column', 'move_fork']),
+  column: z.string().nullable().optional(),
+  name: z.string().optional(),
+  afterColumn: z.string().nullable().optional(),
+  forkId: z.string().optional(),
+  afterForkId: z.string().nullable().optional(),
+};
+const arrangeBoardBody = shimBody.extend(arrangeBoardShape);
 const startExplorationBody = shimBody.extend({
   sessionId: z.string(),
   transcriptPath: z.string().endsWith('.jsonl').optional(),
@@ -894,6 +903,17 @@ export function createApp(options: AppOptions) {
       signal: context.req.raw.signal,
     });
     return context.json(result);
+  });
+
+  internal.get('/explorations/:id/board', (context) =>
+    context.json(store.boardOverview(context.req.param('id'))),
+  );
+
+  internal.post('/explorations/:id/board', async (context) => {
+    const explorationId = context.req.param('id');
+    const { shimId, ...input } = arrangeBoardBody.parse(await context.req.json());
+    store.requireAttachedShim(explorationId, shimId);
+    return context.json(store.arrangeBoard(explorationId, input));
   });
 
   internal.get('/explorations/:id/notes', (context) =>

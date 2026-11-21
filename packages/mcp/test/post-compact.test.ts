@@ -9,6 +9,7 @@ describe('postCompactOutput', () => {
       summary: '',
       model: 'sonnet',
       defaultPage: 'map',
+      boardColumns: [],
       createdAt: 0,
       updatedAt: 0,
       archivedAt: null,

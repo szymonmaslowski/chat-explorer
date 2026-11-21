@@ -206,3 +206,75 @@ describe('a fork comment that picks a column', () => {
     expect(column(context, null)).toEqual([created]);
   });
 });
+
+describe('arrangeBoard, as Claude uses it', () => {
+  it('works with column names and puts a moved fork last unless told otherwise', () => {
+    const context = setup(3);
+    const { store, explorationId, forkIds } = context;
+    const [a, b, c] = forkIds as [string, string, string];
+    store.arrangeBoard(explorationId, { action: 'add_column', name: 'system' });
+    store.arrangeBoard(explorationId, { action: 'add_column', name: 'UX' });
+    store.arrangeBoard(explorationId, { action: 'move_fork', forkId: a, column: 'system' });
+    store.arrangeBoard(explorationId, { action: 'move_fork', forkId: b, column: 'system' });
+    store.arrangeBoard(explorationId, {
+      action: 'move_fork',
+      forkId: c,
+      column: 'system',
+      afterForkId: null,
+    });
+    const overview = store.arrangeBoard(explorationId, {
+      action: 'move_column',
+      column: 'UX',
+      afterColumn: null,
+    });
+    expect(overview.columns.map((column) => column.name)).toEqual(['UX', 'system']);
+    expect(overview.columns[1]!.forks.map((fork) => fork.id)).toEqual([c, a, b]);
+    expect(overview.ungrouped).toEqual([]);
+  });
+
+  it('renames, deletes and sends a fork back to Ungrouped', () => {
+    const context = setup(1);
+    const { store, explorationId, forkIds } = context;
+    store.arrangeBoard(explorationId, { action: 'add_column', name: 'system' });
+    store.arrangeBoard(explorationId, {
+      action: 'move_fork',
+      forkId: forkIds[0]!,
+      column: 'system',
+    });
+    store.arrangeBoard(explorationId, {
+      action: 'rename_column',
+      column: 'system',
+      name: 'platform',
+    });
+    expect(store.boardOverview(explorationId).columns[0]!.name).toBe('platform');
+    const back = store.arrangeBoard(explorationId, {
+      action: 'move_fork',
+      forkId: forkIds[0]!,
+      column: null,
+    });
+    expect(back.ungrouped.map((fork) => fork.id)).toEqual([forkIds[0]]);
+    const gone = store.arrangeBoard(explorationId, { action: 'delete_column', column: 'platform' });
+    expect(gone.columns).toEqual([]);
+  });
+
+  it('says what is missing, and refuses a column or fork it does not know', () => {
+    const { store, explorationId, forkIds } = setup(1);
+    expect(() => store.arrangeBoard(explorationId, { action: 'add_column' })).toThrow(
+      /needs a name/,
+    );
+    expect(() =>
+      store.arrangeBoard(explorationId, {
+        action: 'move_fork',
+        forkId: forkIds[0]!,
+        column: 'nope',
+      }),
+    ).toThrow(/no column/);
+    expect(() =>
+      store.arrangeBoard(explorationId, {
+        action: 'move_fork',
+        forkId: 'fork_zzzzzzzzzz',
+        column: null,
+      }),
+    ).toThrow();
+  });
+});

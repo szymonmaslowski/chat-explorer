@@ -413,10 +413,27 @@ describe("Claude's changes from a terminal session", () => {
         method: 'PATCH',
         json: { shimId: 'other', title: 'x' },
       }),
+      request(`/api/internal/explorations/${explorationId}/board`, {
+        method: 'POST',
+        json: { shimId: 'other', action: 'add_column', name: 'x' },
+      }),
     ];
     for (const response of await Promise.all(attempts)) {
       expect(response.status).toBe(409);
       expect(await response.json()).toMatchObject({ error: 'detached' });
     }
+  });
+
+  it('arranges the board of the attached chat', async () => {
+    const { request, store } = createTestApp();
+    const { explorationId } = seedConversation(store);
+    store.attach({ explorationId, shimId: 'shim-a', sessionId: 'session-a', takeover: false });
+    const added = await request(`/api/internal/explorations/${explorationId}/board`, {
+      method: 'POST',
+      json: { shimId: 'shim-a', action: 'add_column', name: 'system' },
+    });
+    expect(await added.json()).toMatchObject({ columns: [{ name: 'system', forks: [] }] });
+    const read = await request(`/api/internal/explorations/${explorationId}/board`);
+    expect(await read.json()).toMatchObject({ columns: [{ name: 'system' }], ungrouped: [] });
   });
 });

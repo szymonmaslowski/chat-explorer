@@ -270,6 +270,41 @@ function toolsFor(job: Job, { store, runs }: JobToolsOptions) {
   );
 
   server.registerTool(
+    'list_board',
+    {
+      description:
+        'Read the board of forks: the columns left to right with their forks top to bottom, then the Ungrouped forks. The main fork is not on the board.',
+      inputSchema: {},
+    },
+    tool(() => store.boardOverview(job.explorationId)),
+  );
+
+  server.registerTool(
+    'arrange_board',
+    {
+      description:
+        'Change the board of forks, one action at a time. Name a column by its id or its name. add_column needs `name`; rename_column needs `column` and `name`; delete_column needs `column` (its forks go to Ungrouped); move_column needs `column` and, to put it after another, `afterColumn` (null: first); move_fork needs `forkId` and `column` (null: Ungrouped) and puts the fork last in it, or after `afterForkId` (null: first). Archiving keeps a fork in its column. Returns the board.',
+      inputSchema: {
+        action: z.enum([
+          'add_column',
+          'rename_column',
+          'delete_column',
+          'move_column',
+          'move_fork',
+        ]),
+        column: z.string().nullable().optional(),
+        name: z.string().optional(),
+        afterColumn: z.string().nullable().optional(),
+        forkId: z.string().optional(),
+        afterForkId: z.string().nullable().optional(),
+      },
+    },
+    tool((input: Parameters<typeof store.arrangeBoard>[1]) =>
+      store.arrangeBoard(job.explorationId, input),
+    ),
+  );
+
+  server.registerTool(
     'rename_note_category',
     {
       description:

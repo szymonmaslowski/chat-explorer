@@ -131,6 +131,45 @@ describe('job tools', () => {
     expect(missing.isError).toBe(true);
   });
 
+  it('reads and arranges the board of the job chat, and only that chat', async () => {
+    const { connect, call, lease, store, explorationId, mainForkId } = await setup();
+    const client = await connect(lease.toolsToken);
+    expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(
+      expect.arrayContaining(['list_board', 'arrange_board']),
+    );
+    await call(client, 'arrange_board', { action: 'add_column', name: 'system' });
+    const renamed = await call(client, 'arrange_board', {
+      action: 'rename_column',
+      column: 'system',
+      name: 'platform',
+    });
+    expect(renamed.value.columns.map((column: { name: string }) => column.name)).toEqual([
+      'platform',
+    ]);
+    expect((await call(client, 'list_board')).value).toEqual({
+      columns: [expect.objectContaining({ name: 'platform', forks: [] })],
+      ungrouped: [],
+    });
+    expect(store.snapshot(explorationId).exploration.boardColumns).toHaveLength(1);
+
+    // The main fork is not on the board, and a fork of another chat looks like none at all.
+    const mainFork = await call(client, 'arrange_board', {
+      action: 'move_fork',
+      forkId: mainForkId,
+      column: 'platform',
+    });
+    expect(mainFork).toMatchObject({ isError: true });
+    const other = seedConversation(store);
+    const foreign = await call(client, 'arrange_board', {
+      action: 'move_fork',
+      forkId: other.mainForkId,
+      column: null,
+    });
+    expect(foreign.isError).toBe(true);
+    const unknown = await call(client, 'arrange_board', { action: 'delete_column', column: 'x' });
+    expect(unknown.value).toMatch(/no column/);
+  });
+
   it('lists notes as an index, reads them by id and finds them by their words', async () => {
     const { connect, call, lease, store, explorationId } = await setup();
     const group = store.createNoteGroup(explorationId, { name: 'Facts' });
