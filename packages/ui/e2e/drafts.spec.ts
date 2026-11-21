@@ -509,6 +509,12 @@ test('asks before a message takes drafted comments along, and lets them be left 
   await expect(dialog).toHaveCount(0);
   await expect(page.locator('.queued-submission')).toHaveCount(0);
   await expect(reply).toHaveValue('A general message');
+  // Escape closes it too, and Send has the focus when it opens.
+  await page.getByRole('button', { name: 'Submit' }).click();
+  await expect(dialog.getByRole('button', { name: 'Send' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator('.queued-submission')).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Submit' }).click();
   const save = saved(page, '/comments/');

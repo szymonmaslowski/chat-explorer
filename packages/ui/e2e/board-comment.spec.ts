@@ -39,6 +39,7 @@ test('a fork comment picks the board group of the fork it starts', async ({ page
   await expect(card.getByLabel('Board group of the new fork')).toHaveValue(research.id);
 
   await page.getByRole('button', { name: 'Submit' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Send' }).click();
   await attachFakeSession(request, explorationId);
   await deliverAndAnswer(request, explorationId, 'Redis is a fine cache.');
   await detachFakeSession(request);
@@ -63,6 +64,7 @@ test('a fork comment can ask for a new group, made with the fork', async ({ page
   expect(await columns()).toHaveLength(0);
 
   await page.getByRole('button', { name: 'Submit' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Send' }).click();
   await attachFakeSession(request, explorationId);
   await deliverAndAnswer(request, explorationId, 'Sure.');
   await detachFakeSession(request);

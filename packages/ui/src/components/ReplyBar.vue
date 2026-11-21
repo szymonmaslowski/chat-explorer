@@ -200,7 +200,8 @@ const endHistoryWalk = () => (history = atDraft());
 watch(() => props.forkId, endHistoryWalk);
 
 // A message that takes drafted comments along asks first, since the drafts are easy to forget.
-const confirming = ref(false);
+const confirmDialog = ref<HTMLDialogElement>();
+const closeConfirm = () => confirmDialog.value?.close();
 // Any draft, ticked or left out, makes Submit ask; a left-out one can still be ticked there.
 const listedDrafts = computed(() => props.drafts.filter((draft) => draft.editBody === null));
 const sendsDraftsWithMessage = computed(
@@ -229,21 +230,21 @@ const toggleDraft = (draft: Comment) =>
 watch(
   () => listedDrafts.value.length,
   (count) => {
-    if (count === 0) confirming.value = false;
+    if (count === 0) closeConfirm();
   },
 );
 
 function submit() {
   if (!canSubmit.value) return;
   if (listedDrafts.value.length > 0) {
-    confirming.value = true;
+    confirmDialog.value?.showModal();
     return;
   }
   send();
 }
 
 function send() {
-  confirming.value = false;
+  closeConfirm();
   if (!canSubmit.value) return;
   const { explorationId, forkId } = props;
   const submission = {
@@ -401,13 +402,13 @@ function onKeydown(event: KeyboardEvent) {
       </button>
       <button type="submit" class="primary" :disabled="!canSubmit">Submit</button>
     </div>
-    <div
-      v-if="confirming"
-      class="confirm-backdrop"
-      @click.self="confirming = false"
-      @keydown.esc="confirming = false"
+    <dialog
+      ref="confirmDialog"
+      class="confirm"
+      aria-label="Send with drafted comments"
+      @click.self="closeConfirm"
     >
-      <div class="confirm" role="dialog" aria-modal="true" aria-label="Send with drafted comments">
+      <div class="confirm-body">
         <p class="confirm-title">{{ confirmTitle }}</p>
         <ul class="confirm-list">
           <li v-for="draft in listedDrafts" :key="draft.id">
@@ -419,11 +420,13 @@ function onKeydown(event: KeyboardEvent) {
           </li>
         </ul>
         <div class="confirm-actions">
-          <button type="button" @click="confirming = false">Cancel</button>
-          <button type="button" class="primary" autofocus @click="send">Send</button>
+          <button type="button" @click="closeConfirm">Cancel</button>
+          <button type="button" class="primary" autofocus :disabled="!canSubmit" @click="send">
+            Send
+          </button>
         </div>
       </div>
-    </div>
+    </dialog>
   </form>
 </template>
 
@@ -549,26 +552,27 @@ function onKeydown(event: KeyboardEvent) {
   font-size: 0.85rem;
 }
 
-.confirm-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  background: rgb(0 0 0 / 0.4);
+.confirm {
+  width: min(32rem, calc(100vw - 2rem));
+  max-height: 80vh;
+  padding: 0;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
 }
 
-.confirm {
+.confirm::backdrop {
+  background: rgb(0 0 0 / 0.35);
+}
+
+.confirm-body {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 0.75rem;
-  width: min(32rem, 100%);
-  max-height: 80vh;
+  max-height: calc(80vh - 2px);
   padding: 1rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--background);
 }
 
 .confirm-title {
@@ -596,7 +600,7 @@ function onKeydown(event: KeyboardEvent) {
   flex: none;
   font-size: 0.75rem;
   text-transform: uppercase;
-  color: var(--muted, inherit);
+  color: var(--text-muted);
 }
 
 .confirm-text {
