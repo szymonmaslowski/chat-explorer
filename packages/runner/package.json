@@ -16,7 +16,7 @@
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
-    "test:docker": "CHAT_EXPLORER_DOCKER_TESTS=1 vitest run test/security-checklist.test.ts"
+    "test:docker": "vitest run test/security-checklist.test.ts"
   },
   "dependencies": {
     "@chat-explorer/shared": "workspace:*"

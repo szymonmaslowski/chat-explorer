@@ -98,6 +98,9 @@ export function containerArguments(spec: EngineRunSpec, options: ContainerOption
       ? [
           '--env',
           'NODE_USE_ENV_PROXY=1',
+          // There is no Docker inside, so this repository's container checks can't run there.
+          '--env',
+          'CHAT_EXPLORER_DOCKER_TESTS=0',
           '--env',
           `GIT_CONFIG_SYSTEM=${credentialsMount}/gitconfig`,
           '--volume',

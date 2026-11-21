@@ -250,20 +250,24 @@ The design and its decisions are in [docs/plan.md](docs/plan.md).
 
 ```sh
 pnpm build                         # UI, then every package; the backend's build holds the UI
-pnpm test                          # the import check between packages, then unit tests
+pnpm test                          # the import check, unit tests, and the runner's container checks
 pnpm typecheck
 pnpm --filter ui test:e2e          # Playwright, runs in the installed Chrome against a seeded daemon
 pnpm --filter ui dev               # Vite dev server, proxies /api to the daemon
 pnpm --filter @chat-explorer/backend seed   # sample exploration in CHAT_EXPLORER_HOME
-pnpm --filter @chat-explorer/runner test:docker   # coding container checks; needs Docker and the runner image
+pnpm --filter @chat-explorer/runner test:docker   # only the container checks; need Docker and the runner image
 ```
+
+The container checks start real containers, so `pnpm test` needs Docker running and the runner image
+built (start the runner once). Where Docker can't run, `CHAT_EXPLORER_DOCKER_TESTS=0` skips them;
+coding fork containers set it.
 
 The code is in packages that reach each other only along these lines, which `pnpm check:imports` enforces:
 
 | Package            | Holds                                                                       | May import       |
 | ------------------ | --------------------------------------------------------------------------- | ---------------- |
 | `packages/shared`  | Protocol and chat types, markdown, speech blocks, config, the daemon client | nothing          |
-| `packages/backend` | Store, API, dictation and speech, serves the web UI    | shared           |
+| `packages/backend` | Store, API, dictation and speech, serves the web UI                         | shared           |
 | `packages/runner`  | Claims forks and answers them with an engine in Docker                      | shared           |
 | `packages/mcp`     | The plugin's MCP server and hooks                                           | shared           |
 | `packages/cli`     | The `chat-explorer` command and the daemon around the backend               | all of the above |

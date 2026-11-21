@@ -79,15 +79,20 @@ const spec = (overrides: { lease?: object; context?: object; config?: RunnerConf
     config: overrides.config ?? allowed,
   });
 
-// Checks that start real containers run only when asked, since they need Docker and the runner's
-// image: CHAT_EXPLORER_DOCKER_TESTS=1 pnpm --filter @chat-explorer/runner test
-const dockerTests = process.env.CHAT_EXPLORER_DOCKER_TESTS === '1';
+// Checks that start real containers always run, so a merge can't pass without them. Only a place
+// with no Docker skips them, by setting CHAT_EXPLORER_DOCKER_TESTS=0: coding fork containers do.
+const dockerTests = process.env.CHAT_EXPLORER_DOCKER_TESTS !== '0';
 const dockerPort = 4591;
 const run = promisify(execFile);
 
 // One coding container from the real template, running a probe instead of Claude, with a second
 // fork's workspace and sessions folder on the host beside it.
 async function probeCodingContainer() {
+  await run('docker', ['version', '--format', '{{.Server.Version}}']).catch(() => {
+    throw new Error(
+      'Docker is not reachable. Start it, or set CHAT_EXPLORER_DOCKER_TESTS=0 where it cannot run.',
+    );
+  });
   const image = await newestBuiltImage();
   if (!image) throw new Error('Build the runner image first: start the runner once.');
   // Docker Desktop shares /private, not the /var symlink in front of the temporary folder.
