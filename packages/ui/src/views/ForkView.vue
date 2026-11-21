@@ -92,11 +92,19 @@ const {
   reveal,
 } = useMessageWindow({ state, fork, path, sentinelRef: 'olderSentinel' });
 const shownIds = computed(() => shownMessages.value.map((message) => message.id).join());
-// What the reader typed in the messages they sent on this path; a submit of comments alone has none.
+// What the reader typed in the messages they sent on this path, then in those still queued for
+// it; a submit of comments alone has no text.
 const sentTexts = computed(() =>
-  path.value
-    .filter((message) => message.role === 'user')
-    .map((message) => state.value.bodies.get(message.id)?.trim() ?? '')
+  [
+    ...path.value
+      .filter((message) => message.role === 'user')
+      .map((message) => state.value.bodies.get(message.id) ?? ''),
+    ...[...state.value.queuedSubmissions.values()]
+      .filter((submission) => submission.forkId === fork.value?.id)
+      .sort((first, second) => first.createdAt - second.createdAt)
+      .map((submission) => submission.globalMessage),
+  ]
+    .map((text) => text.trim())
     .filter((text) => text !== ''),
 );
 // Claude's answers counted back from the newest, [0], so the user can refer to one as [-2].

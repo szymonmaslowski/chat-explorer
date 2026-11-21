@@ -41,3 +41,17 @@ test('ArrowUp brings back the messages sent in the fork, ArrowDown returns to th
   await box.press('ArrowUp');
   await expect(box).toHaveValue('Line one\nLine two');
 });
+
+test('ArrowUp also brings back a message still queued for Claude', async ({ page, request }) => {
+  const explorationId = await answeredChat(request);
+  await page.goto(`/e/${explorationId}`);
+  const box = page.getByPlaceholder('Reply to Claude');
+  // No session is attached, so the message waits in the queue.
+  await box.fill('Still waiting');
+  await page.getByRole('button', { name: 'Submit' }).click();
+  await expect(box).toHaveValue('');
+  await expect(page.locator('.message', { hasText: 'Still waiting' })).toBeVisible();
+
+  await box.press('ArrowUp');
+  await expect(box).toHaveValue('Still waiting');
+});
