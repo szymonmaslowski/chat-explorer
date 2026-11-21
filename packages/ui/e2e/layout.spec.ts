@@ -32,10 +32,10 @@ test.describe('on a wide screen', () => {
     await expect(chatsColumn(page).locator('.exploration.current')).toHaveCount(1);
     await expect(headerLinks(page)).toHaveText(/^Chat\s*·\s*Notes$/);
 
-    await page.locator(`.main-column .fork-box[href="/e/${explorationId}/f/${forkId}"]`).click();
+    await page.locator(`.main-column .fork-box[data-fork-id="${forkId}"]`).click();
     await expect(page).toHaveURL(`/e/${explorationId}/f/${forkId}`);
     await expect(chatsColumn(page)).toBeVisible();
-    await expect(mapColumn(page).locator('.fork-box.current')).toHaveAttribute(
+    await expect(mapColumn(page).locator('.fork-box.current .card-link')).toHaveAttribute(
       'href',
       `/e/${explorationId}/f/${forkId}`,
     );

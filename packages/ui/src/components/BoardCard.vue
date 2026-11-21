@@ -12,6 +12,7 @@ const props = defineProps<{
   fork: Fork;
   url: string;
   messageCount: number;
+  bookmarkCount: number;
   awaitingAnswer: boolean;
   attention: Attention | undefined;
   archived: boolean;
@@ -80,6 +81,9 @@ function pick(action: () => void) {
         {{ messageCount }} message{{ messageCount === 1 ? '' : 's' }}
         <span v-if="awaitingAnswer" class="awaiting">· awaiting answer</span>
         <span v-if="archived">· archived</span>
+        <span v-if="bookmarkCount" class="bookmarks">
+          {{ bookmarkCount }} bookmark{{ bookmarkCount === 1 ? '' : 's' }}
+        </span>
       </span>
     </RouterLink>
     <button
@@ -187,6 +191,8 @@ function pick(action: () => void) {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
+  /* Fills a card with a set height, as on the graph; on the board the height is automatic. */
+  height: 100%;
   min-height: 5.5rem;
   padding: 0.6rem 2.2rem 0.6rem 0.75rem;
   color: inherit;
@@ -222,6 +228,11 @@ function pick(action: () => void) {
 
 .awaiting {
   color: var(--accent);
+}
+
+.bookmarks {
+  display: block;
+  color: var(--bookmark);
 }
 
 .more {

@@ -4,6 +4,7 @@ import { stratify, tree } from 'd3-hierarchy';
 import { computed, ref } from 'vue';
 import { api, ApiError } from '../api';
 import AttentionDot from '../components/AttentionDot.vue';
+import BoardCard from '../components/BoardCard.vue';
 import ForkBoard from '../components/ForkBoard.vue';
 import MapToolbar from '../components/MapToolbar.vue';
 import {
@@ -211,35 +212,29 @@ const layout = computed(() => {
         <svg :width="layout.width" :height="layout.height" class="edges">
           <path v-for="edge in layout.edges" :key="edge.id" :d="edge.path" />
         </svg>
-        <RouterLink
+        <BoardCard
           v-for="box in layout.boxes"
           :key="box.fork.id"
-          :to="forkUrl(box.fork)"
           class="fork-box"
-          :class="{
-            current: box.fork.id === currentForkId,
-            archived: box.archived,
-            'awaiting-box': box.awaitingAnswer,
-          }"
+          :fork="box.fork"
+          :url="forkUrl(box.fork)"
+          :message-count="box.messageCount"
+          :bookmark-count="box.bookmarkCount"
+          :awaiting-answer="box.awaitingAnswer"
+          :attention="box.attention"
+          :archived="box.archived"
+          :current="box.fork.id === currentForkId"
+          :movable="false"
+          :columns="[]"
+          :can-move-up="false"
+          :can-move-down="false"
           :style="{
             left: `${box.left}px`,
             top: `${box.top}px`,
             width: `${boxWidth}px`,
             height: `${layout.boxHeight}px`,
           }"
-        >
-          <AttentionDot v-if="box.attention" :attention="box.attention" class="dot" />
-          <span class="fork-id">{{ box.fork.id }}</span>
-          <span class="summary">{{ forkTitle(box.fork) }}</span>
-          <span class="meta">
-            {{ box.messageCount }} message{{ box.messageCount === 1 ? '' : 's' }}
-            <span v-if="box.awaitingAnswer" class="awaiting">· awaiting answer</span>
-            <span v-if="box.archived">· archived</span>
-            <span v-if="box.bookmarkCount" class="bookmarks">
-              {{ box.bookmarkCount }} bookmark{{ box.bookmarkCount === 1 ? '' : 's' }}
-            </span>
-          </span>
-        </RouterLink>
+        />
         <template v-for="box in layout.boxes" :key="`toggles-${box.fork.id}`">
           <button
             v-if="box.fork.parentForkId && !revealedForks.has(box.fork.id)"
@@ -321,84 +316,8 @@ const layout = computed(() => {
   stroke-width: 2;
 }
 
-.fork-box {
+.canvas .fork-box {
   position: absolute;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 0.6rem 0.75rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: inherit;
-  text-decoration: none;
-  font-size: 0.85rem;
-}
-
-.fork-box:hover {
-  border-color: var(--accent);
-}
-
-.fork-box.archived {
-  border-style: dashed;
-  opacity: 0.6;
-}
-
-.fork-box.current {
-  /* Same 1px border as other boxes, so selecting never moves the text. */
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
-}
-
-/* The pulse is an outline, so it never touches the border or the inset
-   shadow that mark the selected box. */
-@keyframes box-pulse {
-  50% {
-    outline-color: color-mix(in srgb, var(--text-muted) 55%, transparent);
-  }
-}
-
-.fork-box.awaiting-box {
-  outline: 2px solid transparent;
-  animation: box-pulse 2.6s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fork-box.awaiting-box {
-    animation: none;
-    outline-color: color-mix(in srgb, var(--text-muted) 40%, transparent);
-  }
-}
-
-.dot {
-  position: absolute;
-  top: 0.4rem;
-  right: 0.4rem;
-}
-
-.fork-id {
-  font-size: 0.65rem;
-  line-height: 1.2;
-  color: var(--text-muted);
-  opacity: 0.8;
-}
-
-.summary {
-  padding-right: 0.5rem;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  font-weight: 600;
-}
-
-.meta {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
-
-.awaiting {
-  color: var(--accent);
 }
 
 .collapse-toggle,
@@ -447,10 +366,5 @@ const layout = computed(() => {
 
 .error {
   color: var(--danger);
-}
-
-.bookmarks {
-  display: block;
-  color: var(--bookmark);
 }
 </style>

@@ -57,6 +57,16 @@ test('counts the bookmarks of each fork on the map', async ({ page, request }) =
   }
   await page.goto(`/e/${explorationId}/map`);
   await expect(page.locator('.fork-box .bookmarks')).toHaveText('2 bookmarks');
+
+  // The board card shows the same: the id, the bookmarks, and the actions button.
+  const graphBox = page.locator('.fork-box');
+  await expect(graphBox.getByRole('button', { name: 'Fork actions' })).toBeVisible();
+  const graphId = await graphBox.locator('.fork-id').innerText();
+  await page.getByRole('button', { name: 'Board view' }).click();
+  const card = page.locator('.main-row .board-card');
+  await expect(card.locator('.bookmarks')).toHaveText('2 bookmarks');
+  await expect(card.locator('.fork-id')).toHaveText(graphId);
+  await expect(card.getByRole('button', { name: 'Fork actions' })).toBeVisible();
 });
 
 test.describe('on a phone', () => {

@@ -40,6 +40,13 @@ const messageCounts = computed(() => {
   }
   return counts;
 });
+const bookmarkCounts = computed(() => {
+  const counts = new Map<string, number>();
+  for (const bookmark of state.value.bookmarks.values()) {
+    counts.set(bookmark.forkId, (counts.get(bookmark.forkId) ?? 0) + 1);
+  }
+  return counts;
+});
 const attention = computed(() => explorationIndex(state.value).attentionByFork.value);
 const awaiting = (fork: Fork) =>
   awaitsAnswer(fork, state.value.messages, state.value.forkRuns.get(fork.id));
@@ -225,6 +232,7 @@ async function onDrop(columnId: string | null, cards: Fork[]) {
         :fork="layout.main"
         :url="forkUrl(layout.main)"
         :message-count="messageCounts.get(layout.main.id) ?? 0"
+        :bookmark-count="bookmarkCounts.get(layout.main.id) ?? 0"
         :awaiting-answer="awaiting(layout.main)"
         :attention="attention.get(layout.main.id)"
         :archived="false"
@@ -343,6 +351,7 @@ async function onDrop(columnId: string | null, cards: Fork[]) {
                 :url="forkUrl(fork)"
                 :class="{ 'drag-source': dragHidesSource && dragged === fork.id }"
                 :message-count="messageCounts.get(fork.id) ?? 0"
+                :bookmark-count="bookmarkCounts.get(fork.id) ?? 0"
                 :awaiting-answer="awaiting(fork)"
                 :attention="attention.get(fork.id)"
                 :archived="archivedIds.has(fork.id)"
@@ -417,6 +426,7 @@ async function onDrop(columnId: string | null, cards: Fork[]) {
             :url="forkUrl(fork)"
             :class="{ 'drag-source': dragHidesSource && dragged === fork.id }"
             :message-count="messageCounts.get(fork.id) ?? 0"
+            :bookmark-count="bookmarkCounts.get(fork.id) ?? 0"
             :awaiting-answer="awaiting(fork)"
             :attention="attention.get(fork.id)"
             :archived="archivedIds.has(fork.id)"
