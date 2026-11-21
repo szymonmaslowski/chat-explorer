@@ -453,7 +453,10 @@ watch(
       </p>
 
       <div class="conversation">
-        <div v-if="hasOlder" ref="olderSentinel" class="older" aria-hidden="true" />
+        <div v-if="hasOlder" ref="olderSentinel" class="older" role="status">
+          <span class="spinner" aria-hidden="true" />
+          Loading earlier messages…
+        </div>
         <p v-if="path.length > 0 && !windowReady" class="muted">Loading…</p>
         <template v-for="message in shownMessages" :key="message.id">
           <div v-if="parentFork && pathIndex.get(message.id) === ownStart" class="fork-point">
@@ -583,8 +586,31 @@ watch(
   color: var(--danger);
 }
 
+/* Where older messages come in, shown while there are any: a fast scroll that reaches it sees
+   them on their way, and they take its place. */
 .older {
-  height: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 6rem;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .top {

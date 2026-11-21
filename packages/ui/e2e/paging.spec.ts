@@ -42,6 +42,11 @@ test('opens a long fork on its newest messages and loads older ones above, keepi
   await expect(page.getByText('Answer 60.')).toBeVisible();
   expect(await shownCount(page)).toBeLessThanOrEqual(80);
   await expect(page.getByText('Answer 1.', { exact: true })).toHaveCount(0);
+  // Above the first message loaded, a loader shows that more are coming.
+  await expect(page.locator('.older')).toHaveText('Loading earlier messages…');
+  const loader = (await page.locator('.older').boundingBox())!;
+  const first = (await page.locator('.conversation .message').first().boundingBox())!;
+  expect(loader.y + loader.height).toBeLessThanOrEqual(first.y);
 
   // Older batches come in ahead of the reader, while the message on screen stays where it is. The
   // reader's own scrolling ends the hold on the end of the fork the page opened at.
