@@ -95,8 +95,9 @@ async function startAdding() {
 }
 async function addColumn() {
   const name = newName.value.trim();
+  if (!name) return;
   addingColumn.value = false;
-  if (name) await change(api.addBoardColumn(props.explorationId, name));
+  await change(api.addBoardColumn(props.explorationId, name));
 }
 
 const renamingId = ref<string | null>(null);
@@ -110,8 +111,9 @@ async function startRename(column: BoardColumn) {
 }
 async function saveRename(column: BoardColumn) {
   const name = renameDraft.value.trim();
+  if (!name) return;
   renamingId.value = null;
-  if (name && name !== column.name) {
+  if (name !== column.name) {
     await change(api.renameBoardColumn(props.explorationId, column.id, name));
   }
 }
@@ -192,8 +194,9 @@ const marker = (columnId: string | null, index: number, count: number) => {
   <div class="board">
     <p v-if="error" class="error" role="alert">{{ error }}</p>
 
-    <section v-if="layout.main" class="main-row">
+    <section class="main-row">
       <BoardCard
+        v-if="layout.main"
         :fork="layout.main"
         :url="forkUrl(layout.main)"
         :message-count="messageCounts.get(layout.main.id) ?? 0"
@@ -206,6 +209,16 @@ const marker = (columnId: string | null, index: number, count: number) => {
         :can-move-up="false"
         :can-move-down="false"
       />
+      <button
+        v-if="!archivedOnly && !offline"
+        type="button"
+        class="icon-button add-column"
+        aria-label="New group"
+        title="New group"
+        @click="startAdding"
+      >
+        <MediaIcon name="plus" />
+      </button>
     </section>
     <hr class="divider" />
 
@@ -229,8 +242,17 @@ const marker = (columnId: string | null, index: number, count: number) => {
                 aria-label="Column name"
                 maxlength="80"
                 @keydown.esc="renamingId = null"
-                @blur="saveRename(view.column)"
               />
+              <div class="form-buttons">
+                <ConfirmButton
+                  class="delete-column"
+                  label="Delete"
+                  danger
+                  @confirm="change(api.deleteBoardColumn(explorationId, view.column.id))"
+                />
+                <button type="button" @click="renamingId = null">Cancel</button>
+                <button type="submit" class="primary" :disabled="!renameDraft.trim()">Save</button>
+              </div>
             </form>
             <template v-else>
               <h2>{{ view.column.name }}</h2>
@@ -265,12 +287,6 @@ const marker = (columnId: string | null, index: number, count: number) => {
                 >
                   ›
                 </button>
-                <ConfirmButton
-                  class="delete-column"
-                  label="Delete"
-                  danger
-                  @confirm="change(api.deleteBoardColumn(explorationId, view.column.id))"
-                />
               </div>
             </template>
           </header>
@@ -307,8 +323,8 @@ const marker = (columnId: string | null, index: number, count: number) => {
           </div>
         </section>
 
-        <section v-if="!archivedOnly && !offline" class="column new-column">
-          <form v-if="addingColumn" class="rename" @submit.prevent="addColumn">
+        <section v-if="addingColumn" class="column new-column">
+          <form class="rename" @submit.prevent="addColumn">
             <input
               ref="newInput"
               v-model="newName"
@@ -316,10 +332,12 @@ const marker = (columnId: string | null, index: number, count: number) => {
               placeholder="Column name"
               maxlength="80"
               @keydown.esc="addingColumn = false"
-              @blur="addColumn"
             />
+            <div class="form-buttons">
+              <button type="button" @click="addingColumn = false">Cancel</button>
+              <button type="submit" class="primary" :disabled="!newName.trim()">Save</button>
+            </div>
           </form>
-          <button v-else type="button" class="add-column" @click="startAdding">+ New group</button>
         </section>
       </div>
     </div>
@@ -377,6 +395,13 @@ const marker = (columnId: string | null, index: number, count: number) => {
 }
 
 .main-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.main-row > :first-child {
   width: 12rem;
 }
 
@@ -478,7 +503,26 @@ const marker = (columnId: string | null, index: number, count: number) => {
 }
 
 .add-column {
-  width: 100%;
+  margin-left: auto;
+}
+
+.form-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+
+.form-buttons .delete-column {
+  margin-right: auto;
+  min-height: 0;
+  padding: revert-layer;
+  font-size: inherit;
+}
+
+/* Lighter lines, like the icons of the header. */
+.board :deep(.media-icon) {
+  stroke-width: 1.6;
 }
 
 .ungrouped {

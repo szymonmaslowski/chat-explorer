@@ -45,6 +45,11 @@ const emit = defineEmits<{ view: [view: MapView]; archived: [shown: boolean] }>(
 </template>
 
 <style scoped>
+/* Lighter lines, like the icons of the header. */
+.map-toolbar :deep(.media-icon) {
+  stroke-width: 1.6;
+}
+
 .map-toolbar {
   display: flex;
   justify-content: flex-end;

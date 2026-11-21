@@ -39,7 +39,7 @@ test('files forks into columns by menu and by drag, and keeps the board after a 
   await expect(page.locator('.ungrouped .board-card')).toHaveCount(2);
 
   for (const name of ['system', 'UX']) {
-    await page.getByRole('button', { name: '+ New group' }).click();
+    await page.getByRole('button', { name: 'New group' }).click();
     await page.getByLabel('New column name').fill(name);
     await page.getByLabel('New column name').press('Enter');
     await expect(page.locator('.column-heading h2', { hasText: name })).toBeVisible();
@@ -85,6 +85,41 @@ test('files forks into columns by menu and by drag, and keeps the board after a 
   );
 });
 
+test('saves or cancels a column name with buttons, with no error after Enter', async ({
+  page,
+  request,
+}) => {
+  const { explorationId } = await chatWithTwoForks(request);
+  await page.goto(`/e/${explorationId}/map`);
+  await page.getByRole('button', { name: 'Board view' }).click();
+
+  await page.getByRole('button', { name: 'New group' }).click();
+  await page.getByLabel('New column name').fill('Prio');
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByLabel('New column name')).toHaveCount(0);
+  await expect(page.locator('.column-heading')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'New group' }).click();
+  await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+  await page.getByLabel('New column name').fill('Prio');
+  await page.getByLabel('New column name').press('Enter');
+  await expect(page.locator('.column-heading h2')).toHaveText(['Prio']);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+
+  // Delete shows only while editing the name.
+  const column = page.locator('[data-column="Prio"]');
+  await expect(column.getByRole('button', { name: 'Delete' })).toHaveCount(0);
+  await column.getByRole('button', { name: 'Rename column' }).click();
+  await column.getByLabel('Column name').fill('Other');
+  await column.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.locator('.column-heading h2')).toHaveText(['Prio']);
+  await column.getByRole('button', { name: 'Rename column' }).click();
+  await column.getByLabel('Column name').fill('Other');
+  await column.getByRole('button', { name: 'Save' }).click();
+  await expect(page.locator('.column-heading h2')).toHaveText(['Other']);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
 test('renames, reorders and deletes a column; its forks go to Ungrouped', async ({
   page,
   request,
@@ -93,7 +128,7 @@ test('renames, reorders and deletes a column; its forks go to Ungrouped', async 
   await page.goto(`/e/${explorationId}/map`);
   await page.getByRole('button', { name: 'Board view' }).click();
   for (const name of ['system', 'UX']) {
-    await page.getByRole('button', { name: '+ New group' }).click();
+    await page.getByRole('button', { name: 'New group' }).click();
     await page.getByLabel('New column name').fill(name);
     await page.getByLabel('New column name').press('Enter');
     await expect(page.locator('.column-heading h2', { hasText: name })).toBeVisible();
@@ -117,6 +152,7 @@ test('renames, reorders and deletes a column; its forks go to Ungrouped', async 
   await page.getByRole('menuitem', { name: 'platform', exact: true }).click();
   await expect(page.locator('.ungrouped .board-card')).toHaveCount(1);
   const column = page.locator('[data-column="platform"]');
+  await column.getByRole('button', { name: 'Rename column' }).click();
   await column.getByRole('button', { name: 'Delete' }).click();
   await column.getByRole('button', { name: 'Confirm' }).click();
   await expect(page.locator('.column-heading h2')).toHaveText(['UX']);
