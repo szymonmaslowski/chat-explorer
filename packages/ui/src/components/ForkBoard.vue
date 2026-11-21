@@ -134,11 +134,21 @@ function moveColumn(column: BoardColumn, step: -1 | 1) {
 // Dragging a card: a line shows where it lands. Dropping on a card puts it before or after that
 // card; dropping on the empty part of a column puts it last.
 const dragged = ref<string | null>(null);
+// Set a moment after the drag starts, so the browser has taken its drag image of the card first.
+const dragHidesSource = ref(false);
+const draggedFork = computed(() =>
+  dragged.value ? state.value.forks.get(dragged.value) : undefined,
+);
+const placeholderAt = (columnId: string | null, index: number) =>
+  dragged.value !== null &&
+  indicator.value?.columnId === columnId &&
+  indicator.value.index === index;
 const indicator = ref<{ columnId: string | null; index: number } | null>(null);
 
 function onDragStart(event: DragEvent, fork: Fork) {
   if (!movable.value) return event.preventDefault();
   dragged.value = fork.id;
+  setTimeout(() => (dragHidesSource.value = dragged.value === fork.id), 0);
   event.dataTransfer?.setData('text/plain', fork.id);
   if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
 }
@@ -162,6 +172,7 @@ function onDragOverBody(event: DragEvent, columnId: string | null, cards: Fork[]
 
 function endDrag() {
   dragged.value = null;
+  dragHidesSource.value = false;
   indicator.value = null;
 }
 
@@ -181,13 +192,6 @@ async function onDrop(columnId: string | null, cards: Fork[]) {
   }
   await change(api.moveFork(movedId, columnId, anchor));
 }
-
-const marker = (columnId: string | null, index: number, count: number) => {
-  const at = indicator.value;
-  if (!at || at.columnId !== columnId) return '';
-  if (at.index === index) return 'drop-before';
-  return index === count - 1 && at.index === count ? 'drop-after' : '';
-};
 </script>
 
 <template>
@@ -295,31 +299,52 @@ const marker = (columnId: string | null, index: number, count: number) => {
             @dragover="onDragOverBody($event, view.column.id, view.forks)"
             @drop.prevent="onDrop(view.column.id, view.forks)"
           >
-            <p v-if="view.forks.length === 0" class="muted empty">Drop forks here.</p>
-            <BoardCard
-              v-for="(fork, index) in view.forks"
-              :key="fork.id"
-              :fork="fork"
-              :url="forkUrl(fork)"
-              :class="marker(view.column.id, index, view.forks.length)"
-              :message-count="messageCounts.get(fork.id) ?? 0"
-              :awaiting-answer="awaiting(fork)"
-              :attention="attention.get(fork.id)"
-              :archived="archivedIds.has(fork.id)"
-              :current="fork.id === currentForkId"
-              :movable="movable"
-              :columns="columns"
-              :can-move-up="index > 0"
-              :can-move-down="index < view.forks.length - 1"
-              :draggable="movable"
-              @dragstart="onDragStart($event, fork)"
-              @dragend="endDrag"
-              @dragover="onDragOverCard($event, view.column.id, index, false)"
+            <p
+              v-if="view.forks.length === 0 && !placeholderAt(view.column.id, 0)"
+              class="muted empty"
+            >
+              Drop forks here.
+            </p>
+            <template v-for="(fork, index) in view.forks" :key="fork.id">
+              <div
+                v-if="placeholderAt(view.column.id, index)"
+                class="drop-placeholder"
+                @dragover.prevent.stop
+                @drop.prevent.stop="onDrop(view.column.id, view.forks)"
+              >
+                {{ draggedFork?.summary }}
+              </div>
+              <BoardCard
+                :fork="fork"
+                :url="forkUrl(fork)"
+                :class="{ 'drag-source': dragHidesSource && dragged === fork.id }"
+                :message-count="messageCounts.get(fork.id) ?? 0"
+                :awaiting-answer="awaiting(fork)"
+                :attention="attention.get(fork.id)"
+                :archived="archivedIds.has(fork.id)"
+                :current="fork.id === currentForkId"
+                :movable="movable"
+                :columns="columns"
+                :can-move-up="index > 0"
+                :can-move-down="index < view.forks.length - 1"
+                :draggable="movable"
+                @dragstart="onDragStart($event, fork)"
+                @dragend="endDrag"
+                @dragover="onDragOverCard($event, view.column.id, index, false)"
+                @drop.prevent.stop="onDrop(view.column.id, view.forks)"
+                @move-to="moveToColumn(fork, $event)"
+                @up="moveBy(fork, view.forks, -1)"
+                @down="moveBy(fork, view.forks, 1)"
+              />
+            </template>
+            <div
+              v-if="placeholderAt(view.column.id, view.forks.length)"
+              class="drop-placeholder"
+              @dragover.prevent.stop
               @drop.prevent.stop="onDrop(view.column.id, view.forks)"
-              @move-to="moveToColumn(fork, $event)"
-              @up="moveBy(fork, view.forks, -1)"
-              @down="moveBy(fork, view.forks, 1)"
-            />
+            >
+              {{ draggedFork?.summary }}
+            </div>
           </div>
         </section>
 
@@ -353,30 +378,46 @@ const marker = (columnId: string | null, index: number, count: number) => {
         @dragover="onDragOverBody($event, null, layout.ungrouped)"
         @drop.prevent="onDrop(null, layout.ungrouped)"
       >
-        <BoardCard
-          v-for="(fork, index) in layout.ungrouped"
-          :key="fork.id"
-          :fork="fork"
-          :url="forkUrl(fork)"
-          :class="marker(null, index, layout.ungrouped.length)"
-          :message-count="messageCounts.get(fork.id) ?? 0"
-          :awaiting-answer="awaiting(fork)"
-          :attention="attention.get(fork.id)"
-          :archived="archivedIds.has(fork.id)"
-          :current="fork.id === currentForkId"
-          :movable="movable"
-          :columns="columns"
-          :can-move-up="index > 0"
-          :can-move-down="index < layout.ungrouped.length - 1"
-          :draggable="movable"
-          @dragstart="onDragStart($event, fork)"
-          @dragend="endDrag"
-          @dragover="onDragOverCard($event, null, index, true)"
+        <template v-for="(fork, index) in layout.ungrouped" :key="fork.id">
+          <div
+            v-if="placeholderAt(null, index)"
+            class="drop-placeholder"
+            @dragover.prevent.stop
+            @drop.prevent.stop="onDrop(null, layout.ungrouped)"
+          >
+            {{ draggedFork?.summary }}
+          </div>
+          <BoardCard
+            :fork="fork"
+            :url="forkUrl(fork)"
+            :class="{ 'drag-source': dragHidesSource && dragged === fork.id }"
+            :message-count="messageCounts.get(fork.id) ?? 0"
+            :awaiting-answer="awaiting(fork)"
+            :attention="attention.get(fork.id)"
+            :archived="archivedIds.has(fork.id)"
+            :current="fork.id === currentForkId"
+            :movable="movable"
+            :columns="columns"
+            :can-move-up="index > 0"
+            :can-move-down="index < layout.ungrouped.length - 1"
+            :draggable="movable"
+            @dragstart="onDragStart($event, fork)"
+            @dragend="endDrag"
+            @dragover="onDragOverCard($event, null, index, true)"
+            @drop.prevent.stop="onDrop(null, layout.ungrouped)"
+            @move-to="moveToColumn(fork, $event)"
+            @up="moveBy(fork, layout.ungrouped, -1)"
+            @down="moveBy(fork, layout.ungrouped, 1)"
+          />
+        </template>
+        <div
+          v-if="placeholderAt(null, layout.ungrouped.length)"
+          class="drop-placeholder"
+          @dragover.prevent.stop
           @drop.prevent.stop="onDrop(null, layout.ungrouped)"
-          @move-to="moveToColumn(fork, $event)"
-          @up="moveBy(fork, layout.ungrouped, -1)"
-          @down="moveBy(fork, layout.ungrouped, 1)"
-        />
+        >
+          {{ draggedFork?.summary }}
+        </div>
       </div>
     </section>
 
@@ -547,21 +588,29 @@ const marker = (columnId: string | null, index: number, count: number) => {
   width: 13rem;
 }
 
-.drop-before {
-  box-shadow: 0 -3px 0 0 var(--accent);
+.drop-placeholder {
+  display: flex;
+  align-items: center;
+  min-height: 5.5rem;
+  padding: 0.6rem 0.75rem;
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  font-size: 0.85rem;
+  font-weight: 600;
+  overflow: hidden;
 }
 
-.drop-after {
-  box-shadow: 0 3px 0 0 var(--accent);
+/* The card being dragged leaves its place, so the cards close up around the placeholder. */
+.column-body .drag-source,
+.ungrouped-body .drag-source {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
 }
 
-/* The ungrouped cards sit in a row, so the line stands beside the card. */
-.ungrouped-body .drop-before {
-  box-shadow: -3px 0 0 0 var(--accent);
-}
-
-.ungrouped-body .drop-after {
-  box-shadow: 3px 0 0 0 var(--accent);
+.ungrouped-body > .drop-placeholder {
+  width: 13rem;
 }
 
 .error {

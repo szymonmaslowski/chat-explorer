@@ -199,3 +199,43 @@ test('shows archived forks only, in their own columns, in the board and the grap
     'What about Redis?',
   );
 });
+
+test('a dragged card shows in the proposed place and the other cards make room', async ({
+  page,
+  request,
+}) => {
+  const { explorationId, redis, memcached } = await chatWithTwoForks(request);
+  for (const name of ['system', 'UX']) {
+    await request.post(`/api/explorations/${explorationId}/board-columns`, { data: { name } });
+  }
+  const columns = (
+    (await (await request.get(`/api/explorations/${explorationId}`)).json()) as Snapshot
+  ).exploration.boardColumns;
+  await request.post(`/api/forks/${redis.id}/move`, {
+    data: { columnId: columns[0]!.id, afterForkId: null },
+  });
+  await request.post(`/api/forks/${memcached.id}/move`, {
+    data: { columnId: columns[0]!.id, afterForkId: redis.id },
+  });
+
+  await page.goto(`/e/${explorationId}/map`);
+  await page.getByRole('button', { name: 'Board view' }).click();
+  const system = page.locator('[data-column="system"]');
+  await expect(system.locator('.board-card')).toHaveCount(2);
+
+  const box = (await card(page, 'And Memcached?').boundingBox())!;
+  await page.mouse.move(box.x + 30, box.y + 30);
+  await page.mouse.down();
+  // Over the empty "UX" column: the placeholder is there, the first column has closed up.
+  const target = (await page.locator('[data-column="UX"] .column-body').boundingBox())!;
+  await page.mouse.move(target.x + 40, target.y + 40, { steps: 8 });
+  await expect(page.locator('[data-column="UX"] .drop-placeholder')).toContainText(
+    'And Memcached?',
+  );
+  await expect(system.locator('.board-card:not(.drag-source)')).toHaveCount(1);
+  // A real hand keeps moving a little; the browser accepts a drop after a dragover on the new layout.
+  await page.mouse.move(target.x + 44, target.y + 46, { steps: 3 });
+  await page.mouse.up();
+  await expect(page.locator('[data-column="UX"] .board-card')).toContainText('And Memcached?');
+  await expect(page.locator('.drop-placeholder')).toHaveCount(0);
+});
