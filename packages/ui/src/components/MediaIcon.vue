@@ -43,6 +43,7 @@ defineProps<{
     | 'graph'
     | 'board'
     | 'more'
+    | 'code'
     | 'settings';
 }>();
 </script>
@@ -115,6 +116,7 @@ defineProps<{
     <path v-else-if="name === 'board'" d="M4 5h4v14H4zM10 5h4v9h-4zM16 5h4v6h-4z" />
     <path v-else-if="name === 'more'" d="M5 12h.01M12 12h.01M19 12h.01" />
     <path v-else-if="name === 'list'" d="M4 6h16M4 12h16M4 18h16" />
+    <path v-else-if="name === 'code'" d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16" />
     <path
       v-else-if="name === 'unchecked-first'"
       d="M4 4h6v6H4zM14 7h6M5.5 17l1.5 1.5 3-3M14 17h6"
@@ -172,6 +174,7 @@ defineProps<{
 .media-icon.graph,
 .media-icon.board,
 .media-icon.more,
+.media-icon.code,
 .media-icon.eye {
   fill: none;
   stroke: currentColor;

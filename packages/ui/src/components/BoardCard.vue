@@ -75,7 +75,18 @@ function pick(action: () => void) {
   >
     <RouterLink :to="url" class="card-link" draggable="false">
       <AttentionDot v-if="attention" :attention="attention" class="dot" />
-      <span class="fork-id">{{ fork.id }}</span>
+      <span class="fork-id">
+        {{ fork.id }}
+        <span
+          v-if="fork.coding"
+          class="coding"
+          role="img"
+          aria-label="Coding fork"
+          title="Coding fork"
+        >
+          <MediaIcon name="code" />
+        </span>
+      </span>
       <span class="summary">{{ forkTitle(fork) }}</span>
       <span class="meta">
         {{ messageCount }} message{{ messageCount === 1 ? '' : 's' }}
@@ -206,6 +217,9 @@ function pick(action: () => void) {
 }
 
 .fork-id {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
   font-size: 0.65rem;
   line-height: 1.2;
   color: var(--text-muted);
@@ -228,6 +242,16 @@ function pick(action: () => void) {
 
 .awaiting {
   color: var(--accent);
+}
+
+.coding {
+  display: inline-flex;
+  color: var(--accent);
+}
+
+.coding :deep(.media-icon) {
+  width: 0.8rem;
+  height: 0.8rem;
 }
 
 .bookmarks {

@@ -87,3 +87,23 @@ test('opens a chat on the page its settings name, and shows the fork model there
   await page.getByRole('link', { name: 'Chat', exact: true }).click();
   await expect(page).toHaveURL(`/e/${explorationId}/map`);
 });
+
+test('marks a coding fork next to its id, on the graph and on the board', async ({
+  page,
+  request,
+}) => {
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'How do I cache?' } })
+  ).json();
+  await page.goto(`/e/${explorationId}/map`);
+  await expect(page.locator('.fork-box')).toHaveCount(1);
+  await expect(page.getByRole('img', { name: 'Coding fork' })).toHaveCount(0);
+
+  const { forks } = await (await request.get(`/api/explorations/${explorationId}`)).json();
+  await request.patch(`/api/forks/${forks[0].id}/coding`, { data: { coding: true } });
+  await expect(page.locator('.fork-box').getByRole('img', { name: 'Coding fork' })).toBeVisible();
+  await page.getByRole('button', { name: 'Board view' }).click();
+  await expect(
+    page.locator('.main-row .board-card').getByRole('img', { name: 'Coding fork' }),
+  ).toBeVisible();
+});
