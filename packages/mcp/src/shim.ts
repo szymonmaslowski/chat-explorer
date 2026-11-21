@@ -6,7 +6,12 @@ import { z } from 'zod';
 import { createDaemonClient, DaemonError } from '@chat-explorer/shared/http.js';
 import type { Config } from '@chat-explorer/shared/config.js';
 import { DaemonStartError } from '@chat-explorer/shared/health.js';
-import type { ExplorationListItem, Note, NoteGroup } from '@chat-explorer/shared/types.js';
+import type {
+  ArrangeBoardInput,
+  ExplorationListItem,
+  Note,
+  NoteGroup,
+} from '@chat-explorer/shared/types.js';
 import {
   readNotesDescription,
   readNotesLimit,
@@ -551,7 +556,7 @@ export function createShim(options: ShimOptions) {
         afterForkId: z.string().nullable().optional(),
       },
     },
-    tool(async (input: Record<string, unknown>) => {
+    tool(async (input: ArrangeBoardInput) => {
       const { explorationId } = requireAttachment();
       return json(
         await request(`/api/internal/explorations/${explorationId}/board`, {

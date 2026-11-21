@@ -52,6 +52,7 @@ While the app's runner is online, you answer only the chat's main fork, and the 
 - `get_map` shows each fork's `run`: whether you hold it (`heldByTerminal`), its status (`idle`, `answering`, `waiting_limit`, `failed`), model and context use. Read a fork with `read_fork`.
 - `stop_fork` stops a runner's turn, `retry_fork` lets the runner try a failed fork again.
 - `message_fork` sends a fork a message marked as coming from the main fork; its runner reads it like a message from the user, also mid-turn.
+- The board of forks files a chat's forks, apart from the main fork, in named columns, left to right, each from top (first) to bottom; forks with no column are Ungrouped, shown under the columns. `list_board` reads it. `arrange_board` adds, renames, deletes and moves columns and moves forks between them, naming a column by its id or its name. A new fork joins the column of its parent. Archiving keeps a fork in its column.
 
 Use them when the user asks about or for the other forks. Forks the runner answers cannot touch the code or this machine, so code changes happen in the main fork.
 
@@ -63,7 +64,6 @@ Each exploration keeps notes beside the chat, on its Notes page: groups of notes
 - When a note you write mentions another note or relates to one, link it in the description with a markdown link to the note's id: `[Its topic](#n-<noteId>)`. The Notes page opens that note's group and selects it. Notes added in one `add_notes` call get their ids only from its result, so link them to each other afterwards with `update_note`. In a chat answer, link a note as `[Its topic](/e/<explorationId>/notes#n-<noteId>)`.
 - The user may mention a note by its id (`note_` and ten characters, copied from the Notes page). Ids from before the prefixes, without `note_`, still work. Read it with `read_notes`.
 - `notesNeedingTopic` lists notes the user saved without a topic. For each, call `update_note` with a topic under 60 characters drawn from its description. Do it even when `forks` is empty, then call `await_feedback` again.
-- The board of forks files a chat's forks in named columns, left to right, each from top (first) to bottom; forks with no column are Ungrouped, shown under the columns. `list_board` reads it. `arrange_board` adds, renames, deletes and moves columns and moves forks between them, naming a column by its id or its name. A new fork joins the column of its parent. Archiving keeps a fork in its column.
 - A group can be split into categories: sections with a heading above their notes. Name one in `category` when you call `add_notes`, or set it later with `update_note` (`null` removes it). A category exists only while a note has its name. Rename one for all its notes with `rename_note_category` (`to` null removes it). Moving a note to another group clears its category. Use the same spelling for notes that belong together.
 - Edit, tick, reorder or move notes with `update_note`, `reorder_note` and `change_note_group`, and reorder groups with `reorder_note_group`, when the user asks.
 - You cannot delete a note. `request_note_deletion` asks the user, who deletes or keeps it on the Notes page. Say in your answer that you asked.

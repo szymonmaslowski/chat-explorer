@@ -29,6 +29,17 @@ export interface BoardColumn {
   name: string;
 }
 
+// One change Claude makes to the board of forks. Columns are named by id or by name; a moved fork
+// goes last in its column when `afterForkId` is left out, first when it is null.
+export interface ArrangeBoardInput {
+  action: 'add_column' | 'rename_column' | 'delete_column' | 'move_column' | 'move_fork';
+  column?: string | null | undefined;
+  name?: string | undefined;
+  afterColumn?: string | null | undefined;
+  forkId?: string | undefined;
+  afterForkId?: string | null | undefined;
+}
+
 export const chatDefaultPages = ['map', 'notes'] as const;
 export type ChatDefaultPage = (typeof chatDefaultPages)[number];
 

@@ -25,6 +25,7 @@ import {
   type SubmissionRow,
 } from '../db/rows.js';
 import type {
+  ArrangeBoardInput,
   BoardColumn,
   ChatDefaultPage,
   Comment,
@@ -2795,12 +2796,7 @@ export class ChatStore {
       let number = columns.length + 1;
       while (columns.some((column) => column.name === `Group ${number}`)) number += 1;
       const column = { id: newId(), name: `Group ${number}` };
-      this.db.run(
-        'UPDATE explorations SET board_columns = ?, updated_at = ? WHERE id = ?',
-        JSON.stringify([...columns, column]),
-        this.now(),
-        forkRow.exploration_id,
-      );
+      this.writeBoardColumns(forkRow.exploration_id, [...columns, column]);
       this.placeFork(forkRow.exploration_id, forkRow.id, column.id, 'last');
       return true;
     }
@@ -3068,13 +3064,17 @@ export class ChatStore {
     return JSON.parse(row.board_columns) as BoardColumn[];
   }
 
-  private saveBoardColumns(explorationId: string, columns: BoardColumn[]) {
+  private writeBoardColumns(explorationId: string, columns: BoardColumn[]) {
     this.db.run(
       'UPDATE explorations SET board_columns = ?, updated_at = ? WHERE id = ?',
       JSON.stringify(columns),
       this.now(),
       explorationId,
     );
+  }
+
+  private saveBoardColumns(explorationId: string, columns: BoardColumn[]) {
+    this.writeBoardColumns(explorationId, columns);
     return this.publishExplorationUpdate(explorationId);
   }
 
@@ -3179,19 +3179,7 @@ export class ChatStore {
     return found;
   }
 
-  // What Claude can do to the board, one action at a time. Columns are named by id or by name;
-  // `afterForkId` left out puts a moved fork last in its column, null first.
-  arrangeBoard(
-    explorationId: string,
-    input: {
-      action: 'add_column' | 'rename_column' | 'delete_column' | 'move_column' | 'move_fork';
-      column?: string | null;
-      name?: string;
-      afterColumn?: string | null;
-      forkId?: string;
-      afterForkId?: string | null;
-    },
-  ) {
+  arrangeBoard(explorationId: string, input: ArrangeBoardInput) {
     const need = <Value>(value: Value | undefined, what: string) => {
       if (value === undefined) throw new StoreError('invalid', `${input.action} needs ${what}.`);
       return value;
@@ -3284,7 +3272,7 @@ export class ChatStore {
     }
     if (
       columnId !== null &&
-      !this.boardColumnsOf(row.exploration_id).some((c) => c.id === columnId)
+      !this.boardColumnsOf(row.exploration_id).some((column) => column.id === columnId)
     ) {
       throw new StoreError('not_found', `Column ${columnId} does not exist.`);
     }

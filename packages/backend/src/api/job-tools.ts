@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { StoreError } from '../store/errors.js';
 import type { Job, RunStore } from '../store/runs.js';
 import type { ChatStore } from '../store/store.js';
+import type { ArrangeBoardInput } from '@chat-explorer/shared/types.js';
 import {
   readNotesDescription,
   readNotesLimit,
@@ -299,9 +300,7 @@ function toolsFor(job: Job, { store, runs }: JobToolsOptions) {
         afterForkId: z.string().nullable().optional(),
       },
     },
-    tool((input: Parameters<typeof store.arrangeBoard>[1]) =>
-      store.arrangeBoard(job.explorationId, input),
-    ),
+    tool((input: ArrangeBoardInput) => store.arrangeBoard(job.explorationId, input)),
   );
 
   server.registerTool(
