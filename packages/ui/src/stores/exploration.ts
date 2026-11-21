@@ -880,10 +880,19 @@ export const emptyState = (explorationId: string): ExplorationState => ({
 export async function catchUp(state: ExplorationState, options = { withPending: true }) {
   if (state.seq > 0 && state.exploration) {
     const changes = await api.changes(state.explorationId, state.seq);
-    if (!changes.reset) return applyChangeSet(state, changes, options);
+    if (!changes.reset) {
+      applyChangeSet(state, changes, options);
+      if (!missesAMessage(state)) return;
+    }
   }
   applySnapshot(state, await api.snapshot(state.explorationId), options);
 }
+
+// A copy that lost a message cuts every fork's path short at it, so it is loaded again whole.
+const missesAMessage = (state: ExplorationState) =>
+  [...state.messages.values()].some(
+    (message) => message.parentId !== null && !state.messages.has(message.parentId),
+  );
 
 const saveDelayMs = 1_000;
 
@@ -905,8 +914,11 @@ function createExplorationStore(explorationId: string) {
     if (stored && state.status === 'loading') applyStoredChat(state, stored);
   });
 
-  // Live events move the copy's number on, except while it catches up from an older one.
+  // Live events move the copy's number on, except while it catches up from an older one, and
+  // from a (re)connect until that catch-up: each event carries the daemon's newest number, which
+  // would skip what changed while the page was away.
   let catchingUp = false;
+  let behind = true;
   let filled = false;
   let caughtUp = false;
   const load = async () => {
@@ -914,6 +926,7 @@ function createExplorationStore(explorationId: string) {
     catchingUp = true;
     try {
       await catchUp(state);
+      behind = false;
       caughtUp = true;
       save();
       if (!filled) {
@@ -943,6 +956,7 @@ function createExplorationStore(explorationId: string) {
     // Changes made while offline go first, so the reloaded chat already has them.
     onReady: async () => {
       state.connected = true;
+      behind = true;
       await outbox.flush();
       await load();
     },
@@ -963,7 +977,7 @@ function createExplorationStore(explorationId: string) {
           const event: ExplorationEvent & { seq?: number } = JSON.parse(data);
           applyServerEvent(state, event);
           // Without a copy loaded yet there is nothing the number could be the state of.
-          if (!catchingUp && state.exploration && event.seq !== undefined) {
+          if (!catchingUp && !behind && state.exploration && event.seq !== undefined) {
             state.seq = Math.max(state.seq, event.seq);
           }
           save();
