@@ -506,6 +506,9 @@ test('reviews the drafts with the message before sending, and lets them be left 
   await expect(review.locator('.confirm')).toBeDisabled();
   await expect(review.locator('.confirm')).toBeEnabled();
   await expect(review.locator('.confirm')).toHaveText('Confirm');
+  // With only two cards, the buttons still sit at the bottom of the screen.
+  const footer = (await review.locator('.review-actions').boundingBox())!;
+  expect(footer.y + footer.height).toBeCloseTo(page.viewportSize()!.height, -1);
   await expect(review).toContainText('Forgotten one');
   await expect(review).toContainText('Forgotten two');
   // The message comes last, and the conversation and reply box give way to the review.
