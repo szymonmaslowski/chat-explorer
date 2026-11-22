@@ -101,6 +101,14 @@ const summary = computed(() =>
 </template>
 
 <style scoped>
+/* Fills the page below the header, so the buttons sit at the screen's bottom with few cards too,
+   and stay there while many cards scroll. */
+.submit-review {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
 .review-title {
   position: sticky;
   top: var(--sticky-header-height, 0px);
@@ -157,6 +165,7 @@ const summary = computed(() =>
 }
 
 .review-actions {
+  margin-top: auto;
   position: sticky;
   bottom: 0;
   z-index: 5;
