@@ -99,6 +99,22 @@ test('reopens an unsaved new comment in its editor, and Cancel deletes it', asyn
   await expect(page.locator('.comment-card')).toHaveCount(0);
 });
 
+test('shows a saved comment once after its quoted text was clicked while it was written', async ({
+  page,
+  request,
+}) => {
+  await page.goto(`/e/${await answeredChat(request)}`);
+  await selectAnswer(page);
+  await page.getByRole('button', { name: 'Comment', exact: true }).click();
+  const created = saved(page, '/comments');
+  await page.getByPlaceholder('Your comment').fill('Written in two goes');
+  await created;
+  await clickQuotedText(page, 'Caching');
+  await page.locator('.comment-editor').getByRole('button', { name: 'Save' }).click();
+
+  await expect(page.locator('.comment-card', { hasText: 'Written in two goes' })).toHaveCount(1);
+});
+
 test('keeps an edit of a saved comment apart from its saved text until Save', async ({
   page,
   request,

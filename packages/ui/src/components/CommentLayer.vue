@@ -135,6 +135,10 @@ const editors = ref<OpenEditor[]>([]);
 const editedIds = computed(
   () => new Set(editors.value.flatMap((editor) => (editor.commentId ? [editor.commentId] : []))),
 );
+// A comment shows once: in its editor, or in one place. Opening it again elsewhere would show it
+// twice once its editor closes into its own place.
+const isOpen = (commentId: string) =>
+  editedIds.value.has(commentId) || openedPlaces.value.some((place) => place.ids.has(commentId));
 const placeOfEditor = (editor: OpenEditor) =>
   openedPlaces.value.find((place) => place.key === editor.placeKey);
 // A comment open in an editor shows there, not also as a card. A sent comment that quotes text
@@ -506,7 +510,7 @@ function openCommentsAt(x: number, y: number) {
   const placeHolding = (id: string) => openedPlaces.value.find((place) => place.ids.has(id));
   const closedByEnd: { range: Range; comments: Comment[] }[] = [];
   for (const { comment, range } of hits) {
-    if (placeHolding(comment.id)) continue;
+    if (isOpen(comment.id)) continue;
     const sameEnd = closedByEnd.find(
       (group) => group.range.compareBoundaryPoints(Range.END_TO_END, range) === 0,
     );
@@ -574,8 +578,7 @@ function dropGoneComments() {
 function openBeingEdited() {
   for (const comment of props.comments) {
     const range = anchors.value.get(comment.id);
-    const shown = openedPlaces.value.some((place) => place.ids.has(comment.id));
-    if (comment.editBody === null || editedIds.value.has(comment.id) || shown) continue;
+    if (comment.editBody === null || isOpen(comment.id)) continue;
     if (range && !range.collapsed) openPlace(comment.messageId, comment, range, [comment.id]);
   }
 }
@@ -645,7 +648,7 @@ function setPlaceIds(place: OpenedPlace, ids: Set<string>) {
 function reveal(commentId: string, range: Range) {
   const comment = props.comments.find(({ id }) => id === commentId);
   if (!comment || range.collapsed) return;
-  if (openedPlaces.value.some((place) => place.ids.has(commentId))) return;
+  if (isOpen(commentId)) return;
   openPlace(comment.messageId, comment, range, [commentId]);
 }
 
@@ -740,8 +743,7 @@ function openSubmitted(comment: Comment) {
 function showDrafts() {
   for (const comment of props.comments) {
     const range = anchors.value.get(comment.id);
-    const shown = openedPlaces.value.some((place) => place.ids.has(comment.id));
-    if (comment.status !== 'draft' || editedIds.value.has(comment.id) || shown) continue;
+    if (comment.status !== 'draft' || isOpen(comment.id)) continue;
     if (range && !range.collapsed) openPlace(comment.messageId, comment, range, [comment.id]);
   }
   measure();
