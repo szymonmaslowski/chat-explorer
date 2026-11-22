@@ -496,10 +496,7 @@ test('reviews the drafts with the message before sending, and lets them be left 
   }
   await page.goto(`/e/${explorationId}`);
   const reply = page.getByPlaceholder('Reply to Claude');
-  const banner = page.locator('.drafts-banner');
-  await expect(banner).toHaveCount(0);
   await reply.fill('A general message');
-  await expect(banner).toContainText('2 drafted comments will be sent with this message');
 
   const review = page.getByRole('region', { name: 'Review before sending' });
   await page.getByRole('button', { name: 'Submit' }).click();

@@ -203,9 +203,6 @@ watch(() => props.forkId, endHistoryWalk);
 // Any draft, ticked or left out, makes Submit show the whole submission for review first, so a
 // forgotten draft is not sent unseen. The review page then calls send.
 const listedDrafts = computed(() => props.drafts.filter((draft) => draft.editBody === null));
-const sendsDraftsWithMessage = computed(
-  () => text.value.trim() !== '' && readyDrafts.value.length > 0,
-);
 
 function submit() {
   if (!canSubmit.value) return;
@@ -335,12 +332,6 @@ function onKeydown(event: KeyboardEvent) {
         @show-only="emit('showOnlyDrafts')"
       />
     </div>
-    <p v-if="sendsDraftsWithMessage" class="drafts-banner">
-      <RouterLink :to="{ hash: `#c-${readyDrafts[0]!.id}` }">{{
-        plural(readyDrafts.length, 'drafted comment')
-      }}</RouterLink>
-      will be sent with this message.
-    </p>
     <textarea
       ref="textarea"
       v-model="text"
@@ -489,15 +480,5 @@ function onKeydown(event: KeyboardEvent) {
 .summary.beside {
   flex-shrink: 0;
   max-width: 50%;
-}
-
-.drafts-banner {
-  margin: 0;
-  padding: 0.35rem 0.6rem;
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--accent);
-  border-radius: 6px;
-  background: var(--surface);
-  font-size: 0.85rem;
 }
 </style>
