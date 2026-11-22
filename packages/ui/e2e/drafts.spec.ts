@@ -501,6 +501,11 @@ test('reviews the drafts with the message before sending, and lets them be left 
   const review = page.getByRole('region', { name: 'Review before sending' });
   await page.getByRole('button', { name: 'Submit' }).click();
   await expect(review.locator('.comment-card')).toHaveCount(2);
+  // A comment on nothing quoted has no quote line, and Confirm is off for a moment while it counts.
+  await expect(review.locator('.quote')).toHaveCount(0);
+  await expect(review.locator('.confirm')).toBeDisabled();
+  await expect(review.locator('.confirm')).toBeEnabled();
+  await expect(review.locator('.confirm')).toHaveText('Confirm');
   await expect(review).toContainText('Forgotten one');
   await expect(review).toContainText('Forgotten two');
   // The message comes last, and the conversation and reply box give way to the review.

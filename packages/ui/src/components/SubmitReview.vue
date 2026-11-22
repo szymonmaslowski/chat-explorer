@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Comment } from '@shared/types';
-import { computed } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { plural } from '../lib/plural';
 import { replyFilesOwner, useFileDrafts } from '../stores/file-drafts';
 import { replyDrafts } from '../stores/reply-drafts';
@@ -20,6 +20,19 @@ const emit = defineEmits<{
   cancel: [];
   jump: [comment: Comment];
 }>();
+
+// Confirm stays off for two seconds, counting down in its place, so a second tap meant for Submit
+// cannot land on it.
+const confirmDelaySeconds = 2;
+const waiting = ref(confirmDelaySeconds);
+let countdown: ReturnType<typeof setInterval> | undefined;
+onMounted(() => {
+  countdown = setInterval(() => {
+    waiting.value -= 1;
+    if (waiting.value <= 0) clearInterval(countdown);
+  }, 1000);
+});
+onBeforeUnmount(() => clearInterval(countdown));
 
 const text = computed(() => replyDrafts.get(props.forkId).trim());
 const newFork = computed(() => replyDrafts.newFork(props.forkId));
@@ -75,8 +88,13 @@ const summary = computed(() =>
     </div>
     <div class="review-actions">
       <button type="button" @click="emit('cancel')">Cancel</button>
-      <button type="button" class="primary" :disabled="!canConfirm" @click="emit('confirm')">
-        Confirm
+      <button
+        type="button"
+        class="primary confirm"
+        :disabled="!canConfirm || waiting > 0"
+        @click="emit('confirm')"
+      >
+        {{ waiting > 0 ? waiting : 'Confirm' }}
       </button>
     </div>
   </section>
@@ -84,7 +102,12 @@ const summary = computed(() =>
 
 <style scoped>
 .review-title {
-  margin: 0.75rem 0 0.25rem;
+  position: sticky;
+  top: var(--sticky-header-height, 0px);
+  z-index: 4;
+  margin: 0;
+  padding: 0.75rem 0 0.4rem;
+  background: var(--background);
   font-weight: 600;
 }
 
@@ -123,6 +146,14 @@ const summary = computed(() =>
   margin: 0.2rem 0 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.confirm {
+  min-width: 5.5rem;
+}
+
+.confirm:disabled {
+  cursor: not-allowed;
 }
 
 .review-actions {

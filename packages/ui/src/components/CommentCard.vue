@@ -327,7 +327,7 @@ function onEditorKeydown(event: KeyboardEvent) {
         </button>
       </div>
       <button
-        v-if="grouped || showQuote"
+        v-if="grouped || (showQuote && comment.quote !== '')"
         type="button"
         class="quote"
         title="Show in the text"
