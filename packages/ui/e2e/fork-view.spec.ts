@@ -75,7 +75,7 @@ test('queues a submit, scrolls to it and cancels it back into drafts', async ({ 
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.getByPlaceholder('Reply to Claude').fill('Can you compare costs?');
   await page.getByRole('button', { name: 'Submit' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Send' }).click();
+  await page.getByRole('button', { name: 'Confirm' }).click();
 
   const queued = page.locator('.queued-submission');
   await expect(queued).toContainText('Can you compare costs?');

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Comment } from '@shared/types';
 import { computed } from 'vue';
+import { plural } from '../lib/plural';
 import { replyFilesOwner, useFileDrafts } from '../stores/file-drafts';
 import { replyDrafts } from '../stores/reply-drafts';
 import CommentCard from './CommentCard.vue';
@@ -39,7 +40,6 @@ const entries = computed(() => {
   });
 });
 const selectedCount = computed(() => props.drafts.filter((draft) => draft.selected).length);
-const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
 const summary = computed(() =>
   [
     plural(selectedCount.value, 'comment'),

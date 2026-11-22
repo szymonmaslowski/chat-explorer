@@ -6,6 +6,7 @@ import { useAutosave } from '../composables/useAutosave';
 import { useExpandedArea } from '../composables/useExpandedArea';
 import { useMediaQuery } from '../composables/useMediaQuery';
 import { insertAtCursor } from '../lib/insert-text';
+import { plural } from '../lib/plural';
 import { atDraft, stepBack, stepForward } from '../lib/reply-history';
 import { transferredFiles } from '../lib/transferred-files';
 import { replyFilesOwner, restoreFileDrafts, useFileDrafts } from '../stores/file-drafts';
@@ -76,7 +77,6 @@ const forkCount = computed(
 );
 const inlineCount = computed(() => countOf('inline'));
 const noteCount = computed(() => countOf('note'));
-const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
 const summary = computed(() => {
   const reply = [
     inlineCount.value ? plural(inlineCount.value, 'comment') : '',
