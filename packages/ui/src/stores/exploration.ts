@@ -394,6 +394,7 @@ function addNewFork(
     awareness: 'aware',
     coding: false,
     network: noNetwork,
+    model: null,
     createdAt: now,
     updatedAt: now,
     archivedAt: null,

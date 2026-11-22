@@ -49,6 +49,8 @@ export interface RunInput {
   restart: boolean;
   // The fork's coding switch now, which may differ from the one its container started with.
   coding: boolean;
+  // The fork's model now, which may differ from the one its engine started with.
+  model: ClaudeModel;
   // The fork's allowed hosts now.
   network: ForkNetwork;
 }

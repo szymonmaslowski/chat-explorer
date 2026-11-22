@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { ClaudeModel } from '@chat-explorer/shared/models.js';
 import { RunnerClient, StaleLeaseError } from './client.js';
 import type { Engine, EngineEvent, EngineRun, EngineRunSpec } from './engine.js';
 import {
@@ -172,6 +173,7 @@ class ForkWorker {
   private closing = false;
   private stopping = false;
   private coding = false;
+  private model: ClaudeModel | null = null;
   private credentials = '';
   private diskChecks: NodeJS.Timeout | undefined;
   private diskWarned = false;
@@ -201,6 +203,7 @@ class ForkWorker {
       const context = await client.context(this.lease, resume);
       this.history = context.history;
       this.coding = context.coding;
+      this.model = context.model;
       this.credentials = JSON.stringify(context.network.credentials);
       this.hosts = JSON.stringify(context.network);
       const spec = checkedRunSpec({
@@ -276,11 +279,12 @@ class ForkWorker {
         this.stopTurn();
         return;
       }
-      // A container keeps the coding switch and credentials it started with, so a change lets this
-      // one go between turns. The fork is claimed again for the message, into a container started
-      // with the new settings, and resumes the same session.
+      // A container keeps the coding switch, model and credentials it started with, so a change
+      // lets this one go between turns. The fork is claimed again for the message, into a container
+      // started with the new settings, and resumes the same session.
       const containerChanged =
         input.coding !== this.coding ||
+        input.model !== this.model ||
         (this.coding && JSON.stringify(input.network.credentials) !== this.credentials);
       if (input.messages.length > 0 && !this.turnOpen && containerChanged) {
         await this.close();

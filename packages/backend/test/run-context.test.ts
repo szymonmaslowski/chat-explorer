@@ -29,6 +29,21 @@ describe('the context of a new engine session', () => {
     expect(context.systemPrompt).toContain('[c:');
   });
 
+  it("runs a fork on its own model, or on the chat's when it picks none", () => {
+    const { store } = createTestStore();
+    const { mainFork } = store.createExploration({
+      model: 'sonnet',
+      messages: [{ role: 'user', content: 'Hello' }],
+    });
+    const model = () =>
+      buildRunContext(store, mainFork.id, { resume: true, pendingIds: new Set() }).model;
+    expect(model()).toBe('sonnet');
+    expect(store.setForkModel(mainFork.id, 'opus').model).toBe('opus');
+    expect(model()).toBe('opus');
+    store.setForkModel(mainFork.id, null);
+    expect(model()).toBe('sonnet');
+  });
+
   it('tells a new fork to name itself, and gives a resumed session no history', () => {
     const { store } = createTestStore();
     const { mainFork } = store.createExploration({

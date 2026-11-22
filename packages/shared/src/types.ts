@@ -79,6 +79,8 @@ export interface Fork {
   coding: boolean;
   // What a coding fork's container may reach.
   network: ForkNetwork;
+  // The model the runner answers this fork with; null follows the chat's model.
+  model: ClaudeModel | null;
   createdAt: number;
   updatedAt: number;
   // Set on the fork the reader archived; the forks below it count as archived too.

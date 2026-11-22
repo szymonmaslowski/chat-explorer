@@ -36,6 +36,17 @@ test('opens a chat on the page its settings name, and shows the fork model there
   const { forks } = await (await request.get(`/api/explorations/${explorationId}`)).json();
   await expect(forkSettings.locator('code')).toHaveText(forks[0].id);
   await expect(forkSettings.getByRole('button', { name: 'Copy Fork ID' })).toBeVisible();
+  // The fork follows the chat's model until it picks its own.
+  const model = forkSettings.getByLabel('Model of this fork');
+  await expect(model.locator('option:checked')).toHaveText("The chat's (Sonnet)");
+  const forkModel = async () =>
+    (await (await request.get(`/api/explorations/${explorationId}`)).json()).forks[0].model;
+  await model.selectOption('Opus');
+  await expect.poll(forkModel).toBe('opus');
+  await page.reload();
+  await expect(model).toHaveValue('opus');
+  await model.selectOption("The chat's (Sonnet)");
+  await expect.poll(forkModel).toBeNull();
   await expect(settings.getByLabel("Hears about the chat's other forks")).toBeChecked();
   const coding = settings.getByRole('checkbox', { name: /Coding:/ });
   await expect(coding).not.toBeChecked();

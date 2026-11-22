@@ -589,6 +589,12 @@ export class ChatStore {
     return this.requireExplorationRow(explorationId).model;
   }
 
+  // The model the runner answers a fork with: its own, or else its chat's.
+  forkModel(forkId: string) {
+    const fork = this.requireForkRow(forkId);
+    return fork.model ?? this.explorationModel(fork.exploration_id);
+  }
+
   archiveExploration(explorationId: string) {
     this.requireExplorationRow(explorationId);
     this.db.run('UPDATE explorations SET archived_at = ? WHERE id = ?', this.now(), explorationId);
@@ -721,6 +727,10 @@ export class ChatStore {
     return this.updateForkSettings(forkId, { coding: coding ? 1 : 0 });
   }
 
+  setForkModel(forkId: string, model: ClaudeModel | null) {
+    return this.updateForkSettings(forkId, { model });
+  }
+
   setForkNetwork(forkId: string, network: ForkNetwork) {
     return this.updateForkSettings(forkId, {
       allowed_hosts: JSON.stringify(network.hosts),
@@ -732,7 +742,10 @@ export class ChatStore {
   private updateForkSettings(
     forkId: string,
     changes: Partial<
-      Pick<ForkRow, 'awareness' | 'coding' | 'allowed_hosts' | 'registries' | 'credentials'>
+      Pick<
+        ForkRow,
+        'awareness' | 'coding' | 'model' | 'allowed_hosts' | 'registries' | 'credentials'
+      >
     >,
   ) {
     const row = this.requireWritableFork(forkId);

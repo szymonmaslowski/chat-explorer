@@ -152,6 +152,8 @@ export const api = {
     call<Fork>(`/api/forks/${forkId}/awareness`, { method: 'PATCH', json: { awareness } }),
   setForkCoding: (forkId: string, coding: boolean) =>
     call<Fork>(`/api/forks/${forkId}/coding`, { method: 'PATCH', json: { coding } }),
+  setForkModel: (forkId: string, model: ClaudeModel | null) =>
+    call<Fork>(`/api/forks/${forkId}/model`, { method: 'PATCH', json: { model } }),
   setForkNetwork: (forkId: string, network: ForkNetwork) =>
     call<Fork>(`/api/forks/${forkId}/network`, { method: 'PATCH', json: network }),
   codingCapacity: () => call<{ capacity: CodingCapacity | null }>('/api/coding-capacity'),

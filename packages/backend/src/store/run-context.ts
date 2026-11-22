@@ -79,7 +79,7 @@ export function buildRunContext(
 ): RunContext {
   const fork = store.readFork(forkId);
   const explorationId = store.forkExplorationId(forkId);
-  const model = store.explorationModel(explorationId);
+  const model = store.forkModel(forkId);
   const { coding, network } = store.fork(forkId);
   if (options.resume) return { model, coding, network, systemPrompt, history: null };
   const answered = fork.messages.filter((message) => !options.pendingIds.has(message.id));

@@ -147,6 +147,7 @@ const noteForkBody = z.object({ id: clientId, forkId: clientId, message: z.strin
 const answerForkBody = z.object({ forkId: clientId });
 const forkAwarenessBody = z.object({ awareness: z.enum(['aware', 'separate']) });
 const forkCodingBody = z.object({ coding: z.boolean() });
+const forkModelBody = z.object({ model: model.nullable() });
 const forkNetworkBody = z.object({
   hosts: z
     .array(z.string().refine(isHostPort, 'Write each host as name:port, such as github.com:443.'))
@@ -350,6 +351,11 @@ export function createApp(options: AppOptions) {
   app.patch('/api/forks/:id/coding', async (context) => {
     const { coding } = forkCodingBody.parse(await context.req.json());
     return context.json(store.setForkCoding(context.req.param('id'), coding));
+  });
+
+  app.patch('/api/forks/:id/model', async (context) => {
+    const { model } = forkModelBody.parse(await context.req.json());
+    return context.json(store.setForkModel(context.req.param('id'), model));
   });
 
   app.patch('/api/forks/:id/network', async (context) => {

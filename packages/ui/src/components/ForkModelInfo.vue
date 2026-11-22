@@ -1,14 +1,18 @@
 <script setup lang="ts">
+import { claudeModels, type ClaudeModel } from '@shared/models';
 import type { CapabilitiesReport, Fork, ForkRun } from '@shared/types';
 import { computed, ref, watch } from 'vue';
 import { api } from '../api';
+import { modelLabels } from '../lib/models';
 import CopyableId from './CopyableId.vue';
 import ForkCredentialSettings from './ForkCredentialSettings.vue';
 import ForkNetworkSettings from './ForkNetworkSettings.vue';
 
-// The fork's model and how full its context is, from the runner's last turn, whether the fork
-// hears about the chat's other forks, and whether Claude may code in it.
-const props = defineProps<{ fork: Fork; run: ForkRun | undefined }>();
+// The model the fork runs on, and the one and the context use of the runner's last turn, whether
+// the fork hears about the chat's other forks, and whether Claude may code in it.
+const props = defineProps<{ fork: Fork; run: ForkRun | undefined; chatModel: ClaudeModel }>();
+
+const followsChat = '';
 
 const saving = ref(false);
 
@@ -30,6 +34,10 @@ async function save(change: () => Promise<unknown>) {
 const setAware = (aware: boolean) =>
   save(() => api.setForkAwareness(props.fork.id, aware ? 'aware' : 'separate'));
 const setCoding = (coding: boolean) => save(() => api.setForkCoding(props.fork.id, coding));
+const setModel = (choice: string) =>
+  save(() =>
+    api.setForkModel(props.fork.id, claudeModels.find((model) => model === choice) ?? null),
+  );
 
 const report = ref<CapabilitiesReport | null>(null);
 watch(
@@ -66,7 +74,22 @@ async function restartContainer() {
   <section class="fork-model" aria-label="This fork">
     <h2>This fork</h2>
     <CopyableId class="fork-id" label="Fork ID" :id="fork.id" />
-    <p>Model: {{ run?.model ?? 'not known yet' }}</p>
+    <label>
+      Model:
+      <select
+        :value="fork.model ?? followsChat"
+        :disabled="saving"
+        aria-label="Model of this fork"
+        @change="setModel(($event.target as HTMLSelectElement).value)"
+      >
+        <option :value="followsChat">The chat's ({{ modelLabels[chatModel] }})</option>
+        <option v-for="model in claudeModels" :key="model" :value="model">
+          {{ modelLabels[model] }}
+        </option>
+      </select>
+    </label>
+    <p class="hint">A new model takes effect from your next message.</p>
+    <p>Last turn: {{ run?.model ?? 'none yet' }}</p>
     <p v-if="run && run.contextTokens !== null">
       Context: {{ run.contextTokens.toLocaleString() }} tokens<template v-if="run.contextWindow">
         of {{ run.contextWindow.toLocaleString() }} ({{ Math.round((share ?? 0) * 100) }}%)

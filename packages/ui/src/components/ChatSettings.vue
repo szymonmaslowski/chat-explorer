@@ -48,7 +48,13 @@ async function setDefaultPage(explorationId: string, defaultPage: ChatDefaultPag
       </label>
       <p v-if="failed" class="error" role="alert">Could not save the setting.</p>
     </section>
-    <ForkModelInfo v-if="fork" class="card" :fork="fork" :run="run" />
+    <ForkModelInfo
+      v-if="fork"
+      class="card"
+      :fork="fork"
+      :run="run"
+      :chat-model="exploration.model"
+    />
     <section class="card device" aria-label="This device">
       <h2>This device</h2>
       <p class="muted">

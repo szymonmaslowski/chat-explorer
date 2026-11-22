@@ -432,4 +432,8 @@ export const migrations = [
   ALTER TABLE reply_drafts ADD COLUMN board_column_choice TEXT;
   ALTER TABLE submissions ADD COLUMN board_column_choice TEXT;
   `,
+  `
+  -- The model the runner answers the fork with; null follows the chat's model.
+  ALTER TABLE forks ADD COLUMN model TEXT;
+  `,
 ];

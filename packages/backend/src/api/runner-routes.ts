@@ -164,6 +164,7 @@ export function registerRunnerRoutes(app: Hono, options: RunnerRoutesOptions) {
       context.req.raw.signal,
     );
     const { coding, network } = store.fork(forkId);
+    const model = store.forkModel(forkId);
     const restart = runs.takeRestart(forkId, leaseId);
     if (!input) {
       return context.json<RunInput>({
@@ -172,11 +173,12 @@ export function registerRunnerRoutes(app: Hono, options: RunnerRoutesOptions) {
         stop: false,
         restart,
         coding,
+        model,
         network,
       });
     }
     const others = input.messages.length > 0 ? runs.othersUpdate(forkId, leaseId) : null;
-    return context.json<RunInput>({ ...input, others, restart, coding, network });
+    return context.json<RunInput>({ ...input, others, restart, coding, model, network });
   });
 
   app.post('/api/runner/forks/:forkId/context', async (context) => {

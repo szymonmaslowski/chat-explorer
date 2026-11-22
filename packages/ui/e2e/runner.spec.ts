@@ -74,7 +74,7 @@ test('shows what the runner does in a fork, its usage, and stops it on request',
   ]);
   await page.getByRole('button', { name: 'Chat settings' }).click();
   const forkSettings = page.getByRole('region', { name: 'This fork' });
-  await expect(forkSettings).toContainText('Model: claude-sonnet-5-5');
+  await expect(forkSettings).toContainText('Last turn: claude-sonnet-5-5');
   await expect(forkSettings).toContainText('Context: 84,000 tokens of 1,000,000 (8%)');
   await page.getByRole('button', { name: 'Chat settings' }).click();
 

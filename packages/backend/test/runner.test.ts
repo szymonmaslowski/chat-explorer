@@ -271,6 +271,30 @@ describe('the runner', () => {
     await runner.stop();
   });
 
+  it('starts the engine again on the model the fork picks, resuming the session', async () => {
+    const { runner, engineRuns, store, explorationId, mainForkId } = setup();
+    runner.start();
+    store.submit(explorationId, mainForkId, 'First');
+    await until(() => engineRuns[0]?.sent.length === 1);
+    expect(engineRuns[0]!.spec.model).toBe('sonnet');
+    engineRuns[0]!.emit({ type: 'session', sessionId, model: 'claude-sonnet-5-5' });
+    engineRuns[0]!.emit({
+      type: 'turn-finished',
+      answer: 'One.',
+      failed: false,
+      contextWindow: 1e6,
+    });
+    await until(() => store.snapshot(explorationId).forkRuns[0]?.status === 'idle');
+
+    store.setForkModel(mainForkId, 'opus');
+    store.submit(explorationId, mainForkId, 'Think harder');
+    await until(() => engineRuns[1]?.sent.length === 1);
+    expect(engineRuns[0]!.stopped).toBe(true);
+    expect(engineRuns[1]!.spec).toMatchObject({ model: 'opus', resume: true, sessionId });
+    expect(engineRuns[1]!.sent).toEqual(['Think harder']);
+    await runner.stop();
+  });
+
   it('replaces the container on request once no turn runs, resuming the session', async () => {
     const { runner, engineRuns, store, explorationId, mainForkId, runs } = setup({}, true);
     store.setForkCoding(mainForkId, true);
