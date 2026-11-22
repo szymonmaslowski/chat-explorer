@@ -307,14 +307,12 @@ const drafts = computed<Comment[]>((previous) =>
   ),
 );
 const reviewDrafts = computed(() =>
-  [...drafts.value]
-    .filter((draft) => draft.editBody === null)
-    .sort(
-      (left, right) =>
-        (pathIndex.value.get(left.messageId) ?? 0) - (pathIndex.value.get(right.messageId) ?? 0) ||
-        left.startOffset - right.startOffset ||
-        left.createdAt - right.createdAt,
-    ),
+  [...drafts.value].sort(
+    (left, right) =>
+      (pathIndex.value.get(left.messageId) ?? 0) - (pathIndex.value.get(right.messageId) ?? 0) ||
+      left.startOffset - right.startOffset ||
+      left.createdAt - right.createdAt,
+  ),
 );
 watch(
   () => reviewDrafts.value.length,

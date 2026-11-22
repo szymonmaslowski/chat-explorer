@@ -58,7 +58,8 @@ const fileCount = computed(() => files.readyIds.value.length);
 // Only the selected drafts go with Submit; the others wait for the next one.
 const selectedDrafts = computed(() => props.drafts.filter((draft) => draft.selected));
 const leftOutCount = computed(() => props.drafts.length - selectedDrafts.value.length);
-const beingEdited = computed(() => selectedDrafts.value.filter((draft) => draft.editBody !== null));
+// An edit under way blocks Submit, whether or not the draft is ticked.
+const beingEdited = computed(() => props.drafts.filter((draft) => draft.editBody !== null));
 const editingCount = computed(() => beingEdited.value.length);
 const readyDrafts = computed(() => selectedDrafts.value.filter((draft) => draft.editBody === null));
 const hasQuotedDrafts = computed(() => props.drafts.some((draft) => draft.quote !== ''));
@@ -202,11 +203,9 @@ watch(() => props.forkId, endHistoryWalk);
 
 // Any draft, ticked or left out, makes Submit show the whole submission for review first, so a
 // forgotten draft is not sent unseen. The review page then calls send.
-const listedDrafts = computed(() => props.drafts.filter((draft) => draft.editBody === null));
-
 function submit() {
   if (!canSubmit.value) return;
-  if (listedDrafts.value.length > 0) {
+  if (props.drafts.length > 0) {
     emit('review');
     return;
   }
