@@ -18,6 +18,7 @@ import NoteDeletionNotice from '../components/NoteDeletionNotice.vue';
 import ConversationMessage from '../components/ConversationMessage.vue';
 import QueuedSubmissionCard from '../components/QueuedSubmissionCard.vue';
 import ReplyBar from '../components/ReplyBar.vue';
+import SubmitReview from '../components/SubmitReview.vue';
 import SpeechPlayer from '../components/SpeechPlayer.vue';
 import ActivityGroup from '../components/ActivityGroup.vue';
 import AttentionDot from '../components/AttentionDot.vue';
@@ -257,9 +258,35 @@ const viewBookmarks = computed<Bookmark[]>((previous) => {
 });
 const bookmarksOpen = ref(false);
 const draftsOnly = ref(false);
+// Submit with drafts shows them for review in place of the conversation.
+const reviewing = ref(false);
+const replyBar = ref<InstanceType<typeof ReplyBar> | null>(null);
+let scrollBeforeReview = 0;
+function startReview() {
+  scrollBeforeReview = window.scrollY;
+  reviewing.value = true;
+  window.scrollTo(0, 0);
+}
+async function endReview(restoreScroll: boolean) {
+  reviewing.value = false;
+  if (!restoreScroll) return;
+  await nextTick();
+  window.scrollTo(0, scrollBeforeReview);
+}
+function confirmReview() {
+  replyBar.value?.send();
+  void endReview(false);
+}
+function jumpFromReview(comment: Comment) {
+  void endReview(false);
+  void router.push({ hash: `#c-${comment.id}` });
+}
 watch(
   () => fork.value?.id,
-  () => (draftsOnly.value = false),
+  () => {
+    draftsOnly.value = false;
+    reviewing.value = false;
+  },
 );
 // Every draft shows in drafts-only view, so the messages they are on come first.
 watch(draftsOnly, (only) => {
@@ -278,6 +305,22 @@ const drafts = computed<Comment[]>((previous) =>
     previous,
     viewComments.value.filter((comment) => comment.status === 'draft'),
   ),
+);
+const reviewDrafts = computed(() =>
+  [...drafts.value]
+    .filter((draft) => draft.editBody === null)
+    .sort(
+      (left, right) =>
+        (pathIndex.value.get(left.messageId) ?? 0) - (pathIndex.value.get(right.messageId) ?? 0) ||
+        left.startOffset - right.startOffset ||
+        left.createdAt - right.createdAt,
+    ),
+);
+watch(
+  () => reviewDrafts.value.length,
+  (count) => {
+    if (count === 0 && reviewing.value) void endReview(true);
+  },
 );
 // The layer places only the comments on messages the page shows: a card listed under a message
 // needs that message on the page when the card is made.
@@ -467,7 +510,17 @@ watch(
         No messages yet.<template v-if="!archived"> Write the first one below.</template>
       </p>
 
-      <div class="conversation">
+      <SubmitReview
+        v-if="reviewing"
+        :fork-id="fork.id"
+        :drafts="reviewDrafts"
+        :can-confirm="replyBar?.canSubmit ?? false"
+        @confirm="confirmReview"
+        @cancel="endReview(true)"
+        @jump="jumpFromReview"
+      />
+
+      <div v-show="!reviewing" class="conversation">
         <div v-if="hasOlder" ref="olderSentinel" class="older" role="status">
           <span class="spinner" aria-hidden="true" />
           Loading earlier messages…
@@ -548,20 +601,27 @@ watch(
         />
       </div>
 
-      <ForkRunStatus :fork-id="fork.id" :run="forkRun" :awaiting-answer="awaitingAnswer" />
-      <CodingRoomHint v-if="!archived" :fork="fork" :run="forkRun" />
+      <template v-if="!reviewing">
+        <ForkRunStatus :fork-id="fork.id" :run="forkRun" :awaiting-answer="awaitingAnswer" />
+        <CodingRoomHint v-if="!archived" :fork="fork" :run="forkRun" />
 
-      <QueuedSubmissionCard
-        v-for="submission in queuedSubmissions"
-        :key="submission.id"
-        :submission="submission"
-        :comment-count="commentCountOf(submission.id)"
-        :files="filesOfSubmission(submission.id)"
-      />
+        <QueuedSubmissionCard
+          v-for="submission in queuedSubmissions"
+          :key="submission.id"
+          :submission="submission"
+          :comment-count="commentCountOf(submission.id)"
+          :files="filesOfSubmission(submission.id)"
+        />
+      </template>
 
-      <div v-show="!dockHidden" class="dock" :data-dock="dockHidden ? undefined : ''">
+      <div
+        v-show="!dockHidden && !reviewing"
+        class="dock"
+        :data-dock="dockHidden || reviewing ? undefined : ''"
+      >
         <ReplyBar
           v-if="!archived"
+          ref="replyBar"
           :exploration-id="explorationId"
           :fork-id="fork.id"
           :drafts="drafts"
@@ -570,6 +630,7 @@ watch(
           :last-message-id="path.at(-1)?.id ?? null"
           :sent-texts="sentTexts"
           @submitted="onSubmitted"
+          @review="startReview"
           :drafts-only="draftsOnly"
           @show-drafts="commentLayer?.showDrafts()"
           @hide-drafts="commentLayer?.hideDrafts()"

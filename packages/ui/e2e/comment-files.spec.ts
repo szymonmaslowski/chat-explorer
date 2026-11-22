@@ -31,7 +31,7 @@ test('attaches files to a new comment and shows them on its card, also once sent
   await expect(fileLink(page, 'log.txt')).toBeVisible();
 
   await page.getByRole('button', { name: 'Submit' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Send' }).click();
+  await page.getByRole('button', { name: 'Confirm' }).click();
   await expect(page.locator('.comment-card.queued .files a')).toHaveText('log.txt');
 });
 

@@ -238,7 +238,7 @@ test('saves the reply box text as a general comment, sent with the next Submit',
   await expect(page.locator('.reply-bar .summary')).toHaveText('1 note, 1 comment');
 
   await page.getByRole('button', { name: 'Submit' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Send' }).click();
+  await page.getByRole('button', { name: 'Confirm' }).click();
   await expect(page.locator('.queued-submission')).toBeVisible();
   await page.goto(`/e/${explorationId}/notes`);
   await expect(page.locator('.note .description')).toContainText('Save this for later');
@@ -461,7 +461,7 @@ test('submits only the selected drafts, and selects the left-out one again after
   await expect(page.locator('.reply-bar .summary')).toHaveText('1 comment, 1 draft left out');
 
   await page.getByRole('button', { name: 'Submit' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Send' }).click();
+  await page.getByRole('button', { name: 'Confirm' }).click();
   await expect(page.locator('.queued-submission')).toBeVisible();
   await expect(include).toBeChecked();
   await expect(kept).not.toContainText('left out');
@@ -475,7 +475,7 @@ test('submits only the selected drafts, and selects the left-out one again after
   expect(question.text).not.toContain('Keep this');
 });
 
-test('asks before a message takes drafted comments along, and lets them be left out', async ({
+test('reviews the drafts with the message before sending, and lets them be left out', async ({
   page,
   request,
 }) => {
@@ -501,27 +501,30 @@ test('asks before a message takes drafted comments along, and lets them be left 
   await reply.fill('A general message');
   await expect(banner).toContainText('2 drafted comments will be sent with this message');
 
-  const dialog = page.getByRole('dialog');
+  const review = page.getByRole('region', { name: 'Review before sending' });
   await page.getByRole('button', { name: 'Submit' }).click();
-  await expect(dialog).toContainText('Forgotten one');
-  await expect(dialog).toContainText('Forgotten two');
-  await dialog.getByRole('button', { name: 'Cancel' }).click();
-  await expect(dialog).toHaveCount(0);
-  await expect(page.locator('.queued-submission')).toHaveCount(0);
+  await expect(review.locator('.comment-card')).toHaveCount(2);
+  await expect(review).toContainText('Forgotten one');
+  await expect(review).toContainText('Forgotten two');
+  // The message comes last, and the conversation and reply box give way to the review.
+  await expect(review.locator('.message-card')).toContainText('A general message');
+  await expect(page.locator('.message.assistant')).toBeHidden();
+  await expect(reply).toBeHidden();
+  await review.getByRole('button', { name: 'Cancel' }).click();
+  await expect(review).toHaveCount(0);
   await expect(reply).toHaveValue('A general message');
-  // Escape closes it too, and Send has the focus when it opens.
-  await page.getByRole('button', { name: 'Submit' }).click();
-  await expect(dialog.getByRole('button', { name: 'Send' })).toBeFocused();
-  await page.keyboard.press('Escape');
-  await expect(dialog).toHaveCount(0);
   await expect(page.locator('.queued-submission')).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Submit' }).click();
   const save = saved(page, '/comments/');
-  await dialog.getByRole('checkbox').nth(1).uncheck();
+  await review
+    .locator('.comment-card', { hasText: 'Forgotten two' })
+    .getByRole('checkbox', { name: 'Include in Submit' })
+    .uncheck();
   await save;
-  await expect(banner).toContainText('1 drafted comment will be sent');
-  await dialog.getByRole('button', { name: 'Send' }).click();
+  await expect(review).toContainText('1 comment, 1 left out');
+  await review.getByRole('button', { name: 'Confirm' }).click();
+  await expect(review).toHaveCount(0);
   await expect(page.locator('.queued-submission')).toBeVisible();
 
   await attachFakeSession(request, explorationId);
@@ -532,7 +535,7 @@ test('asks before a message takes drafted comments along, and lets them be left 
   expect(question.text).not.toContain('Forgotten two');
 });
 
-test('asks before drafts alone are sent, and not for a message with no drafts', async ({
+test('reviews drafts sent alone, and sends a message with no drafts at once', async ({
   page,
   request,
 }) => {
@@ -542,7 +545,7 @@ test('asks before drafts alone are sent, and not for a message with no drafts', 
   await page.goto(`/e/${explorationId}`);
   await page.getByPlaceholder('Reply to Claude').fill('Just a message');
   await page.getByRole('button', { name: 'Submit' }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Review before sending' })).toHaveCount(0);
   await expect(page.locator('.queued-submission')).toBeVisible();
   await page.locator('.queued-submission').getByRole('button', { name: 'Cancel' }).click();
   await page.getByPlaceholder('Reply to Claude').fill('');
@@ -559,10 +562,10 @@ test('asks before drafts alone are sent, and not for a message with no drafts', 
   });
   await page.reload();
   await page.getByRole('button', { name: 'Submit' }).click();
-  const dialog = page.getByRole('dialog');
-  await expect(dialog).toContainText('Send 1 drafted comment?');
-  await expect(dialog).toContainText('Only a draft');
-  await dialog.getByRole('button', { name: 'Send' }).click();
+  const review = page.getByRole('region', { name: 'Review before sending' });
+  await expect(review).toContainText('Only a draft');
+  await expect(review.locator('.message-card')).toHaveCount(0);
+  await review.getByRole('button', { name: 'Confirm' }).click();
   await expect(page.locator('.queued-submission')).toBeVisible();
 });
 

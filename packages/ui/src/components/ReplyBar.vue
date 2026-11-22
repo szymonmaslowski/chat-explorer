@@ -37,6 +37,7 @@ const emit = defineEmits<{
   hideDrafts: [];
   showOnlyDrafts: [];
   showText: [];
+  review: [];
 }>();
 
 const textarea = ref<HTMLTextAreaElement | null>(null);
@@ -199,52 +200,23 @@ let history = atDraft();
 const endHistoryWalk = () => (history = atDraft());
 watch(() => props.forkId, endHistoryWalk);
 
-// A message that takes drafted comments along asks first, since the drafts are easy to forget.
-const confirmDialog = ref<HTMLDialogElement>();
-const closeConfirm = () => confirmDialog.value?.close();
-// Any draft, ticked or left out, makes Submit ask; a left-out one can still be ticked there.
+// Any draft, ticked or left out, makes Submit show the whole submission for review first, so a
+// forgotten draft is not sent unseen. The review page then calls send.
 const listedDrafts = computed(() => props.drafts.filter((draft) => draft.editBody === null));
 const sendsDraftsWithMessage = computed(
   () => text.value.trim() !== '' && readyDrafts.value.length > 0,
-);
-const confirmTitle = computed(() => {
-  const ticked = readyDrafts.value.length;
-  const message = text.value.trim() !== '';
-  if (message && ticked) return `Send your message with ${plural(ticked, 'drafted comment')}?`;
-  if (ticked) return `Send ${plural(ticked, 'drafted comment')}?`;
-  return 'Send your message? All drafted comments are left out.';
-});
-const typeLabel = { inline: 'Comment', fork: 'Fork', note: 'Note' } as const;
-const excerpt = (draft: Comment) => {
-  const body = draft.body.replace(/\s+/g, ' ').trim();
-  return body.length > 120 ? `${body.slice(0, 120)}…` : body;
-};
-const toggleDraft = (draft: Comment) =>
-  outbox.add({
-    type: 'comment.update',
-    explorationId: props.explorationId,
-    commentId: draft.id,
-    changes: { selected: !draft.selected },
-  });
-// The drafts may be ticked off or removed from another page while the question is open.
-watch(
-  () => listedDrafts.value.length,
-  (count) => {
-    if (count === 0) closeConfirm();
-  },
 );
 
 function submit() {
   if (!canSubmit.value) return;
   if (listedDrafts.value.length > 0) {
-    confirmDialog.value?.showModal();
+    emit('review');
     return;
   }
   send();
 }
 
 function send() {
-  closeConfirm();
   if (!canSubmit.value) return;
   const { explorationId, forkId } = props;
   const submission = {
@@ -263,6 +235,8 @@ function send() {
   expanded.value = false;
   emit('submitted');
 }
+
+defineExpose({ send, canSubmit });
 
 function onPaste(event: ClipboardEvent) {
   const pasted = transferredFiles(event.clipboardData);
@@ -402,31 +376,6 @@ function onKeydown(event: KeyboardEvent) {
       </button>
       <button type="submit" class="primary" :disabled="!canSubmit">Submit</button>
     </div>
-    <dialog
-      ref="confirmDialog"
-      class="confirm"
-      aria-label="Send with drafted comments"
-      @click.self="closeConfirm"
-    >
-      <div class="confirm-body">
-        <p class="confirm-title">{{ confirmTitle }}</p>
-        <ul class="confirm-list">
-          <li v-for="draft in listedDrafts" :key="draft.id">
-            <label>
-              <input type="checkbox" :checked="draft.selected" @change="toggleDraft(draft)" />
-              <span class="confirm-kind">{{ typeLabel[draft.type] }}</span>
-              <span class="confirm-text">{{ excerpt(draft) }}</span>
-            </label>
-          </li>
-        </ul>
-        <div class="confirm-actions">
-          <button type="button" @click="closeConfirm">Cancel</button>
-          <button type="button" class="primary" autofocus :disabled="!canSubmit" @click="send">
-            Send
-          </button>
-        </div>
-      </div>
-    </dialog>
   </form>
 </template>
 
@@ -550,67 +499,5 @@ function onKeydown(event: KeyboardEvent) {
   border-radius: 6px;
   background: var(--surface);
   font-size: 0.85rem;
-}
-
-.confirm {
-  width: min(32rem, calc(100vw - 2rem));
-  max-height: 80vh;
-  padding: 0;
-  background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-}
-
-.confirm::backdrop {
-  background: rgb(0 0 0 / 0.35);
-}
-
-.confirm-body {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 0.75rem;
-  max-height: calc(80vh - 2px);
-  padding: 1rem;
-}
-
-.confirm-title {
-  margin: 0;
-  font-weight: 600;
-}
-
-.confirm-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  overflow-y: auto;
-  display: grid;
-  gap: 0.4rem;
-}
-
-.confirm-list label {
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  cursor: pointer;
-}
-
-.confirm-kind {
-  flex: none;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
-.confirm-text {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.confirm-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
 }
 </style>
