@@ -110,12 +110,18 @@ const commentChangesBody = z.object({
   selected: z.boolean().optional(),
   boardColumnChoice: z.string().min(1).nullable().optional(),
 });
-const replyDraftBody = z.object({ text: z.string(), newFork: z.boolean(), fileIds });
+const replyDraftBody = z.object({
+  text: z.string(),
+  newFork: z.boolean(),
+  boardColumnChoice: z.string().min(1).nullable().default(null),
+  fileIds,
+});
 const submitBody = z.object({
   id: clientId,
   forkId: z.string(),
   globalMessage: z.string().default(''),
   newFork: z.boolean().default(false),
+  boardColumnChoice: z.string().min(1).nullable().default(null),
   fileIds,
 });
 const forkNowBody = z.object({ id: clientId });
@@ -599,11 +605,16 @@ export function createApp(options: AppOptions) {
   });
 
   app.post('/api/explorations/:id/submit', async (context) => {
-    const { id, forkId, globalMessage, newFork, fileIds } = submitBody.parse(
+    const { id, forkId, globalMessage, newFork, boardColumnChoice, fileIds } = submitBody.parse(
       await context.req.json(),
     );
     return context.json(
-      store.submit(context.req.param('id'), forkId, globalMessage, { id, newFork, fileIds }),
+      store.submit(context.req.param('id'), forkId, globalMessage, {
+        id,
+        newFork,
+        boardColumnChoice,
+        fileIds,
+      }),
       201,
     );
   });

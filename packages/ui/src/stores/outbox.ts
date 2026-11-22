@@ -15,6 +15,7 @@ import { api, ApiError } from '../api';
 export interface ReplyDraftChange {
   text: string;
   newFork: boolean;
+  boardColumnChoice: string | null;
   fileIds: string[];
 }
 
@@ -23,6 +24,7 @@ export interface SubmissionChange {
   forkId: string;
   globalMessage: string;
   newFork: boolean;
+  boardColumnChoice: string | null;
   files: MessageFile[];
 }
 
@@ -293,13 +295,13 @@ function send(change: Change) {
     case 'reply-draft.save':
       return api.saveReplyDraft(change.forkId, change.draft, keepalive);
     case 'submit': {
-      const { id, forkId, globalMessage, newFork, files } = change.submission;
+      const { id, forkId, globalMessage, newFork, boardColumnChoice, files } = change.submission;
       const fileIds = files.map((file) => file.id);
       return api.submit(
         change.explorationId,
         forkId,
         globalMessage,
-        { id, newFork, fileIds },
+        { id, newFork, boardColumnChoice, fileIds },
         keepalive,
       );
     }

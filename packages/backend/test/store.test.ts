@@ -494,6 +494,7 @@ describe('submission queue', () => {
     expect(store.cancelSubmission(submission.id)).toEqual({
       globalMessage: 'global',
       newFork: false,
+      boardColumnChoice: null,
       files: [],
     });
     const snapshot = store.snapshot(explorationId);

@@ -206,6 +206,7 @@ export interface QueuedSubmission {
   forkId: string;
   globalMessage: string;
   newFork: boolean;
+  boardColumnChoice: string | null;
   createdAt: number;
 }
 
@@ -231,6 +232,8 @@ export interface ReplyDraft {
   forkId: string;
   text: string;
   newFork: boolean;
+  // Where the new fork goes on the board; null is its parent's column.
+  boardColumnChoice: string | null;
   files: MessageFile[];
   updatedAt: number;
 }

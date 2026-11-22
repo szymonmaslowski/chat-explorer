@@ -126,6 +126,7 @@ export interface ReplyDraftRow {
   exploration_id: string;
   text: string;
   new_fork: number;
+  board_column_choice: string | null;
   updated_at: number;
 }
 
@@ -212,6 +213,7 @@ export interface SubmissionRow {
   fork_id: string;
   global_message: string;
   new_fork: number;
+  board_column_choice: string | null;
   status: 'queued' | 'delivered';
   created_at: number;
   delivered_at: number | null;
@@ -312,6 +314,7 @@ export const toQueuedSubmission = (row: SubmissionRow): QueuedSubmission => ({
   forkId: row.fork_id,
   globalMessage: row.global_message,
   newFork: row.new_fork === 1,
+  boardColumnChoice: row.board_column_choice,
   createdAt: row.created_at,
 });
 

@@ -129,7 +129,7 @@ export const api = {
     explorationId: string,
     forkId: string,
     globalMessage: string,
-    options: { id: string; newFork: boolean; fileIds: string[] },
+    options: { id: string; newFork: boolean; boardColumnChoice: string | null; fileIds: string[] },
     keepalive = false,
   ) =>
     call<QueuedSubmission>(`/api/explorations/${explorationId}/submit`, {
@@ -174,10 +174,12 @@ export const api = {
       keepalive,
     }),
   cancelSubmission: (submissionId: string, keepalive = false) =>
-    call<{ globalMessage: string; newFork: boolean; files: MessageFile[] }>(
-      `/api/submissions/${submissionId}`,
-      { method: 'DELETE', keepalive },
-    ),
+    call<{
+      globalMessage: string;
+      newFork: boolean;
+      boardColumnChoice: string | null;
+      files: MessageFile[];
+    }>(`/api/submissions/${submissionId}`, { method: 'DELETE', keepalive }),
   createComment: (explorationId: string, comment: NewComment, keepalive = false) =>
     call<Comment>(`/api/explorations/${explorationId}/comments`, { json: comment, keepalive }),
   updateComment: (commentId: string, changes: CommentChanges, keepalive = false) =>
@@ -223,7 +225,12 @@ export const api = {
   replyDraft: (forkId: string) => call<ReplyDraft>(`/api/forks/${forkId}/reply-draft`),
   saveReplyDraft: (
     forkId: string,
-    draft: { text: string; newFork: boolean; fileIds: string[] },
+    draft: {
+      text: string;
+      newFork: boolean;
+      boardColumnChoice: string | null;
+      fileIds: string[];
+    },
     keepalive = false,
   ) =>
     call<ReplyDraft>(`/api/forks/${forkId}/reply-draft`, {

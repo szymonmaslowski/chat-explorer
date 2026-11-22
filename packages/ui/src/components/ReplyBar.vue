@@ -12,6 +12,7 @@ import { transferredFiles } from '../lib/transferred-files';
 import { replyFilesOwner, restoreFileDrafts, useFileDrafts } from '../stores/file-drafts';
 import { newId, outbox } from '../stores/outbox';
 import { replyDrafts } from '../stores/reply-drafts';
+import BoardColumnPicker from './BoardColumnPicker.vue';
 import AttachButton from './AttachButton.vue';
 import DictationButton from './DictationButton.vue';
 import DraftsMenu from './DraftsMenu.vue';
@@ -52,6 +53,10 @@ const text = computed({
 const newFork = computed({
   get: () => replyDrafts.newFork(props.forkId),
   set: (value: boolean) => replyDrafts.setNewFork(props.forkId, value),
+});
+const boardChoice = computed({
+  get: () => replyDrafts.boardChoice(props.forkId),
+  set: (value: string | null) => replyDrafts.setBoardChoice(props.forkId, value),
 });
 const insertDictation = (dictated: string) => insertAtCursor(textarea.value, text, dictated);
 const files = useFileDrafts(() => replyFilesOwner(props.forkId));
@@ -113,10 +118,16 @@ const canSubmit = computed(
 
 // The box as the daemon last saw it, per fork, so only real changes are sent.
 const lastSaved = new Map<string, string>();
-const emptyDraft = JSON.stringify({ text: '', newFork: false, fileIds: [] });
+const emptyDraft = JSON.stringify({
+  text: '',
+  newFork: false,
+  boardColumnChoice: null,
+  fileIds: [],
+});
 const currentDraft = () => ({
   text: text.value,
   newFork: newFork.value,
+  boardColumnChoice: newFork.value ? boardChoice.value : null,
   fileIds: files.readyIds.value,
 });
 let pending: { forkId: string; draft: ReturnType<typeof currentDraft> } | null = null;
@@ -130,6 +141,7 @@ const autosave = useAutosave(() => {
 function applyDraft(draft: ReplyDraft) {
   text.value = draft.text;
   newFork.value = draft.newFork;
+  boardChoice.value = draft.boardColumnChoice;
   files.clear();
   restoreFileDrafts(replyFilesOwner(draft.forkId), draft.files);
   lastSaved.set(
@@ -137,6 +149,7 @@ function applyDraft(draft: ReplyDraft) {
     JSON.stringify({
       text: draft.text,
       newFork: draft.newFork,
+      boardColumnChoice: draft.boardColumnChoice,
       fileIds: draft.files.map((file) => file.id),
     }),
   );
@@ -172,6 +185,7 @@ function applyIfChanged(draft: ReplyDraft) {
   const json = JSON.stringify({
     text: draft.text,
     newFork: draft.newFork,
+    boardColumnChoice: draft.boardColumnChoice,
     fileIds: draft.files.map((file) => file.id),
   });
   if (draft.forkId !== props.forkId || json === (lastSaved.get(draft.forkId) ?? emptyDraft)) return;
@@ -220,6 +234,7 @@ function send() {
     forkId,
     globalMessage: text.value,
     newFork: newFork.value,
+    boardColumnChoice: newFork.value ? boardChoice.value : null,
     files: files.drafts.value.flatMap((draft) => (draft.file ? [draft.file] : [])),
   };
   autosave.finish(() => outbox.add({ type: 'submit', explorationId, submission }));
@@ -227,6 +242,7 @@ function send() {
   text.value = '';
   endHistoryWalk();
   newFork.value = false;
+  boardChoice.value = null;
   files.clear();
   expanded.value = false;
   emit('submitted');
@@ -366,6 +382,12 @@ function onKeydown(event: KeyboardEvent) {
       </button>
       <button type="submit" class="primary" :disabled="!canSubmit">Submit</button>
     </div>
+    <BoardColumnPicker
+      v-if="newFork"
+      v-model="boardChoice"
+      :exploration-id="explorationId"
+      :parent-fork-id="forkId"
+    />
   </form>
 </template>
 

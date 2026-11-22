@@ -93,6 +93,7 @@ describe('reply drafts', () => {
       forkId: mainForkId,
       text: '',
       newFork: false,
+      boardColumnChoice: null,
       files: [],
       updatedAt: 0,
     });

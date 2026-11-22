@@ -427,4 +427,9 @@ export const migrations = [
   -- 'new' (a column made when the fork is), or a column id.
   ALTER TABLE comments ADD COLUMN board_column_choice TEXT;
   `,
+  `
+  -- The same choice for a fork started from the reply box: kept in its draft, then in its submission.
+  ALTER TABLE reply_drafts ADD COLUMN board_column_choice TEXT;
+  ALTER TABLE submissions ADD COLUMN board_column_choice TEXT;
+  `,
 ];

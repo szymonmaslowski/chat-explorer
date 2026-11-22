@@ -57,7 +57,7 @@ describe('outbox', () => {
       type: 'reply-draft.save',
       explorationId,
       forkId: 'f',
-      draft: { text: 'x', newFork: false, fileIds: [] },
+      draft: { text: 'x', newFork: false, boardColumnChoice: null, fileIds: [] },
     });
     await outbox.flush();
     expect(requests.map(({ call }) => call)).toEqual(['createComment', 'saveReplyDraft']);
@@ -112,7 +112,7 @@ describe('outbox', () => {
       type: 'reply-draft.save',
       explorationId,
       forkId: 'f',
-      draft: { text: 'x', newFork: false, fileIds: [] },
+      draft: { text: 'x', newFork: false, boardColumnChoice: null, fileIds: [] },
     });
     await outbox.flush();
     outbox.add({ type: 'comment.create', explorationId, comment });
@@ -140,7 +140,7 @@ describe('outbox', () => {
       type: 'reply-draft.save',
       explorationId,
       forkId: 'f',
-      draft: { text: 'x', newFork: false, fileIds: [] },
+      draft: { text: 'x', newFork: false, boardColumnChoice: null, fileIds: [] },
     });
     await outbox.flush();
     outbox.add({ type: 'comment.create', explorationId, comment });
@@ -148,7 +148,14 @@ describe('outbox', () => {
     outbox.add({
       type: 'submit',
       explorationId,
-      submission: { id: 's000000001', forkId: 'f', globalMessage: 'Hi', newFork: false, files: [] },
+      submission: {
+        id: 's000000001',
+        forkId: 'f',
+        globalMessage: 'Hi',
+        newFork: false,
+        boardColumnChoice: null,
+        files: [],
+      },
     });
     outbox.add({ type: 'submission.cancel', explorationId, submissionId: 's000000001' });
     expect(outbox.changes.value.map(({ type }) => type)).toEqual(['reply-draft.save']);

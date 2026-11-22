@@ -207,6 +207,45 @@ describe('a fork comment that picks a column', () => {
   });
 });
 
+describe('a new fork from the reply box that picks a column', () => {
+  function forkFromReply(context: ReturnType<typeof setup>, choice: string | null) {
+    const { store, explorationId, mainForkId } = context;
+    store.saveReplyDraft(mainForkId, {
+      text: 'Try this',
+      newFork: true,
+      boardColumnChoice: choice,
+      fileIds: [],
+    });
+    expect(store.replyDraft(mainForkId).boardColumnChoice).toBe(choice);
+    const submission = store.submit(explorationId, mainForkId, 'Try this', {
+      newFork: true,
+      boardColumnChoice: choice,
+    });
+    expect(submission.boardColumnChoice).toBe(choice);
+    store.deliverQueued(explorationId);
+    return store.pendingForks(explorationId).at(-1)!.forkId;
+  }
+
+  it('puts the fork in the column it names', () => {
+    const context = setup(0);
+    context.store.addBoardColumn(context.explorationId, 'system');
+    const [system] = context.store.snapshot(context.explorationId).exploration.boardColumns;
+    const created = forkFromReply(context, system!.id);
+    expect(column(context, system!.id)).toEqual([created]);
+  });
+
+  it('makes a column for "new", and ignores the choice when no fork is started', () => {
+    const context = setup(0);
+    const created = forkFromReply(context, 'new');
+    const [made] = context.store.snapshot(context.explorationId).exploration.boardColumns;
+    expect(column(context, made!.id)).toEqual([created]);
+    const plain = context.store.submit(context.explorationId, context.mainForkId, 'Carry on', {
+      boardColumnChoice: 'new',
+    });
+    expect(plain.boardColumnChoice).toBeNull();
+  });
+});
+
 describe('arrangeBoard, as Claude uses it', () => {
   it('works with column names and puts a moved fork last unless told otherwise', () => {
     const context = setup(3);

@@ -481,7 +481,7 @@ export function applyChange(state: ExplorationState, change: Change) {
     case 'reply-draft.save':
       break;
     case 'submit': {
-      const { id, forkId, globalMessage, newFork, files } = change.submission;
+      const { id, forkId, globalMessage, newFork, boardColumnChoice, files } = change.submission;
       const allDrafts = [...state.comments.values()].filter(
         (comment) => comment.viewForkId === forkId && comment.status === 'draft',
       );
@@ -509,6 +509,7 @@ export function applyChange(state: ExplorationState, change: Change) {
           forkId,
           globalMessage: globalMessage.trim(),
           newFork,
+          boardColumnChoice: newFork ? boardColumnChoice : null,
           createdAt: now,
         });
       }
@@ -523,6 +524,7 @@ export function applyChange(state: ExplorationState, change: Change) {
         forkId,
         globalMessage: '',
         newFork: false,
+        boardColumnChoice: null,
         createdAt: now,
       });
       const comment = state.comments.get(commentId);
@@ -551,6 +553,7 @@ export function applyChange(state: ExplorationState, change: Change) {
         forkId,
         globalMessage: note ? noteForkMessage(note, message) : message.trim(),
         newFork: false,
+        boardColumnChoice: null,
         createdAt: now,
       });
       break;

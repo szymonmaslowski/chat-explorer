@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { defaultGroupName } from '@shared/notes';
 import type { CommentType } from '@shared/types';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useAutosave } from '../composables/useAutosave';
@@ -14,6 +13,7 @@ import { newId, outbox } from '../stores/outbox';
 import AttachButton from './AttachButton.vue';
 import CommentTypePicker from './CommentTypePicker.vue';
 import BoardColumnPicker from './BoardColumnPicker.vue';
+import NoteGroupPicker from './NoteGroupPicker.vue';
 import DictationButton from './DictationButton.vue';
 import ExpandButton from './ExpandButton.vue';
 import FileDraftList from './FileDraftList.vue';
@@ -30,24 +30,15 @@ const emit = defineEmits<{
   close: [savedCommentId: string | null];
 }>();
 
-const newGroupChoice = '';
-
 const body = ref('');
 const type = ref<CommentType>('inline');
 const groups = computed(() => sortedGroups(openExploration(props.explorationId).noteGroups));
-const newGroupName = computed(() => defaultGroupName(groups.value.map((group) => group.name)));
 // Undefined until the reader picks a group, which means the first one. Null asks for a new group,
 // made on Submit, so a comment never sent leaves no empty group behind.
 const chosenGroupId = ref<string | null | undefined>(undefined);
 const noteGroupId = computed(() =>
   chosenGroupId.value === undefined ? (groups.value[0]?.id ?? null) : chosenGroupId.value,
 );
-const pickedGroup = computed({
-  get: () => noteGroupId.value ?? newGroupChoice,
-  set: (choice: string) => {
-    chosenGroupId.value = choice === newGroupChoice ? null : choice;
-  },
-});
 // Where the fork goes on the board, when this comment starts one. Null: its parent's column.
 const boardColumnChoice = ref<string | null>(null);
 const parentForkId = computed(
@@ -208,12 +199,12 @@ function onKeydown(event: KeyboardEvent) {
       :exploration-id="explorationId"
       :parent-fork-id="parentForkId"
     />
-    <div v-if="type === 'note'" class="note-group">
-      <select v-model="pickedGroup" aria-label="Note group">
-        <option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }}</option>
-        <option :value="newGroupChoice">{{ newGroupName }} (new)</option>
-      </select>
-    </div>
+    <NoteGroupPicker
+      v-if="type === 'note'"
+      :exploration-id="explorationId"
+      :model-value="noteGroupId"
+      @update:model-value="chosenGroupId = $event"
+    />
   </div>
 </template>
 
@@ -276,10 +267,6 @@ function onKeydown(event: KeyboardEvent) {
 }
 
 .attachments {
-  margin-top: 0.4rem;
-}
-
-.note-group {
   margin-top: 0.4rem;
 }
 </style>

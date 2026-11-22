@@ -1256,9 +1256,15 @@ export class ChatStore {
     explorationId: string,
     forkId: string,
     globalMessage: string,
-    options: { id?: string; newFork?: boolean; fileIds?: string[] } = {},
+    options: {
+      id?: string;
+      newFork?: boolean;
+      boardColumnChoice?: string | null;
+      fileIds?: string[];
+    } = {},
   ) {
     const { newFork = false, fileIds = [] } = options;
+    const boardColumnChoice = newFork ? (options.boardColumnChoice ?? null) : null;
     const existing = options.id
       ? this.existingRow<SubmissionRow>('submissions', options.id, explorationId)
       : null;
@@ -1289,7 +1295,7 @@ export class ChatStore {
     const id = options.id ?? newId();
     const noteEvents = this.db.transaction(() => {
       this.insertSubmission(
-        { id, explorationId, forkId, message, newFork, delivered: !forClaude },
+        { id, explorationId, forkId, message, newFork, boardColumnChoice, delivered: !forClaude },
         claudeDrafts,
       );
       for (const file of files) {
@@ -1634,6 +1640,7 @@ export class ChatStore {
     return {
       globalMessage: row.global_message,
       newFork: row.new_fork === 1,
+      boardColumnChoice: row.board_column_choice,
       files: files.map((file) => ({ ...file, submissionId: null })),
     };
   }
@@ -1661,10 +1668,16 @@ export class ChatStore {
           'SELECT * FROM comments WHERE submission_id = ? ORDER BY created_at, rowid',
           submission.id,
         );
-        const { fork, message } = this.createForkFromReply(
+        const { fork, message, columnCreated } = this.createForkFromReply(
           submission,
           comments.filter(goesIntoReply),
         );
+        if (columnCreated) {
+          addEvent({
+            type: 'exploration.updated',
+            exploration: toExploration(this.requireExplorationRow(fork.exploration_id)),
+          });
+        }
         forkComments.push(...comments.filter(startsAFork));
         this.db.run(
           'UPDATE files SET message_id = ? WHERE submission_id = ?',
@@ -2000,11 +2013,14 @@ export class ChatStore {
     const row = this.db.get<ReplyDraftRow>('SELECT * FROM reply_drafts WHERE fork_id = ?', forkId);
     if (row) return this.toReplyDraft(row);
     this.requireForkRow(forkId);
-    return { forkId, text: '', newFork: false, files: [], updatedAt: 0 };
+    return { forkId, text: '', newFork: false, boardColumnChoice: null, files: [], updatedAt: 0 };
   }
 
   // An empty draft is no draft: its row goes, so a fork never keeps a blank one around.
-  saveReplyDraft(forkId: string, input: { text: string; newFork: boolean; fileIds: string[] }) {
+  saveReplyDraft(
+    forkId: string,
+    input: { text: string; newFork: boolean; boardColumnChoice?: string | null; fileIds: string[] },
+  ) {
     const fork = this.requireForkRow(forkId);
     this.requireExplorationRow(fork.exploration_id);
     const files = input.fileIds.map((fileId) => this.requireDraftFile(fileId));
@@ -2018,14 +2034,17 @@ export class ChatStore {
         return;
       }
       this.db.run(
-        `INSERT INTO reply_drafts (fork_id, exploration_id, text, new_fork, updated_at)
-         VALUES (?, ?, ?, ?, ?)
+        `INSERT INTO reply_drafts
+           (fork_id, exploration_id, text, new_fork, board_column_choice, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT (fork_id) DO UPDATE SET
-           text = excluded.text, new_fork = excluded.new_fork, updated_at = excluded.updated_at`,
+           text = excluded.text, new_fork = excluded.new_fork,
+           board_column_choice = excluded.board_column_choice, updated_at = excluded.updated_at`,
         forkId,
         fork.exploration_id,
         input.text,
         input.newFork ? 1 : 0,
+        input.newFork ? (input.boardColumnChoice ?? null) : null,
         this.now(),
       );
     });
@@ -2671,6 +2690,7 @@ export class ChatStore {
       forkId: row.fork_id,
       text: row.text,
       newFork: row.new_fork === 1,
+      boardColumnChoice: row.board_column_choice,
       files: this.db
         .all<FileRow>(
           'SELECT * FROM files WHERE draft_fork_id = ? ORDER BY created_at, rowid',
@@ -2729,8 +2749,11 @@ export class ChatStore {
           '',
       ),
     });
+    const columnCreated = submission.board_column_choice
+      ? this.fileForkByChoice(forkRow, submission.board_column_choice)
+      : false;
     const { message, fork } = this.appendMessage(
-      forkRow,
+      this.requireForkRow(forkRow.id),
       'user',
       submission.global_message,
       'live',
@@ -2744,7 +2767,7 @@ export class ChatStore {
         comment.id,
       );
     }
-    return { message, fork };
+    return { message, fork, columnCreated };
   }
 
   // Joined fork comments start one fork. It branches after the latest message they quote, so all
@@ -2919,6 +2942,7 @@ export class ChatStore {
       forkId: string;
       message: string;
       newFork: boolean;
+      boardColumnChoice?: string | null;
       delivered: boolean;
     },
     drafts: CommentRow[],
@@ -2926,13 +2950,15 @@ export class ChatStore {
     const createdAt = this.now();
     this.db.run(
       `INSERT INTO submissions
-         (id, exploration_id, fork_id, global_message, new_fork, status, created_at, delivered_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, exploration_id, fork_id, global_message, new_fork, board_column_choice, status,
+          created_at, delivered_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       submission.id,
       submission.explorationId,
       submission.forkId,
       submission.message,
       submission.newFork ? 1 : 0,
+      submission.boardColumnChoice ?? null,
       submission.delivered ? 'delivered' : 'queued',
       createdAt,
       submission.delivered ? createdAt : null,

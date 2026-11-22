@@ -23,6 +23,7 @@ import { newId, outbox } from '../stores/outbox';
 import AttachButton from './AttachButton.vue';
 import BoardColumnPicker from './BoardColumnPicker.vue';
 import CommentTypePicker from './CommentTypePicker.vue';
+import NoteGroupPicker from './NoteGroupPicker.vue';
 import ConfirmButton from './ConfirmButton.vue';
 import DictationButton from './DictationButton.vue';
 import ExpandButton from './ExpandButton.vue';
@@ -62,8 +63,13 @@ function onEditorPaste(event: ClipboardEvent) {
 }
 // Like the files, a type picked while editing counts on Save.
 const editedType = ref<CommentType>(props.comment.type);
+// The group being picked while editing: a note group (null: a new one) or a board column choice.
+const editedNoteGroupId = ref<string | null>(props.comment.noteGroupId);
+const editedBoardChoice = ref<string | null>(props.comment.boardColumnChoice);
 function openEditedFiles() {
   editedType.value = props.comment.type;
+  editedNoteGroupId.value = props.comment.noteGroupId;
+  editedBoardChoice.value = props.comment.boardColumnChoice;
   editedFiles.clear();
   restoreFileDrafts(commentFilesOwner(props.comment.id), savedFiles.value);
 }
@@ -178,6 +184,12 @@ async function startEditing() {
   editor.value?.focus();
 }
 
+// A comment turned into a note starts in the first group, as when the type button does it.
+watch(editedType, (type) => {
+  if (type === 'note' && props.comment.type !== 'note' && editedNoteGroupId.value === null) {
+    editedNoteGroupId.value = firstNoteGroupId();
+  }
+});
 const canSave = computed(() => draftBody.value.trim() !== '' && !editedFiles.uploading.value);
 function save() {
   if (!canSave.value) return;
@@ -185,9 +197,15 @@ function save() {
   const changes: CommentChanges = { body: draftBody.value, editBody: null, fileIds };
   if (editedType.value !== props.comment.type) {
     changes.type = editedType.value;
-    if (editedType.value === 'note') {
-      changes.noteGroupId = props.comment.noteGroupId ?? firstNoteGroupId();
-    }
+  }
+  if (
+    editedType.value === 'note' &&
+    (props.comment.type !== 'note' || editedNoteGroupId.value !== props.comment.noteGroupId)
+  ) {
+    changes.noteGroupId = editedNoteGroupId.value;
+  }
+  if (editedType.value === 'fork' && editedBoardChoice.value !== props.comment.boardColumnChoice) {
+    changes.boardColumnChoice = editedBoardChoice.value;
   }
   autosave.finish(() => update(changes));
   editedFiles.clear();
@@ -202,6 +220,9 @@ function cancelEditing() {
 }
 
 // A general comment quotes nothing: it is about the whole conversation, and can become a note.
+const parentForkId = computed(
+  () => openExploration(props.comment.explorationId).messages.get(props.comment.messageId)?.forkId,
+);
 const isGeneral = computed(() => props.comment.quote === '');
 const draftedBy = computed(() => {
   const forkId = props.comment.draftedByForkId;
@@ -292,6 +313,17 @@ function onEditorKeydown(event: KeyboardEvent) {
           <button type="button" class="primary" :disabled="!canSave" @click="save">Save</button>
         </div>
       </div>
+      <BoardColumnPicker
+        v-if="editedType === 'fork' && !grouped"
+        v-model="editedBoardChoice"
+        :exploration-id="comment.explorationId"
+        :parent-fork-id="parentForkId"
+      />
+      <NoteGroupPicker
+        v-if="editedType === 'note'"
+        v-model="editedNoteGroupId"
+        :exploration-id="comment.explorationId"
+      />
     </template>
     <template v-else>
       <div class="top">
@@ -338,12 +370,16 @@ function onEditorKeydown(event: KeyboardEvent) {
       </button>
       <BoardColumnPicker
         v-if="isDraft && comment.type === 'fork' && !grouped && joinRole === null"
+        readonly
         :model-value="comment.boardColumnChoice"
         :exploration-id="comment.explorationId"
-        :parent-fork-id="
-          openExploration(comment.explorationId).messages.get(comment.messageId)?.forkId
-        "
-        @update:model-value="update({ boardColumnChoice: $event })"
+        :parent-fork-id="parentForkId"
+      />
+      <NoteGroupPicker
+        v-if="isDraft && comment.type === 'note'"
+        readonly
+        :model-value="comment.noteGroupId"
+        :exploration-id="comment.explorationId"
       />
       <p v-if="draftedBy" class="drafted-by muted">Drafted by the fork: {{ draftedBy }}</p>
       <p ref="bodyElement" class="body">{{ comment.body }}</p>

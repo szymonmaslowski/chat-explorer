@@ -24,7 +24,7 @@ test('a fork comment picks the board group of the fork it starts', async ({ page
   await selectAnswer(page);
   await page.getByRole('button', { name: 'Comment', exact: true }).click();
   await chooseCommentType(page, 'Fork');
-  const picker = page.getByLabel('Board group of the new fork');
+  const picker = page.getByLabel('Board group of the fork');
   // Its parent is the main fork, which is not on the board: the default is Ungrouped, first.
   await expect(picker).toHaveValue('ungrouped');
   await expect(picker.locator('option')).toHaveText(['Ungrouped', 'research', 'New group']);
@@ -36,7 +36,18 @@ test('a fork comment picks the board group of the fork it starts', async ({ page
   await page.reload();
   await clickQuotedText(page, 'Caching');
   const card = page.locator('.opened-comments .comment-card.draft');
-  await expect(card.getByLabel('Board group of the new fork')).toHaveValue(research.id);
+  // Outside edit mode the card only shows the group; editing brings the picker back.
+  await expect(card.getByLabel('Board group of the fork')).toHaveCount(0);
+  await expect(card.locator('.group-field .value')).toHaveText('research');
+  await card.getByRole('button', { name: 'Edit' }).click();
+  await expect(card.getByLabel('Board group of the fork')).toHaveValue(research.id);
+  await card.getByLabel('Board group of the fork').selectOption({ label: 'Ungrouped' });
+  await card.getByRole('button', { name: 'Save' }).click();
+  await expect(card.locator('.group-field .value')).toHaveText('Ungrouped');
+  await card.getByRole('button', { name: 'Edit' }).click();
+  await card.getByLabel('Board group of the fork').selectOption({ label: 'research' });
+  await card.getByRole('button', { name: 'Save' }).click();
+  await expect(card.locator('.group-field .value')).toHaveText('research');
 
   await page.getByRole('button', { name: 'Submit' }).click();
   await page.getByRole('button', { name: 'Confirm' }).click();
@@ -54,7 +65,7 @@ test('a fork comment can ask for a new group, made with the fork', async ({ page
   await selectAnswer(page);
   await page.getByRole('button', { name: 'Comment', exact: true }).click();
   await chooseCommentType(page, 'Fork');
-  await page.getByLabel('Board group of the new fork').selectOption({ label: 'New group' });
+  await page.getByLabel('Board group of the fork').selectOption({ label: 'New group' });
   await page.getByPlaceholder('Your comment').fill('A new direction');
   await page.keyboard.press('ControlOrMeta+Enter');
   // Nothing is made until Submit, so a comment never sent leaves no empty group behind.
@@ -71,4 +82,41 @@ test('a fork comment can ask for a new group, made with the fork', async ({ page
   await expect
     .poll(async () => (await columns()).map((column) => column.name))
     .toEqual(['Group 1']);
+});
+
+test('a reply sent to a new fork picks its board group', async ({ page, request }) => {
+  const explorationId = await answeredChat(request);
+  await request.post(`/api/explorations/${explorationId}/board-columns`, {
+    data: { name: 'research' },
+  });
+  const snapshot = async () =>
+    (await (await request.get(`/api/explorations/${explorationId}`)).json()) as Snapshot;
+  const research = (await snapshot()).exploration.boardColumns[0]!;
+
+  await page.goto(`/e/${explorationId}`);
+  const picker = page.getByLabel('Board group of the fork');
+  // The picker belongs to a new fork, so a plain reply has none.
+  await expect(picker).toHaveCount(0);
+  await page.getByPlaceholder('Reply to Claude').fill('What about Redis?');
+  await page.getByLabel('New fork').check();
+  await expect(picker).toHaveValue('ungrouped');
+  await picker.selectOption({ label: 'research' });
+
+  // The choice is kept with the draft, also after a reload.
+  await expect
+    .poll(async () => {
+      const draft = await request.get(`/api/forks/${(await snapshot()).forks[0]!.id}/reply-draft`);
+      return ((await draft.json()) as { boardColumnChoice: string | null }).boardColumnChoice;
+    })
+    .toBe(research.id);
+  await page.reload();
+  await expect(page.getByLabel('Board group of the fork')).toHaveValue(research.id);
+
+  await page.getByRole('button', { name: 'Submit' }).click();
+  await attachFakeSession(request, explorationId);
+  await deliverAndAnswer(request, explorationId, 'Redis is a fine cache.');
+  await detachFakeSession(request);
+  await expect
+    .poll(async () => (await snapshot()).forks.find((fork) => fork.parentForkId)?.boardColumnId)
+    .toBe(research.id);
 });

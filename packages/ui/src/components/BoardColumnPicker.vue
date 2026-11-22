@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { openExploration } from '../stores/exploration';
+import GroupField from './GroupField.vue';
 
 // Where the fork a comment starts goes on the board. Null is the default, the column its parent
 // is in; the rest are Ungrouped, each column, and a new column made with the fork.
@@ -9,6 +10,7 @@ const props = defineProps<{
   // The fork the new fork branches from.
   parentForkId: string | undefined;
   modelValue: string | null;
+  readonly?: boolean;
 }>();
 const emit = defineEmits<{ 'update:modelValue': [choice: string] }>();
 
@@ -21,41 +23,26 @@ const parentDefault = computed(() => {
     ? columnId
     : 'ungrouped';
 });
-const shown = computed({
-  get: () =>
-    props.modelValue !== null &&
-    (['ungrouped', 'new'].includes(props.modelValue) ||
-      columns.value.some((column) => column.id === props.modelValue))
-      ? props.modelValue
-      : parentDefault.value,
-  set: (choice: string) => emit('update:modelValue', choice),
-});
+const shown = computed(() =>
+  props.modelValue !== null &&
+  (['ungrouped', 'new'].includes(props.modelValue) ||
+    columns.value.some((column) => column.id === props.modelValue))
+    ? props.modelValue
+    : parentDefault.value,
+);
+const options = computed(() => [
+  { value: 'ungrouped', label: 'Ungrouped' },
+  ...columns.value.map((column) => ({ value: column.id, label: column.name })),
+  { value: 'new', label: 'New group' },
+]);
 </script>
 
 <template>
-  <label class="board-column-picker">
-    Group
-    <select v-model="shown" aria-label="Board group of the new fork" @click.stop>
-      <option value="ungrouped">Ungrouped</option>
-      <option v-for="column in columns" :key="column.id" :value="column.id">
-        {{ column.name }}
-      </option>
-      <option value="new">New group</option>
-    </select>
-  </label>
+  <GroupField
+    :options="options"
+    :model-value="shown"
+    :readonly="readonly"
+    label="Board group of the fork"
+    @update:model-value="emit('update:modelValue', $event)"
+  />
 </template>
-
-<style scoped>
-.board-column-picker {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-
-select {
-  flex: 1;
-  min-width: 0;
-}
-</style>

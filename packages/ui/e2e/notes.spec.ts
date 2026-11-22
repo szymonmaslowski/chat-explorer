@@ -689,3 +689,28 @@ test('adds a note inside a category from its own button, and folds from anywhere
   await page.getByRole('button', { name: 'Show category Fruit' }).click();
   await expect(topics(page)).toHaveText(['Bread', 'Milk', 'Apple', 'Pear']);
 });
+
+test('a note draft shows its group, and the group can change while editing', async ({
+  page,
+  request,
+}) => {
+  const explorationId = await answeredChat(request);
+  for (const name of ['Facts', 'Backlog']) {
+    await request.post(`/api/explorations/${explorationId}/note-groups`, { data: { name } });
+  }
+  await page.goto(`/e/${explorationId}`);
+  await selectAnswer(page);
+  await page.getByRole('button', { name: 'Comment', exact: true }).click();
+  await chooseCommentType(page.locator('.comment-editor'), 'Note');
+  await page.getByPlaceholder('Your comment').fill('Check this later');
+  await page.keyboard.press('ControlOrMeta+Enter');
+
+  const card = page.locator('.comment-card.note.draft');
+  await expect(card.getByLabel('Note group')).toHaveCount(0);
+  const shown = await card.locator('.group-field .value').innerText();
+  await card.getByRole('button', { name: 'Edit' }).click();
+  const other = shown.includes('Backlog') ? 'Facts' : 'Backlog';
+  await card.getByLabel('Note group').selectOption({ label: other });
+  await card.getByRole('button', { name: 'Save' }).click();
+  await expect(card.locator('.group-field .value')).toHaveText(other);
+});
