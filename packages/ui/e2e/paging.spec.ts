@@ -80,6 +80,41 @@ test('shows everything down from an old message a link points at', async ({ page
   await expect(page.getByText('Answer 40.')).toBeAttached();
 });
 
+test('a link inside the app to an old message settles just below the header', async ({
+  page,
+  request,
+}) => {
+  const { explorationId, messages } = await longChat(request, 40);
+  const oldAnswer = messages.find((message) => message.content.startsWith('Answer 3.'))!;
+  const { forks } = await (await request.get(`/api/explorations/${explorationId}`)).json();
+  await attachFakeSession(request, explorationId);
+  await request.post(`/api/explorations/${explorationId}/submit`, {
+    data: { forkId: forks[0].id, globalMessage: 'Where was it?' },
+  });
+  await deliverAndAnswer(
+    request,
+    explorationId,
+    `See [the old answer](/e/${explorationId}#m-${oldAnswer.id}).`,
+  );
+  await detachFakeSession(request);
+  await page.goto(`/e/${explorationId}`);
+  await page.getByRole('link', { name: 'the old answer' }).click();
+  const target = page.locator(`#m-${oldAnswer.id}`);
+  await expect(target).toBeInViewport();
+  const offset = async () => {
+    const top = await target.evaluate((element) => element.getBoundingClientRect().top);
+    const header = await page
+      .locator('[data-sticky-header]')
+      .evaluate((e) => e.getBoundingClientRect().bottom);
+    return top - header;
+  };
+  await expect.poll(offset).toBeGreaterThanOrEqual(0);
+  await expect.poll(offset).toBeLessThan(24);
+  await page.waitForTimeout(1_000);
+  expect(await offset()).toBeGreaterThanOrEqual(0);
+  expect(await offset()).toBeLessThan(24);
+});
+
 test('stays at the end of a long fork when a sent message arrives', async ({ page, request }) => {
   const { explorationId } = await longChat(request, 30);
   await page.goto(`/e/${explorationId}`);

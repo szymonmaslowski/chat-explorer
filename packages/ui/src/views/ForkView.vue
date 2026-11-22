@@ -402,7 +402,7 @@ watch(
     const target = document.getElementById(hash.slice(1));
     if (!target) return;
     handledHash = hash;
-    scrollToAndFlash(target);
+    scrollToAndFlash(target, 'below-header');
   },
   { flush: 'post', immediate: true },
 );

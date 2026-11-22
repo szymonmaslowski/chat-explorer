@@ -1,5 +1,6 @@
 import { withPrefix } from '@shared/ids';
 import { createRouter, createWebHistory } from 'vue-router';
+import { holdScroll } from './lib/hold-scroll';
 import { scrollTopAtStartOf } from './lib/reading-line';
 import { whenWindowReady } from './composables/useMessageWindow';
 import { whenActiveExplorationLoaded } from './stores/exploration';
@@ -71,23 +72,6 @@ router.beforeEach((to) => {
   if (unchanged) return;
   return { ...prefixed, replace: true };
 });
-
-const settleMs = 1_500;
-const readerScrollEvents = ['wheel', 'touchstart', 'keydown', 'mousedown'] as const;
-
-// Comment cards, images and fonts still change the page's height after the first render, so the
-// page keeps scrolling to its target until it settles or the reader scrolls.
-function holdScroll(target: () => number) {
-  const observer = new ResizeObserver(() => window.scrollTo({ top: target() }));
-  const release = () => {
-    observer.disconnect();
-    clearTimeout(timer);
-    for (const type of readerScrollEvents) window.removeEventListener(type, release);
-  };
-  const timer = setTimeout(release, settleMs);
-  for (const type of readerScrollEvents) window.addEventListener(type, release, { passive: true });
-  observer.observe(document.body);
-}
 
 // Links in answers and notes are plain anchors. One into the app opens in place: loading the page
 // again would build the whole chat a second time, while Safari keeps the first for going back.
