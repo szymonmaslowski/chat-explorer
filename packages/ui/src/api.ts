@@ -1,3 +1,4 @@
+import type { ActionRequest, RequestDecision } from '@shared/requests';
 import type { ClaudeModel } from '@shared/models';
 import type { ForkNetwork } from '@shared/network';
 import type {
@@ -156,6 +157,8 @@ export const api = {
     call<Fork>(`/api/forks/${forkId}/model`, { method: 'PATCH', json: { model } }),
   setForkNetwork: (forkId: string, network: ForkNetwork) =>
     call<Fork>(`/api/forks/${forkId}/network`, { method: 'PATCH', json: network }),
+  decideRequest: (requestId: string, decision: RequestDecision) =>
+    call<ActionRequest>(`/api/requests/${requestId}/decide`, { json: decision }),
   codingCapacity: () => call<{ capacity: CodingCapacity | null }>('/api/coding-capacity'),
   runnerCapabilities: () => call<{ report: CapabilitiesReport | null }>('/api/runner-capabilities'),
   restartContainer: (forkId: string) =>

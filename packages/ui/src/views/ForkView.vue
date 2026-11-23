@@ -17,6 +17,7 @@ import ForkArchiveControl from '../components/ForkArchiveControl.vue';
 import NoteDeletionNotice from '../components/NoteDeletionNotice.vue';
 import ConversationMessage from '../components/ConversationMessage.vue';
 import QueuedSubmissionCard from '../components/QueuedSubmissionCard.vue';
+import RequestCard from '../components/RequestCard.vue';
 import ReplyBar from '../components/ReplyBar.vue';
 import SubmitReview from '../components/SubmitReview.vue';
 import SpeechPlayer from '../components/SpeechPlayer.vue';
@@ -53,6 +54,8 @@ import { api } from '../api';
 import { newId, outbox } from '../stores/outbox';
 import { stopSpeech } from '../stores/speech';
 import { offline } from '../lib/online';
+import { endOfFork, requestPlacement } from '../lib/requests';
+import type { ActionRequest } from '@shared/requests';
 
 const props = defineProps<{ explorationId: string; forkId?: string }>();
 
@@ -181,6 +184,24 @@ const isWorking = ({ summary }: AttemptGroup) => {
   }
   return true;
 };
+// Claude's request cards, each after the message it asked under and that turn's answers.
+const requestsAt = computed(() =>
+  requestPlacement(
+    [...state.value.requests.values()].filter((request) => request.forkId === fork.value?.id),
+    path.value,
+  ),
+);
+const credentialNames = ref<string[]>([]);
+onMounted(() => {
+  api
+    .runnerCapabilities()
+    .then(({ report }) => {
+      credentialNames.value = report?.capabilities.credentials.map((each) => each.name) ?? [];
+    })
+    .catch(() => {});
+});
+const onDecided = (request: ActionRequest) =>
+  applyEvent(state.value, { type: 'request.updated', request });
 const loadSteps = (group: AttemptGroup) => void loadAttemptActivities(state.value, group.summary);
 const lastAnswer = computed(() => path.value.findLast((message) => message.role === 'assistant'));
 const lastUnread = computed(() => path.value.findLast(isUnread));
@@ -564,6 +585,17 @@ watch(
             :working="isWorking(group)"
             @load="loadSteps(group)"
           />
+          <RequestCard
+            v-for="request in requestsAt.get(message.id) ?? []"
+            :key="request.id"
+            :request="request"
+            :exploration-id="explorationId"
+            :forks="state.forks"
+            :note-groups="state.noteGroups"
+            :notes="state.notes"
+            :credential-names="credentialNames"
+            @decided="onDecided"
+          />
           <div :id="`comments-${message.id}`" class="message-comments" />
           <template v-for="child in forksAt(message.id)" :key="child.id">
             <RouterLink
@@ -600,6 +632,17 @@ watch(
       </div>
 
       <template v-if="!reviewing">
+        <RequestCard
+          v-for="request in requestsAt.get(endOfFork) ?? []"
+          :key="request.id"
+          :request="request"
+          :exploration-id="explorationId"
+          :forks="state.forks"
+          :note-groups="state.noteGroups"
+          :notes="state.notes"
+          :credential-names="credentialNames"
+          @decided="onDecided"
+        />
         <ForkRunStatus :fork-id="fork.id" :run="forkRun" :awaiting-answer="awaitingAnswer" />
         <CodingRoomHint v-if="!archived" :fork="fork" :run="forkRun" />
 

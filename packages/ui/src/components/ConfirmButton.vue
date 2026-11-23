@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref } from 'vue';
 
-defineProps<{ label: string; danger?: boolean }>();
+withDefaults(defineProps<{ label: string; danger?: boolean; armedLabel?: string }>(), {
+  armedLabel: 'Confirm',
+});
 const emit = defineEmits<{ confirm: [] }>();
 
 const confirmWindowMs = 3_000;
@@ -36,7 +38,7 @@ onBeforeUnmount(disarm);
 
 <template>
   <button ref="button" type="button" :class="{ armed, danger }" @click="onClick">
-    <template v-if="armed">Confirm</template>
+    <template v-if="armed">{{ armedLabel }}</template>
     <slot v-else>{{ label }}</slot>
   </button>
 </template>
