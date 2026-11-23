@@ -2,6 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { describe, expect, it } from 'vitest';
 import { createToolsApp } from '../src/api/tools-app.js';
+import { RequestStore } from '../src/store/requests.js';
 import { createTestApp, seedConversation } from './helpers.js';
 
 const testToolsPort = 5000;
@@ -65,12 +66,17 @@ describe('job tools', () => {
 
     await call(client, 'answer', { text: 'Noted, more soon.' });
     await call(client, 'set_fork_summary', { summary: 'Caching notes' });
+    // Notes wait for the user's approval, in one card; the group's id is known at once.
     const group = await call(client, 'add_note_group', { name: 'Facts' });
-    await call(client, 'add_notes', {
-      groupId: group.value.id,
+    expect(group.value).toMatchObject({ status: 'waiting for approval' });
+    const notes = await call(client, 'add_notes', {
+      groupId: group.value.groupId,
       notes: [{ topic: 'Redis' }],
       sourceMessageId: question.id,
     });
+    expect(notes.value.requestId).toBe(group.value.requestId);
+    expect(store.snapshot(explorationId).notes).toHaveLength(0);
+    new RequestStore(store).decide(group.value.requestId, { decision: 'approve' });
 
     const snapshot = store.snapshot(explorationId);
     expect(snapshot.messages.at(-1)).toMatchObject({
@@ -103,11 +109,14 @@ describe('job tools', () => {
   });
 
   it('files notes under a category, renames it and lists it', async () => {
-    const { connect, call, lease, store, explorationId } = await setup();
+    const { connect, call, lease, store, explorationId, mainForkId } = await setup();
+    // With notes autonomous they run at once, and the result has what the store answered.
+    store.setForkAutonomous(mainForkId, ['notes']);
     const client = await connect(lease.toolsToken);
     const group = await call(client, 'add_note_group', { name: 'Shopping' });
+    expect(group.value.status).toBe('done');
     await call(client, 'add_notes', {
-      groupId: group.value.id,
+      groupId: group.value.resultId,
       notes: [{ topic: 'Milk', category: 'Dairy' }, { topic: 'Salt' }],
     });
     const [milk] = store.snapshot(explorationId).notes.filter((note) => note.topic === 'Milk');
@@ -115,29 +124,31 @@ describe('job tools', () => {
     expect(
       (
         await call(client, 'rename_note_category', {
-          groupId: group.value.id,
+          groupId: group.value.resultId,
           from: 'Dairy',
           to: 'Nabiał',
         })
-      ).value.noteIds,
+      ).value.result.noteIds,
     ).toEqual([milk!.id]);
     expect(
-      (await call(client, 'update_note', { noteId: milk!.id, category: 'Dairy' })).value.category,
+      (await call(client, 'update_note', { noteId: milk!.id, category: 'Dairy' })).value.result
+        .category,
     ).toBe('Dairy');
     const listed = await call(client, 'list_notes', {});
     expect(
       listed.value.groups[0].notes.map((note: { category: string | null }) => note.category),
     ).toEqual(['Dairy', null]);
     const missing = await call(client, 'rename_note_category', {
-      groupId: group.value.id,
+      groupId: group.value.resultId,
       from: 'Bread',
       to: 'Bakery',
     });
-    expect(missing.isError).toBe(true);
+    expect(missing.value.status).toBe('failed');
   });
 
   it('reads and arranges the board of the job chat, and only that chat', async () => {
     const { connect, call, lease, store, explorationId, mainForkId } = await setup();
+    store.setForkAutonomous(mainForkId, ['board']);
     const client = await connect(lease.toolsToken);
     expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(
       expect.arrayContaining(['list_board', 'arrange_board']),
@@ -148,7 +159,7 @@ describe('job tools', () => {
       column: 'system',
       name: 'platform',
     });
-    expect(renamed.value.columns.map((column: { name: string }) => column.name)).toEqual([
+    expect(renamed.value.result.columns.map((column: { name: string }) => column.name)).toEqual([
       'platform',
     ]);
     expect((await call(client, 'list_board')).value).toEqual({
@@ -163,7 +174,7 @@ describe('job tools', () => {
       forkId: mainForkId,
       column: 'platform',
     });
-    expect(mainFork).toMatchObject({ isError: true });
+    expect(mainFork.value.status).toBe('failed');
     const other = seedConversation(store);
     const foreign = await call(client, 'arrange_board', {
       action: 'move_fork',
@@ -172,7 +183,7 @@ describe('job tools', () => {
     });
     expect(foreign.isError).toBe(true);
     const unknown = await call(client, 'arrange_board', { action: 'delete_column', column: 'x' });
-    expect(unknown.value).toMatch(/no column/);
+    expect(unknown.value.detail).toMatch(/no column/);
   });
 
   it('lists notes as an index, reads them by id and finds them by their words', async () => {

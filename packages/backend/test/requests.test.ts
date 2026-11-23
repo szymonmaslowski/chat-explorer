@@ -59,7 +59,7 @@ describe('action requests', () => {
     const { store, requests, mainForkId } = setup();
     const action = forkAction({ coding: true, awareness: 'separate', model: 'opus' });
     const { requestId, forkId } = requests.request(mainForkId, 'fork', action);
-    const decided = requests.decide(requestId, { decision: 'approve' });
+    const decided = requests.decide(requestId!, { decision: 'approve' });
     expect(decided.status).toBe('approved');
     expect(decided.decidedBy).toBe('user');
     expect(decided.items[0]).toMatchObject({ outcome: 'done', resultId: forkId });
@@ -80,8 +80,8 @@ describe('action requests', () => {
     const { store, requests, explorationId, mainForkId } = setup();
     const a = requests.request(mainForkId, 'fork', forkAction({ title: 'A' }));
     const b = requests.request(mainForkId, 'fork', forkAction({ title: 'B' }));
-    const request = requests.get(a.requestId);
-    const decided = requests.decide(a.requestId, {
+    const request = requests.get(a.requestId!);
+    const decided = requests.decide(a.requestId!, {
       decision: 'approve',
       items: [{ id: request.items[1]!.id, selected: false }],
     });
@@ -92,7 +92,7 @@ describe('action requests', () => {
   it('rejects all, with the reason', () => {
     const { store, requests, explorationId, mainForkId } = setup();
     const { requestId } = requests.request(mainForkId, 'fork', forkAction());
-    const decided = requests.decide(requestId, { decision: 'reject', reason: 'Not now' });
+    const decided = requests.decide(requestId!, { decision: 'reject', reason: 'Not now' });
     expect(decided).toMatchObject({ status: 'rejected', reason: 'Not now', decidedBy: 'user' });
     expect(decided.items[0]?.outcome).toBe('rejected');
     expect(store.snapshot(explorationId).forks).toHaveLength(1);
@@ -102,9 +102,9 @@ describe('action requests', () => {
     const { store, requests, mainForkId } = setup();
     const original = forkAction({ coding: true });
     const { requestId, forkId } = requests.request(mainForkId, 'fork', original);
-    const itemId = requests.get(requestId).items[0]!.id;
+    const itemId = requests.get(requestId!).items[0]!.id;
     const edited = { ...original, brief: 'Build it smaller.', coding: false };
-    const decided = requests.decide(requestId, {
+    const decided = requests.decide(requestId!, {
       decision: 'approve',
       items: [{ id: itemId, selected: true, action: edited }],
     });
@@ -118,14 +118,14 @@ describe('action requests', () => {
     const { requests, mainForkId } = setup();
     const original = forkAction();
     const { requestId } = requests.request(mainForkId, 'fork', original);
-    const itemId = requests.get(requestId).items[0]!.id;
+    const itemId = requests.get(requestId!).items[0]!.id;
     expect(() =>
-      requests.decide(requestId, {
+      requests.decide(requestId!, {
         decision: 'approve',
         items: [{ id: itemId, selected: true, action: { ...original, forkId: 'fork_0000000000' } }],
       }),
     ).toThrow(/id/);
-    expect(requests.get(requestId).status).toBe('waiting');
+    expect(requests.get(requestId!).status).toBe('waiting');
   });
 
   it('refuses an unknown fork and a fork of another chat', () => {
@@ -150,15 +150,15 @@ describe('action requests', () => {
   it('refuses a second decision on the same request', () => {
     const { requests, mainForkId } = setup();
     const { requestId } = requests.request(mainForkId, 'fork', forkAction());
-    requests.decide(requestId, { decision: 'reject' });
-    expect(() => requests.decide(requestId, { decision: 'approve' })).toThrow(/already decided/);
+    requests.decide(requestId!, { decision: 'reject' });
+    expect(() => requests.decide(requestId!, { decision: 'approve' })).toThrow(/already decided/);
   });
 
   it('runs a message to a fork of the same batch after the fork, in order', () => {
     const { store, requests, mainForkId } = setup();
     const { requestId, forkId } = requests.request(mainForkId, 'fork', forkAction());
     requests.request(mainForkId, 'fork', { kind: 'message', forkId: forkId!, text: 'And tests.' });
-    const decided = requests.decide(requestId, { decision: 'approve' });
+    const decided = requests.decide(requestId!, { decision: 'approve' });
     expect(decided.items.map((item) => item.outcome)).toEqual(['done', 'done']);
     const texts = store
       .readFork(forkId!)
@@ -172,8 +172,8 @@ describe('action requests', () => {
     const { store, requests, explorationId, mainForkId } = setup();
     const { requestId, forkId } = requests.request(mainForkId, 'fork', forkAction());
     requests.request(mainForkId, 'fork', { kind: 'message', forkId: forkId!, text: 'And tests.' });
-    const request = requests.get(requestId);
-    const decided = requests.decide(requestId, {
+    const request = requests.get(requestId!);
+    const decided = requests.decide(requestId!, {
       decision: 'approve',
       items: [{ id: request.items[0]!.id, selected: false }],
     });
@@ -195,8 +195,8 @@ describe('action requests', () => {
       text: 'Hello',
     });
     expect(second.requestId).not.toBe(first.requestId);
-    requests.decide(first.requestId, { decision: 'reject' });
-    const decided = requests.decide(second.requestId, { decision: 'approve' });
+    requests.decide(first.requestId!, { decision: 'reject' });
+    const decided = requests.decide(second.requestId!, { decision: 'approve' });
     expect(decided.items[0]?.outcome).toBe('skipped');
   });
 
@@ -210,8 +210,8 @@ describe('action requests', () => {
     ).toThrow(/no credential/);
     const ok = forkAction({ hosts: ['api.example.com:443'], credentials: ['gh'] });
     const { requestId } = requests.request(mainForkId, 'fork', ok);
-    const itemId = requests.get(requestId).items[0]!.id;
-    const decided = requests.decide(requestId, {
+    const itemId = requests.get(requestId!).items[0]!.id;
+    const decided = requests.decide(requestId!, {
       decision: 'approve',
       items: [{ id: itemId, selected: true, action: { ...ok, hosts: ['evil.org:443'] } }],
     });
@@ -227,7 +227,7 @@ describe('action requests', () => {
       forkId: fork.id,
       changes: { coding: true, title: 'Coding fork', model: 'opus', registries: ['npm'] },
     });
-    requests.decide(requestId, { decision: 'approve' });
+    requests.decide(requestId!, { decision: 'approve' });
     expect(store.fork(fork.id)).toMatchObject({
       coding: true,
       summary: 'Coding fork',
@@ -241,8 +241,8 @@ describe('action requests', () => {
     const original = forkAction();
     const { requestId } = requests.request(mainForkId, 'fork', original);
     expect(requests.takeOutcomes(mainForkId)).toBeNull();
-    const itemId = requests.get(requestId).items[0]!.id;
-    requests.decide(requestId, {
+    const itemId = requests.get(requestId!).items[0]!.id;
+    requests.decide(requestId!, {
       decision: 'approve',
       items: [{ id: itemId, selected: true, action: { ...original, brief: 'Smaller.' } }],
     });
@@ -263,14 +263,14 @@ describe('the decide API', () => {
     const { requestId, forkId } = requests.request(mainForkId, 'fork', forkAction());
     const changes = store.changesSince(explorationId, seq);
     expect(changes.requests.map((each) => each.id)).toEqual([requestId]);
-    const response = await request(`/api/requests/${requestId}/decide`, {
+    const response = await request(`/api/requests/${requestId!}/decide`, {
       method: 'POST',
       json: { decision: 'approve' },
     });
     expect(response.status).toBe(200);
     expect((await response.json()).status).toBe('approved');
     expect(store.fork(forkId!).parentForkId).toBe(mainForkId);
-    const again = await request(`/api/requests/${requestId}/decide`, {
+    const again = await request(`/api/requests/${requestId!}/decide`, {
       method: 'POST',
       json: { decision: 'reject' },
     });
@@ -290,7 +290,7 @@ describe('the autonomous setting', () => {
     });
     expect(result.status).toBe('done');
     expect(store.readFork(child.id).messages.at(-1)?.text).toContain('Carry on.');
-    const request = requests.get(result.requestId);
+    const request = requests.get(result.requestId!);
     expect(request).toMatchObject({ status: 'approved', decidedBy: 'autonomous' });
     // Claude heard it in the tool's result.
     expect(requests.takeOutcomes(mainForkId)).toBeNull();
@@ -365,7 +365,7 @@ describe('the chats list', () => {
     expect(listed().waitingRequests).toBe(false);
     const { requestId } = requests.request(mainForkId, 'fork', forkAction());
     expect(listed().waitingRequests).toBe(true);
-    requests.decide(requestId, { decision: 'reject' });
+    requests.decide(requestId!, { decision: 'reject' });
     expect(listed().waitingRequests).toBe(false);
   });
 });
@@ -383,5 +383,95 @@ describe('the settings API', () => {
     expect((await patch(child.id, 'autonomous', { areas: ['notes', 'board'] })).status).toBe(200);
     expect(store.fork(child.id).autonomous).toEqual(['notes', 'board']);
     expect((await patch(child.id, 'autonomous', { areas: ['everything'] })).status).toBe(400);
+  });
+});
+
+describe('notes and board as requests', () => {
+  it('waits for approval for each write, and approving a deletion deletes the note', () => {
+    const { store, requests, explorationId, mainForkId, answer } = setup();
+    const group = store.createNoteGroup(explorationId, { name: 'Facts' });
+    const note = store.createNote(explorationId, { groupId: group.id, topic: 'Redis' });
+    const child = store.forkAtAnswer(answer.id);
+    const newGroupId = 'grp0000new';
+    const actions: RequestAction[] = [
+      { kind: 'note_group', groupId: newGroupId, name: 'Ideas', checklist: false },
+      { kind: 'notes', groupId: newGroupId, notes: [{ topic: 'Valkey' }], sourceMessageId: null },
+      { kind: 'note_update', noteId: note.id, description: 'For sessions.' },
+      { kind: 'note_category', groupId: group.id, from: 'Old', to: 'New' },
+      { kind: 'note_group_change', noteId: note.id, groupId: newGroupId },
+      { kind: 'board', input: { action: 'add_column', name: 'system' } },
+      { kind: 'board', input: { action: 'move_fork', forkId: child.id, column: 'system' } },
+      { kind: 'note_deletion', noteId: note.id },
+    ];
+    const results = actions.map((action) => requests.request(mainForkId, 'fork', action));
+    expect(new Set(results.map((result) => result.status))).toEqual(
+      new Set(['waiting for approval']),
+    );
+    const before = store.snapshot(explorationId);
+    expect(before.noteGroups).toHaveLength(1);
+    expect(before.notes).toHaveLength(1);
+    expect(before.exploration.boardColumns).toEqual([]);
+
+    const decided = requests.decide(results[0]!.requestId!, { decision: 'approve' });
+    expect(decided.items.map((item) => item.outcome)).toEqual([
+      'done',
+      'done',
+      'done',
+      'failed', // There was no category Old to rename.
+      'done',
+      'done',
+      'done',
+      'done',
+    ]);
+    const after = store.snapshot(explorationId);
+    expect(after.notes.map((each) => each.topic)).toEqual(['Valkey']);
+    expect(after.exploration.boardColumns.map((column) => column.name)).toEqual(['system']);
+    expect(store.fork(child.id).boardColumnId).toBe(after.exploration.boardColumns[0]!.id);
+  });
+
+  it('runs notes and the board at once under the Autonomous setting', () => {
+    const { store, requests, explorationId, mainForkId } = setup();
+    store.setForkAutonomous(mainForkId, ['notes', 'board']);
+    const group = requests.request(mainForkId, 'fork', {
+      kind: 'note_group',
+      groupId: 'grp0000aut',
+      name: 'Auto',
+      checklist: false,
+    });
+    expect(group).toMatchObject({ status: 'done', resultId: 'grp0000aut' });
+    const board = requests.request(mainForkId, 'fork', {
+      kind: 'board',
+      input: { action: 'add_column', name: 'system' },
+    });
+    expect(board.status).toBe('done');
+    expect(store.snapshot(explorationId).exploration.boardColumns).toHaveLength(1);
+  });
+
+  it('writes the topic of an untitled note at once, and nothing else that way', () => {
+    const { store, requests, explorationId, mainForkId } = setup();
+    const group = store.createNoteGroup(explorationId, {});
+    const untitled = store.createNote(explorationId, { groupId: group.id, description: 'Bread' });
+    const titled = store.createNote(explorationId, { groupId: group.id, topic: 'Milk' });
+    const topic = requests.request(mainForkId, 'fork', {
+      kind: 'note_update',
+      noteId: untitled.id,
+      topic: 'Bread',
+    });
+    expect(topic).toMatchObject({ status: 'done', requestId: null });
+    expect(store.note(untitled.id).topic).toBe('Bread');
+    const rename = requests.request(mainForkId, 'fork', {
+      kind: 'note_update',
+      noteId: titled.id,
+      topic: 'Oat milk',
+    });
+    expect(rename.status).toBe('waiting for approval');
+  });
+
+  it('has dropped the old deletion flag column', () => {
+    const { database } = setup();
+    const columns = database
+      .all<{ name: string }>("SELECT name FROM pragma_table_info('notes')")
+      .map((column) => column.name);
+    expect(columns).not.toContain('deletion_requested_at');
   });
 });

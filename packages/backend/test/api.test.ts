@@ -401,9 +401,13 @@ describe("Claude's changes from a terminal session", () => {
     store.attach({ explorationId, shimId: 'shim-a', sessionId: 'session-a', takeover: false });
     const group = store.createNoteGroup(explorationId, {});
     const attempts = [
-      request(`/api/internal/explorations/${explorationId}/notes`, {
+      request(`/api/internal/explorations/${explorationId}/requests`, {
         method: 'POST',
-        json: { shimId: 'other', groupId: group.id, notes: [{ topic: 'x' }] },
+        json: {
+          shimId: 'other',
+          tool: 'add_notes',
+          args: { groupId: group.id, notes: [{ topic: 'x' }] },
+        },
       }),
       request(`/api/internal/forks/${mainForkId}`, {
         method: 'PATCH',
@@ -413,9 +417,9 @@ describe("Claude's changes from a terminal session", () => {
         method: 'PATCH',
         json: { shimId: 'other', title: 'x' },
       }),
-      request(`/api/internal/explorations/${explorationId}/board`, {
+      request(`/api/internal/explorations/${explorationId}/requests`, {
         method: 'POST',
-        json: { shimId: 'other', action: 'add_column', name: 'x' },
+        json: { shimId: 'other', tool: 'arrange_board', args: { action: 'add_column', name: 'x' } },
       }),
     ];
     for (const response of await Promise.all(attempts)) {
@@ -424,15 +428,25 @@ describe("Claude's changes from a terminal session", () => {
     }
   });
 
-  it('arranges the board of the attached chat', async () => {
+  it('arranges the board of the attached chat, once the user approves', async () => {
     const { request, store } = createTestApp();
     const { explorationId } = seedConversation(store);
     store.attach({ explorationId, shimId: 'shim-a', sessionId: 'session-a', takeover: false });
-    const added = await request(`/api/internal/explorations/${explorationId}/board`, {
+    const asked = await request(`/api/internal/explorations/${explorationId}/requests`, {
       method: 'POST',
-      json: { shimId: 'shim-a', action: 'add_column', name: 'system' },
+      json: {
+        shimId: 'shim-a',
+        tool: 'arrange_board',
+        args: { action: 'add_column', name: 'system' },
+      },
     });
-    expect(await added.json()).toMatchObject({ columns: [{ name: 'system', forks: [] }] });
+    const { requestId, status } = await asked.json();
+    expect(status).toBe('waiting for approval');
+    expect(store.snapshot(explorationId).exploration.boardColumns).toEqual([]);
+    await request(`/api/requests/${requestId}/decide`, {
+      method: 'POST',
+      json: { decision: 'approve' },
+    });
     const read = await request(`/api/internal/explorations/${explorationId}/board`);
     expect(await read.json()).toMatchObject({ columns: [{ name: 'system' }], ungrouped: [] });
   });

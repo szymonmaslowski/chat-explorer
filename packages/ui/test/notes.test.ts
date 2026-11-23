@@ -63,7 +63,6 @@ const note = (
   sourceQuote: null,
   sourceCommentId: null,
   createdBy: 'user',
-  deletionRequestedAt: null,
   createdAt: 0,
   updatedAt: 0,
 });

@@ -161,7 +161,6 @@ const noteFacts = (note: NoteRow) => ({
   category: note.category,
   checked: note.checked === 1,
   createdBy: note.created_by,
-  deletionRequested: note.deletion_requested_at !== null,
   updatedAt: note.updated_at,
 });
 
@@ -2610,29 +2609,6 @@ export class ChatStore {
 
   note(noteId: string) {
     return toNote(this.requireNoteRow(noteId));
-  }
-
-  // Claude never deletes a note itself: the page shows the request and the user decides.
-  requestNoteDeletion(noteId: string) {
-    return this.setDeletionRequestedAt(noteId, this.now());
-  }
-
-  keepNote(noteId: string) {
-    return this.setDeletionRequestedAt(noteId, null);
-  }
-
-  private setDeletionRequestedAt(noteId: string, requestedAt: number | null) {
-    const row = this.requireNoteRow(noteId);
-    this.requireExplorationRow(row.exploration_id);
-    this.db.run(
-      'UPDATE notes SET deletion_requested_at = ?, updated_at = ? WHERE id = ?',
-      requestedAt,
-      this.now(),
-      noteId,
-    );
-    const note = toNote(this.requireNoteRow(noteId));
-    this.publish([[row.exploration_id, { type: 'note.updated', note }]]);
-    return note;
   }
 
   private groupsWithNotes(explorationId: string) {

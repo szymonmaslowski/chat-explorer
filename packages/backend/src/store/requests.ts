@@ -29,20 +29,25 @@ const cut = (text: string) =>
 const notFound = (what: string) => new StoreError('not_found', `${what} not found.`);
 
 export interface RequestResult {
-  requestId: string;
-  itemId: string;
+  // Null for the topic of an untitled note, which is written at once.
+  requestId: string | null;
+  itemId: string | null;
   status: 'waiting for approval' | 'done' | 'failed';
   // What a waiting request will create, so later requests can name it.
   forkId?: string;
   groupId?: string;
   resultId?: string | null;
   detail?: string | null;
+  result?: unknown;
 }
 
 // What Claude asked to do, kept as cards for the user to approve. Approving runs the stored,
 // edited version; Claude has no part in it after asking, and learns the outcome from the card's
 // record on its next turn.
 export class RequestStore {
+  // What the last item run returned, for an autonomous run's result.
+  private lastValue: unknown;
+
   constructor(
     private readonly chats: ChatStore,
     private readonly capabilities: () => RunnerCapabilities | null = () => null,
@@ -73,6 +78,11 @@ export class RequestStore {
   request(forkId: string, requestedBy: RequestOrigin, action: RequestAction): RequestResult {
     const fork = this.chats.fork(forkId);
     this.validate(fork.explorationId, forkId, action);
+    // The topic Claude is asked to write for a note the user saved without one needs no card.
+    if (this.namesUntitledNote(action)) {
+      const note = this.chats.updateNote(action.noteId, { topic: action.topic! }, 'claude');
+      return { requestId: null, itemId: null, status: 'done', resultId: note.id };
+    }
     if (this.isAutonomous(fork, action)) return this.runAutonomously(fork, requestedBy, action);
     const item: RequestItem = {
       id: newId(),
@@ -133,6 +143,15 @@ export class RequestStore {
     };
   }
 
+  private namesUntitledNote(
+    action: RequestAction,
+  ): action is Extract<RequestAction, { kind: 'note_update' }> {
+    if (action.kind !== 'note_update' || !action.topic?.trim()) return false;
+    const { kind: _kind, noteId: _noteId, topic: _topic, ...others } = action;
+    if (Object.values(others).some((value) => value !== undefined)) return false;
+    return this.chats.note(action.noteId).topic === null;
+  }
+
   // The fork's Autonomous setting covers the action's area, and new forks are under the hourly cap.
   private isAutonomous(fork: Fork, action: RequestAction) {
     const area = autonomousAreaOf(action);
@@ -181,6 +200,7 @@ export class RequestStore {
       now,
       now,
     );
+    this.lastValue = undefined;
     const [decided] = this.run(this.requireRow(id), [{ item, final: action, selected: true }]);
     this.save(id, [decided!], { status: 'approved', decidedBy: 'autonomous', reason: null, now });
     const saved = this.get(id);
@@ -191,6 +211,8 @@ export class RequestStore {
       status: decided!.outcome === 'done' ? ('done' as const) : ('failed' as const),
       resultId: decided!.resultId,
       detail: decided!.detail,
+      // What the store answered, as the tool gave it before it became a request.
+      ...(decided!.outcome === 'done' && { result: this.lastValue }),
     };
   }
 
@@ -288,7 +310,8 @@ export class RequestStore {
       const blocked = this.blockedBy(row, final, done);
       if (blocked) return { ...decided, outcome: 'skipped', detail: blocked };
       try {
-        const resultId = this.execute(row, final);
+        const { resultId, value } = this.execute(row, final);
+        this.lastValue = value;
         const made = createdBy(final);
         if (made) done.add(made.id);
         return { ...decided, outcome: 'done', resultId };
@@ -310,7 +333,11 @@ export class RequestStore {
       : "Not run: its note group wasn't created.";
   }
 
-  private execute(row: ActionRequestRow, action: RequestAction): string | null {
+  // Runs an action; what it made, and what the store answered, for an autonomous run's result.
+  private execute(
+    row: ActionRequestRow,
+    action: RequestAction,
+  ): { resultId: string | null; value: unknown } {
     const explorationId = row.exploration_id;
     const chats = this.chats;
     switch (action.kind) {
@@ -330,11 +357,13 @@ export class RequestStore {
             credentials: action.credentials,
           },
         });
-        return fork.id;
+        return { resultId: fork.id, value: { forkId: fork.id } };
       }
-      case 'message':
+      case 'message': {
         this.requireFork(explorationId, action.forkId);
-        return chats.addSupervisorMessage(action.forkId, action.text).id;
+        const message = chats.addSupervisorMessage(action.forkId, action.text);
+        return { resultId: message.id, value: { messageId: message.id } };
+      }
       case 'fork_settings': {
         const fork = this.requireFork(explorationId, action.forkId);
         const { title, awareness, coding, model, hosts, registries, credentials } = action.changes;
@@ -351,47 +380,57 @@ export class RequestStore {
             credentials: credentials ?? network.credentials,
           });
         }
-        return fork.id;
+        return { resultId: fork.id, value: chats.fork(fork.id) };
       }
-      case 'note_group':
-        return chats.createNoteGroup(explorationId, {
+      case 'note_group': {
+        const group = chats.createNoteGroup(explorationId, {
           id: action.groupId,
           name: action.name,
           checklist: action.checklist,
-        }).id;
-      case 'notes':
-        return (
-          chats.addNotes({
-            explorationId,
-            groupId: action.groupId,
-            notes: action.notes,
-            sourceMessageId: action.sourceMessageId ?? undefined,
-          }).noteIds[0] ?? null
-        );
+        });
+        return { resultId: group.id, value: group };
+      }
+      case 'notes': {
+        const added = chats.addNotes({
+          explorationId,
+          groupId: action.groupId,
+          notes: action.notes,
+          sourceMessageId: action.sourceMessageId ?? undefined,
+        });
+        return { resultId: added.noteIds[0] ?? null, value: added };
+      }
       case 'note_update': {
         this.requireNote(explorationId, action.noteId);
         const { kind: _kind, noteId, ...changes } = action;
         const defined = Object.fromEntries(
           Object.entries(changes).filter(([, value]) => value !== undefined),
         );
-        return chats.updateNote(noteId, defined, 'claude').id;
+        const note = chats.updateNote(noteId, defined, 'claude');
+        return { resultId: note.id, value: note };
       }
-      case 'note_group_change':
+      case 'note_group_change': {
         this.requireNote(explorationId, action.noteId);
         this.requireGroup(explorationId, action.groupId);
-        chats.changeNoteGroup(action.noteId, action.groupId);
-        return action.noteId;
+        return {
+          resultId: action.noteId,
+          value: chats.changeNoteGroup(action.noteId, action.groupId),
+        };
+      }
       case 'note_category':
         this.requireGroup(explorationId, action.groupId);
-        chats.renameNoteCategory(action.groupId, action.from, action.to);
-        return action.groupId;
+        return {
+          resultId: action.groupId,
+          value: chats.renameNoteCategory(action.groupId, action.from, action.to),
+        };
       case 'note_deletion':
         this.requireNote(explorationId, action.noteId);
         chats.deleteNote(action.noteId);
-        return null;
+        return { resultId: null, value: { deleted: action.noteId } };
       case 'board':
-        chats.arrangeBoard(explorationId, action.input);
-        return action.input.forkId ?? null;
+        return {
+          resultId: action.input.forkId ?? null,
+          value: chats.arrangeBoard(explorationId, action.input),
+        };
     }
   }
 

@@ -692,17 +692,15 @@ describe('Claude and notes', () => {
     });
   });
 
-  it('marks a note for deletion until the user keeps or deletes it', () => {
-    const { store, notes, events } = seedNotes(['A']);
-    const requested = store.requestNoteDeletion(notes[0]!.id);
-    expect(requested.deletionRequestedAt).not.toBeNull();
-    expect(events.at(-1)).toEqual({ type: 'note.updated', note: requested });
-    expect(store.keepNote(notes[0]!.id).deletionRequestedAt).toBeNull();
+  it('has no deletion flag left: deleting is a request the user approves', () => {
+    const { store, notes } = seedNotes(['A']);
+    expect(store.note(notes[0]!.id)).not.toHaveProperty('deletionRequestedAt');
+    expect(store).not.toHaveProperty('requestNoteDeletion');
+    expect(store).not.toHaveProperty('keepNote');
   });
 
   it('lists notes without their text and reads chosen ones in full', () => {
     const { store, explorationId, group, notes } = seedNotes(['A', 'B']);
-    store.requestNoteDeletion(notes[1]!.id);
     store.updateNote(notes[0]!.id, { description: 'Lemons for the cake' });
     expect(store.notesIndex(explorationId)).toEqual({
       groups: [
@@ -720,7 +718,8 @@ describe('Claude and notes', () => {
     const listed = store.listNotes(explorationId, group.id).groups[0]!.notes;
     expect(listed[0]).toMatchObject({ topic: 'A', length: 19, createdBy: 'user' });
     expect(listed[0]).not.toHaveProperty('description');
-    expect(listed[1]).toMatchObject({ topic: 'B', length: 0, deletionRequested: true });
+    expect(listed[1]).toMatchObject({ topic: 'B', length: 0 });
+    expect(listed[1]).not.toHaveProperty('deletionRequested');
 
     expect(store.readNotes(explorationId, [notes[0]!.id])).toEqual({
       notes: [

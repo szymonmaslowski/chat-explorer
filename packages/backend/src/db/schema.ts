@@ -492,4 +492,8 @@ export const migrations = [
   -- A JSON array of the areas whose requests run without a card.
   ALTER TABLE forks ADD COLUMN autonomous TEXT NOT NULL DEFAULT '[]';
   `,
+  `
+  -- Claude's request to delete a note is a card now; approving it deletes the note.
+  ALTER TABLE notes DROP COLUMN deletion_requested_at;
+  `,
 ];

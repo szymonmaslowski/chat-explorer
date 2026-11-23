@@ -6,15 +6,14 @@ import { z } from 'zod';
 import { createDaemonClient, DaemonError } from '@chat-explorer/shared/http.js';
 import type { Config } from '@chat-explorer/shared/config.js';
 import { DaemonStartError } from '@chat-explorer/shared/health.js';
-import type {
-  ArrangeBoardInput,
-  ExplorationListItem,
-  Note,
-  NoteGroup,
-} from '@chat-explorer/shared/types.js';
+import type { ArrangeBoardInput, ExplorationListItem } from '@chat-explorer/shared/types.js';
 import { claudeModels } from '@chat-explorer/shared/models.js';
 import { registryNames } from '@chat-explorer/shared/network.js';
-import { requestToolDescriptions, requestToolFields } from '@chat-explorer/shared/request-tools.js';
+import {
+  noteRequestNote,
+  requestToolDescriptions,
+  requestToolFields,
+} from '@chat-explorer/shared/request-tools.js';
 import {
   readNotesDescription,
   readNotesLimit,
@@ -468,8 +467,7 @@ export function createShim(options: ShimOptions) {
   server.registerTool(
     'add_note_group',
     {
-      description:
-        'Create a note group in the attached exploration. A checklist group lets the user tick its notes, as for a shopping list.',
+      description: `Create a note group in the attached exploration. A checklist group lets the user tick its notes, as for a shopping list. The result names the group's id, so notes can go into it in the same card. ${noteRequestNote}`,
       inputSchema: {
         name: z.string().optional().describe('Defaults to General, or Group N'),
         checklist: z.boolean().optional(),
@@ -483,12 +481,7 @@ export function createShim(options: ShimOptions) {
         name?: string | undefined;
         checklist?: boolean | undefined;
       }) => {
-        const { explorationId } = requireAttachment();
-        return json(
-          await request<NoteGroup>(`/api/internal/explorations/${explorationId}/note-groups`, {
-            json: { shimId, name, checklist },
-          }),
-        );
+        return json(await askFor('add_note_group', { name, checklist }));
       },
     ),
   );
@@ -496,8 +489,7 @@ export function createShim(options: ShimOptions) {
   server.registerTool(
     'add_notes',
     {
-      description:
-        'Add notes to a group, at the end of the group (or of their category) in the order given. Each needs a topic (a short title) or a description (markdown), and may name a category: a section of the group, shown as a heading above its notes. Pass sourceMessageId, the inReplyTo of the request that asked for them, so each note links back to it.',
+      description: `Add notes to a group, at the end of the group (or of their category) in the order given. Each needs a topic (a short title) or a description (markdown), and may name a category: a section of the group, shown as a heading above its notes. Pass sourceMessageId, the inReplyTo of the request that asked for them, so each note links back to it. ${noteRequestNote}`,
       inputSchema: {
         groupId: z.string(),
         notes: z
@@ -522,13 +514,7 @@ export function createShim(options: ShimOptions) {
         }[];
         sourceMessageId?: string | undefined;
       }) => {
-        const { explorationId } = requireAttachment();
-        return json(
-          await request<{ noteIds: string[] }>(
-            `/api/internal/explorations/${explorationId}/notes`,
-            { json: { shimId, ...args } },
-          ),
-        );
+        return json(await askFor('add_notes', args));
       },
     ),
   );
@@ -536,8 +522,7 @@ export function createShim(options: ShimOptions) {
   server.registerTool(
     'update_note',
     {
-      description:
-        "Change a note's topic, description or category (null removes it), or tick it (checked) in a checklist group. Also how you write the topic of a note in notesNeedingTopic.",
+      description: `Change a note's topic, description or category (null removes it), or tick it (checked) in a checklist group. ${noteRequestNote} Writing only the topic of a note in notesNeedingTopic runs at once.`,
       inputSchema: {
         noteId: z.string(),
         topic: z.string().optional(),
@@ -557,13 +542,7 @@ export function createShim(options: ShimOptions) {
         category?: string | null | undefined;
         checked?: boolean | undefined;
       }) => {
-        requireAttachment();
-        return json(
-          await request<Note>(`/api/internal/notes/${noteId}`, {
-            method: 'PATCH',
-            json: { shimId, ...changes },
-          }),
-        );
+        return json(await askFor('update_note', { noteId, ...changes }));
       },
     ),
   );
@@ -601,8 +580,7 @@ export function createShim(options: ShimOptions) {
   server.registerTool(
     'arrange_board',
     {
-      description:
-        'Change the board of forks, one action at a time. Name a column by its id or its name. add_column needs `name`; rename_column needs `column` and `name`; delete_column needs `column` (its forks go to Ungrouped); move_column needs `column` and, to put it after another, `afterColumn` (null: first); move_fork needs `forkId` and `column` (null: Ungrouped) and puts the fork last in it, or after `afterForkId` (null: first). Archiving keeps a fork in its column. Returns the board.',
+      description: `Change the board of forks, one action at a time. Name a column by its id or its name. add_column needs \`name\`; rename_column needs \`column\` and \`name\`; delete_column needs \`column\` (its forks go to Ungrouped); move_column needs \`column\` and, to put it after another, \`afterColumn\` (null: first); move_fork needs \`forkId\` and \`column\` (null: Ungrouped) and puts the fork last in it, or after \`afterForkId\` (null: first). Archiving keeps a fork in its column. ${noteRequestNote}`,
       inputSchema: {
         action: z.enum([
           'add_column',
@@ -618,31 +596,18 @@ export function createShim(options: ShimOptions) {
         afterForkId: z.string().nullable().optional(),
       },
     },
-    tool(async (input: ArrangeBoardInput) => {
-      const { explorationId } = requireAttachment();
-      return json(
-        await request(`/api/internal/explorations/${explorationId}/board`, {
-          json: { shimId, ...input },
-        }),
-      );
-    }),
+    tool(async (input: ArrangeBoardInput) => json(await askFor('arrange_board', input))),
   );
 
   server.registerTool(
     'rename_note_category',
     {
-      description:
-        'Rename a category of a note group for all its notes at once, or remove it with `to` null (the notes stay in the group). Renaming to a name already used there merges the two.',
+      description: `Rename a category of a note group for all its notes at once, or remove it with \`to\` null (the notes stay in the group). Renaming to a name already used there merges the two. ${noteRequestNote}`,
       inputSchema: { groupId: z.string(), from: z.string(), to: z.string().nullable() },
     },
-    tool(async ({ groupId, from, to }: { groupId: string; from: string; to: string | null }) => {
-      requireAttachment();
-      return json(
-        await request(`/api/internal/note-groups/${groupId}/rename-category`, {
-          json: { shimId, from, to },
-        }),
-      );
-    }),
+    tool(async (args: { groupId: string; from: string; to: string | null }) =>
+      json(await askFor('rename_note_category', args)),
+    ),
   );
 
   server.registerTool(
@@ -665,35 +630,21 @@ export function createShim(options: ShimOptions) {
   server.registerTool(
     'change_note_group',
     {
-      description: 'Move a note to another group of the same exploration. It goes first there.',
+      description: `Move a note to another group of the same exploration. It goes first there. ${noteRequestNote}`,
       inputSchema: { noteId: z.string(), groupId: z.string() },
     },
-    tool(async ({ noteId, groupId }: { noteId: string; groupId: string }) => {
-      requireAttachment();
-      return json(
-        await request(`/api/internal/notes/${noteId}/group`, {
-          method: 'PUT',
-          json: { shimId, groupId },
-        }),
-      );
-    }),
+    tool(async (args: { noteId: string; groupId: string }) =>
+      json(await askFor('change_note_group', args)),
+    ),
   );
 
   server.registerTool(
     'request_note_deletion',
     {
-      description:
-        'Ask the user to delete a note. You cannot delete notes yourself: the page shows the request and the user deletes or keeps the note. Returns at once.',
+      description: `Ask to delete a note. Approving the card deletes it. ${noteRequestNote}`,
       inputSchema: { noteId: z.string() },
     },
-    tool(async ({ noteId }: { noteId: string }) => {
-      requireAttachment();
-      return json(
-        await request<Note>(`/api/internal/notes/${noteId}/deletion-request`, {
-          json: { shimId },
-        }),
-      );
-    }),
+    tool(async (args: { noteId: string }) => json(await askFor('request_note_deletion', args))),
   );
 
   server.registerTool(

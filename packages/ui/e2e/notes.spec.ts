@@ -329,7 +329,10 @@ test('makes the new group a note comment asks for only on Submit', async ({ page
   expect(await groupNames()).toEqual(['Facts', 'Group 2']);
 });
 
-test('shows the topic Claude writes and its requests to delete', async ({ page, request }) => {
+test('shows the topic Claude writes, and deletes a note once its request is approved', async ({
+  page,
+  request,
+}) => {
   const explorationId = await newChat(request);
   const group = await (
     await request.post(`/api/explorations/${explorationId}/note-groups`, { data: {} })
@@ -342,28 +345,32 @@ test('shows the topic Claude writes and its requests to delete', async ({ page, 
     ).json();
   const unnamed = await create({ description: 'Bread for the weekend' });
   const doomed = await create({ topic: 'Old idea' });
-  const kept = await create({ topic: 'Keeper' });
+  await create({ topic: 'Keeper' });
   await page.goto(`/e/${explorationId}/notes`);
   await expect(topics(page)).toHaveText(['Preparing topic…', 'Old idea', 'Keeper']);
 
   await attachFakeSession(request, explorationId);
-  const asClaude = (path: string, data: object, method = 'POST') =>
-    request.fetch(`/api/internal${path}`, { method, data: { shimId: 'e2e-shim', ...data } });
-  await asClaude(`/notes/${unnamed.id}`, { topic: 'Bread' }, 'PATCH');
-  await asClaude(`/notes/${doomed.id}/deletion-request`, {});
-  await asClaude(`/notes/${kept.id}/deletion-request`, {});
-  await detachFakeSession(request);
-
+  const asClaude = (tool: string, args: object) =>
+    request.post(`/api/internal/explorations/${explorationId}/requests`, {
+      data: { shimId: 'e2e-shim', tool, args },
+    });
+  // The topic of a note the user saved without one is written at once.
+  await asClaude('update_note', { noteId: unnamed.id, topic: 'Bread' });
   await expect(topics(page)).toHaveText(['Bread', 'Old idea', 'Keeper']);
-  await expect(page.locator('.deletion-notice')).toContainText('Claude asks to delete 2 notes.');
-  const keeper = page.locator('.note', { hasText: 'Keeper' });
-  await keeper.getByRole('button', { name: 'Keep' }).click();
-  await expect(keeper).not.toHaveClass(/deletion-requested/);
-  const oldIdea = page.locator('.note', { hasText: 'Old idea' });
-  await oldIdea.getByRole('button', { name: 'Delete' }).click();
-  await oldIdea.getByRole('button', { name: 'Confirm' }).click();
-  await expect(topics(page)).toHaveText(['Bread', 'Keeper']);
+  // A deletion waits for the user's approval on a card in the main fork.
+  await asClaude('request_note_deletion', { noteId: doomed.id });
+  await detachFakeSession(request);
+  await expect(topics(page)).toHaveText(['Bread', 'Old idea', 'Keeper']);
   await expect(page.locator('.deletion-notice')).toHaveCount(0);
+
+  await page.goto(`/e/${explorationId}`);
+  const card = page.locator('.request-card.waiting');
+  await expect(card).toContainText('Delete note "Old idea"');
+  await card.getByRole('button', { name: 'Approve 1' }).click();
+  await card.getByRole('button', { name: 'Sure?' }).click();
+  await expect(page.locator('.request-card')).toContainText('Approved 1 of 1');
+  await page.goto(`/e/${explorationId}/notes`);
+  await expect(topics(page)).toHaveText(['Bread', 'Keeper']);
 });
 
 test('reads an expanded note aloud, from the start or from a tapped block', async ({

@@ -3,6 +3,10 @@
 const waits =
   'It waits for the user to approve it on a card in this conversation and returns at once with the request id; nothing runs until then. The requests you make in one turn join one card. You learn the outcome at the start of your next turn.';
 
+// Writing notes and changing the board are requests for every fork.
+export const noteRequestNote =
+  "It waits for the user's approval on a card in this conversation and returns at once, unless this fork's Autonomous setting lets it run now; the result's status says which (waiting for approval, done or failed). Requests you make in one turn join one card.";
+
 export const requestToolDescriptions = {
   request_fork: `Ask to start a new fork of this chat for a piece of work: a title, the brief, and its settings. The brief is the fork's first message, written as the user would write it; say there what to do and how to report back. coding gives it a container with a shell and its own workspace, for code or for research with command-line tools; hosts, registries and credentials say what that container may reach. The result names the new fork's id, so you can request a message to it before it exists. ${waits}`,
   request_message: `Ask to send a message to another fork of this chat, as from the main fork. ${waits}`,

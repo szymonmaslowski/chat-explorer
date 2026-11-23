@@ -166,7 +166,6 @@ export interface NoteRow {
   source_end_offset: number | null;
   source_comment_id: string | null;
   created_by: NoteAuthor;
-  deletion_requested_at: number | null;
   created_at: number;
   updated_at: number;
   updated_device: string | null;
@@ -356,7 +355,6 @@ export const toNote = (row: NoteRow): Note => ({
   sourceQuote: row.source_quote,
   sourceCommentId: row.source_comment_id,
   createdBy: row.created_by,
-  deletionRequestedAt: row.deletion_requested_at,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });

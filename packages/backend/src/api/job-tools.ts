@@ -7,15 +7,16 @@ import { StoreError } from '../store/errors.js';
 import type { Job, RunStore } from '../store/runs.js';
 import type { ChatStore } from '../store/store.js';
 import type { RequestStore } from '../store/requests.js';
-import { requestToolDescriptions } from '@chat-explorer/shared/request-tools.js';
+import { noteRequestNote, requestToolDescriptions } from '@chat-explorer/shared/request-tools.js';
 import type { RequestAction } from '@chat-explorer/shared/requests.js';
 import {
   coordinationActions,
+  noteActions,
+  noteToolShapes,
   requestToolShapes,
   type CoordinationTool,
   type RequestToolArgs,
 } from './request-tools.js';
-import type { ArrangeBoardInput } from '@chat-explorer/shared/types.js';
 import {
   readNotesDescription,
   readNotesLimit,
@@ -138,10 +139,11 @@ function toolsFor(job: Job, { store, runs, requests }: JobToolsOptions) {
     );
   }
 
+  const ask = (action: RequestAction) => requests.request(job.forkId, 'fork', action);
+
   // The chat's coordinator: the main fork, when the user turned Coordination on.
   const fork = store.fork(job.forkId);
   if (fork.parentForkId === null && fork.coordination) {
-    const ask = (action: RequestAction) => requests.request(job.forkId, 'fork', action);
     const describe = (name: CoordinationTool) => ({
       description: requestToolDescriptions[name],
       inputSchema: requestToolShapes[name],
@@ -238,75 +240,35 @@ function toolsFor(job: Job, { store, runs, requests }: JobToolsOptions) {
     tool(({ query }: { query: string }) => store.searchNotes(job.explorationId, query)),
   );
 
+  // Writing notes and changing the board wait for the user's approval on a card in this fork,
+  // unless the fork's Autonomous setting covers them; the result says which.
+  const waits = ` ${noteRequestNote}`;
+
   server.registerTool(
     'add_note_group',
     {
-      description:
-        'Create a note group. A checklist group lets the user tick its notes, as for a shopping list.',
-      inputSchema: { name: z.string().optional(), checklist: z.boolean().optional() },
+      description: `Create a note group. A checklist group lets the user tick its notes, as for a shopping list. The result names the group's id, so notes can go into it in the same card.${waits}`,
+      inputSchema: noteToolShapes.add_note_group,
     },
-    tool((group: { name?: string | undefined; checklist?: boolean | undefined }) =>
-      store.createNoteGroup(job.explorationId, group),
-    ),
+    tool((args: RequestToolArgs['add_note_group']) => ask(noteActions.add_note_group(args))),
   );
 
   server.registerTool(
     'add_notes',
     {
-      description:
-        "Add notes to a group, at the end of the group (or of their category) in the order given. Each needs a topic (a short title) or a description (markdown), and may name a category: a section of the group, shown as a heading above its notes. Pass sourceMessageId, the id of the user's message that asked for them, so each note links back to it.",
-      inputSchema: {
-        groupId: z.string(),
-        notes: z
-          .array(
-            z.object({
-              topic: z.string().optional(),
-              description: z.string().optional(),
-              category: z.string().optional(),
-            }),
-          )
-          .min(1),
-        sourceMessageId: z.string().optional(),
-      },
+      description: `Add notes to a group, at the end of the group (or of their category) in the order given. Each needs a topic (a short title) or a description (markdown), and may name a category: a section of the group, shown as a heading above its notes. Pass sourceMessageId, the id of the user's message that asked for them, so each note links back to it.${waits}`,
+      inputSchema: noteToolShapes.add_notes,
     },
-    tool(
-      (input: {
-        groupId: string;
-        notes: {
-          topic?: string | undefined;
-          description?: string | undefined;
-          category?: string | undefined;
-        }[];
-        sourceMessageId?: string | undefined;
-      }) => store.addNotes({ explorationId: job.explorationId, ...input }),
-    ),
+    tool((args: RequestToolArgs['add_notes']) => ask(noteActions.add_notes(args))),
   );
 
   server.registerTool(
     'update_note',
     {
-      description:
-        "Change a note's topic, description or category (null removes it), or tick it (checked) in a checklist group.",
-      inputSchema: {
-        noteId: z.string(),
-        topic: z.string().optional(),
-        description: z.string().optional(),
-        category: z.string().nullable().optional(),
-        checked: z.boolean().optional(),
-      },
+      description: `Change a note's topic, description or category (null removes it), or tick it (checked) in a checklist group.${waits}`,
+      inputSchema: noteToolShapes.update_note,
     },
-    tool(
-      ({
-        noteId,
-        ...changes
-      }: {
-        noteId: string;
-        topic?: string | undefined;
-        description?: string | undefined;
-        category?: string | null | undefined;
-        checked?: boolean | undefined;
-      }) => store.updateNote(noteInChat(noteId), changes),
-    ),
+    tool((args: RequestToolArgs['update_note']) => ask(noteActions.update_note(args))),
   );
 
   server.registerTool(
@@ -322,37 +284,21 @@ function toolsFor(job: Job, { store, runs, requests }: JobToolsOptions) {
   server.registerTool(
     'arrange_board',
     {
-      description:
-        'Change the board of forks, one action at a time. Name a column by its id or its name. add_column needs `name`; rename_column needs `column` and `name`; delete_column needs `column` (its forks go to Ungrouped); move_column needs `column` and, to put it after another, `afterColumn` (null: first); move_fork needs `forkId` and `column` (null: Ungrouped) and puts the fork last in it, or after `afterForkId` (null: first). Archiving keeps a fork in its column. Returns the board.',
-      inputSchema: {
-        action: z.enum([
-          'add_column',
-          'rename_column',
-          'delete_column',
-          'move_column',
-          'move_fork',
-        ]),
-        column: z.string().nullable().optional(),
-        name: z.string().optional(),
-        afterColumn: z.string().nullable().optional(),
-        forkId: z.string().optional(),
-        afterForkId: z.string().nullable().optional(),
-      },
+      description: `Change the board of forks, one action at a time. Name a column by its id or its name. add_column needs \`name\`; rename_column needs \`column\` and \`name\`; delete_column needs \`column\` (its forks go to Ungrouped); move_column needs \`column\` and, to put it after another, \`afterColumn\` (null: first); move_fork needs \`forkId\` and \`column\` (null: Ungrouped) and puts the fork last in it, or after \`afterForkId\` (null: first). Archiving keeps a fork in its column.${waits}`,
+      inputSchema: noteToolShapes.arrange_board,
     },
-    tool((input: ArrangeBoardInput) => store.arrangeBoard(job.explorationId, input)),
+    tool((args: RequestToolArgs['arrange_board']) => ask(noteActions.arrange_board(args))),
   );
 
   server.registerTool(
     'rename_note_category',
     {
-      description:
-        'Rename a category of a note group for all its notes at once, or remove it with `to` null (the notes stay in the group). Renaming to a name already used there merges the two.',
-      inputSchema: { groupId: z.string(), from: z.string(), to: z.string().nullable() },
+      description: `Rename a category of a note group for all its notes at once, or remove it with \`to\` null (the notes stay in the group). Renaming to a name already used there merges the two.${waits}`,
+      inputSchema: noteToolShapes.rename_note_category,
     },
-    tool(({ groupId, from, to }: { groupId: string; from: string; to: string | null }) => {
-      sameChat(job, store.noteGroupExplorationId(groupId), `Note group ${groupId}`);
-      return store.renameNoteCategory(groupId, from, to);
-    }),
+    tool((args: RequestToolArgs['rename_note_category']) =>
+      ask(noteActions.rename_note_category(args)),
+    ),
   );
 
   server.registerTool(
@@ -383,22 +329,21 @@ function toolsFor(job: Job, { store, runs, requests }: JobToolsOptions) {
   server.registerTool(
     'change_note_group',
     {
-      description: 'Move a note to another group of this chat. It goes first there.',
-      inputSchema: { noteId: z.string(), groupId: z.string() },
+      description: `Move a note to another group of this chat. It goes first there.${waits}`,
+      inputSchema: noteToolShapes.change_note_group,
     },
-    tool(({ noteId, groupId }: { noteId: string; groupId: string }) =>
-      store.changeNoteGroup(noteInChat(noteId), groupId),
-    ),
+    tool((args: RequestToolArgs['change_note_group']) => ask(noteActions.change_note_group(args))),
   );
 
   server.registerTool(
     'request_note_deletion',
     {
-      description:
-        'Ask the user to delete a note. You cannot delete notes yourself: the page shows the request and the user deletes or keeps the note.',
-      inputSchema: { noteId: z.string() },
+      description: `Ask to delete a note. Approving the card deletes it.${waits}`,
+      inputSchema: noteToolShapes.request_note_deletion,
     },
-    tool(({ noteId }: { noteId: string }) => store.requestNoteDeletion(noteInChat(noteId))),
+    tool((args: RequestToolArgs['request_note_deletion']) =>
+      ask(noteActions.request_note_deletion(args)),
+    ),
   );
 
   return server;

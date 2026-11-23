@@ -156,32 +156,43 @@ describe('MCP shim', () => {
     const { value: feedback } = await waiting;
     expect(feedback).toMatchObject({ notesNeedingTopic: [], notes: { groups: [] } });
 
+    // Writing notes waits for the user's approval, unless the fork's Autonomous setting covers it.
+    const { value: asked } = await call('add_note_group', { name: 'Ideas' });
+    expect(asked).toMatchObject({ status: 'waiting for approval' });
+    const setAutonomous = (areas: string[]) =>
+      fetch(`${config.baseUrl}/api/forks/${mainForkId}/autonomous`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ areas }),
+      });
+    await setAutonomous(['notes']);
     const { value: group } = await call('add_note_group', { name: 'Shopping', checklist: true });
+    expect(group.status).toBe('done');
     const { value: added } = await call('add_notes', {
-      groupId: group.id,
+      groupId: group.resultId,
       notes: [{ topic: 'Lemon' }, { topic: 'Milk' }],
       sourceMessageId: feedback.forks[0].inReplyTo,
     });
-    const [lemon, milk] = added.noteIds;
+    const [lemon, milk] = added.result.noteIds;
     await call('update_note', { noteId: lemon, checked: true });
     await call('reorder_note', { noteId: milk, afterNoteId: null });
     const { value: other } = await call('add_note_group', {});
-    await call('change_note_group', { noteId: lemon, groupId: other.id });
-    await call('reorder_note_group', { groupId: other.id, afterGroupId: null });
-    await call('request_note_deletion', { noteId: milk });
+    await call('change_note_group', { noteId: lemon, groupId: other.resultId });
+    await call('reorder_note_group', { groupId: other.resultId, afterGroupId: null });
 
     const { value: notes } = await call('list_notes');
     expect(notes.groups).toMatchObject([
       { name: 'Group 2', notes: [{ topic: 'Lemon', checked: true, createdBy: 'claude' }] },
-      { name: 'Shopping', notes: [{ topic: 'Milk', deletionRequested: true }] },
+      { name: 'Shopping', notes: [{ topic: 'Milk' }] },
     ]);
+    await setAutonomous([]);
     const { value: read } = await call('read_notes', { noteIds: [lemon] });
     expect(read.notes).toMatchObject([{ topic: 'Lemon', groupName: 'Group 2', description: '' }]);
     const { value: found } = await call('search_notes', { query: 'milk' });
     expect(found.notes).toMatchObject([{ id: milk, topic: 'Milk' }]);
 
     const userNote = await daemonRequest(`/api/explorations/${explorationId}/notes`, {
-      groupId: group.id,
+      groupId: group.resultId,
       description: 'Bread for the weekend',
     });
     const { value: topics } = await call('await_feedback', { timeoutSeconds: 30 });
@@ -190,8 +201,11 @@ describe('MCP shim', () => {
       forks: [{ forkId: mainForkId }],
       notesNeedingTopic: [{ noteId: userNote.id, description: 'Bread for the weekend' }],
     });
-    await call('update_note', { noteId: userNote.id, topic: 'Bread' });
-    expect((await call('list_notes', { groupId: group.id })).value.groups[0].notes).toMatchObject([
+    // The topic of a note the user saved without one is written at once, with no card.
+    expect((await call('update_note', { noteId: userNote.id, topic: 'Bread' })).value.status).toBe(
+      'done',
+    );
+    expect((await call('list_notes', { groupId: group.resultId })).value.groups[0].notes).toMatchObject([
       { topic: 'Milk' },
       { topic: 'Bread' },
     ]);

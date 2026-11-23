@@ -121,7 +121,6 @@ export interface NoteFacts {
   category: string | null;
   checked: boolean;
   createdBy: NoteAuthor;
-  deletionRequested: boolean;
   updatedAt: number;
 }
 

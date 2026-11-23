@@ -204,7 +204,6 @@ export interface Note {
   sourceQuote: string | null;
   sourceCommentId: string | null;
   createdBy: NoteAuthor;
-  deletionRequestedAt: number | null;
   createdAt: number;
   updatedAt: number;
 }

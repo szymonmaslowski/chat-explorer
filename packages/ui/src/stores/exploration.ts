@@ -657,7 +657,6 @@ export function applyChange(state: ExplorationState, change: Change) {
         sourceQuote: null,
         sourceCommentId: null,
         createdBy: 'user',
-        deletionRequestedAt: null,
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
       });
@@ -687,11 +686,6 @@ export function applyChange(state: ExplorationState, change: Change) {
     case 'note.delete':
       state.notes.delete(change.noteId);
       break;
-    case 'note.keep': {
-      const note = state.notes.get(change.noteId);
-      if (note) put(state.notes, note.id, { ...note, deletionRequestedAt: null, updatedAt: now });
-      break;
-    }
     case 'note.reorder': {
       const note = state.notes.get(change.noteId);
       if (!note) break;

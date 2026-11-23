@@ -38,7 +38,6 @@ const emit = defineEmits<{
   toggleSelected: [];
   edit: [];
   delete: [];
-  keep: [];
   toggleChecked: [];
   dragStart: [event: PointerEvent];
   // Null asks for a new group.
@@ -228,7 +227,6 @@ function changeGroup(groupId: string | null) {
       selected,
       expanded,
       checked: checklist && note.checked,
-      'deletion-requested': note.deletionRequestedAt !== null,
     }"
     @click="onClick"
   >
@@ -386,11 +384,6 @@ function changeGroup(groupId: string | null) {
         <MediaIcon :name="actionsPlaying ? 'pause' : 'play'" />
       </button>
     </div>
-    <div v-if="note.deletionRequestedAt !== null" class="deletion-request" @click.stop>
-      <span>Claude asks to delete this note.</span>
-      <ConfirmButton label="Delete" danger @confirm="emit('delete')" />
-      <button type="button" @click="emit('keep')">Keep</button>
-    </div>
   </article>
 </template>
 
@@ -423,29 +416,8 @@ function changeGroup(groupId: string | null) {
   opacity: 0.6;
 }
 
-.checked .topic,
-.deletion-requested .topic {
+.checked .topic {
   text-decoration: line-through;
-}
-
-.deletion-request {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.3rem;
-  margin-top: 0.4rem;
-  font-size: 0.8rem;
-  color: var(--warning);
-}
-
-.deletion-request button {
-  padding: 0.1rem 0.5rem;
-  font-size: 0.75rem;
-}
-
-.deletion-request .danger {
-  color: var(--danger);
-  border-color: var(--danger);
 }
 
 .block-actions {

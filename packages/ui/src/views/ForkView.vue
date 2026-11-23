@@ -14,7 +14,6 @@ import CommentLayer from '../components/CommentLayer.vue';
 import ConfirmButton from '../components/ConfirmButton.vue';
 import ExplorationHeader from '../components/ExplorationHeader.vue';
 import ForkArchiveControl from '../components/ForkArchiveControl.vue';
-import NoteDeletionNotice from '../components/NoteDeletionNotice.vue';
 import ConversationMessage from '../components/ConversationMessage.vue';
 import QueuedSubmissionCard from '../components/QueuedSubmissionCard.vue';
 import RequestCard from '../components/RequestCard.vue';
@@ -519,8 +518,6 @@ watch(
       />
       <SpeechPlayer />
     </ExplorationHeader>
-
-    <NoteDeletionNotice :exploration-id="explorationId" :notes="state.notes" />
 
     <p v-if="state.status === 'loading'" class="muted">Loading…</p>
     <p v-else-if="state.status === 'missing'" class="muted">This chat does not exist.</p>

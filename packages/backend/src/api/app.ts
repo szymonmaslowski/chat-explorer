@@ -204,15 +204,6 @@ const uploadBody = z.object({ file: z.instanceof(File) });
 // Multipart framing around a file at the size limit.
 const uploadOverheadBytes = 64 * 1024;
 const shimBody = z.object({ shimId: z.string() });
-const arrangeBoardShape = {
-  action: z.enum(['add_column', 'rename_column', 'delete_column', 'move_column', 'move_fork']),
-  column: z.string().nullable().optional(),
-  name: z.string().optional(),
-  afterColumn: z.string().nullable().optional(),
-  forkId: z.string().optional(),
-  afterForkId: z.string().nullable().optional(),
-};
-const arrangeBoardBody = shimBody.extend(arrangeBoardShape);
 const startExplorationBody = shimBody.extend({
   sessionId: z.string(),
   transcriptPath: z.string().endsWith('.jsonl').optional(),
@@ -261,28 +252,8 @@ const speechBody = z.union([
   z.object({ messageId: z.string(), block: speechBlock }),
   z.object({ text: z.string(), block: speechBlock }),
 ]);
-const claudeNoteGroupBody = shimBody.extend({
-  name: z.string().optional(),
-  checklist: z.boolean().optional(),
-});
-const claudeNotesBody = shimBody.extend({
-  groupId: z.string(),
-  notes: z
-    .array(
-      z.object({
-        topic: z.string().optional(),
-        description: z.string().optional(),
-        category: z.string().optional(),
-      }),
-    )
-    .min(1),
-  sourceMessageId: z.string().optional(),
-});
-const claudeNoteChangesBody = shimBody.extend(noteChangesBody.shape);
-const claudeCategoryRenameBody = shimBody.extend(categoryRenameBody.shape);
 const claudeNoteReorderBody = shimBody.extend(noteReorderBody.shape);
 const claudeNoteGroupReorderBody = shimBody.extend(noteGroupReorderBody.shape);
-const claudeNoteGroupChangeBody = shimBody.extend(noteGroupBody.shape);
 const feedbackBody = shimBody.extend({
   waitMs: z.number().int().positive().max(maxFeedbackWaitMs),
 });
@@ -794,10 +765,6 @@ export function createApp(options: AppOptions) {
     return context.json(store.forkFromNote(context.req.param('id'), message, { id, forkId }), 201);
   });
 
-  app.post('/api/notes/:id/keep', (context) =>
-    context.json(store.keepNote(context.req.param('id'))),
-  );
-
   app.delete('/api/submissions/:id', (context) =>
     context.json(store.cancelSubmission(context.req.param('id'))),
   );
@@ -973,13 +940,6 @@ export function createApp(options: AppOptions) {
     context.json(store.boardOverview(context.req.param('id'))),
   );
 
-  internal.post('/explorations/:id/board', async (context) => {
-    const explorationId = context.req.param('id');
-    const { shimId, ...input } = arrangeBoardBody.parse(await context.req.json());
-    store.requireAttachedShim(explorationId, shimId);
-    return context.json(store.arrangeBoard(explorationId, input));
-  });
-
   internal.get('/explorations/:id/notes', (context) =>
     context.json(store.listNotes(context.req.param('id'), context.req.query('groupId'))),
   );
@@ -994,39 +954,11 @@ export function createApp(options: AppOptions) {
     context.json(store.searchNotes(context.req.param('id'), context.req.query('q') ?? '')),
   );
 
-  internal.post('/explorations/:id/note-groups', async (context) => {
-    const explorationId = context.req.param('id');
-    const { shimId, ...group } = claudeNoteGroupBody.parse(await context.req.json());
-    store.requireAttachedShim(explorationId, shimId);
-    return context.json(store.createNoteGroup(explorationId, group), 201);
-  });
-
-  internal.post('/explorations/:id/notes', async (context) => {
-    const explorationId = context.req.param('id');
-    const { shimId, ...notes } = claudeNotesBody.parse(await context.req.json());
-    store.requireAttachedShim(explorationId, shimId);
-    return context.json(store.addNotes({ explorationId, ...notes }), 201);
-  });
-
   // Claude changes a note only while its session is attached to the note's chat.
   const attachedNoteId = (noteId: string, shimId: string) => {
     store.requireAttachedShim(store.noteExplorationId(noteId), shimId);
     return noteId;
   };
-
-  internal.patch('/notes/:id', async (context) => {
-    const { shimId, ...changes } = claudeNoteChangesBody.parse(await context.req.json());
-    return context.json(
-      store.updateNote(attachedNoteId(context.req.param('id'), shimId), changes, 'claude'),
-    );
-  });
-
-  internal.post('/note-groups/:id/rename-category', async (context) => {
-    const { shimId, from, to } = claudeCategoryRenameBody.parse(await context.req.json());
-    const groupId = context.req.param('id');
-    store.requireAttachedShim(store.noteGroupExplorationId(groupId), shimId);
-    return context.json(store.renameNoteCategory(groupId, from, to));
-  });
 
   internal.post('/note-groups/:id/reorder', async (context) => {
     const { shimId, afterGroupId } = claudeNoteGroupReorderBody.parse(await context.req.json());
@@ -1039,17 +971,6 @@ export function createApp(options: AppOptions) {
     const { shimId, afterNoteId } = claudeNoteReorderBody.parse(await context.req.json());
     const noteId = attachedNoteId(context.req.param('id'), shimId);
     return context.json(store.reorderNote(noteId, afterNoteId));
-  });
-
-  internal.put('/notes/:id/group', async (context) => {
-    const { shimId, groupId } = claudeNoteGroupChangeBody.parse(await context.req.json());
-    const noteId = attachedNoteId(context.req.param('id'), shimId);
-    return context.json(store.changeNoteGroup(noteId, groupId));
-  });
-
-  internal.post('/notes/:id/deletion-request', async (context) => {
-    const { shimId } = shimBody.parse(await context.req.json());
-    return context.json(store.requestNoteDeletion(attachedNoteId(context.req.param('id'), shimId)));
   });
 
   // After each tool call of an attached session: what it did becomes steps in the forks it
