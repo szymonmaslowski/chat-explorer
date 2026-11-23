@@ -14,6 +14,7 @@ import type {
   QueuedSubmission,
   ReplyDraft,
 } from '@shared/types';
+import type { ActionRequest } from '@shared/requests';
 
 // The device's copy of every chat, in IndexedDB: each chat as one record without message texts,
 // the texts by message, and the list of chats. A chat's record knows the change log's number it
@@ -34,6 +35,8 @@ export interface StoredChat {
   forkRuns: ForkRun[];
   activities: Activity[];
   activitySummaries: ActivitySummary[];
+  // Missing from a copy made before requests existed.
+  requests?: ActionRequest[];
 }
 
 interface StoredBody {

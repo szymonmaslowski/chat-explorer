@@ -1,6 +1,14 @@
 import type { ClaudeModel } from '@chat-explorer/shared/models.js';
 import type { RegistryName } from '@chat-explorer/shared/network.js';
 import type {
+  ActionRequest,
+  AutonomousArea,
+  RequestDecider,
+  RequestItem,
+  RequestOrigin,
+  RequestStatus,
+} from '@chat-explorer/shared/requests.js';
+import type {
   Activity,
   ActivityKind,
   Bookmark,
@@ -58,6 +66,8 @@ export interface ForkRow {
   model: ClaudeModel | null;
   registries: string;
   credentials: string;
+  coordination: number;
+  autonomous: string;
   created_at: number;
   updated_at: number;
   archived_at: number | null;
@@ -250,6 +260,8 @@ export const toFork = (row: ForkRow): Fork => ({
     credentials: JSON.parse(row.credentials) as string[],
   },
   model: row.model,
+  coordination: row.coordination === 1,
+  autonomous: JSON.parse(row.autonomous) as AutonomousArea[],
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   archivedAt: row.archived_at,
@@ -387,4 +399,35 @@ export const toActivity = (row: ActivityRow): Activity => ({
   text: row.text,
   interrupted: row.interrupted === 1,
   createdAt: row.created_at,
+});
+
+export interface ActionRequestRow {
+  id: string;
+  exploration_id: string;
+  fork_id: string;
+  after_message_id: string | null;
+  requested_by: RequestOrigin;
+  items: string;
+  status: RequestStatus;
+  decided_by: RequestDecider | null;
+  decided_at: number | null;
+  reason: string | null;
+  reported_at: number | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export const toActionRequest = (row: ActionRequestRow): ActionRequest => ({
+  id: row.id,
+  explorationId: row.exploration_id,
+  forkId: row.fork_id,
+  afterMessageId: row.after_message_id,
+  requestedBy: row.requested_by,
+  items: JSON.parse(row.items) as RequestItem[],
+  status: row.status,
+  decidedBy: row.decided_by,
+  decidedAt: row.decided_at,
+  reason: row.reason,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
 });

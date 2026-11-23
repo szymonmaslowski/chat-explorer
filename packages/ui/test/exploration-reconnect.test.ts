@@ -28,6 +28,7 @@ const stored: StoredChat = {
   forkRuns: [],
   activities: [],
   activitySummaries: [],
+  requests: [],
 };
 const storedChats = new Map<string, Partial<StoredChat>>();
 vi.mock('../src/lib/local-store', () => ({
@@ -77,6 +78,7 @@ vi.mock('../src/api', async (importOriginal) => {
           bookmarks: [],
           forkRuns: [],
           activities: [],
+          requests: [],
           deleted: [],
           sessionStatus: 'listening',
         };
@@ -85,6 +87,7 @@ vi.mock('../src/api', async (importOriginal) => {
         snapshotsOf.push(explorationId);
         return {
           ...stored,
+          requests: [],
           exploration: { ...exploration, id: explorationId },
           messages: [head('m1', null), head('m2', 'm1'), head('m3', 'm2')],
           sessionStatus: 'listening',

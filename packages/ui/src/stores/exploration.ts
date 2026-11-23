@@ -21,6 +21,7 @@ import type {
   SessionStatus,
   Snapshot,
 } from '@shared/types';
+import type { ActionRequest } from '@shared/requests';
 import { taggedIds } from '@shared/answer-tags';
 import { joinForkGroup, leaveForkGroup } from '@shared/fork-groups';
 import { defaultGroupName, noteForkMessage, reorderedIds } from '@shared/notes';
@@ -73,6 +74,8 @@ export interface ExplorationState {
   activities: Map<string, Activity>;
   // Every attempt, counted, by attemptKey.
   activitySummaries: Map<string, ActivitySummary>;
+  // Claude's requested actions, each a card waiting for the user or decided.
+  requests: Map<string, ActionRequest>;
   sessionStatus: SessionStatus;
   connected: boolean;
 }
@@ -105,6 +108,8 @@ const eventTypes: ExplorationEvent['type'][] = [
   'reply-draft.updated',
   'activity.added',
   'activities.interrupted',
+  'request.created',
+  'request.updated',
   'exploration.updated',
   'exploration.deleted',
   'session.status',
@@ -294,6 +299,10 @@ export function applyEvent(state: ExplorationState, event: ExplorationEvent) {
     case 'session.status':
       state.sessionStatus = event.status;
       break;
+    case 'request.created':
+    case 'request.updated':
+      put(state.requests, event.request.id, event.request);
+      break;
     case 'session.attached':
       break;
   }
@@ -395,6 +404,8 @@ function addNewFork(
     coding: false,
     network: noNetwork,
     model: null,
+    coordination: false,
+    autonomous: [],
     createdAt: now,
     updatedAt: now,
     archivedAt: null,
@@ -756,6 +767,7 @@ export function applySnapshot(
   syncItems(state.notes, snapshot.notes, byId);
   syncItems(state.bookmarks, snapshot.bookmarks, byId);
   syncItems(state.forkRuns, snapshot.forkRuns, (run) => run.forkId);
+  syncItems(state.requests, snapshot.requests ?? [], byId);
   // Steps opened earlier stay loaded; the light load sends only those of running attempts.
   for (const activity of snapshot.activities) put(state.activities, activity.id, activity);
   state.sessionStatus = snapshot.sessionStatus;
@@ -782,6 +794,7 @@ export function applyStoredChat(
   syncItems(state.forkRuns, stored.forkRuns, (run) => run.forkId);
   syncItems(state.activities, stored.activities, byId);
   syncItems(state.activitySummaries, stored.activitySummaries, attemptKey);
+  syncItems(state.requests, stored.requests ?? [], byId);
   state.seq = stored.seq;
   state.status = 'ready';
   if (options.withPending) applyPending(state);
@@ -806,6 +819,7 @@ export function toStoredChat(state: ExplorationState): StoredChat | null {
     forkRuns: values(state.forkRuns),
     activities: values(state.activities),
     activitySummaries: values(state.activitySummaries),
+    requests: values(state.requests),
   };
 }
 
@@ -832,6 +846,7 @@ export function applyChangeSet(
     if (!state.activities.has(activity.id)) countActivity(state, activity);
     put(state.activities, activity.id, activity);
   }
+  for (const request of changes.requests ?? []) put(state.requests, request.id, request);
   for (const { kind, id } of changes.deleted) removeChanged(state, kind, id);
   state.sessionStatus = changes.sessionStatus;
   state.seq = changes.seq;
@@ -852,6 +867,7 @@ function removeChanged(state: ExplorationState, kind: ChangeKind, id: string) {
     bookmark: state.bookmarks,
     fork_run: state.forkRuns,
     activity: state.activities,
+    request: state.requests,
   };
   if (kind === 'exploration') state.status = 'deleted';
   maps[kind]?.delete(id);
@@ -875,6 +891,7 @@ export const emptyState = (explorationId: string): ExplorationState => ({
   forkRuns: new Map(),
   activities: new Map(),
   activitySummaries: new Map(),
+  requests: new Map(),
   sessionStatus: 'detached',
   connected: false,
 });

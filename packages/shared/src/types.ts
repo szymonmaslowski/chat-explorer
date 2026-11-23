@@ -1,5 +1,6 @@
 import type { ClaudeModel } from './models.js';
 import type { ForkNetwork } from './network.js';
+import type { ActionRequest, AutonomousArea } from './requests.js';
 
 export type Role = 'user' | 'assistant';
 export type MessageSource = 'import' | 'live';
@@ -81,6 +82,10 @@ export interface Fork {
   network: ForkNetwork;
   // The model the runner answers this fork with; null follows the chat's model.
   model: ClaudeModel | null;
+  // The main fork's Claude may request work in other forks; only the main fork can have it.
+  coordination: boolean;
+  // Areas of requested actions that run without the user's approval. Only the user sets it.
+  autonomous: AutonomousArea[];
   createdAt: number;
   updatedAt: number;
   // Set on the fork the reader archived; the forks below it count as archived too.
@@ -342,6 +347,7 @@ export interface Snapshot {
   bookmarks: Bookmark[];
   forkRuns: ForkRun[];
   activities: Activity[];
+  requests: ActionRequest[];
   sessionStatus: SessionStatus;
 }
 
@@ -366,7 +372,8 @@ export type ChangeKind =
   | 'note'
   | 'bookmark'
   | 'fork_run'
-  | 'activity';
+  | 'activity'
+  | 'request';
 
 // What changed in a chat after a number of the change log, as it is now. A reply draft and a
 // fork run are named by their fork's id.
@@ -386,6 +393,7 @@ export interface ChangeSet {
   bookmarks: Bookmark[];
   forkRuns: ForkRun[];
   activities: Activity[];
+  requests: ActionRequest[];
   deleted: { kind: ChangeKind; id: string }[];
   // The log keeps no session state, so a chat caught up from it gets the current one.
   sessionStatus: SessionStatus;
@@ -422,6 +430,8 @@ export type ExplorationEvent =
   | { type: 'fork-run.updated'; run: ForkRun }
   | { type: 'activity.added'; activity: Activity }
   | { type: 'activities.interrupted'; forkId: string; attempt: number }
+  | { type: 'request.created'; request: ActionRequest }
+  | { type: 'request.updated'; request: ActionRequest }
   | { type: 'session.attached'; shimId: string }
   | { type: 'session.status'; status: SessionStatus };
 

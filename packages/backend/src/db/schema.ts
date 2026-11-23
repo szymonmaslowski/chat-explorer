@@ -20,6 +20,35 @@ const nowMs = "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)";
 // Every write to a chat's data records a row in the same transaction, by trigger, so no write
 // path can miss one. A row only names what changed; the current state is read when asked. A
 // file that leaves a chat, or joins one, counts as deleted there and created in the other.
+function loggedTriggers({
+  table,
+  kind,
+  key,
+  chat,
+}: {
+  table: string;
+  kind: string;
+  key: string;
+  chat: string;
+}) {
+  const log = (row: 'NEW' | 'OLD', kind: string, key: string, chat: string, action: string) =>
+    `INSERT INTO changes (exploration_id, kind, entity_id, action, created_at)
+       SELECT ${row}.${chat}, '${kind}', ${row}.${key}, '${action}', ${nowMs}
+       WHERE ${row}.${chat} IS NOT NULL;`;
+  return `
+  CREATE TRIGGER ${table}_logged_insert AFTER INSERT ON ${table} BEGIN
+    ${log('NEW', kind, key, chat, 'created')}
+  END;
+  CREATE TRIGGER ${table}_logged_update AFTER UPDATE ON ${table} BEGIN
+    ${log('OLD', kind, key, chat, 'deleted').replace('WHERE', `WHERE OLD.${chat} IS NOT NEW.${chat} AND`)}
+    ${log('NEW', kind, key, chat, 'updated').replace('WHERE', `WHERE OLD.${chat} IS NEW.${chat} AND`)}
+    ${log('NEW', kind, key, chat, 'created').replace('WHERE', `WHERE OLD.${chat} IS NOT NEW.${chat} AND`)}
+  END;
+  CREATE TRIGGER ${table}_logged_delete AFTER DELETE ON ${table} BEGIN
+    ${log('OLD', kind, key, chat, 'deleted')}
+  END;`;
+}
+
 function changeLog() {
   const log = (row: 'NEW' | 'OLD', kind: string, key: string, chat: string, action: string) =>
     `INSERT INTO changes (exploration_id, kind, entity_id, action, created_at)
@@ -435,5 +464,32 @@ export const migrations = [
   `
   -- The model the runner answers the fork with; null follows the chat's model.
   ALTER TABLE forks ADD COLUMN model TEXT;
+  `,
+  `
+  -- What Claude asked to do, one card each, waiting for the user's approval or decided. items is
+  -- a JSON array of { id, original, final, outcome, detail, resultId }. reported_at: when the
+  -- outcome went to the Claude that asked.
+  CREATE TABLE action_requests (
+    id TEXT PRIMARY KEY,
+    exploration_id TEXT NOT NULL REFERENCES explorations (id) ON DELETE CASCADE,
+    fork_id TEXT NOT NULL REFERENCES forks (id) ON DELETE CASCADE,
+    after_message_id TEXT,
+    requested_by TEXT NOT NULL CHECK (requested_by IN ('fork', 'terminal')),
+    items TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'waiting' CHECK (status IN ('waiting', 'approved', 'rejected')),
+    decided_by TEXT CHECK (decided_by IN ('user', 'autonomous')),
+    decided_at INTEGER,
+    reason TEXT,
+    reported_at INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX action_requests_by_fork ON action_requests (fork_id, status);
+  CREATE INDEX action_requests_by_exploration ON action_requests (exploration_id, created_at);
+  ${loggedTriggers({ table: 'action_requests', kind: 'request', key: 'id', chat: 'exploration_id' })}
+  -- The main fork's Claude may request work in other forks.
+  ALTER TABLE forks ADD COLUMN coordination INTEGER NOT NULL DEFAULT 0;
+  -- A JSON array of the areas whose requests run without a card.
+  ALTER TABLE forks ADD COLUMN autonomous TEXT NOT NULL DEFAULT '[]';
   `,
 ];

@@ -36,6 +36,8 @@ import type { EventBus } from '../store/event-bus.js';
 import type { FeedbackHub } from '../store/feedback-hub.js';
 import type { RunStore } from '../store/runs.js';
 import type { ChatStore } from '../store/store.js';
+import { RequestStore } from '../store/requests.js';
+import { requestDecisionSchema } from './request-schemas.js';
 import { guardLocalRequests } from './guard.js';
 import { registerJobTools } from './job-tools.js';
 import { registerRunnerRoutes } from './runner-routes.js';
@@ -305,6 +307,10 @@ export function createApp(options: AppOptions) {
     localUrl: `${localUrl}/e/${explorationId}`,
   });
   const app = new Hono();
+  const requests = new RequestStore(
+    store,
+    () => options.runs.lastCapabilities()?.capabilities ?? null,
+  );
 
   app.use('*', guardLocalRequests(port, options.publicUrl));
   // A long chat's snapshot is megabytes of JSON, loaded again on every reconnect over the
@@ -337,11 +343,19 @@ export function createApp(options: AppOptions) {
 
   registerRunnerRoutes(app, {
     store,
+    requests,
     runs: options.runs,
     bus,
     machineToken: options.machineToken,
   });
-  registerJobTools(app, { store, runs: options.runs });
+  registerJobTools(app, { store, runs: options.runs, requests });
+
+  // The user's decision on a card of requested actions: approve the ticked items, edited, or
+  // reject them all.
+  app.post('/api/requests/:id/decide', async (context) => {
+    const decision = requestDecisionSchema.parse(await context.req.json());
+    return context.json(requests.decide(context.req.param('id'), decision));
+  });
 
   app.patch('/api/forks/:id/awareness', async (context) => {
     const { awareness } = forkAwarenessBody.parse(await context.req.json());

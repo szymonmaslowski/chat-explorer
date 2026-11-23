@@ -8,10 +8,12 @@ import type { EventBus } from '../store/event-bus.js';
 import { buildRunContext } from '../store/run-context.js';
 import type { RunStore } from '../store/runs.js';
 import type { ChatStore } from '../store/store.js';
+import type { RequestStore } from '../store/requests.js';
 import { waitUntil } from '../store/wait-until.js';
 
 export interface RunnerRoutesOptions {
   store: ChatStore;
+  requests: RequestStore;
   runs: RunStore;
   bus: EventBus;
   machineToken: string;

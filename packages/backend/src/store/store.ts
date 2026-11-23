@@ -1,5 +1,6 @@
 import type { Database } from '../db/database.js';
 import {
+  toActionRequest,
   toActivity,
   toBookmark,
   toForkRun,
@@ -11,6 +12,7 @@ import {
   toNote,
   toNoteGroup,
   toQueuedSubmission,
+  type ActionRequestRow,
   type ActivityRow,
   type BookmarkRow,
   type ForkRunRow,
@@ -210,6 +212,19 @@ export class ChatStore {
     private readonly now: () => number = Date.now,
   ) {}
 
+  // For the stores that keep their own tables in the same database, such as action requests.
+  get database() {
+    return this.db;
+  }
+
+  get eventBus() {
+    return this.bus;
+  }
+
+  clock() {
+    return this.now();
+  }
+
   createExploration(
     options: {
       title?: string;
@@ -348,6 +363,12 @@ export class ChatStore {
           explorationId,
         )
         .map(toActivity),
+      requests: this.db
+        .all<ActionRequestRow>(
+          'SELECT * FROM action_requests WHERE exploration_id = ? ORDER BY created_at, rowid',
+          explorationId,
+        )
+        .map(toActionRequest),
     };
   }
 
@@ -428,6 +449,7 @@ export class ChatStore {
       bookmarks: [],
       forkRuns: [],
       activities: [],
+      requests: [],
       deleted: [],
     };
     if (empty.reset) return empty;
@@ -497,6 +519,8 @@ export class ChatStore {
         return push(set.forkRuns, row<ForkRunRow>('fork_runs', 'fork_id'), toForkRun);
       case 'activity':
         return push(set.activities, row<ActivityRow>('activities'), toActivity);
+      case 'request':
+        return push(set.requests, row<ActionRequestRow>('action_requests'), toActionRequest);
     }
   }
 
@@ -1621,6 +1645,60 @@ export class ChatStore {
     });
     this.publish([[explorationId, { type: 'fork.created', fork: toFork(fork) }]]);
     return this.publishSubmission(explorationId, id, []);
+  }
+
+  // A fork a request started: under the fork that asked, at its newest message, with its settings
+  // in place before its first message, the brief, which is written as if the user typed it.
+  startRequestedFork(input: {
+    forkId: string;
+    parentForkId: string;
+    title: string;
+    brief: string;
+    awareness: ForkAwareness;
+    coding: boolean;
+    model: ClaudeModel | null;
+    network: ForkNetwork;
+  }) {
+    const parent = this.requireWritableFork(input.parentForkId);
+    if (this.db.get<ForkRow>('SELECT * FROM forks WHERE id = ?', input.forkId)) {
+      throw new StoreError('invalid', `Id ${input.forkId} is already taken.`);
+    }
+    if (parent.tip_message_id === null) {
+      throw new StoreError('invalid', 'The fork has no messages to fork from.');
+    }
+    if (!input.brief.trim()) throw new StoreError('invalid', 'The new fork needs a brief.');
+    const explorationId = parent.exploration_id;
+    const { created, message, fork } = this.db.transaction(() => {
+      const created = this.insertFork({
+        id: input.forkId,
+        explorationId,
+        parentForkId: parent.id,
+        baseMessageId: parent.tip_message_id,
+        originCommentId: null,
+        summary: input.title.trim() || summaryFrom(input.brief.trim()),
+      });
+      this.db.run(
+        `UPDATE forks SET awareness = ?, coding = ?, model = ?, allowed_hosts = ?, registries = ?,
+           credentials = ? WHERE id = ?`,
+        input.awareness,
+        input.coding ? 1 : 0,
+        input.model,
+        JSON.stringify(input.network.hosts),
+        JSON.stringify(input.network.registries),
+        JSON.stringify(input.network.credentials),
+        created.id,
+      );
+      const withSettings = this.requireForkRow(created.id);
+      return {
+        created: withSettings,
+        ...this.appendMessage(withSettings, 'user', input.brief.trim(), 'live'),
+      };
+    });
+    this.publish([
+      [explorationId, { type: 'fork.created', fork: toFork(created) }],
+      [explorationId, { type: 'message.added', message: toMessage(message), fork: toFork(fork) }],
+    ]);
+    return toFork(fork);
   }
 
   cancelSubmission(submissionId: string) {

@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { StoreError } from '../store/errors.js';
 import type { Job, RunStore } from '../store/runs.js';
 import type { ChatStore } from '../store/store.js';
+import type { RequestStore } from '../store/requests.js';
 import type { ArrangeBoardInput } from '@chat-explorer/shared/types.js';
 import {
   readNotesDescription,
@@ -15,6 +16,7 @@ import {
 
 export interface JobToolsOptions {
   store: ChatStore;
+  requests: RequestStore;
   runs: RunStore;
 }
 
