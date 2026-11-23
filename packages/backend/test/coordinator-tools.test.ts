@@ -215,6 +215,7 @@ describe("the terminal's request tools", () => {
     };
     const names = (await client.listTools()).tools.map((tool) => tool.name);
     expect(names).toEqual(expect.arrayContaining(coordinationTools));
+    expect(names).not.toContain('message_fork');
 
     const { explorationId, mainForkId } = seedConversation(context.store);
     expect(context.store.fork(mainForkId).coordination).toBe(false);

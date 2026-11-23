@@ -271,23 +271,6 @@ export function createShim(options: ShimOptions) {
     }),
   );
 
-  server.registerTool(
-    'message_fork',
-    {
-      description:
-        'Send a message into another fork of the attached chat, shown as coming from the main fork. The runner answering that fork reads it like a message from the user, also in the middle of a turn.',
-      inputSchema: { forkId: z.string(), text: z.string().min(1) },
-    },
-    tool(async ({ forkId, text }: { forkId: string; text: string }) => {
-      requireAttachment();
-      return json(
-        await request(`/api/internal/forks/${forkId}/supervisor-messages`, {
-          json: { shimId, text },
-        }),
-      );
-    }),
-  );
-
   // Requests wait for the user's approval on a card in the main fork, as the runner's do.
   const askFor = (tool: string, args: object) => {
     const { explorationId } = requireAttachment();

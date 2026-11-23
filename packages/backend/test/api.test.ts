@@ -372,18 +372,31 @@ describe("a fork's allowed hosts", () => {
 });
 
 describe('the main fork overseeing the other forks', () => {
-  it('lets only the attached session message, stop or retry another fork', async () => {
+  it('has no direct message route: a message to a fork is a request the user approves', async () => {
     const { request, store } = createTestApp();
     const { explorationId, answer } = seedConversation(store);
     store.attach({ explorationId, shimId: 'shim-a', sessionId: 'session-a', takeover: false });
     const side = store.forkAtAnswer(answer.id);
-    const send = (shimId: string) =>
-      request(`/api/internal/forks/${side.id}/supervisor-messages`, {
-        method: 'POST',
-        json: { shimId, text: 'Compare it with the first one.' },
-      });
-    expect((await send('shim-b')).status).toBe(409);
-    expect((await send('shim-a')).status).toBe(201);
+    const sent = await request(`/api/internal/forks/${side.id}/supervisor-messages`, {
+      method: 'POST',
+      json: { shimId: 'shim-a', text: 'Compare it with the first one.' },
+    });
+    expect(sent.status).toBe(404);
+    const asked = await request(`/api/internal/explorations/${explorationId}/requests`, {
+      method: 'POST',
+      json: { shimId: 'shim-a', tool: 'request_message', args: { forkId: side.id, text: 'Hi' } },
+    });
+    expect((await asked.json()).status).toBe('waiting for approval');
+    expect(store.readFork(side.id).messages.some((message) => message.text.includes('Hi'))).toBe(
+      false,
+    );
+  });
+
+  it('lets only the attached session stop or retry another fork', async () => {
+    const { request, store } = createTestApp();
+    const { explorationId, answer } = seedConversation(store);
+    store.attach({ explorationId, shimId: 'shim-a', sessionId: 'session-a', takeover: false });
+    const side = store.forkAtAnswer(answer.id);
     for (const action of ['stop', 'retry']) {
       const response = await request(`/api/internal/forks/${side.id}/${action}`, {
         method: 'POST',

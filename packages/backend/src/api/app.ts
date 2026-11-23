@@ -212,7 +212,6 @@ const startExplorationBody = shimBody.extend({
 const attachBody = shimBody.extend({ sessionId: z.string(), takeover: z.boolean().default(false) });
 const addMessageBody = shimBody.extend({ inReplyTo: z.string(), content: z.string().min(1) });
 const forkSummaryBody = shimBody.extend({ summary: z.string() });
-const supervisorMessageBody = shimBody.extend({ text: z.string().min(1) });
 const requestToolBody = shimBody.extend({
   tool: z.string(),
   args: z.record(z.string(), z.unknown()),
@@ -896,13 +895,6 @@ export function createApp(options: AppOptions) {
     const { shimId } = shimBody.parse(await context.req.json());
     options.runs.retry(supervisedForkId(context.req.param('id'), shimId));
     return context.json({ ok: true });
-  });
-
-  internal.post('/forks/:id/supervisor-messages', async (context) => {
-    const { shimId, text } = supervisorMessageBody.parse(await context.req.json());
-    const forkId = supervisedForkId(context.req.param('id'), shimId);
-    const message = store.addSupervisorMessage(forkId, text);
-    return context.json({ messageId: message.id }, 201);
   });
 
   // The terminal session answering the main fork asks for actions there; each waits for the
