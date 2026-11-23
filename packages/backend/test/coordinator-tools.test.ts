@@ -54,6 +54,10 @@ describe("the runner's request tools", () => {
     expect(await off.tools()).not.toEqual(expect.arrayContaining(['request_fork']));
     store.setForkCoordination(mainForkId, true);
     expect(await off.tools()).toEqual(expect.arrayContaining(coordinationTools));
+    // No tool can change Coordination or Autonomous: only the user sets them.
+    expect((await off.tools()).filter((name) => /autonom|coordinat|setting/.test(name))).toEqual([
+      'request_fork_settings',
+    ]);
     const other = await jobOn(context, child.id);
     expect(await other.tools()).not.toEqual(expect.arrayContaining(['request_fork']));
   });
