@@ -1,6 +1,8 @@
 import { isHostPort, matchesHostPattern, maxAllowedHosts } from '@chat-explorer/shared/network.js';
 import {
+  autonomousAreaOf,
   createdBy,
+  defaultAutonomousForksPerHour,
   describeAction,
   editedFields,
   targetOf,
@@ -10,13 +12,14 @@ import {
   type RequestItem,
   type RequestOrigin,
 } from '@chat-explorer/shared/requests.js';
-import type { RunnerCapabilities } from '@chat-explorer/shared/types.js';
+import type { Fork, RunnerCapabilities } from '@chat-explorer/shared/types.js';
 import { toActionRequest, type ActionRequestRow } from '../db/rows.js';
 import { StoreError } from './errors.js';
 import { newId } from './ids.js';
 import type { ChatStore } from './store.js';
 
 const requestIdPrefix = 'req_';
+const hourMs = 60 * 60 * 1000;
 // Long texts in what goes back to Claude are cut; the card shows them whole.
 const outcomeTextLength = 300;
 
@@ -70,6 +73,7 @@ export class RequestStore {
   request(forkId: string, requestedBy: RequestOrigin, action: RequestAction): RequestResult {
     const fork = this.chats.fork(forkId);
     this.validate(fork.explorationId, forkId, action);
+    if (this.isAutonomous(fork, action)) return this.runAutonomously(fork, requestedBy, action);
     const item: RequestItem = {
       id: newId(),
       original: action,
@@ -126,6 +130,67 @@ export class RequestStore {
       status: 'waiting for approval',
       ...(made?.kind === 'fork' && { forkId: made.id }),
       ...(made?.kind === 'group' && { groupId: made.id }),
+    };
+  }
+
+  // The fork's Autonomous setting covers the action's area, and new forks are under the hourly cap.
+  private isAutonomous(fork: Fork, action: RequestAction) {
+    const area = autonomousAreaOf(action);
+    if (!area || !fork.autonomous.includes(area)) return false;
+    if (area !== 'forks') return true;
+    const cap = this.capabilities()?.autonomousForksPerHour ?? defaultAutonomousForksPerHour;
+    return this.autonomousForksSince(fork.explorationId, this.now() - hourMs) < cap;
+  }
+
+  private autonomousForksSince(explorationId: string, since: number) {
+    return this.db
+      .all<ActionRequestRow>(
+        `SELECT * FROM action_requests
+         WHERE exploration_id = ? AND decided_by = 'autonomous' AND decided_at >= ?`,
+        explorationId,
+        since,
+      )
+      .flatMap((row) => JSON.parse(row.items) as RequestItem[])
+      .filter((item) => item.original.kind === 'fork' && item.outcome === 'done').length;
+  }
+
+  // Runs at once, logged as a request the autonomous setting decided. Claude hears the outcome in
+  // the tool's result, so it counts as reported.
+  private runAutonomously(fork: Fork, requestedBy: RequestOrigin, action: RequestAction) {
+    const now = this.now();
+    const id = `${requestIdPrefix}${newId()}`;
+    const item: RequestItem = {
+      id: newId(),
+      original: action,
+      final: null,
+      outcome: null,
+      detail: null,
+      resultId: null,
+    };
+    this.db.run(
+      `INSERT INTO action_requests (id, exploration_id, fork_id, after_message_id, requested_by,
+         items, reported_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      id,
+      fork.explorationId,
+      fork.id,
+      fork.tipMessageId,
+      requestedBy,
+      JSON.stringify([item]),
+      now,
+      now,
+      now,
+    );
+    const [decided] = this.run(this.requireRow(id), [{ item, final: action, selected: true }]);
+    this.save(id, [decided!], { status: 'approved', decidedBy: 'autonomous', reason: null, now });
+    const saved = this.get(id);
+    this.chats.eventBus.publish(saved.explorationId, { type: 'request.created', request: saved });
+    return {
+      requestId: id,
+      itemId: item.id,
+      status: decided!.outcome === 'done' ? ('done' as const) : ('failed' as const),
+      resultId: decided!.resultId,
+      detail: decided!.detail,
     };
   }
 
@@ -187,6 +252,16 @@ export class RequestStore {
       'The user decided on your requests:',
       ...rows.map((row) => outcomeText(toActionRequest(row))),
     ].join('\n');
+  }
+
+  // A new session's history has every decided request, so none is left to report.
+  markReported(forkId: string) {
+    this.db.run(
+      `UPDATE action_requests SET reported_at = ?
+       WHERE fork_id = ? AND status != 'waiting' AND reported_at IS NULL`,
+      this.now(),
+      forkId,
+    );
   }
 
   // The fork's requests as Claude sees them in a new session's history, after their message.

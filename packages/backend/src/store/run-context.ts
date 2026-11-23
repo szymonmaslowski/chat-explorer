@@ -1,5 +1,6 @@
 import { supervisorMessagePrefix, type ChatStore } from './store.js';
 import { noReply, type RunContext } from '@chat-explorer/shared/protocol.js';
+import type { RequestStore } from './requests.js';
 
 // The newest messages of a long fork go into a new session up to about this many characters; the
 // rest is a pointer to read_fork.
@@ -27,6 +28,12 @@ Tools:
 - To read notes, start small: list_notes gives the index of topics, search_notes finds notes by their words, and read_notes gives the full text of the notes you chose. A link like #n-<noteId> in a note or message points at a note you can read by that id.
 - list_forks and read_fork show the chat's other forks and older messages of this one.
 - draft_comment drafts a comment in another fork, for the user to edit and send there; you can't send it. Use it, rather than asking the user to copy text over, when something belongs in another fork.`;
+
+// For the main fork, when the user turned Coordination on.
+export const coordinationPrompt = `Coordination: you are this chat's coordinator. Other forks do the work, and the user talks to them there; you plan with the user here and hand the work over.
+- request_fork asks to start a fork with a title, a brief and settings. The brief is the fork's first message, written as the user would write it: what to do, and how to report. Turn coding on for work that needs a shell or a workspace, such as code or research with command-line tools, and allow only the hosts and registries it needs.
+- request_message asks to send a fork a message; request_fork_settings asks to change a fork's settings.
+- Each request waits for the user's approval on a card in this conversation; the user may edit it first. The tool returns at once, and the requests of one turn join one card, so ask for everything in one turn and say in your answer what you asked for. You learn the outcome at the start of your next turn; don't assume a fork exists or got your text until then.`;
 
 const maxDigestLines = 30;
 
@@ -75,13 +82,17 @@ function notesDigest(store: ChatStore, explorationId: string) {
 export function buildRunContext(
   store: ChatStore,
   forkId: string,
-  options: { resume: boolean; pendingIds: Set<string> },
+  options: { resume: boolean; pendingIds: Set<string>; requests?: RequestStore },
 ): RunContext {
   const fork = store.readFork(forkId);
   const explorationId = store.forkExplorationId(forkId);
   const model = store.forkModel(forkId);
-  const { coding, network } = store.fork(forkId);
-  if (options.resume) return { model, coding, network, systemPrompt, history: null };
+  const { coding, network, parentForkId, coordination } = store.fork(forkId);
+  const prompt =
+    parentForkId === null && coordination
+      ? `${systemPrompt}\n\n${coordinationPrompt}`
+      : systemPrompt;
+  if (options.resume) return { model, coding, network, systemPrompt: prompt, history: null };
   const answered = fork.messages.filter((message) => !options.pendingIds.has(message.id));
   const kept: typeof answered = [];
   let length = 0;
@@ -114,14 +125,28 @@ export function buildRunContext(
     ...(digest ? ['', digest] : []),
     ...(notes ? ['', notes] : []),
   ];
-  const messages = kept.map(
-    (message) => `<message id="${message.id}" role="${message.role}">\n${message.text}\n</message>`,
-  );
+  // Each request shows after the message it was asked under, with how it was decided.
+  const records = options.requests?.historyRecords(forkId) ?? [];
+  options.requests?.markReported(forkId);
+  const keptIds = new Set(kept.map((message) => message.id));
+  const recordsAfter = (messageId: string | null) =>
+    records
+      .filter((record) => record.afterMessageId === messageId)
+      .map((record) => `<requests>\n${record.text}\n</requests>`);
+  const messages = [
+    ...records
+      .filter((record) => record.afterMessageId === null || !keptIds.has(record.afterMessageId))
+      .map((record) => `<requests>\n${record.text}\n</requests>`),
+    ...kept.flatMap((message) => [
+      `<message id="${message.id}" role="${message.role}">\n${message.text}\n</message>`,
+      ...recordsAfter(message.id),
+    ]),
+  ];
   return {
     model,
     coding,
     network,
-    systemPrompt,
+    systemPrompt: prompt,
     history: [intro.join('\n'), ...messages].join('\n\n'),
   };
 }

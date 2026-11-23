@@ -108,6 +108,7 @@ function setup(timings = {}, coding = false, extras: SetupExtras = {}) {
       path: '/runner/config.json',
       coding: { enabled: coding, ...defaultCodingLimits, allowedHosts: null, credentials },
       localBackend: true,
+      autonomousForksPerHour: 5,
     },
     diskGuard,
     memoryGate,

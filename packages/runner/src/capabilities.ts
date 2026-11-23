@@ -45,6 +45,7 @@ export function capabilitiesReport(
       processes: coding.processes,
       workspaceLimitGb: coding.workspaceLimitGb,
     },
+    autonomousForksPerHour: config.autonomousForksPerHour,
     configHash,
   };
 }

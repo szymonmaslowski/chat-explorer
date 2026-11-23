@@ -38,6 +38,7 @@ import type { RunStore } from '../store/runs.js';
 import type { ChatStore } from '../store/store.js';
 import { RequestStore } from '../store/requests.js';
 import { requestDecisionSchema } from './request-schemas.js';
+import { actionFromTool } from './request-tools.js';
 import { guardLocalRequests } from './guard.js';
 import { registerJobTools } from './job-tools.js';
 import { registerRunnerRoutes } from './runner-routes.js';
@@ -220,6 +221,10 @@ const attachBody = shimBody.extend({ sessionId: z.string(), takeover: z.boolean(
 const addMessageBody = shimBody.extend({ inReplyTo: z.string(), content: z.string().min(1) });
 const forkSummaryBody = shimBody.extend({ summary: z.string() });
 const supervisorMessageBody = shimBody.extend({ text: z.string().min(1) });
+const requestToolBody = shimBody.extend({
+  tool: z.string(),
+  args: z.record(z.string(), z.unknown()),
+});
 const sessionStepBody = z.object({
   texts: z.array(z.string().min(1)).default([]),
   tool: z.string().min(1).nullable().default(null),
@@ -917,6 +922,16 @@ export function createApp(options: AppOptions) {
     return context.json({ messageId: message.id }, 201);
   });
 
+  // The terminal session answering the main fork asks for actions there; each waits for the
+  // user's approval on a card, as a fork's requests do.
+  internal.post('/explorations/:id/requests', async (context) => {
+    const explorationId = context.req.param('id');
+    const { shimId, tool, args } = requestToolBody.parse(await context.req.json());
+    store.requireAttachedShim(explorationId, shimId);
+    const mainFork = store.mainFork(explorationId);
+    return context.json(requests.request(mainFork.id, 'terminal', actionFromTool(tool, args)), 201);
+  });
+
   internal.patch('/explorations/:id', async (context) => {
     const explorationId = context.req.param('id');
     const { shimId, ...changes } = explorationChangesBody.parse(await context.req.json());
@@ -933,7 +948,9 @@ export function createApp(options: AppOptions) {
       waitMs,
       signal: context.req.raw.signal,
     });
-    return context.json(result);
+    if (result.status !== 'feedback') return context.json(result);
+    const outcomes = requests.takeOutcomes(store.mainFork(context.req.param('id')).id);
+    return context.json(outcomes ? { ...result, requestOutcomes: outcomes } : result);
   });
 
   internal.get('/explorations/:id/board', (context) =>

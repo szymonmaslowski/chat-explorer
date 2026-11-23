@@ -29,7 +29,12 @@ export interface RunnerConfig {
   // The backend runs on this machine. Coding forks run only then, and only if its address is
   // loopback too: a backend elsewhere needs enrolled devices first.
   localBackend: boolean;
+  // How many forks a fork's Claude may start in an hour without the user's approval, under its
+  // Autonomous setting. Beyond it, each request waits for approval on a card.
+  autonomousForksPerHour: number;
 }
+
+export const defaultAutonomousForksPerHour = 5;
 
 export const defaultCodingLimits: Omit<ContainerLimits, 'memory'> & DiskLimits = {
   processes: 512,
@@ -45,6 +50,7 @@ export class RunnerConfigError extends Error {}
 
 interface RunnerConfigFile {
   localBackend?: unknown;
+  autonomousForksPerHour?: unknown;
   coding?: {
     allowedHosts?: unknown;
     credentials?: unknown;
@@ -68,6 +74,7 @@ export function readRunnerConfig(runnerPath: string): RunnerConfig {
       path,
       coding: { enabled: false, ...defaultCodingLimits, allowedHosts: null, credentials: [] },
       localBackend: true,
+      autonomousForksPerHour: defaultAutonomousForksPerHour,
     };
   }
   try {
@@ -103,6 +110,16 @@ export function readRunnerConfig(runnerPath: string): RunnerConfig {
   if (typeof localBackend !== 'boolean') {
     throw new RunnerConfigError(`localBackend in ${path} must be true or false.`);
   }
+  const autonomousForksPerHour = parsed.autonomousForksPerHour ?? defaultAutonomousForksPerHour;
+  if (
+    typeof autonomousForksPerHour !== 'number' ||
+    !Number.isInteger(autonomousForksPerHour) ||
+    autonomousForksPerHour < 0
+  ) {
+    throw new RunnerConfigError(
+      `autonomousForksPerHour in ${path} must be a whole number, 0 or more.`,
+    );
+  }
   let access: AccessConfig;
   try {
     access = readAccessConfig(parsed.coding, path, runnerKnowsHostKey);
@@ -131,5 +148,6 @@ export function readRunnerConfig(runnerPath: string): RunnerConfig {
       ...access,
     },
     localBackend,
+    autonomousForksPerHour,
   };
 }

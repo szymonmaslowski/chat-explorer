@@ -7,6 +7,14 @@ import { StoreError } from '../store/errors.js';
 import type { Job, RunStore } from '../store/runs.js';
 import type { ChatStore } from '../store/store.js';
 import type { RequestStore } from '../store/requests.js';
+import { requestToolDescriptions } from '@chat-explorer/shared/request-tools.js';
+import type { RequestAction } from '@chat-explorer/shared/requests.js';
+import {
+  coordinationActions,
+  requestToolShapes,
+  type CoordinationTool,
+  type RequestToolArgs,
+} from './request-tools.js';
 import type { ArrangeBoardInput } from '@chat-explorer/shared/types.js';
 import {
   readNotesDescription,
@@ -33,7 +41,7 @@ function sameChat(job: Job, explorationId: string, what: string) {
   if (explorationId !== job.explorationId) throw new StoreError('not_found', `${what} not found.`);
 }
 
-function toolsFor(job: Job, { store, runs }: JobToolsOptions) {
+function toolsFor(job: Job, { store, runs, requests }: JobToolsOptions) {
   const server = new McpServer({ name: 'chat-explorer-job', version: '1.0.0' });
   const tool =
     <Args>(handler: (args: Args) => unknown) =>
@@ -126,6 +134,35 @@ function toolsFor(job: Job, { store, runs }: JobToolsOptions) {
           const comment = store.draftComment(job.forkId, { forkId, messageId, body: text });
           return { commentId: comment.id, forkId, messageId: comment.messageId };
         },
+      ),
+    );
+  }
+
+  // The chat's coordinator: the main fork, when the user turned Coordination on.
+  const fork = store.fork(job.forkId);
+  if (fork.parentForkId === null && fork.coordination) {
+    const ask = (action: RequestAction) => requests.request(job.forkId, 'fork', action);
+    const describe = (name: CoordinationTool) => ({
+      description: requestToolDescriptions[name],
+      inputSchema: requestToolShapes[name],
+    });
+    server.registerTool(
+      'request_fork',
+      describe('request_fork'),
+      tool((args: RequestToolArgs['request_fork']) => ask(coordinationActions.request_fork(args))),
+    );
+    server.registerTool(
+      'request_message',
+      describe('request_message'),
+      tool((args: RequestToolArgs['request_message']) =>
+        ask(coordinationActions.request_message(args)),
+      ),
+    );
+    server.registerTool(
+      'request_fork_settings',
+      describe('request_fork_settings'),
+      tool((args: RequestToolArgs['request_fork_settings']) =>
+        ask(coordinationActions.request_fork_settings(args)),
       ),
     );
   }

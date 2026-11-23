@@ -277,3 +277,83 @@ describe('the decide API', () => {
     expect(again.status).toBe(409);
   });
 });
+
+describe('the autonomous setting', () => {
+  it('runs an allowed area at once, logged with the setting as the decider', () => {
+    const { store, requests, mainForkId, answer } = setup();
+    const child = store.forkAtAnswer(answer.id);
+    store.setForkAutonomous(mainForkId, ['messages']);
+    const result = requests.request(mainForkId, 'fork', {
+      kind: 'message',
+      forkId: child.id,
+      text: 'Carry on.',
+    });
+    expect(result.status).toBe('done');
+    expect(store.readFork(child.id).messages.at(-1)?.text).toContain('Carry on.');
+    const request = requests.get(result.requestId);
+    expect(request).toMatchObject({ status: 'approved', decidedBy: 'autonomous' });
+    // Claude heard it in the tool's result.
+    expect(requests.takeOutcomes(mainForkId)).toBeNull();
+  });
+
+  it('needs a card for an area that is not ticked', () => {
+    const { store, requests, mainForkId, answer } = setup();
+    const child = store.forkAtAnswer(answer.id);
+    store.setForkAutonomous(mainForkId, ['forks']);
+    const result = requests.request(mainForkId, 'fork', {
+      kind: 'message',
+      forkId: child.id,
+      text: 'Carry on.',
+    });
+    expect(result.status).toBe('waiting for approval');
+  });
+
+  it('never covers container settings, credentials or the model', () => {
+    const { store, requests, mainForkId, answer } = setup();
+    const child = store.forkAtAnswer(answer.id);
+    store.setForkAutonomous(mainForkId, ['forks', 'fork_options']);
+    for (const action of [
+      forkAction({ coding: true }),
+      forkAction({ registries: ['npm'] }),
+      forkAction({ credentials: ['gh'] }),
+      forkAction({ hosts: ['api.example.com:443'] }),
+      forkAction({ model: 'opus' }),
+    ]) {
+      expect(requests.request(mainForkId, 'fork', action).status).toBe('waiting for approval');
+    }
+    const settings = (changes: Record<string, unknown>) =>
+      requests.request(mainForkId, 'fork', { kind: 'fork_settings', forkId: child.id, changes })
+        .status;
+    expect(settings({ coding: true })).toBe('waiting for approval');
+    expect(settings({ registries: ['npm'] })).toBe('waiting for approval');
+    expect(settings({ title: 'Renamed', awareness: 'separate' })).toBe('done');
+    expect(store.fork(child.id)).toMatchObject({ summary: 'Renamed', awareness: 'separate' });
+  });
+
+  it('turns the sixth new fork within an hour into a card', () => {
+    const { store, requests, mainForkId, clock } = setup();
+    store.setForkAutonomous(mainForkId, ['forks']);
+    const statuses = Array.from(
+      { length: 6 },
+      () => requests.request(mainForkId, 'fork', forkAction()).status,
+    );
+    expect(statuses).toEqual(['done', 'done', 'done', 'done', 'done', 'waiting for approval']);
+    clock.now += 60 * 60 * 1000 + 1;
+    expect(requests.request(mainForkId, 'fork', forkAction()).status).toBe('done');
+  });
+
+  it("takes the cap from the runner's config", () => {
+    const { store, requests, mainForkId } = setup({ ...capabilities, autonomousForksPerHour: 1 });
+    store.setForkAutonomous(mainForkId, ['forks']);
+    expect(requests.request(mainForkId, 'fork', forkAction()).status).toBe('done');
+    expect(requests.request(mainForkId, 'fork', forkAction()).status).toBe('waiting for approval');
+  });
+
+  it('is only for the main fork to coordinate', () => {
+    const { store, mainForkId, answer } = setup();
+    const child = store.forkAtAnswer(answer.id);
+    expect(store.setForkCoordination(mainForkId, true).coordination).toBe(true);
+    expect(() => store.setForkCoordination(child.id, true)).toThrow(/main fork/);
+    expect(() => store.setForkAutonomous(child.id, ['nope' as never])).toThrow(/no autonomous/);
+  });
+});

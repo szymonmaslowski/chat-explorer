@@ -57,6 +57,7 @@ const allowed: RunnerConfig = {
   path: '/runner/config.json',
   coding: { enabled: true, ...defaultCodingLimits, allowedHosts: null, credentials: [] },
   localBackend: true,
+  autonomousForksPerHour: 5,
 };
 const notAllowed = { ...allowed, coding: { ...allowed.coding, enabled: false } };
 const sessionId = '11111111-2222-3333-4444-555555555555';

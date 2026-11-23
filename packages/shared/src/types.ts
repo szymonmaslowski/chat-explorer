@@ -267,6 +267,8 @@ export interface RunnerCapabilities {
     processes: number;
     workspaceLimitGb: number;
   };
+  // Forks a fork may start in an hour without a card; missing from an older runner.
+  autonomousForksPerHour?: number;
   // Changes with the runner's config file.
   configHash: string;
 }

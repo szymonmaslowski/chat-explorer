@@ -67,6 +67,7 @@ import {
 } from '@chat-explorer/shared/answer-tags.js';
 import { defaultClaudeModel, type ClaudeModel } from '@chat-explorer/shared/models.js';
 import type { ForkNetwork } from '@chat-explorer/shared/network.js';
+import { autonomousAreas, type AutonomousArea } from '@chat-explorer/shared/requests.js';
 import {
   inTextOrder,
   joinForkGroup,
@@ -743,12 +744,38 @@ export class ChatStore {
     return toFork(this.requireForkRow(forkId));
   }
 
+  mainFork(explorationId: string) {
+    this.requireExplorationRow(explorationId);
+    return toFork(
+      this.db.get<ForkRow>(
+        'SELECT * FROM forks WHERE exploration_id = ? AND parent_fork_id IS NULL',
+        explorationId,
+      )!,
+    );
+  }
+
   setForkAwareness(forkId: string, awareness: ForkAwareness) {
     return this.updateForkSettings(forkId, { awareness });
   }
 
   setForkCoding(forkId: string, coding: boolean) {
     return this.updateForkSettings(forkId, { coding: coding ? 1 : 0 });
+  }
+
+  // Only the main fork can coordinate: a fork it starts cannot start forks.
+  setForkCoordination(forkId: string, coordination: boolean) {
+    if (coordination && this.requireForkRow(forkId).parent_fork_id !== null) {
+      throw new StoreError('invalid', "Only a chat's main fork can coordinate.");
+    }
+    return this.updateForkSettings(forkId, { coordination: coordination ? 1 : 0 });
+  }
+
+  setForkAutonomous(forkId: string, areas: AutonomousArea[]) {
+    const known = new Set<string>(autonomousAreas);
+    const unknown = areas.find((area) => !known.has(area));
+    if (unknown) throw new StoreError('invalid', `There is no autonomous area ${unknown}.`);
+    const ordered = autonomousAreas.filter((area) => areas.includes(area));
+    return this.updateForkSettings(forkId, { autonomous: JSON.stringify(ordered) });
   }
 
   setForkModel(forkId: string, model: ClaudeModel | null) {
@@ -768,7 +795,14 @@ export class ChatStore {
     changes: Partial<
       Pick<
         ForkRow,
-        'awareness' | 'coding' | 'model' | 'allowed_hosts' | 'registries' | 'credentials'
+        | 'awareness'
+        | 'coding'
+        | 'model'
+        | 'allowed_hosts'
+        | 'registries'
+        | 'credentials'
+        | 'coordination'
+        | 'autonomous'
       >
     >,
   ) {

@@ -22,7 +22,15 @@ describe("the runner's own config", () => {
         credentials: [],
       },
       localBackend: true,
+      autonomousForksPerHour: 5,
     });
+  });
+
+  it('reads how many forks may start in an hour without a card', () => {
+    writeFileSync(configPath, JSON.stringify({ autonomousForksPerHour: 2 }));
+    expect(readRunnerConfig(runnerPath).autonomousForksPerHour).toBe(2);
+    writeFileSync(configPath, JSON.stringify({ autonomousForksPerHour: -1 }));
+    expect(() => readRunnerConfig(runnerPath)).toThrow(/autonomousForksPerHour/);
   });
 
   it('allows coding only when the file says so', () => {

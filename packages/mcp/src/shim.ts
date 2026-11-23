@@ -12,6 +12,9 @@ import type {
   Note,
   NoteGroup,
 } from '@chat-explorer/shared/types.js';
+import { claudeModels } from '@chat-explorer/shared/models.js';
+import { registryNames } from '@chat-explorer/shared/network.js';
+import { requestToolDescriptions, requestToolFields } from '@chat-explorer/shared/request-tools.js';
 import {
   readNotesDescription,
   readNotesLimit,
@@ -284,6 +287,65 @@ export function createShim(options: ShimOptions) {
         }),
       );
     }),
+  );
+
+  // Requests wait for the user's approval on a card in the main fork, as the runner's do.
+  const askFor = (tool: string, args: object) => {
+    const { explorationId } = requireAttachment();
+    return request(`/api/internal/explorations/${explorationId}/requests`, {
+      json: { shimId, tool, args },
+    });
+  };
+  const settingsShape = {
+    aware: z.boolean().optional().describe(requestToolFields.aware),
+    coding: z.boolean().optional().describe(requestToolFields.coding),
+    model: z.enum(claudeModels).nullable().optional().describe(requestToolFields.model),
+    hosts: z.array(z.string()).optional().describe(requestToolFields.hosts),
+    registries: z.array(z.enum(registryNames)).optional().describe(requestToolFields.registries),
+    credentials: z.array(z.string()).optional().describe(requestToolFields.credentials),
+  };
+  const settingsArgs = z.object(settingsShape);
+  type SettingsArgs = z.infer<typeof settingsArgs>;
+
+  server.registerTool(
+    'request_fork',
+    {
+      description: requestToolDescriptions.request_fork,
+      inputSchema: {
+        title: z.string().min(1).describe(requestToolFields.title),
+        brief: z.string().min(1).describe(requestToolFields.brief),
+        ...settingsShape,
+      },
+    },
+    tool(async (args: { title: string; brief: string } & SettingsArgs) =>
+      json(await askFor('request_fork', args)),
+    ),
+  );
+
+  server.registerTool(
+    'request_message',
+    {
+      description: requestToolDescriptions.request_message,
+      inputSchema: { forkId: z.string(), text: z.string().min(1) },
+    },
+    tool(async (args: { forkId: string; text: string }) =>
+      json(await askFor('request_message', args)),
+    ),
+  );
+
+  server.registerTool(
+    'request_fork_settings',
+    {
+      description: requestToolDescriptions.request_fork_settings,
+      inputSchema: {
+        forkId: z.string(),
+        title: z.string().optional().describe(requestToolFields.title),
+        ...settingsShape,
+      },
+    },
+    tool(async (args: { forkId: string; title?: string | undefined } & SettingsArgs) =>
+      json(await askFor('request_fork_settings', args)),
+    ),
   );
 
   server.registerTool(

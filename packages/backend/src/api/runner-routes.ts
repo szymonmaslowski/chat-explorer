@@ -66,6 +66,7 @@ const capabilitiesBody = z.object({
       processes: z.number().int().positive(),
       workspaceLimitGb: z.number().positive(),
     }),
+    autonomousForksPerHour: z.number().int().min(0).optional(),
     configHash: z.string(),
   }),
 });
@@ -179,7 +180,13 @@ export function registerRunnerRoutes(app: Hono, options: RunnerRoutesOptions) {
         network,
       });
     }
-    const others = input.messages.length > 0 ? runs.othersUpdate(forkId, leaseId) : null;
+    // What happened elsewhere, and what the user decided on this fork's requests, go before the
+    // next message.
+    const news =
+      input.messages.length > 0
+        ? [runs.othersUpdate(forkId, leaseId), options.requests.takeOutcomes(forkId)]
+        : [];
+    const others = news.filter((part) => part !== null).join('\n\n') || null;
     return context.json<RunInput>({ ...input, others, restart, coding, model, network });
   });
 
@@ -187,7 +194,11 @@ export function registerRunnerRoutes(app: Hono, options: RunnerRoutesOptions) {
     const forkId = context.req.param('forkId');
     const { leaseId, resume } = contextBody.parse(await context.req.json());
     const pendingIds = new Set(runs.pendingInput(forkId, leaseId).map((message) => message.id));
-    const runContext = buildRunContext(store, forkId, { resume, pendingIds });
+    const runContext = buildRunContext(store, forkId, {
+      resume,
+      pendingIds,
+      requests: options.requests,
+    });
     // A new session's digest covers the other forks so far; a resumed one hears from now on.
     if (!resume) runs.markOthersSeen(forkId, leaseId);
     return context.json(runContext);

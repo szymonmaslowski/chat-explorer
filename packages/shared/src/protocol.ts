@@ -151,6 +151,8 @@ export type FeedbackResult =
       forks: PendingFork[];
       notesNeedingTopic: NoteNeedingTopic[];
       notes: NotesIndex;
+      // How the user decided on the main fork's requests since the session last heard.
+      requestOutcomes?: string;
     }
   | { status: 'timeout' }
   | { status: 'detached' }
