@@ -2,6 +2,9 @@
 import { usePopover } from '../composables/usePopover';
 import MediaIcon from './MediaIcon.vue';
 
+// Showing and hiding apply to drafts on quoted text; a general draft is always listed under its
+// message, so with only those, displaying them alone is the one choice.
+defineProps<{ quoted: boolean }>();
 const emit = defineEmits<{ show: []; hide: []; showOnly: [] }>();
 const { open, closeOnEscape } = usePopover('root');
 
@@ -16,8 +19,10 @@ function choose(action: 'show' | 'hide' | 'showOnly') {
 <template>
   <div ref="root" class="drop-up" @keydown.escape="closeOnEscape">
     <div v-if="open" class="drop-up-menu from-right" role="menu" aria-label="Drafts">
-      <button type="button" role="menuitem" @click="choose('show')">Show all drafts</button>
-      <button type="button" role="menuitem" @click="choose('hide')">Hide all drafts</button>
+      <template v-if="quoted">
+        <button type="button" role="menuitem" @click="choose('show')">Show all drafts</button>
+        <button type="button" role="menuitem" @click="choose('hide')">Hide all drafts</button>
+      </template>
       <button
         type="button"
         role="menuitem"
@@ -33,7 +38,7 @@ function choose(action: 'show' | 'hide' | 'showOnly') {
       aria-haspopup="menu"
       :aria-expanded="open"
       aria-label="Drafts"
-      title="Show or hide the drafts in the text"
+      :title="quoted ? 'Show or hide the drafts in the text' : 'Display only the drafts'"
       @click="open = !open"
     >
       <MediaIcon name="eye" />

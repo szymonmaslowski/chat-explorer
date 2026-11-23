@@ -357,6 +357,39 @@ test('displays only the drafts, one under another, until the text is shown again
   await expect(page.getByRole('button', { name: 'Show text' })).toHaveCount(0);
 });
 
+test('offers only Display all when every draft is general', async ({ page, request }) => {
+  const { explorationId } = await (
+    await request.post('/api/explorations', { data: { message: 'Explain caching' } })
+  ).json();
+  await attachFakeSession(request, explorationId);
+  await deliverAndAnswer(request, explorationId, 'Alpha paragraph here.');
+  await detachFakeSession(request);
+  const snapshot = await (await request.get(`/api/explorations/${explorationId}`)).json();
+  const message = snapshot.messages.at(-1);
+  await request.post(`/api/explorations/${explorationId}/comments`, {
+    data: {
+      messageId: message.id,
+      viewForkId: message.forkId,
+      quote: '',
+      startOffset: 0,
+      endOffset: 0,
+      body: 'About the whole answer',
+    },
+  });
+  await page.goto(`/e/${explorationId}`);
+
+  await page.getByRole('button', { name: 'Drafts' }).click();
+  await expect(page.getByRole('menuitem')).toHaveText(['Display all']);
+  await page.getByRole('menuitem', { name: 'Display all' }).click();
+  await expect(page.locator('.comment-card').filter({ visible: true })).toHaveText([
+    /About the whole answer/,
+  ]);
+  await expect(page.getByText('Alpha paragraph here.')).toBeHidden();
+
+  await page.getByRole('button', { name: 'Show text' }).click();
+  await expect(page.getByText('Alpha paragraph here.')).toBeVisible();
+});
+
 test('leaves sent comments out of the drafts-only view, even when opened', async ({
   page,
   request,

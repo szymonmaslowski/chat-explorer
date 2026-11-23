@@ -341,7 +341,8 @@ function onKeydown(event: KeyboardEvent) {
         <MediaIcon name="eye" /> Show text
       </button>
       <DraftsMenu
-        v-else-if="hasQuotedDrafts"
+        v-else-if="drafts.length"
+        :quoted="hasQuotedDrafts"
         @show="emit('showDrafts')"
         @hide="emit('hideDrafts')"
         @show-only="emit('showOnlyDrafts')"
