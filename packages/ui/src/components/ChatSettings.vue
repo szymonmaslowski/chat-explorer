@@ -8,6 +8,7 @@ import { outbox } from '../stores/outbox';
 import ConfirmButton from './ConfirmButton.vue';
 import CopyableId from './CopyableId.vue';
 import ForkModelInfo from './ForkModelInfo.vue';
+import ForkRequestSettings from './ForkRequestSettings.vue';
 
 const unsent = computed(() => outbox.changes.value.length);
 
@@ -55,6 +56,7 @@ async function setDefaultPage(explorationId: string, defaultPage: ChatDefaultPag
       :run="run"
       :chat-model="exploration.model"
     />
+    <ForkRequestSettings v-if="fork" class="card" :fork="fork" />
     <section class="card device" aria-label="This device">
       <h2>This device</h2>
       <p class="muted">

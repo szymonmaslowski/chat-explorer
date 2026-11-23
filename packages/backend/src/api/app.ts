@@ -37,6 +37,7 @@ import type { FeedbackHub } from '../store/feedback-hub.js';
 import type { RunStore } from '../store/runs.js';
 import type { ChatStore } from '../store/store.js';
 import { RequestStore } from '../store/requests.js';
+import { autonomousAreas } from '@chat-explorer/shared/requests.js';
 import { requestDecisionSchema } from './request-schemas.js';
 import { actionFromTool } from './request-tools.js';
 import { guardLocalRequests } from './guard.js';
@@ -370,6 +371,21 @@ export function createApp(options: AppOptions) {
   app.patch('/api/forks/:id/coding', async (context) => {
     const { coding } = forkCodingBody.parse(await context.req.json());
     return context.json(store.setForkCoding(context.req.param('id'), coding));
+  });
+
+  // Only the user sets these, here: no tool of Claude's can.
+  app.patch('/api/forks/:id/coordination', async (context) => {
+    const { coordination } = z
+      .object({ coordination: z.boolean() })
+      .parse(await context.req.json());
+    return context.json(store.setForkCoordination(context.req.param('id'), coordination));
+  });
+
+  app.patch('/api/forks/:id/autonomous', async (context) => {
+    const { areas } = z
+      .object({ areas: z.array(z.enum(autonomousAreas)) })
+      .parse(await context.req.json());
+    return context.json(store.setForkAutonomous(context.req.param('id'), areas));
   });
 
   app.patch('/api/forks/:id/model', async (context) => {

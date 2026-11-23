@@ -369,3 +369,19 @@ describe('the chats list', () => {
     expect(listed().waitingRequests).toBe(false);
   });
 });
+
+describe('the settings API', () => {
+  it("sets Coordination on the main fork only, and the Autonomous areas; Claude's tools can't", async () => {
+    const { store, request } = createTestApp();
+    const { mainForkId, answer } = seedConversation(store);
+    const child = store.forkAtAnswer(answer.id);
+    const patch = (forkId: string, setting: string, json: object) =>
+      request(`/api/forks/${forkId}/${setting}`, { method: 'PATCH', json });
+    expect((await patch(mainForkId, 'coordination', { coordination: true })).status).toBe(200);
+    expect(store.fork(mainForkId).coordination).toBe(true);
+    expect((await patch(child.id, 'coordination', { coordination: true })).status).toBe(400);
+    expect((await patch(child.id, 'autonomous', { areas: ['notes', 'board'] })).status).toBe(200);
+    expect(store.fork(child.id).autonomous).toEqual(['notes', 'board']);
+    expect((await patch(child.id, 'autonomous', { areas: ['everything'] })).status).toBe(400);
+  });
+});

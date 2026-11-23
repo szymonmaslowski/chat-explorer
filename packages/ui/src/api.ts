@@ -1,4 +1,4 @@
-import type { ActionRequest, RequestDecision } from '@shared/requests';
+import type { ActionRequest, AutonomousArea, RequestDecision } from '@shared/requests';
 import type { ClaudeModel } from '@shared/models';
 import type { ForkNetwork } from '@shared/network';
 import type {
@@ -153,6 +153,10 @@ export const api = {
     call<Fork>(`/api/forks/${forkId}/awareness`, { method: 'PATCH', json: { awareness } }),
   setForkCoding: (forkId: string, coding: boolean) =>
     call<Fork>(`/api/forks/${forkId}/coding`, { method: 'PATCH', json: { coding } }),
+  setForkCoordination: (forkId: string, coordination: boolean) =>
+    call<Fork>(`/api/forks/${forkId}/coordination`, { method: 'PATCH', json: { coordination } }),
+  setForkAutonomous: (forkId: string, areas: AutonomousArea[]) =>
+    call<Fork>(`/api/forks/${forkId}/autonomous`, { method: 'PATCH', json: { areas } }),
   setForkModel: (forkId: string, model: ClaudeModel | null) =>
     call<Fork>(`/api/forks/${forkId}/model`, { method: 'PATCH', json: { model } }),
   setForkNetwork: (forkId: string, network: ForkNetwork) =>
