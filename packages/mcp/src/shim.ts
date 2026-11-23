@@ -246,31 +246,6 @@ export function createShim(options: ShimOptions) {
     ),
   );
 
-  server.registerTool(
-    'stop_fork',
-    {
-      description:
-        "Stop the runner's current turn in another fork of the attached chat. The messages it was answering stay unanswered.",
-      inputSchema: { forkId: z.string() },
-    },
-    tool(async ({ forkId }: { forkId: string }) => {
-      requireAttachment();
-      return json(await request(`/api/internal/forks/${forkId}/stop`, { json: { shimId } }));
-    }),
-  );
-
-  server.registerTool(
-    'retry_fork',
-    {
-      description: 'Let the runner try again on a fork whose runs failed.',
-      inputSchema: { forkId: z.string() },
-    },
-    tool(async ({ forkId }: { forkId: string }) => {
-      requireAttachment();
-      return json(await request(`/api/internal/forks/${forkId}/retry`, { json: { shimId } }));
-    }),
-  );
-
   // Requests wait for the user's approval on a card in the main fork, as the runner's do.
   const askFor = (tool: string, args: object) => {
     const { explorationId } = requireAttachment();

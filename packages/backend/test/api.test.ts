@@ -392,17 +392,19 @@ describe('the main fork overseeing the other forks', () => {
     );
   });
 
-  it('lets only the attached session stop or retry another fork', async () => {
+  it("has no terminal routes to stop or retry a fork; the page's buttons keep theirs", async () => {
     const { request, store } = createTestApp();
     const { explorationId, answer } = seedConversation(store);
     store.attach({ explorationId, shimId: 'shim-a', sessionId: 'session-a', takeover: false });
     const side = store.forkAtAnswer(answer.id);
     for (const action of ['stop', 'retry']) {
-      const response = await request(`/api/internal/forks/${side.id}/${action}`, {
+      const internal = await request(`/api/internal/forks/${side.id}/${action}`, {
         method: 'POST',
-        json: { shimId: 'shim-b' },
+        json: { shimId: 'shim-a' },
       });
-      expect(response.status).toBe(409);
+      expect(internal.status).toBe(404);
+      const button = await request(`/api/forks/${side.id}/${action}`, { method: 'POST', json: {} });
+      expect(button.status).toBe(200);
     }
   });
 });

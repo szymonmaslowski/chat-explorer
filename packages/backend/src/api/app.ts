@@ -879,24 +879,6 @@ export function createApp(options: AppOptions) {
     return context.json(store.updateForkSummary({ forkId, summary }));
   });
 
-  // The session answering the main fork oversees the chat's other forks, which the runner answers.
-  const supervisedForkId = (forkId: string, shimId: string) => {
-    store.requireAttachedShim(store.forkExplorationId(forkId), shimId);
-    return forkId;
-  };
-
-  internal.post('/forks/:id/stop', async (context) => {
-    const { shimId } = shimBody.parse(await context.req.json());
-    const forkId = supervisedForkId(context.req.param('id'), shimId);
-    return context.json({ stopping: options.runs.requestStop(forkId) });
-  });
-
-  internal.post('/forks/:id/retry', async (context) => {
-    const { shimId } = shimBody.parse(await context.req.json());
-    options.runs.retry(supervisedForkId(context.req.param('id'), shimId));
-    return context.json({ ok: true });
-  });
-
   // The terminal session answering the main fork asks for actions there; each waits for the
   // user's approval on a card, as a fork's requests do.
   internal.post('/explorations/:id/requests', async (context) => {
