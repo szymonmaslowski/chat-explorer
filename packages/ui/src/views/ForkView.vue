@@ -18,6 +18,7 @@ import NoteDeletionNotice from '../components/NoteDeletionNotice.vue';
 import ConversationMessage from '../components/ConversationMessage.vue';
 import QueuedSubmissionCard from '../components/QueuedSubmissionCard.vue';
 import RequestCard from '../components/RequestCard.vue';
+import RequestBar from '../components/RequestBar.vue';
 import ReplyBar from '../components/ReplyBar.vue';
 import SubmitReview from '../components/SubmitReview.vue';
 import SpeechPlayer from '../components/SpeechPlayer.vue';
@@ -54,7 +55,7 @@ import { api } from '../api';
 import { newId, outbox } from '../stores/outbox';
 import { stopSpeech } from '../stores/speech';
 import { offline } from '../lib/online';
-import { endOfFork, requestPlacement } from '../lib/requests';
+import { endOfFork, requestPlacement, waitingRequests } from '../lib/requests';
 import type { ActionRequest } from '@shared/requests';
 
 const props = defineProps<{ explorationId: string; forkId?: string }>();
@@ -190,6 +191,9 @@ const requestsAt = computed(() =>
     [...state.value.requests.values()].filter((request) => request.forkId === fork.value?.id),
     path.value,
   ),
+);
+const waitingHere = computed(() =>
+  fork.value ? waitingRequests(state.value.requests.values(), fork.value.id) : [],
 );
 const credentialNames = ref<string[]>([]);
 onMounted(() => {
@@ -660,6 +664,7 @@ watch(
         class="dock"
         :data-dock="dockHidden || reviewing ? undefined : ''"
       >
+        <RequestBar :requests="waitingHere" />
         <ReplyBar
           v-if="!archived"
           ref="replyBar"

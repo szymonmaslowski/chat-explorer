@@ -17,7 +17,7 @@ import {
 } from '../lib/board';
 import ExplorationHeader from '../components/ExplorationHeader.vue';
 import { archivingFork, forkLineage, forkTitle } from '../lib/conversation';
-import { awaitsAnswer, type Attention } from '../lib/read-state';
+import { awaitsAnswer, strongestAttention } from '../lib/read-state';
 import { openExploration } from '../stores/exploration';
 import { explorationIndex } from '../stores/exploration-index';
 import { offline } from '../lib/online';
@@ -84,10 +84,6 @@ async function change(request: Promise<unknown>) {
 
 const collapse = (fork: Fork) => change(api.collapseFork(fork.id));
 const expandChildren = (fork: Fork) => change(api.expandCollapsedChildren(fork.id));
-
-function strongestAttention(attentions: (Attention | undefined)[]) {
-  return attentions.includes('unread') ? ('unread' as const) : undefined;
-}
 
 const forkUrl = (fork: Fork) =>
   fork.parentForkId ? `/e/${props.explorationId}/f/${fork.id}` : `/e/${props.explorationId}`;

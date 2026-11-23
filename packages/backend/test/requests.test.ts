@@ -357,3 +357,15 @@ describe('the autonomous setting', () => {
     expect(() => store.setForkAutonomous(child.id, ['nope' as never])).toThrow(/no autonomous/);
   });
 });
+
+describe('the chats list', () => {
+  it('marks a chat with a waiting request until it is decided', () => {
+    const { store, requests, explorationId, mainForkId } = setup();
+    const listed = () => store.listExplorations().find((each) => each.id === explorationId)!;
+    expect(listed().waitingRequests).toBe(false);
+    const { requestId } = requests.request(mainForkId, 'fork', forkAction());
+    expect(listed().waitingRequests).toBe(true);
+    requests.decide(requestId, { decision: 'reject' });
+    expect(listed().waitingRequests).toBe(false);
+  });
+});

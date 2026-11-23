@@ -51,6 +51,8 @@ export interface ExplorationListItem extends Exploration {
   sessionStatus: SessionStatus;
   hasUnread: boolean;
   awaitingAnswer: boolean;
+  // A request of Claude's waits for the user's approval in one of its forks.
+  waitingRequests: boolean;
 }
 
 // What a split changed: the new fork, the old one and the forks moved under the new one, and

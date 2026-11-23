@@ -223,3 +223,65 @@ describe('request placement', () => {
     expect(decisionSummary(request({ status: 'rejected', decidedAt: null }))).toBe('Rejected');
   });
 });
+
+describe('request bar', () => {
+  it('counts the waiting requests, jumps to the oldest card and lists every card', async () => {
+    const { default: RequestBar } = await import('../src/components/RequestBar.vue');
+    const first = request();
+    const second = request({ id: 'req_2', createdAt: 2 });
+    document.body.innerHTML = `<section id="r-${first.id}"></section><section id="r-req_2"></section>`;
+    window.scrollTo = (() => {}) as typeof window.scrollTo;
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+    const wrapper = mount(RequestBar, { props: { requests: [first, second] } });
+    expect(wrapper.find('.jump').text()).toBe('4 requests waiting');
+    await wrapper.find('.jump').trigger('click');
+    expect(document.getElementById(`r-${first.id}`)!.classList).toContain('flash');
+    await wrapper.find('.toggle').trigger('click');
+    const lines = wrapper.findAll('.line');
+    expect(lines).toHaveLength(2);
+    expect(lines[0]!.text()).toContain('Start a new fork "Settings page"');
+    expect(lines[0]!.text()).toContain('and 1 more');
+    await wrapper.setProps({ requests: [] });
+    expect(wrapper.find('.request-bar').exists()).toBe(false);
+  });
+});
+
+describe('attention', () => {
+  it('puts a waiting request above an unseen answer', async () => {
+    const { forkAttention, strongestAttention } = await import('../src/lib/read-state');
+    const attention = forkAttention({
+      forks: new Map(),
+      forkRuns: new Map(),
+      messages: new Map([
+        [
+          'm1',
+          {
+            id: 'm1',
+            explorationId: 'chat_x',
+            forkId: 'fork_main',
+            parentId: null,
+            role: 'assistant',
+            source: 'live',
+            createdAt: 0,
+            readAt: null,
+            answers: [],
+          },
+        ],
+      ]),
+      requests: new Map([
+        ['a', request()],
+        ['b', request({ id: 'b', forkId: 'fork_done', status: 'approved' })],
+      ]),
+    });
+    expect(attention.get('fork_main')).toBe('request');
+    expect(attention.has('fork_done')).toBe(false);
+    expect(strongestAttention(['unread', 'request'])).toBe('request');
+    expect(strongestAttention([undefined, 'unread'])).toBe('unread');
+  });
+});
