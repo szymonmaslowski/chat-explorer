@@ -15,7 +15,7 @@ import type { Fork, Note, NoteGroup } from '@shared/types';
 import { computed, reactive, ref, watch } from 'vue';
 import { api } from '../api';
 import { useAutosave } from '../composables/useAutosave';
-import { offline } from '../lib/online';
+import { notOffline, offline } from '../lib/online';
 import { outbox } from '../stores/outbox';
 import { forkTitle } from '../lib/conversation';
 import { decisionSummary, outcomeLabel } from '../lib/requests';
@@ -353,6 +353,7 @@ async function decide(decision: 'approve' | 'reject') {
         armed-label="Sure?"
         danger
         :disabled="busy || unreachable"
+        :title="unreachable ? notOffline : undefined"
         @confirm="decide('reject')"
       />
       <ConfirmButton
@@ -360,6 +361,7 @@ async function decide(decision: 'approve' | 'reject') {
         armed-label="Sure?"
         class="primary"
         :disabled="busy || unreachable || tickedCount === 0"
+        :title="unreachable ? notOffline : undefined"
         @confirm="decide('approve')"
       />
     </div>

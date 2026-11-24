@@ -1,5 +1,5 @@
 import { idAlphabet, idLength, idPrefixes, type PrefixedKind } from '@shared/ids';
-import type { RequestDraft } from '@shared/requests';
+import type { AutonomousArea, RequestDraft } from '@shared/requests';
 import type {
   CommentChanges,
   MessageFile,
@@ -100,6 +100,9 @@ export type Change =
   | { type: 'note.delete'; explorationId: string; noteId: string }
   | { type: 'note.reorder'; explorationId: string; noteId: string; afterNoteId: string | null }
   | { type: 'note.change-group'; explorationId: string; noteId: string; groupId: string }
+  | { type: 'fork.coordination'; explorationId: string; forkId: string; coordination: boolean }
+  // The whole list of areas, so the newest setting wins.
+  | { type: 'fork.autonomous'; explorationId: string; forkId: string; areas: AutonomousArea[] }
   // The user's edits on a waiting card of Claude's requests, whole: the last one wins.
   | {
       type: 'request.draft';
@@ -219,6 +222,10 @@ export const subjectOf = (change: Change) => {
       return change.noteId;
     case 'request.draft':
       return change.requestId;
+    case 'fork.coordination':
+      return `coordination ${change.forkId}`;
+    case 'fork.autonomous':
+      return `autonomous ${change.forkId}`;
   }
 };
 
@@ -240,6 +247,8 @@ function merge(waiting: Change, next: Change): Change | null {
   }
   if (waiting.type === 'note.reorder' && next.type === 'note.reorder') return next;
   if (waiting.type === 'request.draft' && next.type === 'request.draft') return next;
+  if (waiting.type === 'fork.coordination' && next.type === 'fork.coordination') return next;
+  if (waiting.type === 'fork.autonomous' && next.type === 'fork.autonomous') return next;
   if (waiting.type === 'note-group.reorder' && next.type === 'note-group.reorder') return next;
   if (waiting.type === 'note-group.update' && next.type === 'note-group.update') {
     return { ...next, changes: { ...waiting.changes, ...next.changes } };
@@ -353,6 +362,10 @@ function send(change: Change) {
       return api.changeNoteGroup(change.noteId, change.groupId, keepalive);
     case 'request.draft':
       return api.saveRequestDraft(change.requestId, change.draft, keepalive);
+    case 'fork.coordination':
+      return api.setForkCoordination(change.forkId, change.coordination, keepalive);
+    case 'fork.autonomous':
+      return api.setForkAutonomous(change.forkId, change.areas, keepalive);
     case 'messages.read':
       return api.markRead(change.explorationId, change.messageIds, change.at, keepalive);
     case 'messages.unread':

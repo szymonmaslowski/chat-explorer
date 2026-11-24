@@ -1,39 +1,38 @@
 <script setup lang="ts">
 import { autonomousAreaLabels, autonomousAreas, type AutonomousArea } from '@shared/requests';
 import type { Fork } from '@shared/types';
-import { computed, ref } from 'vue';
-import { api } from '../api';
+import { computed } from 'vue';
 import { offline } from '../lib/online';
+import { outbox } from '../stores/outbox';
 
 // What Claude may ask for in this fork, and what of it runs without the user's approval. Only the
-// main fork can coordinate other forks.
+// main fork can coordinate other forks. Changes go through the outbox, so they work offline too.
 const props = defineProps<{ fork: Fork }>();
 
 const isMain = computed(() => props.fork.parentForkId === null);
-const saving = ref(false);
-const failed = ref(false);
-
-async function save(change: () => Promise<unknown>) {
-  saving.value = true;
-  failed.value = false;
-  try {
-    await change();
-  } catch {
-    failed.value = true;
-  } finally {
-    saving.value = false;
-  }
-}
 
 const setCoordination = (coordination: boolean) =>
-  save(() => api.setForkCoordination(props.fork.id, coordination));
+  outbox.add({
+    type: 'fork.coordination',
+    explorationId: props.fork.explorationId,
+    forkId: props.fork.id,
+    coordination,
+  });
 const setArea = (area: AutonomousArea, on: boolean) =>
-  save(() =>
-    api.setForkAutonomous(
-      props.fork.id,
-      on ? [...props.fork.autonomous, area] : props.fork.autonomous.filter((each) => each !== area),
-    ),
-  );
+  outbox.add({
+    type: 'fork.autonomous',
+    explorationId: props.fork.explorationId,
+    forkId: props.fork.id,
+    areas: on
+      ? [...props.fork.autonomous, area]
+      : props.fork.autonomous.filter((each) => each !== area),
+  });
+const unsent = computed(
+  () =>
+    offline.value &&
+    (outbox.isPending(`coordination ${props.fork.id}`) ||
+      outbox.isPending(`autonomous ${props.fork.id}`)),
+);
 </script>
 
 <template>
@@ -43,7 +42,7 @@ const setArea = (area: AutonomousArea, on: boolean) =>
       <input
         type="checkbox"
         :checked="fork.coordination"
-        :disabled="!isMain || saving || offline"
+        :disabled="!isMain"
         @change="setCoordination(($event.target as HTMLInputElement).checked)"
       />
       Coordination
@@ -62,7 +61,6 @@ const setArea = (area: AutonomousArea, on: boolean) =>
         <input
           type="checkbox"
           :checked="fork.autonomous.includes(area)"
-          :disabled="saving || offline"
           @change="setArea(area, ($event.target as HTMLInputElement).checked)"
         />
         {{ autonomousAreaLabels[area] }}
@@ -76,7 +74,7 @@ const setArea = (area: AutonomousArea, on: boolean) =>
       A fork that reads hostile content, such as a web page or a README, could use these to act
       without you.
     </p>
-    <p v-if="failed" class="error" role="alert">Could not save the setting.</p>
+    <p v-if="unsent" class="muted unsent">Not sent yet: it goes when the daemon is back.</p>
   </section>
 </template>
 

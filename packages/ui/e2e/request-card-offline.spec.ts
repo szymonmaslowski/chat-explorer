@@ -105,3 +105,53 @@ test('holds Approve and Reject while offline, and gives them back online', async
   await card.getByRole('button', { name: 'Sure?' }).click();
   await expect(page.locator('.request-card')).toContainText('Approved 1 of 1');
 });
+
+test('keeps Coordination and Autonomous changed offline, and sends them when back online', async ({
+  page,
+  context,
+  request,
+  browser,
+}) => {
+  const { explorationId, mainForkId } = await newChat(request, 'Plan the work');
+  const settingsPath = `/e/${explorationId}/f/${mainForkId}/settings`;
+  await page.goto('/');
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+  });
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
+  await page.goto(settingsPath);
+  const settings = page.getByRole('region', { name: 'Requests' });
+  await expect(settings).toBeVisible();
+  await page.waitForTimeout(1_500);
+
+  await context.setOffline(true);
+  const coordination = settings.getByRole('checkbox', { name: 'Coordination' });
+  const notes = settings.getByRole('checkbox', { name: /^Notes:/ });
+  await coordination.check();
+  await notes.check();
+  await expect(coordination).toBeChecked();
+  await expect(notes).toBeChecked();
+  await expect(settings).toContainText('Not sent yet');
+
+  await page.reload();
+  const reloaded = page.getByRole('region', { name: 'Requests' });
+  await expect(reloaded.getByRole('checkbox', { name: 'Coordination' })).toBeChecked();
+  await expect(reloaded.getByRole('checkbox', { name: /^Notes:/ })).toBeChecked();
+  const forkOf = async () => {
+    const snapshot = await (await request.get(`/api/explorations/${explorationId}`)).json();
+    return snapshot.forks.find((fork: { id: string }) => fork.id === mainForkId);
+  };
+  expect(await forkOf()).toMatchObject({ coordination: false, autonomous: [] });
+
+  await context.setOffline(false);
+  await expect
+    .poll(forkOf, { timeout: 15_000 })
+    .toMatchObject({ coordination: true, autonomous: ['notes'] });
+  const other = await (await browser.newContext()).newPage();
+  await other.goto(settingsPath);
+  const elsewhere = other.getByRole('region', { name: 'Requests' });
+  await expect(elsewhere.getByRole('checkbox', { name: 'Coordination' })).toBeChecked();
+  await expect(elsewhere.getByRole('checkbox', { name: /^Notes:/ })).toBeChecked();
+  await other.close();
+});

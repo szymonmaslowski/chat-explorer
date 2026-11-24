@@ -335,6 +335,9 @@ const eventSubjects = (event: ExplorationEvent) => {
     case 'request.created':
     case 'request.updated':
       return [event.request.id];
+    // A fork's settings sent from here and not confirmed yet go on top of the daemon's notice.
+    case 'fork.updated':
+      return [`coordination ${event.fork.id}`, `autonomous ${event.fork.id}`];
     case 'fork.split':
       return [
         ...event.comments.map((comment) => comment.id),
@@ -708,6 +711,19 @@ export function applyChange(state: ExplorationState, change: Change) {
       });
       renumberGroup(state.notes, note.groupId);
       renumberGroup(state.notes, change.groupId);
+      break;
+    }
+    case 'fork.coordination':
+    case 'fork.autonomous': {
+      const fork = state.forks.get(change.forkId);
+      if (!fork) break;
+      put(
+        state.forks,
+        fork.id,
+        change.type === 'fork.coordination'
+          ? { ...fork, coordination: change.coordination }
+          : { ...fork, autonomous: change.areas },
+      );
       break;
     }
     // A card shows its latest edits, also those still waiting to be sent, after a reload too.

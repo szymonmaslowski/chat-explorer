@@ -36,6 +36,8 @@ const direct = {
   retryFork: 'acts on a failed run now, so it is useless later',
   restartContainer: 'acts on a container running now, so it is useless later',
   deleteExploration: 'a confirmed, destructive decision that must not run later by surprise',
+  decideRequest:
+    "approving or rejecting Claude's requests is a decision that must not run later by surprise; the card sends its edits through the outbox first",
 };
 
 // Direct today, but they should go through the outbox. Move one, then take it off this list: the
