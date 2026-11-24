@@ -21,6 +21,8 @@ const backend = startBackend({
       env: {
         CHAT_EXPLORER_HOME: config.home,
         CHAT_EXPLORER_PORT: String(config.port),
+        // The runner points containers at the daemon's tools listener, so both must agree on it.
+        CHAT_EXPLORER_TOOLS_PORT: String(config.toolsPort),
         ...runnerSettingsEnv(settings),
       },
     });

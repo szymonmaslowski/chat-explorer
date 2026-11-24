@@ -88,7 +88,7 @@ describe('starting Claude Code in Docker', () => {
     network: noHosts,
     credentials: [],
     systemPrompt: 'Be brief.',
-    toolsUrl: 'http://host.docker.internal:4517/api/runner/mcp',
+    toolsUrl: 'http://host.docker.internal:4518/api/tools/mcp',
     toolsToken: 'job-token',
   };
   const options = {

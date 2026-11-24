@@ -11,6 +11,7 @@ const log = (message: string) => console.log(`${new Date().toISOString()} ${mess
 const runner = await startRunner({
   baseUrl: backendUrl,
   port: config.port,
+  toolsPort: config.toolsPort,
   machineToken: readMachineToken(config.machineTokenPath),
   runnerPath: config.runnerPath,
   filesPath: config.filesPath,

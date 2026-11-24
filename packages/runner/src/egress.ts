@@ -14,7 +14,11 @@ export const egressContainer = (port: number) => `chat-explorer-egress-${port}`;
 const proxyAddress = (port: number) => `${egressContainer(port)}:3128`;
 const modelAddress = (port: number) => `${egressContainer(port)}:3129`;
 
-export const toolsHost = (port: number) => `host.docker.internal:${port}`;
+// The daemon's tools listener, which serves only the job tools: the one daemon address a container
+// may reach.
+export const toolsHost = (toolsPort: number) => `host.docker.internal:${toolsPort}`;
+// The daemon's main port, with every page route: the proxy never connects to it.
+export const daemonHost = (port: number) => `host.docker.internal:${port}`;
 
 // Policies and secrets are written by the runner and only read by the proxy; logs are written by
 // the proxy.
@@ -107,7 +111,9 @@ async function required(args: string[], what: string) {
 
 interface EgressOptions {
   image: string;
+  // The daemon's main port, which names the proxy and is refused to every container.
   port: number;
+  toolsPort: number;
   egressPath: string;
 }
 
@@ -137,7 +143,7 @@ export async function keepEgressRunning(options: EgressOptions) {
 }
 
 async function startEgress(options: EgressOptions) {
-  const { image, port, egressPath } = options;
+  const { image, port, toolsPort, egressPath } = options;
   const folders = egressFolders(egressPath);
   mkdirSync(folders.policies, { recursive: true });
   mkdirSync(folders.secrets, { recursive: true });
@@ -152,7 +158,8 @@ async function startEgress(options: EgressOptions) {
     policiesPath: '/egress/policies',
     secretsPath: '/egress/secrets',
     logsPath: '/egress/logs',
-    toolsHost: toolsHost(port),
+    toolsHost: toolsHost(toolsPort),
+    blockedHosts: [daemonHost(port)],
   };
   await required(
     [

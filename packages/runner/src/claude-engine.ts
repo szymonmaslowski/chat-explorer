@@ -36,6 +36,8 @@ export interface ClaudeEngineOptions extends ClaudeEnginePaths {
   image: () => string;
   // The daemon's port, which names the egress proxy the engine goes out through.
   port: number;
+  // The daemon's tools listener, the only daemon port the proxy lets a container reach.
+  toolsPort: number;
   // From the runner's config: a coding fork's container gets these instead of the chat limits.
   codingLimits: ContainerLimits;
   oauthToken: () => string;
@@ -64,7 +66,7 @@ export const forkFolders = (
 
 const chatLimits: ContainerLimits = { memory: '2g', processes: 256, cpus: 2 };
 
-type ContainerOptions = Omit<ClaudeEngineOptions, 'oauthToken'>;
+type ContainerOptions = Omit<ClaudeEngineOptions, 'oauthToken' | 'toolsPort'>;
 
 // The one `docker run` template: only these flags, filled from checked values. Nothing from a job
 // is passed through as a flag. The work folder appears at the same absolute path inside, so Claude
@@ -237,6 +239,7 @@ export function claudeCodeEngine(options: ClaudeEngineOptions): Engine {
       egressCheck ??= keepEgressRunning({
         image: options.image(),
         port: options.port,
+        toolsPort: options.toolsPort,
         egressPath: options.egressPath,
       }).finally(() => (egressCheck = null));
       return egressCheck;

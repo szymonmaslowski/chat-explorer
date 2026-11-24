@@ -59,7 +59,7 @@ const allowed: RunnerConfig = {
 };
 const notAllowed = { ...allowed, coding: { ...allowed.coding, enabled: false } };
 const sessionId = '11111111-2222-3333-4444-555555555555';
-const toolsUrl = 'http://host.docker.internal:4517/api/tools/mcp';
+const toolsUrl = 'http://host.docker.internal:4518/api/tools/mcp';
 const engineOptions = {
   image: () => 'chat-explorer-claude:2.1.325',
   port: 4517,
@@ -137,7 +137,12 @@ async function probeCodingContainer() {
   }
   writeFileSync(runnerConfigPath(runnerPath), JSON.stringify({ coding: { enabled: true } }));
   writeFileSync(join(otherFolders.work, 'secret.env'), 'TOKEN=other-fork');
-  await ensureEgress({ image, port: dockerPort, egressPath: paths.egressPath });
+  await ensureEgress({
+    image,
+    port: dockerPort,
+    toolsPort: dockerPort + 1,
+    egressPath: paths.egressPath,
+  });
   writeModelToken(paths.egressPath, readClaudeToken(join(homedir(), '.chat-explorer', 'runner')));
   const probe = readFileSync(new URL('./fixtures/container-probe.cjs', import.meta.url), 'utf8');
   const probePaths = {

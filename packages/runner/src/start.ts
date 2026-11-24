@@ -12,7 +12,7 @@ import {
   newestBuiltImage,
 } from './claude-image.js';
 import { RunnerClient } from './client.js';
-import { egressContainer, ensureEgress } from './egress.js';
+import { egressContainer, ensureEgress, toolsHost } from './egress.js';
 import { removeLeftoverCredentials } from './credential-files.js';
 import { codingMemory, codingNeedsBytes, MemoryGate } from './memory-gate.js';
 import { Runner } from './runner.js';
@@ -22,6 +22,7 @@ import { readRunnerConfig, type RunnerConfig } from './runner-config.js';
 export interface StartRunnerOptions {
   baseUrl: string;
   port: number;
+  toolsPort: number;
   machineToken: string;
   runnerPath: string;
   filesPath: string;
@@ -72,6 +73,9 @@ async function codingStaysOff(config: RunnerConfig, baseUrl: string) {
 
 // A runner on this machine, next to the daemon: its engine runs Claude Code in Docker at the
 // version installed here.
+// Where a container's engine calls the job tools: the daemon's tools listener, never its main port.
+export const toolsUrl = (toolsPort: number) => `http://${toolsHost(toolsPort)}/api/tools/mcp`;
+
 export async function startRunner(options: StartRunnerOptions) {
   const version = await installedClaudeVersion();
   if (!version) throw new Error('Claude Code is not installed, so the runner has no version.');
@@ -85,7 +89,7 @@ export async function startRunner(options: StartRunnerOptions) {
     (error: Error) => options.log(error.message),
   );
   const egressPath = join(options.runnerPath, 'egress');
-  await ensureEgress({ image, port: options.port, egressPath });
+  await ensureEgress({ image, port: options.port, toolsPort: options.toolsPort, egressPath });
   const configured = readRunnerConfig(options.runnerPath);
   const codingOff = await codingStaysOff(configured, options.baseUrl);
   if (codingOff) options.log(codingOff);
@@ -142,11 +146,12 @@ export async function startRunner(options: StartRunnerOptions) {
       ...enginePaths,
       image: () => currentImage,
       port: options.port,
+      toolsPort: options.toolsPort,
       codingLimits,
       oauthToken: () => readClaudeToken(options.runnerPath),
     }),
     runnerId: `${hostname()}-${process.pid}`,
-    toolsUrl: `http://host.docker.internal:${options.port}/api/tools/mcp`,
+    toolsUrl: toolsUrl(options.toolsPort),
     maxParallel: options.maxParallel,
     memoryGate,
     diskGuard: diskGuard({
