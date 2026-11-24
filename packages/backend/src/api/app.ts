@@ -36,7 +36,7 @@ import type { EventBus } from '../store/event-bus.js';
 import type { FeedbackHub } from '../store/feedback-hub.js';
 import type { RunStore } from '../store/runs.js';
 import type { ChatStore } from '../store/store.js';
-import { RequestStore } from '../store/requests.js';
+import { requestStoreFor } from '../store/requests.js';
 import { autonomousAreas } from '@chat-explorer/shared/requests.js';
 import { requestDecisionSchema } from './request-schemas.js';
 import { actionFromTool } from './request-tools.js';
@@ -283,10 +283,7 @@ export function createApp(options: AppOptions) {
     localUrl: `${localUrl}/e/${explorationId}`,
   });
   const app = new Hono();
-  const requests = new RequestStore(
-    store,
-    () => options.runs.lastCapabilities()?.capabilities ?? null,
-  );
+  const requests = requestStoreFor(store, options.runs);
 
   app.use('*', guardLocalRequests(port, options.publicUrl));
   // A long chat's snapshot is megabytes of JSON, loaded again on every reconnect over the

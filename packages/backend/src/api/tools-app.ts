@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { createMiddleware } from 'hono/factory';
+import { requestStoreFor } from '../store/requests.js';
 import type { RunStore } from '../store/runs.js';
 import type { ChatStore } from '../store/store.js';
 import { registerJobTools } from './job-tools.js';
@@ -22,7 +23,12 @@ export function createToolsApp(options: { store: ChatStore; runs: RunStore; tool
       await next();
     }),
   );
-  registerJobTools(app, { store: options.store, runs: options.runs });
+  // The coordinator's request tools and the notes requests are job tools too.
+  registerJobTools(app, {
+    store: options.store,
+    runs: options.runs,
+    requests: requestStoreFor(options.store, options.runs),
+  });
   app.notFound((context) => context.json({ error: 'not_found', message: 'Not found.' }, 404));
   app.onError((error, context) => {
     console.error(error);

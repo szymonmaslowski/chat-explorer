@@ -16,6 +16,7 @@ import type { Fork, RunnerCapabilities } from '@chat-explorer/shared/types.js';
 import { toActionRequest, type ActionRequestRow } from '../db/rows.js';
 import { StoreError } from './errors.js';
 import { newId } from './ids.js';
+import type { RunStore } from './runs.js';
 import type { ChatStore } from './store.js';
 
 const requestIdPrefix = 'req_';
@@ -40,6 +41,11 @@ export interface RequestResult {
   detail?: string | null;
   result?: unknown;
 }
+
+// The request store of a daemon: ceilings from the runner's last capabilities report. It keeps
+// nothing in memory between calls, so the main port and the tools port may each have one.
+export const requestStoreFor = (chats: ChatStore, runs: RunStore) =>
+  new RequestStore(chats, () => runs.lastCapabilities()?.capabilities ?? null);
 
 // What Claude asked to do, kept as cards for the user to approve. Approving runs the stored,
 // edited version; Claude has no part in it after asking, and learns the outcome from the card's

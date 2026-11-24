@@ -9,7 +9,10 @@ import { createShim } from '@chat-explorer/mcp/shim.js';
 import { loadConfig } from '@chat-explorer/shared/config.js';
 import { buildRunContext } from '../src/store/run-context.js';
 import { RequestStore } from '../src/store/requests.js';
+import { createToolsApp } from '../src/api/tools-app.js';
 import { createTestApp, seedConversation } from './helpers.js';
+
+const testToolsPort = 5000;
 
 const coordinationTools = ['request_fork', 'request_message', 'request_fork_settings'];
 
@@ -19,16 +22,18 @@ async function jobOn(context: ReturnType<typeof createTestApp>, forkId: string) 
   store.submit(store.fork(forkId).explorationId, forkId, 'Plan the work');
   const lease = runs.claim(forkId, 'runner-a')!;
   const client = new Client({ name: 'test', version: '1.0.0' });
+  // As a container reaches them: on the tools listener.
+  const toolsApp = createToolsApp({ store, runs, toolsPort: testToolsPort });
   const transport = new StreamableHTTPClientTransport(
-    new URL('http://host.docker.internal:4999/api/tools/mcp'),
+    new URL(`http://host.docker.internal:${testToolsPort}/api/tools/mcp`),
     {
       requestInit: { headers: { authorization: `Bearer ${lease.toolsToken}` } },
       fetch: async (url, init) =>
-        context.app.request(String(url), {
+        toolsApp.request(String(url), {
           ...init,
           headers: {
             ...Object.fromEntries(new Headers(init?.headers)),
-            host: 'host.docker.internal:4999',
+            host: `host.docker.internal:${testToolsPort}`,
           },
         }),
     },
