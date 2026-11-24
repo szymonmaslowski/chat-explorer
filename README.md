@@ -253,7 +253,7 @@ The design and its decisions are in [docs/plan.md](docs/plan.md).
 
 ```sh
 pnpm build                         # UI, then every package; the backend's build holds the UI
-pnpm test                          # the import check, unit tests, and the runner's container checks
+pnpm test                          # the import and offline-write checks, unit tests, and the runner's container checks
 pnpm typecheck
 pnpm --filter ui test:e2e          # Playwright, runs in the installed Chrome against a seeded daemon
 pnpm --filter ui dev               # Vite dev server, proxies /api to the daemon
@@ -275,5 +275,7 @@ The code is in packages that reach each other only along these lines, which `pnp
 | `packages/mcp`     | The plugin's MCP server and hooks                                           | shared           |
 | `packages/cli`     | The `chat-explorer` command and the daemon around the backend               | all of the above |
 | `packages/ui`      | The web UI                                                                  | shared           |
+
+Writes from the web UI go through the outbox so they survive going offline; `pnpm check:offline-writes` enforces it. See [docs/offline-writes.md](docs/offline-writes.md). Coding agents start from [AGENTS.md](AGENTS.md).
 
 If you linked `chat-explorer` before the split, from `packages/server`, link it again from `packages/cli` and run `chat-explorer service install` again, so the login service starts the new daemon entry.

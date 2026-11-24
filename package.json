@@ -9,7 +9,8 @@
   "scripts": {
     "build": "pnpm --filter ui build && pnpm --filter @chat-explorer/shared build && pnpm --filter @chat-explorer/runner build && pnpm --filter @chat-explorer/mcp build && pnpm --filter @chat-explorer/backend build && pnpm --filter chat-explorer build",
     "check:imports": "node scripts/check-imports.mjs",
-    "test": "pnpm check:imports && pnpm -r test",
+    "check:offline-writes": "node scripts/check-offline-writes.mjs",
+    "test": "pnpm check:imports && pnpm check:offline-writes && pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
