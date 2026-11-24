@@ -9,6 +9,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { createServer, type IncomingHttpHeaders } from 'node:http';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -85,6 +86,32 @@ const dockerTests = process.env.CHAT_EXPLORER_DOCKER_TESTS !== '0';
 const dockerPort = 4591;
 const run = promisify(execFile);
 
+// Stand-ins for the daemon on the Mac: its main port and its tools port, each noting what reaches it.
+async function standInDaemon() {
+  const seen: { port: number; method: string; path: string; headers: IncomingHttpHeaders }[] = [];
+  const servers = [dockerPort, dockerPort + 1].map((port) =>
+    createServer((request, response) => {
+      seen.push({
+        port,
+        method: request.method ?? '',
+        path: request.url ?? '',
+        headers: request.headers,
+      });
+      response.end('reached');
+    }),
+  );
+  await Promise.all(
+    servers.map(
+      (server, index) =>
+        new Promise<void>((resolve, reject) => {
+          server.once('error', reject);
+          server.listen(dockerPort + index, '127.0.0.1', resolve);
+        }),
+    ),
+  );
+  return { seen, close: () => servers.forEach((server) => server.close()) };
+}
+
 // One coding container from the real template, running a probe instead of Claude, with a second
 // fork's workspace and sessions folder on the host beside it.
 async function probeCodingContainer() {
@@ -150,6 +177,8 @@ async function probeCodingContainer() {
     otherWorkspace: otherFolders.work,
     ownWorkspace: ownFolders.work,
     otherSessions: otherFolders.sessions,
+    daemonPort: dockerPort,
+    toolsPort: dockerPort + 1,
   };
   const openPass = (runSpec: typeof own) =>
     openEgressPass(paths.egressPath, dockerPort, runSpec.forkId, runSpec.network);
@@ -172,9 +201,15 @@ async function probeCodingContainer() {
     }
   };
   const ownPass = openPass(own);
-  const results = JSON.parse(
-    await inContainer(own, ['node', '-e', probe, JSON.stringify(probePaths)], ownPass, true),
-  );
+  const daemon = await standInDaemon();
+  const results = await inContainer(
+    own,
+    ['node', '-e', probe, JSON.stringify(probePaths)],
+    ownPass,
+    true,
+  )
+    .then(JSON.parse)
+    .finally(daemon.close);
   // The same pass used from another fork's container while its own still runs, as if its dummy
   // token leaked, and then after its container ended.
   const modelStatus = `fetch(process.env.ANTHROPIC_BASE_URL + '/v1/messages', { method: 'POST', headers: { authorization: 'Bearer ' + process.env.CLAUDE_CODE_OAUTH_TOKEN, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, body: '{}' }).then((response) => console.log(response.status), (error) => console.log(error.message))`;
@@ -211,6 +246,7 @@ async function probeCodingContainer() {
     readFileSync(join(egressFolders(paths.egressPath).logs, `${forkId}.log`), 'utf8');
   return {
     results,
+    daemonSaw: daemon.seen,
     ownerStatus,
     leakedDummy,
     endedDummy,
@@ -292,6 +328,25 @@ describe('coding forks: security acceptance checklist', () => {
       expect(probed.ownerStatus).toBe('400');
       expect(probed.leakedDummy).toBe('401');
       expect(probed.endedDummy).toBe('401');
+    });
+
+    it("11. a container reaches only the daemon's job tools, and only over plain HTTP", () => {
+      expect(probed.results.daemonForgedHost).toBe(403);
+      expect(probed.results.daemonTunnel).toBe(403);
+      expect(probed.results.daemonGatewayTunnel).toBe(403);
+      expect(probed.results.toolsTunnel).toBe(403);
+      expect(probed.results.toolsPageRoute).toBe(403);
+      expect(probed.results.toolsRoute).toBe(200);
+      expect(probed.daemonSaw).toHaveLength(1);
+      const [tools] = probed.daemonSaw;
+      expect(tools).toMatchObject({
+        port: dockerPort + 1,
+        method: 'POST',
+        path: '/api/tools/mcp',
+        headers: { host: `host.docker.internal:${dockerPort + 1}` },
+      });
+      expect(tools?.headers.cookie).toBeUndefined();
+      expect(tools?.headers['proxy-authorization']).toBeUndefined();
     });
 
     it("6. a container cannot read the runner config or other forks' workspaces", () => {

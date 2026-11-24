@@ -100,6 +100,37 @@ const write = (file) => {
   }
 };
 
+// The daemon's two ports on the Mac, as a prompt-injected Claude would try them: the main port
+// with a forged Host and through tunnels, and the tools port on a page route, in a tunnel, and on
+// the tools themselves.
+const daemonReach = async (daemonPort, toolsPort) => {
+  const daemon = `host.docker.internal:${daemonPort}`;
+  const tools = `host.docker.internal:${toolsPort}`;
+  const forged = { 'proxy-authorization': signIn, host: `127.0.0.1:${daemonPort}` };
+  return {
+    daemonForgedHost: await throughProxy({
+      path: `http://${daemon}/api/explorations`,
+      headers: forged,
+    }),
+    daemonTunnel: await throughProxy({ method: 'CONNECT', path: daemon }),
+    daemonGatewayTunnel: await throughProxy({
+      method: 'CONNECT',
+      path: `gateway.docker.internal:${daemonPort}`,
+    }),
+    toolsTunnel: await throughProxy({ method: 'CONNECT', path: tools }),
+    toolsPageRoute: await throughProxy({
+      method: 'PATCH',
+      path: `http://${tools}/api/forks/fork_0000000001/network`,
+      headers: forged,
+    }),
+    toolsRoute: await throughProxy({
+      method: 'POST',
+      path: `http://${tools}/api/tools/mcp`,
+      headers: { ...forged, cookie: 'session=probe' },
+    }),
+  };
+};
+
 (async () => {
   const results = {
     lan: await tcp('192.168.1.1', 80),
@@ -127,6 +158,7 @@ const write = (file) => {
     ownWorkspace: write(path.join(paths.ownWorkspace, 'probe.txt')),
     otherSessions: write(path.join(paths.otherSessions, 'probe.jsonl')),
     ownSessions: write('/home/agent/.claude/projects/probe.jsonl'),
+    ...(await daemonReach(paths.daemonPort, paths.toolsPort)),
   };
   console.log(JSON.stringify(results));
 })();
