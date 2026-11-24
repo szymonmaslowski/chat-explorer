@@ -214,6 +214,8 @@ Restart the daemon after changing the file, so the runner reads it again.
 
 Git uses them by itself: a token over HTTPS through a credential helper (sent as user `x-access-token`; set `"username"` for another host, such as `"oauth2"` for GitLab), an SSH key through a generated SSH config that tunnels through the proxy. SSH checks host keys: GitHub's are built in, and for any other host the runner refuses the credential until you add its `known_hosts` line, from `ssh-keyscan -p <port> <host>` after checking the fingerprint. **Claude can read a credential it is given**, and can use it anywhere on its hosts: prefer a fine-grained token or a deploy key for one repository, never your personal SSH key. A credential marked `"hidden": true` isn't shown to the backend; type its name in the fork's settings instead.
 
+To let forks push branches to GitHub, follow [docs/runner-github-credential.md](docs/runner-github-credential.md): a deploy key for one repository, and a ruleset that keeps forks off `main`.
+
 **Restart container.** A new credential or host key reaches a fork's container when it starts. The **Restart container** button in the fork's settings lets the current container go once no answer is running; the next message starts a fresh one and the conversation continues. Anything running in the old one, such as a dev server, stops.
 
 **Local backend only.** Coding forks run only when the backend is on this machine: its address must be loopback, and `localBackend` in the runner's config must not be `false`. A backend elsewhere needs enrolled devices first. The runner also refuses a config file other users could change.

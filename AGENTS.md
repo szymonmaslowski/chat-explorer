@@ -24,6 +24,11 @@ This file is for coding agents: Claude Code (through `CLAUDE.md`), Codex, and an
 
 ## Rules no check enforces yet
 
+- **Push only branches named `fork/<fork id>/<topic>`.**
+  - Never push `main` or another fork's branch, and never force-push a branch you didn't create.
+  - Merging into `main` is the main fork's job, after review.
+  - Pushing needs the GitHub credential: see [docs/runner-github-credential.md](docs/runner-github-credential.md).
+
 - **Every delete button asks to confirm.** Use `ConfirmButton`.
 - **Database changes are migrations** in `packages/backend/src/db/schema.ts`. Add them; never edit an old one. Whoever merges backs up the database before the daemon runs a new migration.
 - **Never print or commit a token or key.** That includes the Claude token in `~/.chat-explorer/runner/` and anything under `~/.ssh`.
