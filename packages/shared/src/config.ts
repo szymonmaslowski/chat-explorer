@@ -6,9 +6,12 @@ export const defaultPort = 4517;
 
 export function loadConfig() {
   const port = Number(process.env.CHAT_EXPLORER_PORT ?? defaultPort);
+  // Coding containers reach the daemon only here, where nothing but the job tools is served.
+  const toolsPort = Number(process.env.CHAT_EXPLORER_TOOLS_PORT ?? port + 1);
   const home = process.env.CHAT_EXPLORER_HOME ?? join(homedir(), '.chat-explorer');
   return {
     port,
+    toolsPort,
     home,
     databasePath: join(home, 'chat-explorer.db'),
     logPath: join(home, 'daemon.log'),

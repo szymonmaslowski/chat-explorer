@@ -1,27 +1,32 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { describe, expect, it } from 'vitest';
+import { createToolsApp } from '../src/api/tools-app.js';
 import { createTestApp, seedConversation } from './helpers.js';
+
+const testToolsPort = 5000;
 
 async function setup() {
   const context = createTestApp();
   const conversation = seedConversation(context.store);
   const { store, runs } = context;
+  const tools = createToolsApp({ store, runs, toolsPort: testToolsPort });
   store.submit(conversation.explorationId, conversation.mainForkId, 'Note this down');
   const lease = runs.claim(conversation.mainForkId, 'runner-a')!;
   const [question] = runs.pendingInput(conversation.mainForkId, lease.leaseId);
   const connect = async (token: string) => {
     const client = new Client({ name: 'test', version: '1.0.0' });
+    // As a coding container reaches them: on the tools listener, not the main port.
     const transport = new StreamableHTTPClientTransport(
-      new URL('http://host.docker.internal:4999/api/tools/mcp'),
+      new URL(`http://host.docker.internal:${testToolsPort}/api/tools/mcp`),
       {
         requestInit: { headers: { authorization: `Bearer ${token}` } },
         fetch: async (url, init) =>
-          context.app.request(String(url), {
+          tools.request(String(url), {
             ...init,
             headers: {
               ...Object.fromEntries(new Headers(init?.headers)),
-              host: 'host.docker.internal:4999',
+              host: `host.docker.internal:${testToolsPort}`,
             },
           }),
       },

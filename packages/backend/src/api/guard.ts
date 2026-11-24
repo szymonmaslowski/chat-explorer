@@ -5,8 +5,8 @@ const safeMethods = new Set(['GET', 'HEAD', 'OPTIONS']);
 // Blocks DNS rebinding (foreign Host) and other websites posting to the daemon (foreign Origin).
 export function guardLocalRequests(port: number, publicUrl: string | null) {
   const localHosts = [`127.0.0.1:${port}`, `localhost:${port}`];
-  // How an engine in a Docker container reaches the daemon for its job tools.
-  const allowedHosts = new Set([...localHosts, `host.docker.internal:${port}`]);
+  // Never host.docker.internal: containers reach only the tools listener, on a port of its own.
+  const allowedHosts = new Set(localHosts);
   const allowedOrigins = new Set(localHosts.map((host) => `http://${host}`));
   if (publicUrl) {
     allowedHosts.add(new URL(publicUrl).host);

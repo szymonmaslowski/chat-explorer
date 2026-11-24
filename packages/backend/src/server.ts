@@ -7,6 +7,7 @@ import { probe } from '@chat-explorer/shared/health.js';
 import { ensureMachineToken } from '@chat-explorer/shared/machine-token.js';
 import { packageVersion } from '@chat-explorer/shared/version.js';
 import { createApp } from './api/app.js';
+import { createToolsApp } from './api/tools-app.js';
 import { Database } from './db/database.js';
 import { dictationAvailability } from './dictation/availability.js';
 import { whisperModelPath } from './dictation/models.js';
@@ -84,6 +85,8 @@ export function startBackend(options: {
     hub.stop();
     server.close();
     server.closeAllConnections();
+    toolsServer.close();
+    toolsServer.closeAllConnections();
     database.close();
     process.exit(0);
   };
@@ -118,6 +121,18 @@ export function startBackend(options: {
     console.error(`Port ${config.port} is already in use.`);
     process.exit(portInUseExitCode);
   });
+
+  // Coding containers reach only this one, through the egress proxy.
+  const toolsServer = createServer(
+    getRequestListener(createToolsApp({ store, runs, toolsPort: config.toolsPort }).fetch),
+  );
+  toolsServer.on('error', (error: NodeJS.ErrnoException) => {
+    if (error.code !== 'EADDRINUSE') throw error;
+    console.error(`The tools port ${config.toolsPort} is already in use.`);
+    database.close();
+    process.exit(portInUseExitCode);
+  });
+  toolsServer.listen(config.toolsPort, '127.0.0.1');
 
   server.listen(config.port, '127.0.0.1', () => {
     console.log(
