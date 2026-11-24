@@ -101,7 +101,11 @@ describe('the egress proxy', () => {
       alwaysAllowed: ['api.anthropic.com:443'],
       toolsHost: `localhost:${targetPort}`,
       // Stands for the daemon's main port. Nothing listens there: no request may even try it.
-      blockedHosts: [`localhost:${mainPort}`, `host.docker.internal:${mainPort}`],
+      blockedHosts: [
+        `localhost:${mainPort}`,
+        `host.docker.internal:${mainPort}`,
+        `gateway.docker.internal:${mainPort}`,
+      ],
       lookup: async (host) => {
         const address = answers[host];
         if (!address) throw new Error('ENOTFOUND');
@@ -361,9 +365,46 @@ describe('the egress proxy', () => {
     );
   });
 
+  it('refuses a tunnel to the tools host, which is reached over plain HTTP', async () => {
+    allow('fork_c', []);
+    for (const tools of [`localhost:${targetPort}`, `LOCALHOST.:${targetPort}`]) {
+      expect(await status(tools, signIn('fork_c')), tools).toBe(403);
+    }
+    await expect
+      .poll(() => logOf('fork_c'))
+      .toMatch(/denied a tunnel to the tools host: the job tools are reached over plain HTTP/);
+  });
+
+  it('blocks the main port and finds the tools host under any spelling of their names', async () => {
+    allow('fork_n', []);
+    const auth = { 'proxy-authorization': signIn('fork_n') };
+    for (const main of [
+      `host.docker.internal.:${mainPort}`,
+      `HOST.Docker.Internal:${mainPort}`,
+      `gateway.docker.internal:${mainPort}`,
+      `gateway.docker.internal.:${mainPort}`,
+    ]) {
+      writeFileSync(
+        join(policiesPath, 'fork_n.json'),
+        JSON.stringify({ token: 'fork_n-token', hosts: [main], privateHosts: [main] }),
+      );
+      expect(await status(main, signIn('fork_n')), main).toBe(403);
+      expect((await plain(`http://${main}/api/tools/mcp`, auth)).body, main).toBe(
+        "Blocked by the sandbox: containers reach only the daemon's job tools.",
+      );
+    }
+    for (const tools of [`localhost.:${targetPort}`, `LocalHost:${targetPort}`]) {
+      expect(await plain(`http://${tools}/api/tools/mcp`, auth), tools).toEqual({
+        status: 200,
+        body: 'hello from /api/tools/mcp',
+      });
+      expect((await plain(`http://${tools}/api/forks/x`, auth)).status, tools).toBe(403);
+    }
+  });
+
   it('caps the open connections of one fork', async () => {
-    allow('fork_f', []);
-    const tools = `localhost:${targetPort}`;
+    allow('fork_f', ['allowed.example.com:443']);
+    const tools = 'allowed.example.com:443';
     const first = await tunnel(tools, signIn('fork_f'));
     const second = await tunnel(tools, signIn('fork_f'));
     expect([first.status, second.status]).toEqual([200, 200]);

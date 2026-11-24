@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { runtime } from '../src/container-runtime.js';
-import { daemonHost, ensureEgress, toolsHost } from '../src/egress.js';
+import { daemonGatewayHost, daemonHost, ensureEgress, toolsHost } from '../src/egress.js';
 import { toolsUrl } from '../src/start.js';
 
 afterEach(() => vi.restoreAllMocks());
@@ -26,7 +26,8 @@ describe("containers and the daemon's ports", () => {
     const environment = run[run.indexOf('--env') + 1]!;
     const options = JSON.parse(environment.replace(/^EGRESS_OPTIONS=/, ''));
     expect(options.toolsHost).toBe('host.docker.internal:4518');
-    expect(options.blockedHosts).toEqual([daemonHost(4517)]);
+    expect(options.blockedHosts).toEqual([daemonHost(4517), daemonGatewayHost(4517)]);
+    expect(daemonGatewayHost(4517)).toBe('gateway.docker.internal:4517');
     expect(daemonHost(4517)).toBe('host.docker.internal:4517');
   });
 });

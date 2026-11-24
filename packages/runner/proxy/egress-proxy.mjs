@@ -119,9 +119,18 @@ const toolsPathPrefix = '/api/tools/';
 
 const plainAddress = (address = '') => address.replace(/^::ffff:/, '');
 
+// One spelling per name, before any check: lowercase, without the trailing dot of a fully
+// qualified name, so host.docker.internal.:4517 is the same as host.docker.internal:4517.
+const canonicalHost = (host) => host.toLowerCase().replace(/\.$/, '');
+
 const splitHostPort = (target) => {
   const match = /^([a-z0-9.-]+):(\d{1,5})$/i.exec(target);
-  return match ? { host: match[1].toLowerCase(), port: Number(match[2]) } : null;
+  return match ? { host: canonicalHost(match[1]), port: Number(match[2]) } : null;
+};
+
+const canonicalHostPort = (target) => {
+  const split = splitHostPort(target);
+  return split ? `${split.host}:${split.port}` : target;
 };
 
 export function startEgressProxy(options) {
@@ -144,7 +153,8 @@ export function startEgressProxy(options) {
     requestModel = (requestOptions, onResponse) =>
       https.request({ host: 'api.anthropic.com', port: 443, ...requestOptions }, onResponse),
   } = options;
-  const blocked = new Set(blockedHosts);
+  const blocked = new Set(blockedHosts.map(canonicalHostPort));
+  const tools = canonicalHostPort(toolsHost);
   const open = new Map();
   // Where each pass was first used from. A pass works from that address only, so a token that
   // leaks out of its container is worthless anywhere else.
@@ -178,7 +188,9 @@ export function startEgressProxy(options) {
     return {
       id: given.id,
       allowed: new Set(
-        [...alwaysAllowed, toolsHost, ...list('hosts')].filter((host) => !blocked.has(host)),
+        [...alwaysAllowed, ...list('hosts')]
+          .map(canonicalHostPort)
+          .filter((host) => !blocked.has(host) && host !== tools),
       ),
       onPrivateNetwork: new Set(list('privateHosts')),
       hidden: new Set(list('hiddenHosts')),
@@ -191,7 +203,7 @@ export function startEgressProxy(options) {
     if (blocked.has(`${target.host}:${target.port}`)) {
       return { refused: "it is the daemon's main port, which containers never reach" };
     }
-    if (`${target.host}:${target.port}` === toolsHost) return { host: target.host };
+    if (`${target.host}:${target.port}` === tools) return { host: target.host };
     let resolved;
     try {
       resolved = await lookup(target.host);
@@ -221,7 +233,7 @@ export function startEgressProxy(options) {
       response.writeHead(400).end();
       return;
     }
-    const target = `${url.hostname}:${url.port || '80'}`;
+    const target = `${canonicalHost(url.hostname)}:${url.port || '80'}`;
     const shown = fork.hidden.has(target) ? 'a hidden host' : target;
     const refuse = (line, message) => {
       log(fork.id, line);
@@ -241,7 +253,7 @@ export function startEgressProxy(options) {
       );
       return;
     }
-    if (target !== toolsHost) {
+    if (target !== tools) {
       refuse(
         `denied plain HTTP to ${shown}: only HTTPS goes out`,
         'Plain HTTP is refused by the sandbox. Use HTTPS.',
@@ -255,14 +267,13 @@ export function startEgressProxy(options) {
       );
       return;
     }
-    // The proxy names the host itself: a container's own Host header is never passed on.
+    // A container's own Host header is never passed on: Node names the host from the target.
     const headers = Object.fromEntries(
       Object.entries(request.headers).filter(([name]) => !droppedToolsHeaders.has(name)),
     );
-    headers.host = toolsHost;
     const upstream = http.request(
       {
-        host: url.hostname,
+        host: canonicalHost(url.hostname),
         port: url.port || 80,
         method: request.method,
         path: url.pathname + url.search,
@@ -297,6 +308,16 @@ export function startEgressProxy(options) {
       refuse(
         '403 Forbidden',
         "Blocked by the sandbox: containers reach only the daemon's job tools.",
+      );
+      return;
+    }
+    // The tools are reached over plain HTTP, where the proxy checks the path; a tunnel would hide
+    // it. Claude Code's MCP client never opens one.
+    if (target && named === tools) {
+      log(fork.id, 'denied a tunnel to the tools host: the job tools are reached over plain HTTP');
+      refuse(
+        '403 Forbidden',
+        "Blocked by the sandbox: reach the daemon's job tools over plain HTTP, not a tunnel.",
       );
       return;
     }

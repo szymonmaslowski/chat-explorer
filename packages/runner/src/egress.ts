@@ -19,6 +19,8 @@ const modelAddress = (port: number) => `${egressContainer(port)}:3129`;
 export const toolsHost = (toolsPort: number) => `host.docker.internal:${toolsPort}`;
 // The daemon's main port, with every page route: the proxy never connects to it.
 export const daemonHost = (port: number) => `host.docker.internal:${port}`;
+// The other name Docker Desktop gives the Mac, which reaches the same port.
+export const daemonGatewayHost = (port: number) => `gateway.docker.internal:${port}`;
 
 // Policies and secrets are written by the runner and only read by the proxy; logs are written by
 // the proxy.
@@ -159,7 +161,7 @@ async function startEgress(options: EgressOptions) {
     secretsPath: '/egress/secrets',
     logsPath: '/egress/logs',
     toolsHost: toolsHost(toolsPort),
-    blockedHosts: [daemonHost(port)],
+    blockedHosts: [daemonHost(port), daemonGatewayHost(port)],
   };
   await required(
     [
