@@ -524,4 +524,8 @@ export const migrations = [
   -- Areas of the Autonomous setting a card's Approve turned on for its fork, as a JSON array.
   ALTER TABLE action_requests ADD COLUMN allowed_areas TEXT NOT NULL DEFAULT '[]';
   `,
+  `
+  -- The user's edits on a waiting card, as JSON, so a reload or another device shows them.
+  ALTER TABLE action_requests ADD COLUMN draft TEXT;
+  `,
 ];

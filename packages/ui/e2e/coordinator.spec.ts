@@ -126,3 +126,51 @@ test('shows a dot on the chats list and the map while a request waits', async ({
   await page.goto(`/e/${explorationId}/map`);
   await expect(page.locator('.attention-dot.request').first()).toBeVisible();
 });
+
+test('keeps edits on a card across a reload and shows them on another device', async ({
+  page,
+  request,
+  browser,
+}) => {
+  const { explorationId, mainForkId } = await newChat(request, 'Plan the work');
+  await request.patch(`/api/forks/${mainForkId}/coordination`, { data: { coordination: true } });
+  const runner = fakeRunner(request);
+  const { lease } = await runner.call('claim', {
+    runnerId: 'e2e-runner',
+    explorationId,
+    waitMs: 5_000,
+  });
+  await runner.call(`forks/${mainForkId}/input`, { leaseId: lease.leaseId });
+  await runner.tool(lease.toolsToken, 'request_fork', { title: 'Research', brief: 'Look it up.' });
+
+  await page.goto(`/e/${explorationId}/f/${mainForkId}`);
+  const card = page.locator('.request-card.waiting');
+  await card.getByRole('button', { name: 'Show and edit the details' }).click();
+  const brief = card.getByLabel("Brief: the fork's first message");
+  const saved = page.waitForResponse(
+    (response) => response.url().includes('/draft') && response.request().method() === 'PUT',
+  );
+  await brief.fill('Look it up, with sources.');
+  expect((await saved).status()).toBe(200);
+
+  await page.reload();
+  const reloaded = page.locator('.request-card.waiting');
+  await expect(reloaded.locator('.edited')).toBeVisible();
+  await reloaded.getByRole('button', { name: 'Show and edit the details' }).click();
+  await expect(reloaded.getByLabel("Brief: the fork's first message")).toHaveValue(
+    'Look it up, with sources.',
+  );
+
+  const other = await (await browser.newContext()).newPage();
+  await other.goto(`/e/${explorationId}/f/${mainForkId}`);
+  const elsewhere = other.locator('.request-card.waiting');
+  await elsewhere.getByRole('button', { name: 'Show and edit the details' }).click();
+  await expect(elsewhere.getByLabel("Brief: the fork's first message")).toHaveValue(
+    'Look it up, with sources.',
+  );
+  // A change on the first device arrives on the second while its field isn't in use.
+  await brief.page().bringToFront();
+  await reloaded.getByLabel('Reason for rejecting').fill('Not yet');
+  await expect(elsewhere.getByLabel('Reason for rejecting')).toHaveValue('Not yet');
+  await other.close();
+});

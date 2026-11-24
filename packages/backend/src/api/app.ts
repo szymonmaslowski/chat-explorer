@@ -38,7 +38,7 @@ import type { RunStore } from '../store/runs.js';
 import type { ChatStore } from '../store/store.js';
 import { requestStoreFor } from '../store/requests.js';
 import { autonomousAreas } from '@chat-explorer/shared/requests.js';
-import { requestDecisionSchema } from './request-schemas.js';
+import { requestDecisionSchema, requestDraftSchema } from './request-schemas.js';
 import { actionFromTool } from './request-tools.js';
 import { guardLocalRequests } from './guard.js';
 import { registerJobTools } from './job-tools.js';
@@ -326,6 +326,12 @@ export function createApp(options: AppOptions) {
 
   // The user's decision on a card of requested actions: approve the ticked items, edited, or
   // reject them all.
+  // The user's edits on a waiting card, saved as they type, for a reload or another device.
+  app.put('/api/requests/:id/draft', async (context) => {
+    const draft = requestDraftSchema.parse(await context.req.json());
+    return context.json(requests.saveDraft(context.req.param('id'), draft));
+  });
+
   app.post('/api/requests/:id/decide', async (context) => {
     const decision = requestDecisionSchema.parse(await context.req.json());
     return context.json(requests.decide(context.req.param('id'), decision));

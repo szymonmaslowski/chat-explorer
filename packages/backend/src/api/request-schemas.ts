@@ -86,6 +86,12 @@ export const requestActionSchema: z.ZodType<RequestAction> = z.discriminatedUnio
   z.object({ kind: z.literal('board'), input: boardInputSchema }),
 ]);
 
+export const requestDraftSchema = z.object({
+  items: z.array(z.object({ id: z.string(), selected: z.boolean(), action: requestActionSchema })),
+  reason: z.string().max(2_000).default(''),
+  allowAreas: z.array(z.enum(autonomousAreas)).default([]),
+});
+
 export const requestDecisionSchema = z.object({
   decision: z.enum(['approve', 'reject']),
   items: z

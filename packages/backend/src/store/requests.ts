@@ -11,6 +11,7 @@ import {
   type ActionRequest,
   type RequestAction,
   type RequestDecision,
+  type RequestDraft,
   type RequestItem,
   type RequestOrigin,
 } from '@chat-explorer/shared/requests.js';
@@ -212,6 +213,29 @@ export class RequestStore {
     };
   }
 
+  // Saves the user's edits on a waiting card, whole; the last save wins. Edits are checked as on
+  // Approve, so a draft never holds what Approve would refuse.
+  saveDraft(requestId: string, draft: Omit<RequestDraft, 'savedAt'>): ActionRequest {
+    const row = this.requireRow(requestId);
+    if (row.status !== 'waiting') {
+      throw new StoreError('already_decided', `Request ${requestId} was already decided.`);
+    }
+    const items = JSON.parse(row.items) as RequestItem[];
+    for (const entry of draft.items) {
+      const item = items.find((each) => each.id === entry.id);
+      if (!item) throw new StoreError('invalid', `Request ${requestId} has no item ${entry.id}.`);
+      this.checkEdit(item.original, entry.action);
+    }
+    const now = this.now();
+    this.db.run(
+      'UPDATE action_requests SET draft = ?, updated_at = ? WHERE id = ?',
+      JSON.stringify({ ...draft, savedAt: now }),
+      now,
+      requestId,
+    );
+    return this.publishUpdate(requestId);
+  }
+
   // The user's decision. Approving runs the ticked items in order, with the user's edits; an item
   // aimed at a fork or group another item was to create runs only once that one did.
   decide(requestId: string, decision: RequestDecision): ActionRequest {
@@ -220,7 +244,11 @@ export class RequestStore {
       throw new StoreError('already_decided', `Request ${requestId} was already decided.`);
     }
     const items = JSON.parse(row.items) as RequestItem[];
-    const choices = new Map((decision.items ?? []).map((choice) => [choice.id, choice]));
+    // What the page sends with Approve, or else the saved draft.
+    const draft = row.draft === null ? null : (JSON.parse(row.draft) as RequestDraft);
+    const choices = new Map(
+      (decision.items ?? draft?.items ?? []).map((choice) => [choice.id, choice]),
+    );
     for (const id of choices.keys()) {
       if (!items.some((item) => item.id === id)) {
         throw new StoreError('invalid', `Request ${requestId} has no item ${id}.`);
@@ -232,7 +260,7 @@ export class RequestStore {
       this.save(row.id, rejected, {
         status: 'rejected',
         decidedBy: 'user',
-        reason: decision.reason?.trim() || null,
+        reason: (decision.reason ?? draft?.reason)?.trim() || null,
         now,
       });
       return this.publishUpdate(row.id);
@@ -252,7 +280,9 @@ export class RequestStore {
     const allowable = allowableAreas(
       planned.filter((entry) => entry.selected).map((entry) => entry.final),
     );
-    const allowed = [...new Set(decision.allowAreas ?? [])];
+    const allowed = [
+      ...new Set(decision.allowAreas ?? (decision.items ? [] : (draft?.allowAreas ?? []))),
+    ];
     for (const area of allowed) {
       if (!allowable.includes(area)) {
         throw new StoreError(
@@ -624,7 +654,7 @@ export class RequestStore {
   ) {
     this.db.run(
       `UPDATE action_requests SET items = ?, status = ?, decided_by = ?, decided_at = ?, reason = ?,
-         updated_at = ? WHERE id = ?`,
+         draft = NULL, updated_at = ? WHERE id = ?`,
       JSON.stringify(items),
       decision.status,
       decision.decidedBy,

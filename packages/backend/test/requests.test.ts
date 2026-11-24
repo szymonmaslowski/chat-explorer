@@ -675,3 +675,65 @@ describe("the card's checkbox to allow an area without asking", () => {
     expect(store.fork(mainForkId).autonomous).toEqual([]);
   });
 });
+
+describe('saved card edits', () => {
+  it('keep the ticks, edits, reason and areas, for every reader, until the card is decided', async () => {
+    const { store, request: http } = createTestApp();
+    const { mainForkId, explorationId, answer } = seedConversation(store);
+    const child = store.forkAtAnswer(answer.id);
+    const requests = new RequestStore(store);
+    const original = forkAction();
+    const { requestId } = requests.request(mainForkId, 'fork', original);
+    requests.request(mainForkId, 'fork', { kind: 'message', forkId: child.id, text: 'Go on.' });
+    const [forkItem, messageItem] = requests.get(requestId).items;
+    const save = (json: object) =>
+      http(`/api/requests/${requestId}/draft`, { method: 'PUT', json });
+    const first = await save({
+      items: [{ id: forkItem!.id, selected: true, action: { ...original, brief: 'First.' } }],
+    });
+    expect(first.status).toBe(200);
+    // The last save wins, whole.
+    await save({
+      items: [
+        { id: forkItem!.id, selected: true, action: { ...original, brief: 'Smaller.' } },
+        { id: messageItem!.id, selected: false, action: messageItem!.original },
+      ],
+      reason: 'Maybe later',
+      allowAreas: ['forks'],
+    });
+    // A reload, or another device, reads the same draft from the chat.
+    const snapshot = await (await http(`/api/explorations/${explorationId}`)).json();
+    const shown = snapshot.requests.find((each: { id: string }) => each.id === requestId);
+    expect(shown.draft).toMatchObject({
+      items: [
+        { id: forkItem!.id, selected: true, action: { brief: 'Smaller.' } },
+        { id: messageItem!.id, selected: false },
+      ],
+      reason: 'Maybe later',
+      allowAreas: ['forks'],
+    });
+    expect(shown.items[0].original).toEqual(original);
+    // Approve without items takes the saved draft; the draft goes once decided.
+    const decided = requests.decide(requestId, { decision: 'approve' });
+    expect(decided.items[0]?.final).toMatchObject({ brief: 'Smaller.' });
+    expect(decided.items.map((item) => item.outcome)).toEqual(['done', 'unticked']);
+    expect(decided.allowedAreas).toEqual(['forks']);
+    expect(decided.draft).toBeNull();
+    expect((await save({ items: [] })).status).toBe(409);
+  });
+
+  it('refuses a draft that changes what an item is', () => {
+    const { requests, mainForkId } = setup();
+    const original = forkAction();
+    const { requestId } = requests.request(mainForkId, 'fork', original);
+    const itemId = requests.get(requestId).items[0]!.id;
+    expect(() =>
+      requests.saveDraft(requestId, {
+        items: [{ id: itemId, selected: true, action: { ...original, forkId: 'fork_other00000' } }],
+        reason: '',
+        allowAreas: [],
+      }),
+    ).toThrow(/id/);
+    expect(requests.get(requestId).draft).toBeNull();
+  });
+});

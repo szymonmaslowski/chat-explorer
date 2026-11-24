@@ -95,8 +95,20 @@ export interface ActionRequest {
   reason: string | null;
   // Areas of the Autonomous setting the user turned on for the fork with this card's Approve.
   allowedAreas: AutonomousArea[];
+  // The user's edits while the card waits, saved so a reload or another device shows them; null
+  // when there are none, and dropped once the card is decided.
+  draft: RequestDraft | null;
   createdAt: number;
   updatedAt: number;
+}
+
+// What the user changed on a waiting card so far: ticks, edited items, the reason and the areas
+// to allow. Items not named are ticked and as Claude asked.
+export interface RequestDraft {
+  items: { id: string; selected: boolean; action: RequestAction }[];
+  reason: string;
+  allowAreas: AutonomousArea[];
+  savedAt: number;
 }
 
 // The user's decision on a card: each item ticked or not, with its edited values.

@@ -6,8 +6,12 @@ import RequestCard from '../src/components/RequestCard.vue';
 import { decisionSummary, requestPlacement, waitingRequests } from '../src/lib/requests';
 
 const decideRequest = vi.fn();
+const saveRequestDraft = vi.fn(async (..._args: unknown[]) => ({}));
 vi.mock('../src/api', () => ({
-  api: { decideRequest: (...args: unknown[]) => decideRequest(...args) },
+  api: {
+    decideRequest: (...args: unknown[]) => decideRequest(...args),
+    saveRequestDraft: (...args: unknown[]) => saveRequestDraft(...args),
+  },
 }));
 
 const forkAction: RequestAction = {
@@ -45,6 +49,7 @@ const request = (overrides: Partial<ActionRequest> = {}): ActionRequest => ({
   decidedAt: null,
   reason: null,
   allowedAreas: [],
+  draft: null,
   createdAt: 1,
   updatedAt: 1,
   ...overrides,
@@ -365,5 +370,98 @@ describe("the card's allow checkboxes", () => {
       .find((each) => each.text() === 'Sure?')!
       .trigger('click');
     expect(decideRequest.mock.calls[1]![1]).not.toHaveProperty('allowAreas');
+  });
+});
+
+describe('saved card edits', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    decideRequest.mockReset();
+    decideRequest.mockImplementation(async () => request({ status: 'approved' }));
+    saveRequestDraft.mockClear();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const draft = {
+    items: [
+      { id: 'i1', selected: true, action: { ...forkAction, brief: 'Saved brief.' } },
+      {
+        id: 'i2',
+        selected: false,
+        action: { kind: 'message', forkId: 'fork_new0000000', text: 'And tests.' } as RequestAction,
+      },
+    ],
+    reason: 'Saved reason',
+    allowAreas: [],
+    savedAt: 5,
+  };
+
+  it('opens with the saved edits, as after a reload or on another device', async () => {
+    const wrapper = card(request({ draft }));
+    const ticks = wrapper.findAll('.line input[type="checkbox"]');
+    expect((ticks[0]!.element as HTMLInputElement).checked).toBe(true);
+    expect((ticks[1]!.element as HTMLInputElement).checked).toBe(false);
+    expect(wrapper.find('.edited').exists()).toBe(true);
+    expect((wrapper.find('.reason-input').element as HTMLInputElement).value).toBe('Saved reason');
+    await wrapper.find('[aria-label="Show and edit the details"]').trigger('click');
+    expect((wrapper.find('textarea').element as HTMLTextAreaElement).value).toBe('Saved brief.');
+  });
+
+  it('saves a moment after a change, the whole card', async () => {
+    const wrapper = card(request());
+    await wrapper.find('[aria-label="Show and edit the details"]').trigger('click');
+    await wrapper.find('textarea').setValue('Typed brief.');
+    await wrapper.find('.reason-input').setValue('Because');
+    expect(saveRequestDraft).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(700);
+    expect(saveRequestDraft).toHaveBeenCalledTimes(1);
+    expect(saveRequestDraft.mock.calls[0]).toEqual([
+      'req_0000000001',
+      {
+        items: [
+          { id: 'i1', selected: true, action: { ...forkAction, brief: 'Typed brief.' } },
+          { id: 'i2', selected: true, action: request().items[1]!.original },
+        ],
+        reason: 'Because',
+        allowAreas: [],
+      },
+    ]);
+  });
+
+  it("shows another device's save, but not over a change made here and not saved yet", async () => {
+    const wrapper = card(request());
+    await wrapper.findAll('.line input[type="checkbox"]')[1]!.setValue(false);
+    await wrapper.setProps({ request: request({ draft }) });
+    // The fork item takes the other device's brief; the message keeps this device's untick.
+    await wrapper.find('[aria-label="Show and edit the details"]').trigger('click');
+    expect((wrapper.find('textarea').element as HTMLTextAreaElement).value).toBe('Saved brief.');
+    expect(
+      (wrapper.findAll('.line input[type="checkbox"]')[1]!.element as HTMLInputElement).checked,
+    ).toBe(false);
+    await vi.advanceTimersByTimeAsync(700);
+    await wrapper.setProps({
+      request: request({
+        draft: { ...draft, items: [draft.items[0]!, { ...draft.items[1]!, selected: true }] },
+      }),
+    });
+    expect(
+      (wrapper.findAll('.line input[type="checkbox"]')[1]!.element as HTMLInputElement).checked,
+    ).toBe(true);
+  });
+
+  it('sends what is on the card with Approve, and drops the pending save', async () => {
+    const wrapper = card(request());
+    await wrapper.find('[aria-label="Show and edit the details"]').trigger('click');
+    await wrapper.find('textarea').setValue('Last keystroke.');
+    await button(wrapper, 'Approve').trigger('click');
+    await wrapper
+      .findAll('button')
+      .find((each) => each.text() === 'Sure?')!
+      .trigger('click');
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(saveRequestDraft).not.toHaveBeenCalled();
+    expect(decideRequest.mock.calls[0]![1]).toMatchObject({
+      items: [{ id: 'i1', action: { brief: 'Last keystroke.' } }, { id: 'i2' }],
+    });
   });
 });

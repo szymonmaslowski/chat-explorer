@@ -12,7 +12,7 @@ import {
   type RequestItem,
 } from '@shared/requests';
 import type { Fork, Note, NoteGroup } from '@shared/types';
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import { api } from '../api';
 import { forkTitle } from '../lib/conversation';
 import { decisionSummary, outcomeLabel } from '../lib/requests';
@@ -40,18 +40,104 @@ const allow = reactive(new Set<AutonomousArea>());
 const busy = ref(false);
 const error = ref('');
 
-// Items added to the card while it is shown start ticked and as Claude asked.
+const copy = (action: RequestAction) => JSON.parse(JSON.stringify(action)) as RequestAction;
+
+// Edits are saved on the backend as the card's draft a moment after each change, so a reload or
+// another device shows them. A save from elsewhere replaces what is shown, except what is being
+// changed here: an item or the reason with the focus, or a change not saved yet.
+const saveDelayMs = 600;
+const dirty = new Set<string>();
+const reasonKey = ' reason';
+const allowKey = ' allow';
+let focused: string | null = null;
+const focus = (key: string | null) => (focused = key);
+let saveTimer: ReturnType<typeof setTimeout> | undefined;
+const saveFailed = ref(false);
+
+function draftEntry(itemId: string) {
+  return props.request.draft?.items.find((entry) => entry.id === itemId);
+}
+
+// Items added to the card while it is shown start as the saved draft has them, or else ticked
+// and as Claude asked.
 watch(
   () => props.request.items,
   (items) => {
     for (const item of items) {
-      if (!selected.has(item.id)) selected.set(item.id, true);
-      if (!drafts.has(item.id))
-        drafts.set(item.id, JSON.parse(JSON.stringify(item.original)) as RequestAction);
+      const saved = draftEntry(item.id);
+      if (!selected.has(item.id)) selected.set(item.id, saved?.selected ?? true);
+      if (!drafts.has(item.id)) drafts.set(item.id, copy(saved?.action ?? item.original));
     }
   },
   { immediate: true },
 );
+reason.value = props.request.draft?.reason ?? '';
+for (const area of props.request.draft?.allowAreas ?? []) allow.add(area);
+
+watch(
+  () => props.request.draft,
+  (draft) => {
+    if (!draft) return;
+    for (const entry of draft.items) {
+      if (dirty.has(entry.id) || focused === entry.id) continue;
+      selected.set(entry.id, entry.selected);
+      drafts.set(entry.id, copy(entry.action));
+    }
+    if (!dirty.has(reasonKey) && focused !== reasonKey) reason.value = draft.reason;
+    if (!dirty.has(allowKey)) {
+      allow.clear();
+      for (const area of draft.allowAreas) allow.add(area);
+    }
+  },
+);
+
+function changed(key: string) {
+  dirty.add(key);
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => void saveDraft(), saveDelayMs);
+}
+
+async function saveDraft() {
+  if (!waiting.value) return;
+  const saving = new Set(dirty);
+  try {
+    await api.saveRequestDraft(props.request.id, {
+      items: props.request.items.map((item) => ({
+        id: item.id,
+        selected: selected.get(item.id) !== false,
+        action: drafts.get(item.id) ?? item.original,
+      })),
+      reason: reason.value,
+      allowAreas: [...allow],
+    });
+    for (const key of saving) dirty.delete(key);
+    saveFailed.value = false;
+  } catch {
+    saveFailed.value = true;
+  }
+}
+
+const setSelected = (itemId: string, value: boolean) => {
+  selected.set(itemId, value);
+  changed(itemId);
+};
+const setDraft = (itemId: string, action: RequestAction) => {
+  drafts.set(itemId, action);
+  changed(itemId);
+};
+const setAllowed = (area: AutonomousArea, value: boolean) => {
+  if (value) allow.add(area);
+  else allow.delete(area);
+  changed(allowKey);
+};
+const onReasonInput = () => changed(reasonKey);
+onBeforeUnmount(() => {
+  // A change still waiting to be saved goes now, so leaving the page keeps it.
+  if (saveTimer !== undefined && dirty.size > 0) {
+    clearTimeout(saveTimer);
+    void saveDraft();
+  }
+});
 
 const tickedCount = computed(
   () => props.request.items.filter((item) => selected.get(item.id) !== false).length,
@@ -130,6 +216,8 @@ const originalValue = (action: RequestAction, field: string): string => {
 };
 
 async function decide(decision: 'approve' | 'reject') {
+  // Approve sends what is on the card, so a save still on its way can't leave a keystroke out.
+  clearTimeout(saveTimer);
   busy.value = true;
   error.value = '';
   try {
@@ -174,6 +262,8 @@ async function decide(decision: 'approve' | 'reject') {
         :key="item.id"
         class="item"
         :class="[item.outcome, { left: waiting && selected.get(item.id) === false }]"
+        @focusin="focus(item.id)"
+        @focusout="focus(null)"
       >
         <div class="line">
           <input
@@ -181,7 +271,7 @@ async function decide(decision: 'approve' | 'reject') {
             type="checkbox"
             :checked="selected.get(item.id) !== false"
             :aria-label="`Approve: ${title(shown(item))}`"
-            @change="selected.set(item.id, ($event.target as HTMLInputElement).checked)"
+            @change="setSelected(item.id, ($event.target as HTMLInputElement).checked)"
           />
           <span class="what">{{ title(shown(item)) }}</span>
           <span v-if="waiting && editedNow(item).length > 0" class="edited">edited</span>
@@ -205,7 +295,7 @@ async function decide(decision: 'approve' | 'reject') {
           :forks="otherForks"
           :note-groups="[...noteGroups.values()]"
           :credential-names="credentialNames"
-          @update="drafts.set(item.id, $event)"
+          @update="setDraft(item.id, $event)"
         />
         <template v-if="!waiting">
           <p class="outcome">
@@ -233,9 +323,7 @@ async function decide(decision: 'approve' | 'reject') {
           type="checkbox"
           :checked="allow.has(area)"
           :disabled="!tickedAreas.has(area)"
-          @change="
-            ($event.target as HTMLInputElement).checked ? allow.add(area) : allow.delete(area)
-          "
+          @change="setAllowed(area, ($event.target as HTMLInputElement).checked)"
         />
         {{ allowAreaLabel(area) }}
         <span v-if="area === 'forks'" class="muted"> (up to the runner's limit per hour)</span>
@@ -251,6 +339,9 @@ async function decide(decision: 'approve' | 'reject') {
         class="reason-input"
         placeholder="Reason for rejecting (optional)"
         aria-label="Reason for rejecting"
+        @input="onReasonInput"
+        @focus="focus(reasonKey)"
+        @blur="focus(null)"
       />
       <ConfirmButton
         label="Reject"
@@ -268,6 +359,9 @@ async function decide(decision: 'approve' | 'reject') {
       />
     </div>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
+    <p v-if="waiting && saveFailed" class="error" role="status">
+      Your changes on this card aren't saved yet; they stay here and go with Approve.
+    </p>
   </section>
 </template>
 

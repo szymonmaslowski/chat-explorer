@@ -4,6 +4,7 @@ import type {
   ActionRequest,
   AutonomousArea,
   RequestDecider,
+  RequestDraft,
   RequestItem,
   RequestOrigin,
   RequestStatus,
@@ -411,6 +412,7 @@ export interface ActionRequestRow {
   decided_at: number | null;
   reason: string | null;
   allowed_areas: string;
+  draft: string | null;
   reported_at: number | null;
   created_at: number;
   updated_at: number;
@@ -428,6 +430,7 @@ export const toActionRequest = (row: ActionRequestRow): ActionRequest => ({
   decidedAt: row.decided_at,
   reason: row.reason,
   allowedAreas: JSON.parse(row.allowed_areas) as AutonomousArea[],
+  draft: row.draft === null ? null : (JSON.parse(row.draft) as RequestDraft),
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });

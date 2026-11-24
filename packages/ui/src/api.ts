@@ -1,4 +1,9 @@
-import type { ActionRequest, AutonomousArea, RequestDecision } from '@shared/requests';
+import type {
+  ActionRequest,
+  AutonomousArea,
+  RequestDecision,
+  RequestDraft,
+} from '@shared/requests';
 import type { ClaudeModel } from '@shared/models';
 import type { ForkNetwork } from '@shared/network';
 import type {
@@ -161,6 +166,8 @@ export const api = {
     call<Fork>(`/api/forks/${forkId}/model`, { method: 'PATCH', json: { model } }),
   setForkNetwork: (forkId: string, network: ForkNetwork) =>
     call<Fork>(`/api/forks/${forkId}/network`, { method: 'PATCH', json: network }),
+  saveRequestDraft: (requestId: string, draft: Omit<RequestDraft, 'savedAt'>) =>
+    call<ActionRequest>(`/api/requests/${requestId}/draft`, { method: 'PUT', json: draft }),
   decideRequest: (requestId: string, decision: RequestDecision) =>
     call<ActionRequest>(`/api/requests/${requestId}/decide`, { json: decision }),
   codingCapacity: () => call<{ capacity: CodingCapacity | null }>('/api/coding-capacity'),
