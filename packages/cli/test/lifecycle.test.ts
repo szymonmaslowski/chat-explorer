@@ -114,4 +114,26 @@ describe('ensureDaemon', () => {
       ).rejects.toThrow(`Port ${config.port} is used by another program`);
     });
   });
+
+  describe('with another program on the tools port', () => {
+    let foreign: Server;
+
+    beforeEach(async () => {
+      foreign = createServer((_request, response) => response.end('<html>hello</html>'));
+      await new Promise<void>((resolve) => foreign.listen(config.toolsPort, '127.0.0.1', resolve));
+    });
+
+    afterEach(() => {
+      foreign.close();
+    });
+
+    it('fails with a message naming the tools port, not the main one', async () => {
+      const started = ensureDaemon(config, { version: '1.0.0', apiVersion: 1, daemonEntry });
+      await expect(started).rejects.toThrow(
+        `Port ${config.toolsPort}, the tools port coding containers use, is used by another program`,
+      );
+      await expect(started).rejects.toThrow('CHAT_EXPLORER_TOOLS_PORT');
+      expect((await probe(config.baseUrl)).state).toBe('stopped');
+    });
+  });
 });

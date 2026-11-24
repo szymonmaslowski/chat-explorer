@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { mkdirSync, openSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import type { Config } from '@chat-explorer/shared/config.js';
 import { DaemonStartError, probe } from '@chat-explorer/shared/health.js';
@@ -48,6 +49,7 @@ export async function ensureDaemon(config: Config, target: DaemonTarget) {
     }
     await stopDaemon(config);
   }
+  if (await portTaken(config.toolsPort)) throw toolsPortTakenError(config);
   await startDaemon(config, target.daemonEntry);
   return { health: await waitForHealth(config), started: true };
 }
@@ -80,6 +82,7 @@ function spawnDaemon(config: Config, daemonEntry: string) {
     env: {
       ...process.env,
       CHAT_EXPLORER_PORT: String(config.port),
+      CHAT_EXPLORER_TOOLS_PORT: String(config.toolsPort),
       CHAT_EXPLORER_HOME: config.home,
     },
   });
@@ -95,6 +98,21 @@ export async function waitForHealth(config: Config) {
   }
   throw new DaemonStartError(
     `The daemon did not start within ${startTimeoutMs / 1000} s. See ${config.logPath}.`,
+  );
+}
+
+// Whether another program listens on the port, found by trying to listen there.
+function portTaken(port: number) {
+  return new Promise<boolean>((resolve) => {
+    const server = createServer();
+    server.once('error', () => resolve(true));
+    server.listen(port, '127.0.0.1', () => server.close(() => resolve(false)));
+  });
+}
+
+function toolsPortTakenError(config: Config) {
+  return new DaemonStartError(
+    `Port ${config.toolsPort}, the tools port coding containers use, is used by another program. Set CHAT_EXPLORER_TOOLS_PORT to use a different port.`,
   );
 }
 

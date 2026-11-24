@@ -26,6 +26,8 @@ import { leaseMs, RunStore } from './store/runs.js';
 import { ChatStore } from './store/store.js';
 
 export const portInUseExitCode = 3;
+// The tools port is taken; the main port may be free.
+export const toolsPortInUseExitCode = 4;
 
 // The backend in this process: the store, the API and the web UI on the configured port. The
 // daemon around it adds the processes it supervises, such as the runner, through the two hooks.
@@ -128,9 +130,11 @@ export function startBackend(options: {
   );
   toolsServer.on('error', (error: NodeJS.ErrnoException) => {
     if (error.code !== 'EADDRINUSE') throw error;
-    console.error(`The tools port ${config.toolsPort} is already in use.`);
+    console.error(
+      `The tools port ${config.toolsPort} is already in use. Set CHAT_EXPLORER_TOOLS_PORT to use a different port.`,
+    );
     database.close();
-    process.exit(portInUseExitCode);
+    process.exit(toolsPortInUseExitCode);
   });
   toolsServer.listen(config.toolsPort, '127.0.0.1');
 

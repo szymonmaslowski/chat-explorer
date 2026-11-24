@@ -15,6 +15,10 @@ export function launchAgentPlist(input: {
     PATH: input.path,
     CHAT_EXPLORER_HOME: input.config.home,
     CHAT_EXPLORER_PORT: String(input.config.port),
+    // Only when set apart from its default, the main port + 1, as the daemon would work it out.
+    ...(input.config.toolsPort !== input.config.port + 1 && {
+      CHAT_EXPLORER_TOOLS_PORT: String(input.config.toolsPort),
+    }),
   };
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

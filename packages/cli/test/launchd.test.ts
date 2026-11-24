@@ -21,6 +21,21 @@ describe('launch agent', () => {
     expect(plist).toMatch(/<key>SuccessfulExit<\/key>\s*<false\/>/);
   });
 
+  it('passes the tools port only when it is set apart from its default', () => {
+    const base = { ...loadConfig(), home: '/Users/me/.chat-explorer', port: 4517 };
+    const plistOf = (toolsPort: number) =>
+      launchAgentPlist({
+        nodePath: 'node',
+        daemonEntry: 'main.js',
+        config: { ...base, toolsPort },
+        path: '/usr/bin',
+      });
+    expect(plistOf(4518)).not.toContain('CHAT_EXPLORER_TOOLS_PORT');
+    expect(plistOf(5000)).toContain(
+      '<key>CHAT_EXPLORER_TOOLS_PORT</key>\n    <string>5000</string>',
+    );
+  });
+
   it.runIf(process.platform === 'darwin')(
     'starts the daemon through the service only for the home and port it runs',
     () => {

@@ -71,11 +71,11 @@ async function codingStaysOff(config: RunnerConfig, baseUrl: string) {
   return null;
 }
 
-// A runner on this machine, next to the daemon: its engine runs Claude Code in Docker at the
-// version installed here.
 // Where a container's engine calls the job tools: the daemon's tools listener, never its main port.
 export const toolsUrl = (toolsPort: number) => `http://${toolsHost(toolsPort)}/api/tools/mcp`;
 
+// A runner on this machine, next to the daemon: its engine runs Claude Code in Docker at the
+// version installed here.
 export async function startRunner(options: StartRunnerOptions) {
   const version = await installedClaudeVersion();
   if (!version) throw new Error('Claude Code is not installed, so the runner has no version.');
