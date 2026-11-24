@@ -496,4 +496,28 @@ export const migrations = [
   -- Claude's request to delete a note is a card now; approving it deletes the note.
   ALTER TABLE notes DROP COLUMN deletion_requested_at;
   `,
+  `
+  -- The ids requests promised for the forks and note groups they create, so a later request may
+  -- name one before it exists. One row each, found by its id.
+  CREATE TABLE request_promises (
+    id TEXT PRIMARY KEY,
+    exploration_id TEXT NOT NULL REFERENCES explorations (id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK (kind IN ('fork', 'group')),
+    request_id TEXT NOT NULL REFERENCES action_requests (id) ON DELETE CASCADE,
+    item_id TEXT NOT NULL
+  );
+  CREATE INDEX request_promises_by_request ON request_promises (request_id);
+  INSERT OR IGNORE INTO request_promises (id, exploration_id, kind, request_id, item_id)
+    SELECT
+      CASE json_extract(item.value, '$.original.kind')
+        WHEN 'fork' THEN json_extract(item.value, '$.original.forkId')
+        ELSE json_extract(item.value, '$.original.groupId')
+      END,
+      action_requests.exploration_id,
+      CASE json_extract(item.value, '$.original.kind') WHEN 'fork' THEN 'fork' ELSE 'group' END,
+      action_requests.id,
+      json_extract(item.value, '$.id')
+    FROM action_requests, json_each(action_requests.items) AS item
+    WHERE json_extract(item.value, '$.original.kind') IN ('fork', 'note_group');
+  `,
 ];

@@ -116,6 +116,7 @@ export class RequestStore {
           now,
           open.id,
         );
+        this.promise(fork.explorationId, open.id, item);
         return { id: open.id, created: false };
       }
       const id = `${requestIdPrefix}${newId()}`;
@@ -132,6 +133,7 @@ export class RequestStore {
         now,
         now,
       );
+      this.promise(fork.explorationId, id, item);
       return { id, created: true };
     });
     const saved = this.get(request.id);
@@ -206,6 +208,7 @@ export class RequestStore {
       now,
       now,
     );
+    this.promise(fork.explorationId, id, item);
     this.lastValue = undefined;
     const [decided] = this.run(this.requireRow(id), [{ item, final: action, selected: true }]);
     this.save(id, [decided!], { status: 'approved', decidedBy: 'autonomous', reason: null, now });
@@ -553,18 +556,30 @@ export class RequestStore {
     );
   }
 
-  // An id a request of this chat picked for a fork or group it creates.
+  // Records the id of the fork or group an item will create, so later requests may name it.
+  private promise(explorationId: string, requestId: string, item: RequestItem) {
+    const made = createdBy(item.original);
+    if (!made) return;
+    this.db.run(
+      `INSERT INTO request_promises (id, exploration_id, kind, request_id, item_id)
+       VALUES (?, ?, ?, ?, ?)`,
+      made.id,
+      explorationId,
+      made.kind,
+      requestId,
+      item.id,
+    );
+  }
+
+  // An id a request of this chat picked for a fork or group it creates: one lookup by key.
   private isReserved(explorationId: string, id: string) {
-    return this.db
-      .all<ActionRequestRow>(
-        'SELECT * FROM action_requests WHERE exploration_id = ?',
+    return (
+      this.db.get(
+        'SELECT 1 FROM request_promises WHERE id = ? AND exploration_id = ?',
+        id,
         explorationId,
-      )
-      .some((row) =>
-        (JSON.parse(row.items) as RequestItem[]).some(
-          (item) => createdBy(item.original)?.id === id,
-        ),
-      );
+      ) !== undefined
+    );
   }
 
   private requireFork(explorationId: string, forkId: string) {

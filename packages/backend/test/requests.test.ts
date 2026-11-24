@@ -1,4 +1,10 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
+import { Database } from '../src/db/database.js';
+import { migrations } from '../src/db/schema.js';
 import type { RequestAction } from '@chat-explorer/shared/requests.js';
 import type { RunnerCapabilities } from '@chat-explorer/shared/types.js';
 import { newPrefixedId } from '../src/store/ids.js';
@@ -473,5 +479,106 @@ describe('notes and board as requests', () => {
       .all<{ name: string }>("SELECT name FROM pragma_table_info('notes')")
       .map((column) => column.name);
     expect(columns).not.toContain('deletion_requested_at');
+  });
+});
+
+describe('promised ids', () => {
+  it('are checked by one lookup of the id, never by reading every request', () => {
+    const { requests, database, mainForkId, store } = setup();
+    // Many cards in the chat, so a scan would show.
+    for (let index = 0; index < 5; index += 1) {
+      requests.request(mainForkId, 'fork', forkAction());
+      store.addRunnerAnswer(mainForkId, `Asked ${index}.`);
+    }
+    const promised = requests.request(mainForkId, 'fork', forkAction());
+    const queries: string[] = [];
+    const record =
+      <Method extends (...args: never[]) => unknown>(method: Method) =>
+      (sql: string, ...rest: unknown[]) => {
+        queries.push(sql.replace(/\s+/g, ' '));
+        return (method as unknown as (...args: unknown[]) => unknown).call(database, sql, ...rest);
+      };
+    const all = database.all.bind(database);
+    const get = database.get.bind(database);
+    database.all = record(all) as typeof database.all;
+    database.get = record(get) as typeof database.get;
+    try {
+      const ok = requests.request(mainForkId, 'fork', {
+        kind: 'message',
+        forkId: promised.forkId!,
+        text: 'Hi',
+      });
+      expect(ok.status).toBe('waiting for approval');
+      expect(() =>
+        requests.request(mainForkId, 'fork', {
+          kind: 'message',
+          forkId: 'fork_madeup0000',
+          text: 'Hi',
+        }),
+      ).toThrow(/not found/);
+    } finally {
+      database.all = all;
+      database.get = get;
+    }
+    expect(queries.filter((sql) => sql.includes('FROM request_promises'))).toHaveLength(2);
+    expect(queries.some((sql) => /FROM action_requests WHERE exploration_id/.test(sql))).toBe(
+      false,
+    );
+    const plan = database.all<{ detail: string }>(
+      'EXPLAIN QUERY PLAN SELECT 1 FROM request_promises WHERE id = ? AND exploration_id = ?',
+      'x',
+      'y',
+    );
+    expect(plan.map((step) => step.detail).join(' ')).toMatch(/USING INDEX|PRIMARY KEY/);
+  });
+
+  it('come from requests made before the table, through the migration', () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'chat-explorer-promises-')), 'test.db');
+    const old = new DatabaseSync(path);
+    const before = migrations.findIndex((migration) => migration.includes('request_promises'));
+    for (const migration of migrations.slice(0, before)) old.exec(migration);
+    const item = (id: string, original: object) => ({
+      id,
+      original,
+      final: null,
+      outcome: null,
+      detail: null,
+      resultId: null,
+    });
+    old.exec(`PRAGMA user_version = ${before};
+      INSERT INTO explorations (id, created_at, updated_at) VALUES ('chat_0000000001', 1, 1);
+      INSERT INTO forks (id, exploration_id, created_at, updated_at)
+        VALUES ('fork_000000000a', 'chat_0000000001', 1, 1);`);
+    old
+      .prepare(
+        `INSERT INTO action_requests (id, exploration_id, fork_id, requested_by, items, created_at,
+           updated_at) VALUES ('req_1', 'chat_0000000001', 'fork_000000000a', 'fork', ?, 1, 1)`,
+      )
+      .run(
+        JSON.stringify([
+          item('i1', { kind: 'fork', forkId: 'fork_promised01' }),
+          item('i2', { kind: 'note_group', groupId: 'grp0000001' }),
+          item('i3', { kind: 'message', forkId: 'fork_promised01', text: 'Hi' }),
+        ]),
+      );
+    old.close();
+    const database = new Database(path);
+    expect(database.all('SELECT * FROM request_promises ORDER BY id')).toEqual([
+      {
+        id: 'fork_promised01',
+        exploration_id: 'chat_0000000001',
+        kind: 'fork',
+        request_id: 'req_1',
+        item_id: 'i1',
+      },
+      {
+        id: 'grp0000001',
+        exploration_id: 'chat_0000000001',
+        kind: 'group',
+        request_id: 'req_1',
+        item_id: 'i2',
+      },
+    ]);
+    database.close();
   });
 });
