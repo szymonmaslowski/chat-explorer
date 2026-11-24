@@ -332,6 +332,9 @@ const eventSubjects = (event: ExplorationEvent) => {
       return [event.note.id, ...event.noteIds];
     case 'notes.reordered':
       return event.noteIds;
+    case 'request.created':
+    case 'request.updated':
+      return [event.request.id];
     case 'fork.split':
       return [
         ...event.comments.map((comment) => comment.id),
@@ -705,6 +708,14 @@ export function applyChange(state: ExplorationState, change: Change) {
       });
       renumberGroup(state.notes, note.groupId);
       renumberGroup(state.notes, change.groupId);
+      break;
+    }
+    // A card shows its latest edits, also those still waiting to be sent, after a reload too.
+    case 'request.draft': {
+      const request = state.requests.get(change.requestId);
+      if (request?.status === 'waiting') {
+        put(state.requests, request.id, { ...request, draft: { ...change.draft, savedAt: now } });
+      }
       break;
     }
     case 'messages.read':

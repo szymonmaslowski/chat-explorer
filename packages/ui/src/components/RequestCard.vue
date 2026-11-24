@@ -12,8 +12,11 @@ import {
   type RequestItem,
 } from '@shared/requests';
 import type { Fork, Note, NoteGroup } from '@shared/types';
-import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { api } from '../api';
+import { useAutosave } from '../composables/useAutosave';
+import { offline } from '../lib/online';
+import { outbox } from '../stores/outbox';
 import { forkTitle } from '../lib/conversation';
 import { decisionSummary, outcomeLabel } from '../lib/requests';
 import ConfirmButton from './ConfirmButton.vue';
@@ -42,17 +45,16 @@ const error = ref('');
 
 const copy = (action: RequestAction) => JSON.parse(JSON.stringify(action)) as RequestAction;
 
-// Edits are saved on the backend as the card's draft a moment after each change, so a reload or
-// another device shows them. A save from elsewhere replaces what is shown, except what is being
-// changed here: an item or the reason with the focus, or a change not saved yet.
-const saveDelayMs = 600;
+// Edits are saved as the card's draft through the outbox, like every write of the page: kept on
+// the device until the daemon has them, sent in order, and shown again after a reload. A save
+// from another device replaces what is shown, except what is being changed here: an item or the
+// reason with the focus, a change not saved yet, or one still waiting in the outbox (the card
+// then shows that one, as the outbox replays it over the daemon's copy).
 const dirty = new Set<string>();
 const reasonKey = ' reason';
 const allowKey = ' allow';
 let focused: string | null = null;
 const focus = (key: string | null) => (focused = key);
-let saveTimer: ReturnType<typeof setTimeout> | undefined;
-const saveFailed = ref(false);
 
 function draftEntry(itemId: string) {
   return props.request.draft?.items.find((entry) => entry.id === itemId);
@@ -91,30 +93,32 @@ watch(
   },
 );
 
-function changed(key: string) {
-  dirty.add(key);
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => void saveDraft(), saveDelayMs);
+const currentDraft = () => ({
+  items: props.request.items.map((item) => ({
+    id: item.id,
+    selected: selected.get(item.id) !== false,
+    action: drafts.get(item.id) ?? item.original,
+  })),
+  reason: reason.value,
+  allowAreas: [...allow],
+});
+
+function queueDraft() {
+  if (!waiting.value) return;
+  dirty.clear();
+  outbox.add({
+    type: 'request.draft',
+    explorationId: props.explorationId,
+    requestId: props.request.id,
+    draft: currentDraft(),
+  });
 }
 
-async function saveDraft() {
-  if (!waiting.value) return;
-  const saving = new Set(dirty);
-  try {
-    await api.saveRequestDraft(props.request.id, {
-      items: props.request.items.map((item) => ({
-        id: item.id,
-        selected: selected.get(item.id) !== false,
-        action: drafts.get(item.id) ?? item.original,
-      })),
-      reason: reason.value,
-      allowAreas: [...allow],
-    });
-    for (const key of saving) dirty.delete(key);
-    saveFailed.value = false;
-  } catch {
-    saveFailed.value = true;
-  }
+const autosave = useAutosave(queueDraft);
+
+function changed(key: string) {
+  dirty.add(key);
+  autosave.changed();
 }
 
 const setSelected = (itemId: string, value: boolean) => {
@@ -131,13 +135,10 @@ const setAllowed = (area: AutonomousArea, value: boolean) => {
   changed(allowKey);
 };
 const onReasonInput = () => changed(reasonKey);
-onBeforeUnmount(() => {
-  // A change still waiting to be saved goes now, so leaving the page keeps it.
-  if (saveTimer !== undefined && dirty.size > 0) {
-    clearTimeout(saveTimer);
-    void saveDraft();
-  }
-});
+
+// Approve and Reject need the daemon: they are decisions, not drafts, so they never wait in the
+// outbox.
+const unreachable = computed(() => offline.value);
 
 const tickedCount = computed(
   () => props.request.items.filter((item) => selected.get(item.id) !== false).length,
@@ -216,11 +217,15 @@ const originalValue = (action: RequestAction, field: string): string => {
 };
 
 async function decide(decision: 'approve' | 'reject') {
-  // Approve sends what is on the card, so a save still on its way can't leave a keystroke out.
-  clearTimeout(saveTimer);
   busy.value = true;
   error.value = '';
   try {
+    // The latest edits go first, through the outbox, so the draft never lags behind the decision.
+    autosave.finish(queueDraft);
+    await outbox.flush();
+    if (outbox.isPending(props.request.id)) {
+      throw new Error('The daemon could not be reached. Try again when it is back.');
+    }
     const request = await api.decideRequest(props.request.id, {
       decision,
       ...(decision === 'approve'
@@ -347,20 +352,21 @@ async function decide(decision: 'approve' | 'reject') {
         label="Reject"
         armed-label="Sure?"
         danger
-        :disabled="busy"
+        :disabled="busy || unreachable"
         @confirm="decide('reject')"
       />
       <ConfirmButton
         :label="`Approve ${tickedCount}`"
         armed-label="Sure?"
         class="primary"
-        :disabled="busy || tickedCount === 0"
+        :disabled="busy || unreachable || tickedCount === 0"
         @confirm="decide('approve')"
       />
     </div>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
-    <p v-if="waiting && saveFailed" class="error" role="status">
-      Your changes on this card aren't saved yet; they stay here and go with Approve.
+    <p v-if="waiting && unreachable" class="offline-note" role="status">
+      Approve and Reject wait for the connection to the daemon. Your edits are kept and sent when it
+      is back.
     </p>
   </section>
 </template>
@@ -511,6 +517,12 @@ ul {
 
 .allow .warning {
   margin: 0;
+}
+
+.offline-note {
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
 }
 
 .reason-input {

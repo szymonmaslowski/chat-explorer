@@ -3,11 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ActionRequest, RequestAction } from '@shared/requests';
 import type { MessageHead } from '@shared/types';
 import RequestCard from '../src/components/RequestCard.vue';
+import { outbox } from '../src/stores/outbox';
 import { decisionSummary, requestPlacement, waitingRequests } from '../src/lib/requests';
 
 const decideRequest = vi.fn();
 const saveRequestDraft = vi.fn(async (..._args: unknown[]) => ({}));
 vi.mock('../src/api', () => ({
+  ApiError: class ApiError extends Error {
+    status = 400;
+    code = 'invalid';
+  },
   api: {
     decideRequest: (...args: unknown[]) => decideRequest(...args),
     saveRequestDraft: (...args: unknown[]) => saveRequestDraft(...args),
@@ -68,6 +73,11 @@ const card = (value: ActionRequest) =>
     global: { stubs: { RouterLink: RouterLinkStub } },
   });
 
+// Lets the outbox send the card's draft ahead of a decision.
+const settle = async () => {
+  for (let round = 0; round < 50; round += 1) await Promise.resolve();
+};
+
 const button = (wrapper: ReturnType<typeof card>, text: string) =>
   wrapper.findAll('button').find((each) => each.text().startsWith(text))!;
 
@@ -75,6 +85,7 @@ describe('request card', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     decideRequest.mockReset();
+    outbox.clear();
     decideRequest.mockImplementation(async (_id, decision) => ({
       ...request(),
       status: decision.decision === 'approve' ? 'approved' : 'rejected',
@@ -96,6 +107,7 @@ describe('request card', () => {
       .findAll('button')
       .find((each) => each.text() === 'Sure?')!
       .trigger('click');
+    await settle();
     expect(decideRequest).toHaveBeenCalledWith('req_0000000001', {
       decision: 'approve',
       items: [
@@ -122,6 +134,7 @@ describe('request card', () => {
       .findAll('button')
       .find((each) => each.text() === 'Sure?')!
       .trigger('click');
+    await settle();
     expect(decideRequest).toHaveBeenCalledWith('req_0000000001', {
       decision: 'reject',
       reason: 'Not now',
@@ -311,6 +324,7 @@ describe("the card's allow checkboxes", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     decideRequest.mockReset();
+    outbox.clear();
     decideRequest.mockImplementation(async () => request({ status: 'approved' }));
   });
   afterEach(() => vi.useRealTimers());
@@ -360,6 +374,7 @@ describe("the card's allow checkboxes", () => {
       .findAll('button')
       .find((each) => each.text() === 'Sure?')!
       .trigger('click');
+    await settle();
     expect(decideRequest.mock.calls[0]![1]).toMatchObject({ allowAreas: ['notes'] });
 
     const rejecting = card(mixed());
@@ -369,6 +384,7 @@ describe("the card's allow checkboxes", () => {
       .findAll('button')
       .find((each) => each.text() === 'Sure?')!
       .trigger('click');
+    await settle();
     expect(decideRequest.mock.calls[1]![1]).not.toHaveProperty('allowAreas');
   });
 });
@@ -377,6 +393,7 @@ describe('saved card edits', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     decideRequest.mockReset();
+    outbox.clear();
     decideRequest.mockImplementation(async () => request({ status: 'approved' }));
     saveRequestDraft.mockClear();
   });
@@ -407,13 +424,14 @@ describe('saved card edits', () => {
     expect((wrapper.find('textarea').element as HTMLTextAreaElement).value).toBe('Saved brief.');
   });
 
-  it('saves a moment after a change, the whole card', async () => {
+  it('saves the whole card through the outbox a moment after a change', async () => {
     const wrapper = card(request());
     await wrapper.find('[aria-label="Show and edit the details"]').trigger('click');
     await wrapper.find('textarea').setValue('Typed brief.');
     await wrapper.find('.reason-input').setValue('Because');
     expect(saveRequestDraft).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(700);
+    await vi.advanceTimersByTimeAsync(1_100);
+    await settle();
     expect(saveRequestDraft).toHaveBeenCalledTimes(1);
     expect(saveRequestDraft.mock.calls[0]).toEqual([
       'req_0000000001',
@@ -425,7 +443,30 @@ describe('saved card edits', () => {
         reason: 'Because',
         allowAreas: [],
       },
+      false,
     ]);
+  });
+
+  it('keeps a draft the daemon could not take in the outbox, and holds the decisions', async () => {
+    saveRequestDraft.mockImplementationOnce(async () => {
+      throw new TypeError('Failed to fetch');
+    });
+    const wrapper = card(request());
+    await wrapper.find('.reason-input').setValue('Offline reason');
+    await vi.advanceTimersByTimeAsync(1_100);
+    await settle();
+    expect(outbox.isPending('req_0000000001')).toBe(true);
+    expect(outbox.changes.value).toMatchObject([
+      { type: 'request.draft', requestId: 'req_0000000001', draft: { reason: 'Offline reason' } },
+    ]);
+    expect(wrapper.find('.offline-note').text()).toContain('Approve and Reject wait');
+    expect((button(wrapper, 'Approve').element as HTMLButtonElement).disabled).toBe(true);
+    expect((button(wrapper, 'Reject').element as HTMLButtonElement).disabled).toBe(true);
+    // Back online, the outbox sends it and the decisions come back.
+    await vi.advanceTimersByTimeAsync(1_100);
+    await settle();
+    expect(outbox.isPending('req_0000000001')).toBe(false);
+    expect((button(wrapper, 'Approve').element as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("shows another device's save, but not over a change made here and not saved yet", async () => {
@@ -438,7 +479,8 @@ describe('saved card edits', () => {
     expect(
       (wrapper.findAll('.line input[type="checkbox"]')[1]!.element as HTMLInputElement).checked,
     ).toBe(false);
-    await vi.advanceTimersByTimeAsync(700);
+    await vi.advanceTimersByTimeAsync(1_100);
+    await settle();
     await wrapper.setProps({
       request: request({
         draft: { ...draft, items: [draft.items[0]!, { ...draft.items[1]!, selected: true }] },
@@ -449,7 +491,7 @@ describe('saved card edits', () => {
     ).toBe(true);
   });
 
-  it('sends what is on the card with Approve, and drops the pending save', async () => {
+  it('sends the latest edits through the outbox ahead of the decision', async () => {
     const wrapper = card(request());
     await wrapper.find('[aria-label="Show and edit the details"]').trigger('click');
     await wrapper.find('textarea').setValue('Last keystroke.');
@@ -458,8 +500,14 @@ describe('saved card edits', () => {
       .findAll('button')
       .find((each) => each.text() === 'Sure?')!
       .trigger('click');
-    await vi.advanceTimersByTimeAsync(1_000);
-    expect(saveRequestDraft).not.toHaveBeenCalled();
+    await settle();
+    expect(saveRequestDraft).toHaveBeenCalledTimes(1);
+    expect(saveRequestDraft.mock.calls[0]![1]).toMatchObject({
+      items: [{ id: 'i1', action: { brief: 'Last keystroke.' } }, { id: 'i2' }],
+    });
+    expect(saveRequestDraft.mock.invocationCallOrder[0]).toBeLessThan(
+      decideRequest.mock.invocationCallOrder[0]!,
+    );
     expect(decideRequest.mock.calls[0]![1]).toMatchObject({
       items: [{ id: 'i1', action: { brief: 'Last keystroke.' } }, { id: 'i2' }],
     });

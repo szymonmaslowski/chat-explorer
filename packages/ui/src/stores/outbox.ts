@@ -1,4 +1,5 @@
 import { idAlphabet, idLength, idPrefixes, type PrefixedKind } from '@shared/ids';
+import type { RequestDraft } from '@shared/requests';
 import type {
   CommentChanges,
   MessageFile,
@@ -99,6 +100,13 @@ export type Change =
   | { type: 'note.delete'; explorationId: string; noteId: string }
   | { type: 'note.reorder'; explorationId: string; noteId: string; afterNoteId: string | null }
   | { type: 'note.change-group'; explorationId: string; noteId: string; groupId: string }
+  // The user's edits on a waiting card of Claude's requests, whole: the last one wins.
+  | {
+      type: 'request.draft';
+      explorationId: string;
+      requestId: string;
+      draft: Omit<RequestDraft, 'savedAt'>;
+    }
   // When the reader saw or unmarked them, so a mark sent late loses to a newer one.
   | { type: 'messages.read'; explorationId: string; messageIds: string[]; at: number }
   | {
@@ -209,6 +217,8 @@ export const subjectOf = (change: Change) => {
     case 'note.reorder':
     case 'note.change-group':
       return change.noteId;
+    case 'request.draft':
+      return change.requestId;
   }
 };
 
@@ -229,6 +239,7 @@ function merge(waiting: Change, next: Change): Change | null {
     return { ...next, changes: { ...waiting.changes, ...next.changes, baseUpdatedAt } };
   }
   if (waiting.type === 'note.reorder' && next.type === 'note.reorder') return next;
+  if (waiting.type === 'request.draft' && next.type === 'request.draft') return next;
   if (waiting.type === 'note-group.reorder' && next.type === 'note-group.reorder') return next;
   if (waiting.type === 'note-group.update' && next.type === 'note-group.update') {
     return { ...next, changes: { ...waiting.changes, ...next.changes } };
@@ -340,6 +351,8 @@ function send(change: Change) {
       return api.reorderNote(change.noteId, change.afterNoteId, keepalive);
     case 'note.change-group':
       return api.changeNoteGroup(change.noteId, change.groupId, keepalive);
+    case 'request.draft':
+      return api.saveRequestDraft(change.requestId, change.draft, keepalive);
     case 'messages.read':
       return api.markRead(change.explorationId, change.messageIds, change.at, keepalive);
     case 'messages.unread':
@@ -359,6 +372,10 @@ const alreadyDone = (change: Change, error: unknown) =>
     change.type === 'submission.cancel') &&
   error instanceof ApiError &&
   error.code === 'not_found';
+
+// A draft for a card decided meanwhile, here or on another device, has nothing left to save.
+const noLongerNeeded = (change: Change, error: unknown) =>
+  change.type === 'request.draft' && error instanceof ApiError && error.code === 'already_decided';
 
 function failureMessage(change: Change, error: unknown) {
   const reason = error instanceof Error ? error.message : 'The daemon refused it.';
@@ -393,7 +410,7 @@ async function sendAll() {
         writeStored(unsent);
         return false;
       }
-      if (!alreadyDone(head.change, error)) {
+      if (!alreadyDone(head.change, error) && !noLongerNeeded(head.change, error)) {
         failures.push({
           key: head.key,
           explorationId: head.change.explorationId,
