@@ -30,9 +30,8 @@ const cut = (text: string) =>
 const notFound = (what: string) => new StoreError('not_found', `${what} not found.`);
 
 export interface RequestResult {
-  // Null for the topic of an untitled note, which is written at once.
-  requestId: string | null;
-  itemId: string | null;
+  requestId: string;
+  itemId: string;
   status: 'waiting for approval' | 'done' | 'failed';
   // What a waiting request will create, so later requests can name it.
   forkId?: string;
@@ -84,11 +83,6 @@ export class RequestStore {
   request(forkId: string, requestedBy: RequestOrigin, action: RequestAction): RequestResult {
     const fork = this.chats.fork(forkId);
     this.validate(fork.explorationId, forkId, action);
-    // The topic Claude is asked to write for a note the user saved without one needs no card.
-    if (this.namesUntitledNote(action)) {
-      const note = this.chats.updateNote(action.noteId, { topic: action.topic! }, 'claude');
-      return { requestId: null, itemId: null, status: 'done', resultId: note.id };
-    }
     if (this.isAutonomous(fork, action)) return this.runAutonomously(fork, requestedBy, action);
     const item: RequestItem = {
       id: newId(),
@@ -149,15 +143,6 @@ export class RequestStore {
       ...(made?.kind === 'fork' && { forkId: made.id }),
       ...(made?.kind === 'group' && { groupId: made.id }),
     };
-  }
-
-  private namesUntitledNote(
-    action: RequestAction,
-  ): action is Extract<RequestAction, { kind: 'note_update' }> {
-    if (action.kind !== 'note_update' || !action.topic?.trim()) return false;
-    const { kind: _kind, noteId: _noteId, topic: _topic, ...others } = action;
-    if (Object.values(others).some((value) => value !== undefined)) return false;
-    return this.chats.note(action.noteId).topic === null;
   }
 
   // The fork's Autonomous setting covers the action's area, and new forks are under the hourly cap.

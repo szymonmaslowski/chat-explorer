@@ -453,24 +453,30 @@ describe('notes and board as requests', () => {
     expect(store.snapshot(explorationId).exploration.boardColumns).toHaveLength(1);
   });
 
-  it('writes the topic of an untitled note at once, and nothing else that way', () => {
+  it('always asks before update_note, also for the topic of an untitled note', () => {
     const { store, requests, explorationId, mainForkId } = setup();
     const group = store.createNoteGroup(explorationId, {});
     const untitled = store.createNote(explorationId, { groupId: group.id, description: 'Bread' });
-    const titled = store.createNote(explorationId, { groupId: group.id, topic: 'Milk' });
     const topic = requests.request(mainForkId, 'fork', {
       kind: 'note_update',
       noteId: untitled.id,
       topic: 'Bread',
     });
-    expect(topic).toMatchObject({ status: 'done', requestId: null });
+    expect(topic.status).toBe('waiting for approval');
+    expect(store.note(untitled.id).topic).toBeNull();
+  });
+
+  it('sets a missing topic with set_note_topic, with no card, and never overwrites one', () => {
+    const { store, requests, explorationId } = setup();
+    const group = store.createNoteGroup(explorationId, {});
+    const untitled = store.createNote(explorationId, { groupId: group.id, description: 'Bread' });
+    const titled = store.createNote(explorationId, { groupId: group.id, topic: 'Milk' });
+    expect(store.setMissingNoteTopic(untitled.id, 'Bread').topic).toBe('Bread');
+    expect(() => store.setMissingNoteTopic(titled.id, 'Oat milk')).toThrow(/already has a topic/);
+    expect(() => store.setMissingNoteTopic(untitled.id, 'Rye')).toThrow(/already has a topic/);
+    expect(store.note(titled.id).topic).toBe('Milk');
     expect(store.note(untitled.id).topic).toBe('Bread');
-    const rename = requests.request(mainForkId, 'fork', {
-      kind: 'note_update',
-      noteId: titled.id,
-      topic: 'Oat milk',
-    });
-    expect(rename.status).toBe('waiting for approval');
+    expect(requests.list(explorationId)).toEqual([]);
   });
 
   it('has dropped the old deletion flag column', () => {

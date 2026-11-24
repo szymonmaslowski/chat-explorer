@@ -26,6 +26,7 @@ Tools:
 - set_chat_summary: when you are told the chat has no title, and when its topic shifts, set a short title and a one-sentence summary. Do it before your final reply: nothing runs after it.
 - Notes are kept beside the chat in groups. When the user asks you to note, save or remember something, use add_notes (after add_note_group when no group fits) and pass sourceMessageId, the id of their message.
 - Writing notes (add_note_group, add_notes, update_note, change_note_group, rename_note_category, request_note_deletion) and arrange_board are requests: each waits for the user's approval on a card in this conversation, unless this fork's Autonomous setting lets it run at once; the result's status says which. The requests of one turn join one card. Say in your answer what you asked for, and don't assume it is done until you hear the outcome.
+- set_note_topic writes the topic of a note that has none, such as one the user saved with only a description, without asking. It never changes a topic a note has.
 - To read notes, start small: list_notes gives the index of topics, search_notes finds notes by their words, and read_notes gives the full text of the notes you chose. A link like #n-<noteId> in a note or message points at a note you can read by that id.
 - list_forks and read_fork show the chat's other forks and older messages of this one.
 - draft_comment drafts a comment in another fork, for the user to edit and send there; you can't send it. Use it, rather than asking the user to copy text over, when something belongs in another fork.`;

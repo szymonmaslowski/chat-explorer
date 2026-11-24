@@ -252,6 +252,7 @@ const speechBody = z.union([
   z.object({ text: z.string(), block: speechBlock }),
 ]);
 const claudeNoteReorderBody = shimBody.extend(noteReorderBody.shape);
+const claudeNoteTopicBody = shimBody.extend({ topic: z.string().min(1) });
 const claudeNoteGroupReorderBody = shimBody.extend(noteGroupReorderBody.shape);
 const feedbackBody = shimBody.extend({
   waitMs: z.number().int().positive().max(maxFeedbackWaitMs),
@@ -930,6 +931,12 @@ export function createApp(options: AppOptions) {
     store.requireAttachedShim(store.noteExplorationId(noteId), shimId);
     return noteId;
   };
+
+  internal.post('/notes/:id/topic', async (context) => {
+    const { shimId, topic } = claudeNoteTopicBody.parse(await context.req.json());
+    const noteId = attachedNoteId(context.req.param('id'), shimId);
+    return context.json(store.setMissingNoteTopic(noteId, topic));
+  });
 
   internal.post('/note-groups/:id/reorder', async (context) => {
     const { shimId, afterGroupId } = claudeNoteGroupReorderBody.parse(await context.req.json());

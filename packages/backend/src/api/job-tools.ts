@@ -272,6 +272,18 @@ function toolsFor(job: Job, { store, runs, requests }: JobToolsOptions) {
   );
 
   server.registerTool(
+    'set_note_topic',
+    {
+      description:
+        'Write the topic of a note that has none, such as one the user saved with only a description: under 60 characters, drawn from its description. Needs no approval. It refuses a note that already has a topic; change that with update_note.',
+      inputSchema: { noteId: z.string(), topic: z.string().min(1) },
+    },
+    tool(({ noteId, topic }: { noteId: string; topic: string }) =>
+      store.setMissingNoteTopic(noteInChat(noteId), topic),
+    ),
+  );
+
+  server.registerTool(
     'list_board',
     {
       description:

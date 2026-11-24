@@ -480,7 +480,7 @@ export function createShim(options: ShimOptions) {
   server.registerTool(
     'update_note',
     {
-      description: `Change a note's topic, description or category (null removes it), or tick it (checked) in a checklist group. ${noteRequestNote} Writing only the topic of a note in notesNeedingTopic runs at once.`,
+      description: `Change a note's topic, description or category (null removes it), or tick it (checked) in a checklist group. ${noteRequestNote} For a note in notesNeedingTopic, use set_note_topic.`,
       inputSchema: {
         noteId: z.string(),
         topic: z.string().optional(),
@@ -503,6 +503,21 @@ export function createShim(options: ShimOptions) {
         return json(await askFor('update_note', { noteId, ...changes }));
       },
     ),
+  );
+
+  server.registerTool(
+    'set_note_topic',
+    {
+      description:
+        'Write the topic of a note in notesNeedingTopic, which has none: under 60 characters, drawn from its description. Needs no approval. It refuses a note that already has a topic; change that with update_note.',
+      inputSchema: { noteId: z.string(), topic: z.string().min(1) },
+    },
+    tool(async ({ noteId, topic }: { noteId: string; topic: string }) => {
+      requireAttachment();
+      return json(
+        await request(`/api/internal/notes/${noteId}/topic`, { json: { shimId, topic } }),
+      );
+    }),
   );
 
   server.registerTool(

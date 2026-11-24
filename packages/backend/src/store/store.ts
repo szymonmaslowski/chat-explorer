@@ -2611,6 +2611,20 @@ export class ChatStore {
     return toNote(this.requireNoteRow(noteId));
   }
 
+  // The topic Claude writes for a note the user saved without one. It never replaces a topic:
+  // changing one is update_note, which asks the user.
+  setMissingNoteTopic(noteId: string, topic: string) {
+    const note = this.note(noteId);
+    if (note.topic !== null) {
+      throw new StoreError(
+        'invalid',
+        `Note ${noteId} already has a topic. Change it with update_note, which asks the user.`,
+      );
+    }
+    if (!topic.trim()) throw new StoreError('invalid', 'Write a topic.');
+    return this.updateNote(noteId, { topic }, 'claude');
+  }
+
   private groupsWithNotes(explorationId: string) {
     const notes = this.db.all<NoteRow>(
       'SELECT * FROM notes WHERE exploration_id = ? ORDER BY position, rowid',

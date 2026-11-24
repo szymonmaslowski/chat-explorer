@@ -47,6 +47,29 @@ async function setup() {
 }
 
 describe('job tools', () => {
+  it('sets the topic of an untitled note with no card, and refuses a note with one', async () => {
+    const { connect, call, lease, store, explorationId } = await setup();
+    const group = store.createNoteGroup(explorationId, {});
+    const untitled = store.createNote(explorationId, { groupId: group.id, description: 'Bread' });
+    const client = await connect(lease.toolsToken);
+    const set = await call(client, 'set_note_topic', { noteId: untitled.id, topic: 'Bread' });
+    expect(set.value.topic).toBe('Bread');
+    const again = await call(client, 'set_note_topic', { noteId: untitled.id, topic: 'Rye' });
+    expect(again).toMatchObject({ isError: true });
+    expect(again.value).toMatch(/already has a topic/);
+    expect(store.note(untitled.id).topic).toBe('Bread');
+    expect(store.snapshot(explorationId).requests).toEqual([]);
+    const other = seedConversation(store);
+    const foreignGroup = store.createNoteGroup(other.explorationId, {});
+    const foreign = store.createNote(other.explorationId, {
+      groupId: foreignGroup.id,
+      description: 'x',
+    });
+    expect((await call(client, 'set_note_topic', { noteId: foreign.id, topic: 'X' })).isError).toBe(
+      true,
+    );
+  });
+
   it('answers right away, names the fork and adds notes linked to the asking message', async () => {
     const { connect, call, lease, store, explorationId, mainForkId, question } = await setup();
     const client = await connect(lease.toolsToken);

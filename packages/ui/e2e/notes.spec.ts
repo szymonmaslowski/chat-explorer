@@ -355,7 +355,9 @@ test('shows the topic Claude writes, and deletes a note once its request is appr
       data: { shimId: 'e2e-shim', tool, args },
     });
   // The topic of a note the user saved without one is written at once.
-  await asClaude('update_note', { noteId: unnamed.id, topic: 'Bread' });
+  await request.post(`/api/internal/notes/${unnamed.id}/topic`, {
+    data: { shimId: 'e2e-shim', topic: 'Bread' },
+  });
   await expect(topics(page)).toHaveText(['Bread', 'Old idea', 'Keeper']);
   // A deletion waits for the user's approval on a card in the main fork.
   await asClaude('request_note_deletion', { noteId: doomed.id });

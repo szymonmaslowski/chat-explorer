@@ -202,9 +202,12 @@ describe('MCP shim', () => {
       notesNeedingTopic: [{ noteId: userNote.id, description: 'Bread for the weekend' }],
     });
     // The topic of a note the user saved without one is written at once, with no card.
-    expect((await call('update_note', { noteId: userNote.id, topic: 'Bread' })).value.status).toBe(
-      'done',
+    expect((await call('set_note_topic', { noteId: userNote.id, topic: 'Bread' })).value.topic).toBe(
+      'Bread',
     );
+    const again = await call('set_note_topic', { noteId: userNote.id, topic: 'Rye' });
+    expect(again.isError).toBe(true);
+    expect(again.text).toContain('already has a topic');
     expect((await call('list_notes', { groupId: group.resultId })).value.groups[0].notes).toMatchObject([
       { topic: 'Milk' },
       { topic: 'Bread' },
