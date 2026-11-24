@@ -582,3 +582,30 @@ describe('promised ids', () => {
     database.close();
   });
 });
+
+describe('the model', () => {
+  it('is never covered by the Autonomous setting, whatever is ticked', () => {
+    const { store, requests, mainForkId, answer } = setup();
+    const child = store.forkAtAnswer(answer.id);
+    store.setForkAutonomous(mainForkId, ['notes', 'board', 'messages', 'forks', 'fork_options']);
+    for (const model of ['sonnet', 'opus'] as const) {
+      expect(requests.request(mainForkId, 'fork', forkAction({ model })).status).toBe(
+        'waiting for approval',
+      );
+      const change = requests.request(mainForkId, 'fork', {
+        kind: 'fork_settings',
+        forkId: child.id,
+        changes: { model },
+      });
+      expect(change.status).toBe('waiting for approval');
+    }
+    // Following the chat's model again is a model change too.
+    const back = requests.request(mainForkId, 'fork', {
+      kind: 'fork_settings',
+      forkId: child.id,
+      changes: { model: null },
+    });
+    expect(back.status).toBe('waiting for approval');
+    expect(store.fork(child.id).model).toBeNull();
+  });
+});
