@@ -1,5 +1,7 @@
 import { isHostPort, matchesHostPattern, maxAllowedHosts } from '@chat-explorer/shared/network.js';
 import {
+  allowableAreas,
+  allowAreaNames,
   autonomousAreaOf,
   createdBy,
   defaultAutonomousForksPerHour,
@@ -245,8 +247,31 @@ export class RequestStore {
     if (!planned.some((entry) => entry.selected)) {
       throw new StoreError('invalid', 'Tick at least one item to approve, or reject the request.');
     }
+    // An area may be allowed only for a ticked item the setting can cover: never for coding,
+    // hosts, registries, credentials or a model.
+    const allowable = allowableAreas(
+      planned.filter((entry) => entry.selected).map((entry) => entry.final),
+    );
+    const allowed = [...new Set(decision.allowAreas ?? [])];
+    for (const area of allowed) {
+      if (!allowable.includes(area)) {
+        throw new StoreError(
+          'invalid',
+          `No ticked item of this card is one the setting can allow without asking: ${area}.`,
+        );
+      }
+    }
     const decided = this.run(row, planned);
     this.save(row.id, decided, { status: 'approved', decidedBy: 'user', reason: null, now });
+    if (allowed.length > 0) {
+      const fork = this.chats.fork(row.fork_id);
+      this.chats.setForkAutonomous(fork.id, [...new Set([...fork.autonomous, ...allowed])]);
+      this.db.run(
+        'UPDATE action_requests SET allowed_areas = ? WHERE id = ?',
+        JSON.stringify(allowed),
+        row.id,
+      );
+    }
     return this.publishUpdate(row.id);
   }
 
@@ -640,8 +665,12 @@ export function outcomeText(request: ActionRequest): string {
     request.status === 'waiting'
       ? 'waiting for the user'
       : `${request.status} by ${request.decidedBy === 'autonomous' ? 'the autonomous setting' : 'the user'}`;
+  const allowed =
+    request.allowedAreas.length > 0
+      ? `. The user also allowed ${request.allowedAreas.map((area) => allowAreaNames[area]).join(', ')} without asking in this fork from now on`
+      : '';
   const lines = [
-    `- Request ${request.id}, ${decided}${request.reason ? `. Reason: ${cut(request.reason)}` : ''}:`,
+    `- Request ${request.id}, ${decided}${request.reason ? `. Reason: ${cut(request.reason)}` : ''}${allowed}:`,
   ];
   for (const item of request.items) {
     const action = item.final ?? item.original;

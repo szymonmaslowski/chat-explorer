@@ -520,4 +520,8 @@ export const migrations = [
     FROM action_requests, json_each(action_requests.items) AS item
     WHERE json_extract(item.value, '$.original.kind') IN ('fork', 'note_group');
   `,
+  `
+  -- Areas of the Autonomous setting a card's Approve turned on for its fork, as a JSON array.
+  ALTER TABLE action_requests ADD COLUMN allowed_areas TEXT NOT NULL DEFAULT '[]';
+  `,
 ];

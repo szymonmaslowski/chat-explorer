@@ -93,6 +93,8 @@ export interface ActionRequest {
   decidedAt: number | null;
   // The user's reason for a rejection, when given.
   reason: string | null;
+  // Areas of the Autonomous setting the user turned on for the fork with this card's Approve.
+  allowedAreas: AutonomousArea[];
   createdAt: number;
   updatedAt: number;
 }
@@ -102,6 +104,8 @@ export interface RequestDecision {
   decision: 'approve' | 'reject';
   items?: { id: string; selected: boolean; action?: RequestAction }[];
   reason?: string | null;
+  // Areas to turn on in the fork's Autonomous setting along with the approval; Reject ignores it.
+  allowAreas?: AutonomousArea[];
 }
 
 // Areas of actions a fork's Autonomous setting can let run without a card.
@@ -117,6 +121,25 @@ export const autonomousAreaLabels: Record<AutonomousArea, string> = {
 };
 
 export const defaultAutonomousForksPerHour = 5;
+
+// The card's checkbox for an area: "Allow notes actions without asking in this fork".
+export const allowAreaNames: Record<AutonomousArea, string> = {
+  notes: 'notes actions',
+  board: 'board actions',
+  messages: 'messages to forks',
+  forks: 'new forks',
+  fork_options: 'fork option changes',
+};
+
+export const allowAreaLabel = (area: AutonomousArea) =>
+  `Allow ${allowAreaNames[area]} without asking in this fork`;
+
+// The areas a card may offer to allow: those of its ticked items that Autonomous can cover, in
+// the setting's order.
+export function allowableAreas(actions: RequestAction[]): AutonomousArea[] {
+  const present = new Set(actions.map(autonomousAreaOf).filter((area) => area !== null));
+  return autonomousAreas.filter((area) => present.has(area));
+}
 
 const hasNetwork = (values: {
   hosts?: string[] | undefined;

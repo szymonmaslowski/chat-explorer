@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { claudeModels } from '@chat-explorer/shared/models.js';
 import { registryNames } from '@chat-explorer/shared/network.js';
-import type { RequestAction } from '@chat-explorer/shared/requests.js';
+import { autonomousAreas, type RequestAction } from '@chat-explorer/shared/requests.js';
 
 // The shapes of requested actions, as Claude sends them and as the user edits them on the card.
 
@@ -94,4 +94,5 @@ export const requestDecisionSchema = z.object({
     )
     .optional(),
   reason: z.string().nullable().optional(),
+  allowAreas: z.array(z.enum(autonomousAreas)).optional(),
 });

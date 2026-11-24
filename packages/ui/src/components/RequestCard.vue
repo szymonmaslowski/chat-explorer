@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import {
+  allowableAreas,
+  allowAreaLabel,
+  allowAreaNames,
   attachesCredential,
+  type AutonomousArea,
   describeAction,
   editedFields,
   type ActionRequest,
@@ -32,6 +36,7 @@ const selected = reactive(new Map<string, boolean>());
 const drafts = reactive(new Map<string, RequestAction>());
 const open = reactive(new Set<string>());
 const reason = ref('');
+const allow = reactive(new Set<AutonomousArea>());
 const busy = ref(false);
 const error = ref('');
 
@@ -50,6 +55,29 @@ watch(
 
 const tickedCount = computed(
   () => props.request.items.filter((item) => selected.get(item.id) !== false).length,
+);
+const actionOf = (item: RequestItem) => drafts.get(item.id) ?? item.original;
+// A checkbox for each area of the card the Autonomous setting can cover and doesn't yet; it
+// counts only while one of that area's items is ticked.
+const alreadyAllowed = computed(() => props.forks.get(props.request.forkId)?.autonomous ?? []);
+const offeredAreas = computed(() =>
+  allowableAreas(props.request.items.map(actionOf)).filter(
+    (area) => !alreadyAllowed.value.includes(area),
+  ),
+);
+const tickedAreas = computed(
+  () =>
+    new Set(
+      allowableAreas(
+        props.request.items.filter((item) => selected.get(item.id) !== false).map(actionOf),
+      ),
+    ),
+);
+const allowedNow = computed(() =>
+  offeredAreas.value.filter((area) => allow.has(area) && tickedAreas.value.has(area)),
+);
+const allowedRecord = computed(() =>
+  props.request.allowedAreas.map((area) => allowAreaNames[area]).join(', '),
 );
 const editedNow = (item: RequestItem) => editedFields(item.original, drafts.get(item.id) ?? null);
 
@@ -114,6 +142,7 @@ async function decide(decision: 'approve' | 'reject') {
               selected: selected.get(item.id) !== false,
               action: drafts.get(item.id) ?? item.original,
             })),
+            ...(allowedNow.value.length > 0 && { allowAreas: allowedNow.value }),
           }
         : { reason: reason.value.trim() || null }),
     });
@@ -194,6 +223,28 @@ async function decide(decision: 'approve' | 'reject') {
       </li>
     </ul>
     <p v-if="!waiting && request.reason" class="reason">Reason: {{ request.reason }}</p>
+    <p v-if="!waiting && request.allowedAreas.length > 0" class="reason">
+      With this approval you allowed without asking in this fork:
+      {{ allowedRecord }}.
+    </p>
+    <fieldset v-if="waiting && offeredAreas.length > 0" class="allow">
+      <label v-for="area in offeredAreas" :key="area" :class="{ off: !tickedAreas.has(area) }">
+        <input
+          type="checkbox"
+          :checked="allow.has(area)"
+          :disabled="!tickedAreas.has(area)"
+          @change="
+            ($event.target as HTMLInputElement).checked ? allow.add(area) : allow.delete(area)
+          "
+        />
+        {{ allowAreaLabel(area) }}
+        <span v-if="area === 'forks'" class="muted"> (up to the runner's limit per hour)</span>
+      </label>
+      <p v-if="allowedNow.length > 0" class="warning">
+        Applies when you approve. A fork that reads hostile content, such as a web page or a README,
+        could then act without you in these areas.
+      </p>
+    </fieldset>
     <div v-if="waiting" class="actions">
       <input
         v-model="reason"
@@ -342,6 +393,30 @@ ul {
   gap: 0.5rem;
   align-items: center;
   margin-top: 0.5rem;
+}
+
+.allow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  border: none;
+  font-size: 0.85rem;
+}
+
+.allow label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.allow .off {
+  opacity: 0.55;
+}
+
+.allow .warning {
+  margin: 0;
 }
 
 .reason-input {

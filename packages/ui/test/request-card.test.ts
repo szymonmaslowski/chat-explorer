@@ -44,6 +44,7 @@ const request = (overrides: Partial<ActionRequest> = {}): ActionRequest => ({
   decidedBy: null,
   decidedAt: null,
   reason: null,
+  allowedAreas: [],
   createdAt: 1,
   updatedAt: 1,
   ...overrides,
@@ -283,5 +284,86 @@ describe('attention', () => {
     expect(attention.has('fork_done')).toBe(false);
     expect(strongestAttention(['unread', 'request'])).toBe('request');
     expect(strongestAttention([undefined, 'unread'])).toBe('unread');
+  });
+});
+
+describe("the card's allow checkboxes", () => {
+  const notesItem = {
+    id: 'n1',
+    original: {
+      kind: 'notes',
+      groupId: 'g1',
+      notes: [{ topic: 'A' }],
+      sourceMessageId: null,
+    } as RequestAction,
+    final: null,
+    outcome: null,
+    detail: null,
+    resultId: null,
+  };
+  const mixed = () => request({ items: [request().items[0]!, request().items[1]!, notesItem] });
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    decideRequest.mockReset();
+    decideRequest.mockImplementation(async () => request({ status: 'approved' }));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const labels = (wrapper: ReturnType<typeof card>) =>
+    wrapper.findAll('.allow label').map((label) => label.text());
+
+  it('offers one per area the setting can cover, none for a coding fork', () => {
+    // The fork item has coding on, so "new forks" is not offered.
+    const wrapper = card(mixed());
+    expect(labels(wrapper)).toEqual([
+      'Allow notes actions without asking in this fork',
+      'Allow messages to forks without asking in this fork',
+    ]);
+    const plain = card(
+      request({
+        items: [
+          {
+            ...request().items[0]!,
+            original: { ...forkAction, coding: false },
+          },
+        ],
+      }),
+    );
+    expect(labels(plain)[0]).toContain('Allow new forks without asking in this fork');
+    const withModel = card(
+      request({
+        items: [
+          { ...request().items[0]!, original: { ...forkAction, coding: false, model: 'opus' } },
+        ],
+      }),
+    );
+    expect(labels(withModel)).toEqual([]);
+  });
+
+  it('sends the ticked areas with Approve only, and only for ticked items', async () => {
+    const wrapper = card(mixed());
+    const boxes = wrapper.findAll('.allow input');
+    await boxes[0]!.setValue(true);
+    await boxes[1]!.setValue(true);
+    expect(wrapper.find('.allow .warning').exists()).toBe(true);
+    // Unticking the message item leaves its area disabled and out of the approval.
+    await wrapper.findAll('.item input[type="checkbox"]')[1]!.setValue(false);
+    expect((wrapper.findAll('.allow input')[1]!.element as HTMLInputElement).disabled).toBe(true);
+    await button(wrapper, 'Approve').trigger('click');
+    await wrapper
+      .findAll('button')
+      .find((each) => each.text() === 'Sure?')!
+      .trigger('click');
+    expect(decideRequest.mock.calls[0]![1]).toMatchObject({ allowAreas: ['notes'] });
+
+    const rejecting = card(mixed());
+    await rejecting.findAll('.allow input')[0]!.setValue(true);
+    await button(rejecting, 'Reject').trigger('click');
+    await rejecting
+      .findAll('button')
+      .find((each) => each.text() === 'Sure?')!
+      .trigger('click');
+    expect(decideRequest.mock.calls[1]![1]).not.toHaveProperty('allowAreas');
   });
 });

@@ -615,3 +615,63 @@ describe('the model', () => {
     expect(store.fork(child.id).model).toBeNull();
   });
 });
+
+describe("the card's checkbox to allow an area without asking", () => {
+  it('turns the area on for the fork only on Approve, and records it', () => {
+    const { store, requests, mainForkId, answer } = setup();
+    const child = store.forkAtAnswer(answer.id);
+    const first = requests.request(mainForkId, 'fork', {
+      kind: 'message',
+      forkId: child.id,
+      text: 'Go on.',
+    });
+    requests.decide(first.requestId, { decision: 'reject', allowAreas: ['messages'] });
+    expect(store.fork(mainForkId).autonomous).toEqual([]);
+    store.addRunnerAnswer(mainForkId, 'Asked again.');
+    const second = requests.request(mainForkId, 'fork', {
+      kind: 'message',
+      forkId: child.id,
+      text: 'Go on.',
+    });
+    const decided = requests.decide(second.requestId, {
+      decision: 'approve',
+      allowAreas: ['messages'],
+    });
+    expect(decided.allowedAreas).toEqual(['messages']);
+    expect(store.fork(mainForkId).autonomous).toEqual(['messages']);
+    expect(requests.takeOutcomes(mainForkId)).toContain(
+      'The user also allowed messages to forks without asking in this fork',
+    );
+    // From now on, messages run without a card.
+    expect(
+      requests.request(mainForkId, 'fork', { kind: 'message', forkId: child.id, text: 'More.' })
+        .status,
+    ).toBe('done');
+  });
+
+  it('refuses an area no ticked item can be allowed for', () => {
+    const { store, requests, mainForkId, explorationId } = setup();
+    const coding = requests.request(mainForkId, 'fork', forkAction({ coding: true }));
+    expect(() =>
+      requests.decide(coding.requestId, { decision: 'approve', allowAreas: ['forks'] }),
+    ).toThrow(/can allow without asking: forks/);
+    const group = store.createNoteGroup(explorationId, {});
+    requests.request(mainForkId, 'fork', {
+      kind: 'notes',
+      groupId: group.id,
+      notes: [{ topic: 'A' }],
+      sourceMessageId: null,
+    });
+    const card = requests.get(coding.requestId);
+    expect(card.items).toHaveLength(2);
+    expect(() =>
+      requests.decide(card.id, {
+        decision: 'approve',
+        items: [{ id: card.items[1]!.id, selected: false }],
+        allowAreas: ['notes'],
+      }),
+    ).toThrow(/can allow without asking: notes/);
+    expect(requests.get(card.id).status).toBe('waiting');
+    expect(store.fork(mainForkId).autonomous).toEqual([]);
+  });
+});

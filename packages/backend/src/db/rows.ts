@@ -410,6 +410,7 @@ export interface ActionRequestRow {
   decided_by: RequestDecider | null;
   decided_at: number | null;
   reason: string | null;
+  allowed_areas: string;
   reported_at: number | null;
   created_at: number;
   updated_at: number;
@@ -426,6 +427,7 @@ export const toActionRequest = (row: ActionRequestRow): ActionRequest => ({
   decidedBy: row.decided_by,
   decidedAt: row.decided_at,
   reason: row.reason,
+  allowedAreas: JSON.parse(row.allowed_areas) as AutonomousArea[],
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
