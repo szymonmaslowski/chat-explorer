@@ -49,6 +49,7 @@ describe('the egress proxy', () => {
   let target: Server;
   let proxyPort: number;
   let targetPort: number;
+  const mainPort = 4517;
   // Names resolve as the test says, all to the local target, which stands in for the internet.
   const answers: Record<string, string> = {
     'allowed.example.com': '104.16.1.34',
@@ -78,7 +79,13 @@ describe('the egress proxy', () => {
     const upstreamPort = (upstream.address() as AddressInfo).port;
     target = createServer((incoming, outgoing) =>
       outgoing.end(
-        `hello from ${incoming.url}${incoming.headers['proxy-authorization'] ? ' with the sign-in' : ''}`,
+        incoming.url === '/api/tools/echo'
+          ? JSON.stringify({
+              host: incoming.headers.host,
+              authorization: incoming.headers.authorization,
+              cookie: incoming.headers.cookie ?? null,
+            })
+          : `hello from ${incoming.url}${incoming.headers['proxy-authorization'] ? ' with the sign-in' : ''}`,
       ),
     );
     await new Promise<void>((resolve) => target.listen(0, '127.0.0.1', resolve));
@@ -93,6 +100,8 @@ describe('the egress proxy', () => {
       logsPath,
       alwaysAllowed: ['api.anthropic.com:443'],
       toolsHost: `localhost:${targetPort}`,
+      // Stands for the daemon's main port. Nothing listens there: no request may even try it.
+      blockedHosts: [`localhost:${mainPort}`, `host.docker.internal:${mainPort}`],
       lookup: async (host) => {
         const address = answers[host];
         if (!address) throw new Error('ENOTFOUND');
@@ -257,6 +266,99 @@ describe('the egress proxy', () => {
     await expect
       .poll(() => logOf('fork_e'))
       .toMatch(/denied plain HTTP to allowed\.example\.com:80/);
+  });
+
+  // A plain-HTTP request through the proxy, with the headers a container may send.
+  const plain = (url: string, headers: Record<string, string> = {}) =>
+    new Promise<{ status: number; body: string }>((resolve, reject) => {
+      const outgoing = request(
+        { host: '127.0.0.1', port: proxyPort, path: url, headers },
+        (incoming) => {
+          let body = '';
+          incoming.on('data', (chunk: Buffer) => (body += chunk.toString()));
+          incoming.on('end', () => resolve({ status: incoming.statusCode ?? 0, body }));
+        },
+      );
+      outgoing.on('error', reject);
+      outgoing.end();
+    });
+
+  it('lets only the job tools paths through to the tools host', async () => {
+    allow('fork_t', []);
+    const auth = { 'proxy-authorization': signIn('fork_t') };
+    for (const path of ['/api/forks/fork_t/network', '/api/explorations', '/', '/api/toolsx']) {
+      const refused = await plain(`http://localhost:${targetPort}${path}`, auth);
+      expect(refused, path).toEqual({
+        status: 403,
+        body: "Blocked by the sandbox: only the daemon's job tools are reachable.",
+      });
+    }
+    // A path that climbs out of the tools is read as where it lands.
+    const climbed = await plain(`http://localhost:${targetPort}/api/tools/../forks/x`, auth);
+    expect(climbed.status).toBe(403);
+    await expect
+      .poll(() => logOf('fork_t'))
+      .toMatch(
+        /denied the daemon's \/api\/forks\/fork_t\/network: only the job tools are reachable/,
+      );
+  });
+
+  it("sends the tools host its own Host, and drops the container's cookies", async () => {
+    allow('fork_h', []);
+    const echoed = await plain(`http://localhost:${targetPort}/api/tools/echo`, {
+      'proxy-authorization': signIn('fork_h'),
+      host: `127.0.0.1:${mainPort}`,
+      authorization: 'Bearer job-token',
+      cookie: 'session=stolen',
+    });
+    expect(echoed.status).toBe(200);
+    expect(JSON.parse(echoed.body)).toEqual({
+      host: `localhost:${targetPort}`,
+      authorization: 'Bearer job-token',
+      cookie: null,
+    });
+  });
+
+  it("never reaches the daemon's main port, even when a policy lists it as private", async () => {
+    for (const main of [`localhost:${mainPort}`, `host.docker.internal:${mainPort}`]) {
+      writeFileSync(
+        join(policiesPath, 'fork_m.json'),
+        JSON.stringify({ token: 'fork_m-token', hosts: [main], privateHosts: [main] }),
+      );
+      expect(await status(main, signIn('fork_m')), main).toBe(403);
+      const viaPlain = await plain(`http://${main}/api/tools/mcp`, {
+        'proxy-authorization': signIn('fork_m'),
+      });
+      expect(viaPlain).toEqual({
+        status: 403,
+        body: "Blocked by the sandbox: containers reach only the daemon's job tools.",
+      });
+    }
+    await expect
+      .poll(() => logOf('fork_m'))
+      .toMatch(/denied host\.docker\.internal:4517: the daemon's main port/);
+    expect(logOf('fork_m')).toMatch(/denied plain HTTP to localhost:4517: the daemon's main port/);
+  });
+
+  it('says why plain HTTP was refused, apart for each reason', async () => {
+    allow('fork_s', ['allowed.example.com:80']);
+    const auth = { 'proxy-authorization': signIn('fork_s') };
+    expect((await plain('http://allowed.example.com/', auth)).body).toBe(
+      'Plain HTTP is refused by the sandbox. Use HTTPS.',
+    );
+    expect((await plain(`http://localhost:${targetPort}/api/x`, auth)).body).toBe(
+      "Blocked by the sandbox: only the daemon's job tools are reachable.",
+    );
+    expect((await plain(`http://localhost:${mainPort}/api/tools/mcp`, auth)).body).toBe(
+      "Blocked by the sandbox: containers reach only the daemon's job tools.",
+    );
+    expect((await plain('ftp://allowed.example.com/file', auth)).body).toBe(
+      'Blocked by the sandbox: unsupported scheme. Use HTTPS.',
+    );
+    await expect.poll(() => logOf('fork_s')).toMatch(/denied a ftp: request/);
+    expect(logOf('fork_s')).toMatch(
+      /denied plain HTTP to allowed\.example\.com:80: only HTTPS goes out/,
+    );
   });
 
   it('caps the open connections of one fork', async () => {

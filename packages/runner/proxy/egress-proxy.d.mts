@@ -7,6 +7,7 @@ export interface EgressProxyOptions {
   logsPath: string;
   alwaysAllowed?: string[];
   toolsHost: string;
+  blockedHosts?: string[];
   lookup?: (host: string) => Promise<{ address: string; family: number }[]>;
   maxConnections?: number;
   connect?: (port: number, host: string, onConnect: () => void) => Socket;

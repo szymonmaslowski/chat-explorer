@@ -108,6 +108,15 @@ const droppedModelHeaders = new Set([
   'trailer',
 ]);
 
+// The same for a request to the daemon's job tools, which keeps its authorization: the tools
+// token, made for this container's job.
+const droppedToolsHeaders = new Set(
+  [...droppedModelHeaders].filter((name) => name !== 'authorization'),
+);
+
+// The only daemon paths a container may reach over plain HTTP.
+const toolsPathPrefix = '/api/tools/';
+
 const plainAddress = (address = '') => address.replace(/^::ffff:/, '');
 
 const splitHostPort = (target) => {
@@ -121,8 +130,11 @@ export function startEgressProxy(options) {
     policiesPath,
     logsPath,
     alwaysAllowed = [],
-    // Reached by name, never checked for a private address: the daemon on the user's machine.
+    // Reached by name, never checked for a private address: the daemon's tools listener on the
+    // user's machine, which serves only the job tools.
     toolsHost,
+    // Never reached, whatever a fork's policy says: the daemon's main port, with every page route.
+    blockedHosts = [],
     lookup = (host) => dnsLookup(host, { all: true, verbatim: true }),
     maxConnections = 128,
     connect = (port, host, onConnect) => net.connect(port, host, onConnect),
@@ -132,6 +144,7 @@ export function startEgressProxy(options) {
     requestModel = (requestOptions, onResponse) =>
       https.request({ host: 'api.anthropic.com', port: 443, ...requestOptions }, onResponse),
   } = options;
+  const blocked = new Set(blockedHosts);
   const open = new Map();
   // Where each pass was first used from. A pass works from that address only, so a token that
   // leaks out of its container is worthless anywhere else.
@@ -164,7 +177,9 @@ export function startEgressProxy(options) {
     const list = (name) => (Array.isArray(policy[name]) ? policy[name] : []);
     return {
       id: given.id,
-      allowed: new Set([...alwaysAllowed, toolsHost, ...list('hosts')]),
+      allowed: new Set(
+        [...alwaysAllowed, toolsHost, ...list('hosts')].filter((host) => !blocked.has(host)),
+      ),
       onPrivateNetwork: new Set(list('privateHosts')),
       hidden: new Set(list('hiddenHosts')),
     };
@@ -173,6 +188,9 @@ export function startEgressProxy(options) {
   // Where to connect for an allowed host: the address its name resolves to, checked first, so a
   // name that points at the local network, now or after a quick DNS change, is refused.
   async function address(target, privateAllowed) {
+    if (blocked.has(`${target.host}:${target.port}`)) {
+      return { refused: "it is the daemon's main port, which containers never reach" };
+    }
     if (`${target.host}:${target.port}` === toolsHost) return { host: target.host };
     let resolved;
     try {
@@ -204,16 +222,44 @@ export function startEgressProxy(options) {
       return;
     }
     const target = `${url.hostname}:${url.port || '80'}`;
-    if (url.protocol !== 'http:' || target !== toolsHost) {
-      log(
-        fork.id,
-        `denied plain HTTP to ${fork.hidden.has(target) ? 'a hidden host' : target}: only HTTPS goes out`,
+    const shown = fork.hidden.has(target) ? 'a hidden host' : target;
+    const refuse = (line, message) => {
+      log(fork.id, line);
+      response.writeHead(403).end(message);
+    };
+    if (url.protocol !== 'http:') {
+      refuse(
+        `denied a ${url.protocol} request to ${shown}: only http goes through the proxy unencrypted`,
+        'Blocked by the sandbox: unsupported scheme. Use HTTPS.',
       );
-      response.writeHead(403).end('Plain HTTP is refused by the sandbox. Use HTTPS.');
       return;
     }
-    const headers = { ...request.headers };
-    delete headers['proxy-authorization'];
+    if (blocked.has(target)) {
+      refuse(
+        `denied plain HTTP to ${shown}: the daemon's main port, which containers never reach`,
+        "Blocked by the sandbox: containers reach only the daemon's job tools.",
+      );
+      return;
+    }
+    if (target !== toolsHost) {
+      refuse(
+        `denied plain HTTP to ${shown}: only HTTPS goes out`,
+        'Plain HTTP is refused by the sandbox. Use HTTPS.',
+      );
+      return;
+    }
+    if (!url.pathname.startsWith(toolsPathPrefix)) {
+      refuse(
+        `denied the daemon's ${url.pathname}: only the job tools are reachable`,
+        "Blocked by the sandbox: only the daemon's job tools are reachable.",
+      );
+      return;
+    }
+    // The proxy names the host itself: a container's own Host header is never passed on.
+    const headers = Object.fromEntries(
+      Object.entries(request.headers).filter(([name]) => !droppedToolsHeaders.has(name)),
+    );
+    headers.host = toolsHost;
     const upstream = http.request(
       {
         host: url.hostname,
@@ -246,6 +292,14 @@ export function startEgressProxy(options) {
     const target = splitHostPort(request.url);
     const named = target ? `${target.host}:${target.port}` : request.url;
     const shown = fork.hidden.has(named) ? 'a hidden host' : named;
+    if (target && blocked.has(named)) {
+      log(fork.id, `denied ${shown}: the daemon's main port, which containers never reach`);
+      refuse(
+        '403 Forbidden',
+        "Blocked by the sandbox: containers reach only the daemon's job tools.",
+      );
+      return;
+    }
     if (!target || !fork.allowed.has(named)) {
       log(fork.id, `denied ${shown}: not on this fork's list`);
       refuse('403 Forbidden', "Blocked by the sandbox: add the host to this fork's allowed hosts.");
